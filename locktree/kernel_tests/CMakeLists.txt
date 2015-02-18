@@ -1,0 +1,34 @@
+set(locktree_kernel_srcs
+lock_request_wait_time_callback
+lock_request_start_deadlock
+range_buffer_test
+wfg_test
+manager_create_destroy
+txnid_set_test
+manager_params
+locktree_single_txnid_optimization
+concurrent_tree_lkr_insert_remove
+concurrent_tree_create_destroy
+locktree_create_destroy
+locktree_conflicts
+locktree_simple_lock
+locktree_misc
+lock_request_create_set
+lock_request_get_set_keys
+concurrent_tree_lkr_acquire_release
+concurrent_tree_lkr_insert_serial_large
+concurrent_tree_lkr_remove_all
+manager_reference_release_lt
+locktree_infinity
+manager_locktree_map
+manager_status
+locktree_overlapping_relock
+lock_request_start_pending
+locktree_escalation_stalls
+)
+
+add_library(locktree_kernel_static STATIC ${locktree_kernel_srcs})
+maybe_add_gcov_to_libraries(locktree_static)
+set_target_properties(locktree_kernel_static PROPERTIES POSITION_INDEPENDENT_CODE ${STATIC_PIC})
+add_dependencies(locktree_kernel_static install_tdb_h)
+

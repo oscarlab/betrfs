@@ -1,0 +1,126 @@
+dnl Process this file with autoconf to produce a configure script.
+AC_INIT(bonnie++.cpp)
+AC_CONFIG_HEADER(conf.h)
+AC_SUBST(version)
+version="1.97"
+AC_SUBST(csv_version)
+csv_version="1.97"
+
+AC_ARG_ENABLE(stripping,
+      [  --disable-stripping  disables stripping of installed binaries],
+      STRIPPING=$strippingval, STRIPPING=no)
+AC_SUBST(stripping)
+if [[ ! "$STRIPPING" = "no" ]]; then
+  stripping=""
+else
+  stripping="-s"
+fi
+echo $DEB_BUILD_OPTIONS | grep -q nostrip
+if [[ "$?" = "0" ]]; then
+  stripping=""
+fi
+
+AC_SUBST(debug)
+AC_ARG_ENABLE(debug,
+      [  --with-debug  enables debug code generation for binaries],
+      debug=-g, debug="")
+echo $DEB_BUILD_OPTIONS | grep -q debug
+if [[ "$?" = "0" ]]; then
+  debug=-g
+fi
+
+dnl Checks for programs.
+AC_LANG_CPLUSPLUS
+AC_PROG_CC
+AC_PROG_CXX
+AC_PROG_CXXCPP
+AC_PROG_INSTALL
+
+dnl Checks for typedefs, structures, and compiler characteristics.
+AC_C_CONST
+AC_TYPE_SIZE_T
+
+AC_SUBST(semun)
+AC_TRY_COMPILE(#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/sem.h>
+    , union semun sem; , semun="yes")
+if [[ -n "$semun" ]]; then
+   semun="#define SEMUN_IN_SEM_H"
+fi
+
+AC_SUBST(bool)
+AC_TRY_COMPILE([], [bool var;] , , bool="typedef bool char;")
+AC_SUBST(true_false)
+AC_TRY_COMPILE(, [char c = true; char d = false;
+] , true_false="0", true_false="1")
+AC_SUBST(snprintf)
+AC_TRY_LINK([#include <stdio.h>], char buf[[10]]; snprintf(buf, sizeof(buf), "abc");,,snprintf="no");
+if [[ -n "$snprintf" ]]; then
+   snprintf="#define NO_SNPRINTF"
+fi
+
+AC_CHECK_HEADERS(algorithm algo.h algo)
+
+AC_SUBST(linux_pthread)
+AC_TRY_COMPILE([#define _GNU_SOURCE
+#include <pthread.h>
+] , [pthread_mutexattr_t attr;
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE_NP);]
+  , linux_pthread="yes")
+if [[ -n "$linux_pthread" ]]; then
+   linux_pthread="#define LINUX_PTHREAD"
+fi
+ 
+LDFLAGS=-lpthread
+AC_SUBST(thread_ldflags)
+AC_TRY_LINK([#include <pthread.h>
+void * thread_func(void * param) { return NULL; }
+] , [pthread_t thread_info;
+     pthread_attr_t attr;
+     pthread_create(&thread_info, &attr, &thread_func, NULL);]
+  , thread_ldflags="-lpthread"
+  , thread_ldflags="-pthread")
+
+AC_SUBST(large_file)
+AC_TRY_RUN([#ifndef _LARGEFILE64_SOURCE
+#define _LARGEFILE64_SOURCE
+#endif
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <stdlib.h>
+
+int main () {
+  int fd;
+  off64_t i = off64_t(1) << 32 + 1;
+  const char * const name = "test.2g";
+
+  fd = open64(name, O_CREAT|O_RDWR|O_EXCL|O_LARGEFILE,
+              S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP);
+  if (fd == -1) {
+    perror("open64");
+    exit(1);
+  }
+  unlink(name);
+
+  int r = lseek64(fd, i, SEEK_SET);
+  if (r == -1) {
+    perror("lseek");
+    exit(1);
+  }
+  r = write(fd, &r, 1);
+  if (r == -1) {
+    perror("write");
+    exit(1);
+  }
+  close(fd);
+  return 0;
+}], large_file="yes")
+if [[ -n "$large_file" ]]; then
+   large_file="#define _LARGEFILE64_SOURCE"
+fi
+
+AC_OUTPUT(Makefile bonnie.h port.h bonnie++.spec bon_csv2txt bon_csv2html.1 sun/pkginfo)

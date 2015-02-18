@@ -1,0 +1,145 @@
+#!/usr/bin/perl
+
+{
+  my $line;
+  $iocount = 0;
+  $filecount = 0;
+  while($line = <STDIN>)
+  {
+    while($line =~ /^name,/)
+    {
+      $line = <STDIN>;
+    }
+    process($line);
+  }
+  printIOData();
+
+  printFileData();
+}
+
+sub IOHeader
+{
+  my $version = '1.97';
+printf(STDOUT "Version %9s   ------Sequential Output------ --Sequential Input- --Random-\n", $version);
+print "                    -Per Chr- --Block-- -Rewrite- -Per Chr- --Block-- --Seeks--\n";
+print "Machine        Size K/sec %CP K/sec %CP K/sec %CP K/sec %CP K/sec %CP  /sec %CP\n";
+}
+
+sub FileHeader
+{
+print "                    ------Sequential Create------ --------Random Create--------\n";
+print "                    -Create-- --Read--- -Delete-- -Create-- --Read--- -Delete--\n";
+print "files:max:min        /sec %CP  /sec %CP  /sec %CP  /sec %CP  /sec %CP  /sec %CP\n";
+}
+
+sub process
+{
+  my($line) = @_;
+
+  chomp($line);
+  $line =~ s/\r//;
+  my @arr = split(',', $line);
+  my $csv_version = '1.97';
+  if($arr[0] ne $csv_version)
+  {
+    printf(STDERR "Can't process: %s\n", $line);
+    return;
+  }
+  my $name = $arr[2];
+
+# merge size and chunk-size
+  my $tmp = $arr[5];
+  if($arr[6] ne "")
+  {
+    $tmp .= ":" . $arr[6];
+  }
+  $arr[6] = $tmp;
+# $ioline contains the file-IO data, IE we strip off the data on file creation
+  my @ioline = @arr[6 .. 18];
+  if(join('', @ioline) ne "")
+  {
+    $io[$iocount] = $name . "," . join(',', @ioline);
+    if($#arr > 37)
+    {
+      $io[$iocount] .= "," . join(',', @arr[36..41]);
+    }
+    $iocount++;
+  }
+
+# merge num_files, max_size, min_size, num_dirs, and file_chunk_size
+  $tmp = $arr[19];
+  if($arr[20] ne "")
+  {
+    $tmp .= ":" . $arr[20];
+  }
+  if($arr[21] ne "")
+  {
+    $tmp .= ":" . $arr[21];
+  }
+  if($arr[22] ne "")
+  {
+    $tmp .= "/" . $arr[22];
+  }
+  if($arr[23] ne "")
+  {
+    $tmp .= ":" . $arr[23];
+  }
+  $arr[23] = $tmp;
+# $fileline contains the file creation data - everything but $ioline
+  my @fileline = @arr[23 .. 35];
+  if(join('', @fileline) ne "")
+  {
+    $file[$filecount] = $name . "," . join(',', @fileline);
+    if($#arr > 41)
+    {
+      $file[$filecount] .= "," . join(',', @arr[42..$#arr]);
+    }
+    $filecount++;
+  }
+}
+
+sub printFileData
+{
+  if($filecount < 1){ return; }
+  FileHeader();
+  for($i = 0; $i < $filecount; $i++)
+  {
+    @arr = split(/,/,$file[$i]);
+    my $size = $arr[1];
+    $size =~ s/:0:0:/\//;
+    my $desc = $arr[0] . "                   ";
+    $desc = substr($desc, 0, 18 - length($size) );
+    $desc .= " " . $size;
+    printf(STDOUT "%19s %5s %3s %5s %3s %5s %3s %5s %3s %5s %3s %5s %3s\n"
+         , $desc, $arr[2], $arr[3], $arr[4], $arr[5], $arr[6], $arr[7]
+         , $arr[8], $arr[9], $arr[10], $arr[11], $arr[12], $arr[13]);
+    if($#arr > 13 && join("", @arr[14..$#arr]) ne "")
+    {
+      printf(STDOUT "Latency           %9s %9s %9s %9s %9s %9s\n"
+           , $arr[14], $arr[15], $arr[16], $arr[17], $arr[18], $arr[19]);
+    }
+  }
+}
+
+sub printIOData
+{
+  if($iocount < 1){ return; }
+  IOHeader();
+  for($i = 0; $i < $iocount; $i++)
+  {
+    @arr = split(/,/,$io[$i]);
+    my $size = $arr[1];
+    my $desc = $arr[0] . "                   ";
+    $desc = substr($desc, 0, 18 - length($size) );
+    $desc .= " " . $size;
+    printf(STDOUT "%19s %5s %3s %5s %3s %5s %3s %5s %3s %5s %3s %5s %3s\n"
+         , $desc, $arr[2], $arr[3], $arr[4], $arr[5], $arr[6], $arr[7]
+         , $arr[8], $arr[9], $arr[10], $arr[11], $arr[12], $arr[13]);
+    if($#arr > 13 && join("", @arr[14..$#arr]) ne "")
+    {
+      printf(STDOUT "Latency           %9s %9s %9s %9s %9s %9s\n"
+           , $arr[14], $arr[15], $arr[16], $arr[17], $arr[18], $arr[19]);
+    }
+  }
+}
+

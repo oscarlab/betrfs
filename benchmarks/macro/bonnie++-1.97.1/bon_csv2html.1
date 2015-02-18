@@ -1,0 +1,113 @@
+.TH bon_csv2html 1 
+.SH "NAME"
+.BR bon_csv2html
+program to convert CSV format Bonnie++ data to a HTML form
+using tables suitable for display on a web page. NB Lynx can't display this
+properly, and due to the size it probably requires 1024x768 monitor to display
+properly.
+.P
+.BR bon_csv2txt
+program to convert CSV format Bonnie++ data to plain-text format
+suitable for pasting into an email or reading on a Braille display.
+
+.SH "DESCRIPTION"
+They take CSV format (comma-delimited spreadsheet files AKA Comma Seperated
+Values in MS land) data on standard input and produce HTML or plain text on
+standard output respectively.
+
+.SH "FORMAT"
+This is a list of the fields used in the CSV files format version 2.  Format
+version 1 was the type used in Bonnie++ < 1.90.
+Before each field I list the field number as well as the name given in the heading
+.TP
+.B 0 format_version
+Version of the output format in use (1.97)
+.TP
+.B 1 bonnie_version
+(1.97)
+.TP
+.B 2 name
+Machine Name
+.TP
+.B 3 concurrency
+The number of copies of each operation to be run at the same time
+.TP
+.B 4 seed
+Random number seed
+.TP
+.B 5 file_size
+Size in megs for the IO tests
+.TP
+.B 6 chunk_size
+Size of chunks in bytes
+.TP
+.B 7 putc,putc_cpu
+Results for writing a character at a time K/s,%CPU
+.TP
+.B 9 put_block,put_block_cpu
+Results for writing a block at a time K/s,%CPU
+.TP
+.B 11 rewrite,rewrite_cpu
+Results for reading and re-writing a block at a time K/s,%CPU
+.TP
+.B 13 getc,getc_cpu
+Results for reading a character at a time K/s,%CPU
+.TP
+.B 15 get_block,get_block_cpu
+Results for reading a block at a time K/s,%CPU
+.TP
+.B 17 seeks,seeks_cpu
+Results for the seek test seeks/s,%CPU
+.TP
+.B 19 num_files
+Number of files for file-creation tests (units of 1024 files)
+.TP
+.B 20 max_size
+The maximum size of files for file-creation tests.  Or the type of files for
+links.
+.TP
+.B 21 min_size
+The minimum size of files for file-creation tests.
+.TP
+.B 22 num_dirs
+The number of directories for creation of files in multiple directories.
+.TP
+.B 23 file_chunk_size
+The size of blocks for writing multiple files.
+.TP
+.B 24 seq_create,seq_create_cpu
+Rate of creating files sequentially files/s,%CPU
+.TP
+.B 26 seq_stat,seq_stat_cpu
+Rate of reading/stating files sequentially files/s,%CPU
+.TP
+.B 28 seq_del,seq_del_cpu
+Rate of deleting files sequentially files/s,%CPU
+.TP
+.B 30 ran_create,ran_create_cpu
+Rate of creating files in random order files/s,%CPU
+.TP
+.B 32 ran_stat,ran_stat_cpu
+Rate of deleting files in random order files/s,%CPU
+.TP
+.B 34 ran_del,ran_del_cpu
+Rate of deleting files in random order files/s,%CPU
+.TP
+.B 36 putc_latency,put_block_latency,rewrite_latency
+Latency (maximum amount of time for a single operation) for putc, put_block,
+and reqrite
+.TP
+.B 39 getc_latency,get_block_latency,seeks_latency
+Latency for getc, get_block, and seeks
+.TP
+.B 42 seq_create_latency,seq_stat_latency,seq_del_latency
+Latency for seq_create, seq_stat, and seq_del
+.TP
+.B 45 ran_create_latency,ran_stat_latency,ran_del_latency
+Latency for ran_create, ran_stat, and ran_del
+.P
+A string that starts with '#' is a comment.
+
+.SH "AUTHOR"
+These programs were written by Russell Coker <russell@coker.com.au>. May be
+freely used and distributed without restriction.

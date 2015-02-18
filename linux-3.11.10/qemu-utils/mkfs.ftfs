@@ -1,0 +1,14 @@
+#!/bin/bash
+
+set -x
+
+sbDisk=ftfs-southbound.raw
+echo "generating 10G .raw disk image for southbound: $sbDisk (ext4)"
+qemu-img create -f raw $sbDisk 10G
+mkfs.ext4 -F $sbDisk
+
+mkdir -p mnt
+sudo mount -o loop $sbDisk mnt
+cd mnt; sudo rm -rf *; sudo mkdir db; sudo mkdir dev; sudo touch dev/null; sudo mkdir tmp; sudo chmod 1777 tmp; cd ..;
+sleep 1
+sudo umount mnt

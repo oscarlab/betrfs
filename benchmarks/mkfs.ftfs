@@ -1,0 +1,16 @@
+#!/bin/bash
+
+DIR="${BASH_SOURCE%/*}"
+if [[ ! -d "$DIR" ]]; then DIR="$PWD"; fi
+
+. "$DIR/.hostcheck"
+. "$DIR/.rootcheck"
+
+mkfs.ext4 $1
+
+mount $1 /mnt
+cd /mnt; mkdir db; mkdir dev; touch dev/null; mkdir tmp; chmod 1777 tmp; cd -;
+
+sleep 1
+
+umount /mnt

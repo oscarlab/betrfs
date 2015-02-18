@@ -1,0 +1,16 @@
+Differences between Bonnie++ 1.00 and 2.00.
+
+Version 2.00 is totally threaded, this has many subtle impacts on the way the
+code works.  This changed the per-char results so I decided to make it do
+per-byte tests using write() and read() instead.  The results are now much
+less.  From 1.92.
+
+When closing files for the IO tests the operation is to fsync() each file
+handle.  This means on Linux and other OSs that agressively cache writes the
+write performance will be noticably less, but the results will be more
+accurate.  From 1.90b.
+
+The number of seek processes is now 5 instead of 3.  Now almost all new hard
+drives have some sort of seek reordering capability, and OSs are getting
+smarter about maintaining queues.  This and the increasing popularity of RAID
+arrays requires more seek procs to do a reasonable test.

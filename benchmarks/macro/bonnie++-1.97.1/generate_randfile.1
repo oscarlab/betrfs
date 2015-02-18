@@ -1,0 +1,41 @@
+.TH generate_randfile 1 
+.SH "NAME"
+.BR generate_randfile
+\- a program to generate a file of random data
+.P
+
+.SH "SYNOPSIS"
+.BR generate_randfile
+[
+.BR \-s
+seed] [
+.BR \-f
+file]
+.BR count
+
+.SH "DESCRIPTION"
+Produces a file comprised of random integers in network-byte-order from the
+rand(3) library call.
+
+.SH "OPTIONS"
+.TP
+.B \-s
+the seed to use to create the random numbers.
+.TP
+.B \-f
+the file to create for writing the output (default is to use standard output).
+.TP
+.B count
+the number of integers to write.
+
+.SH "SEE ALSO"
+.BR rand (3)
+
+.SH "AUTHOR"
+These programs were written by Russell Coker <russell@coker.com.au>. May be
+freely used and distributed without restriction.
+
+.SH "AVAILABILITY"
+The source is available from http://www.coker.com.au/bonnie++ .
+.P
+See http://etbe.coker.com.au/category/benchmark for further information.

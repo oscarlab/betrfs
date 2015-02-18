@@ -1,0 +1,655 @@
+bonnie++ (1.97.1) unstable; urgency=medium
+
+  * Fixed the changelog and aim it at unstable not wheezy.
+
+ -- Russell Coker <russell@coker.com.au>  Fri, 23 Nov 2012 20:12:46 +1100
+
+bonnie++ (1.97) unstable; urgency=medium
+
+  * Fix a CSV column alignment bug in the case where -s0 is used.  Bump the
+    data format version to 1.97.  Thanks to Brian Keefer for reporting this.
+    Also added the concurrency and seed fields to the header.
+    Closes: #660564, #669124
+  * Use a const pointer for the large file test.
+  * zcav.8 documents the maximum value of -s
+  * Made the zcav deefault block size 512M to cope with new disks that can
+    sustain >200MB/s.  Also documented this.
+  * Made zcav not SEGV when the -c option is used.
+    Closes: #687668
+  * Describe the units for the plain text output in bonnie++.8.
+    Closes: #643821
+  * Removed the outdated section in the description which referred to Lenny.
+    Closes: #693483
+  * Fixed most of the HTML validation errors in the output of bon_csv2html.
+
+ -- Russell Coker <russell@coker.com.au>  Fri, 23 Nov 2012 19:32:00 +1100
+
+bonnie++ (1.96) unstable; urgency=low
+
+  * Fix a minor bug in setting the GID.
+  * Make it build on Solaris by checking for O_DIRECT being defined.
+  * The option -n9765 or greater caused the small file test to abort,
+    to increase this I changed the number format to hexadecimal and made it
+    10 digits.  Now any option smaller than -n1073741824 will be OK.
+    Thanks Nick Dokos of HP.
+  * Updated bon_csv2html, made the machine name span two rows, made the
+    concurrency column go away when there's no data, correctly calculated the
+    colors of the speed columns (was off by one column before), and calculate
+    the CPU colors.
+
+ -- Russell Coker <russell@coker.com.au>  Sat, 04 Jul 2009 11:24:13 +1000
+
+bonnie++ (1.95) unstable; urgency=low
+
+  * Removed code for building on OS/2, I think that no-one has been interested
+    in this for a while.
+  * Removed code for building on NT, I don't think that anyone was ever very
+    interested in that and it probably didn't work.
+  * Patch from Justin Clift to make getc_putc compile on RHEL 5.2.
+  * Added the -D option to bonnie++ to use direct IO (O_DIRECT) for bulk IO.
+    Thanks to Dave Murch from Violin Memory - http://violin-memory.com/
+  * Fixed some more warnings with recent versions of GCC.
+
+ -- Russell Coker <russell@coker.com.au>  Wed, 31 Dec 2008 08:50:06 +1100
+
+bonnie++ (1.94) unstable; urgency=low
+
+  * Fixed typos in man page.
+    Closes: #133714, #449596
+  * Added the URL to the man pages.
+  * Documented why UID==0 is bad.
+    Closes: #182023
+  * Check return value of chdir()
+  * Removed the zcav -s option which did the same thing as -n.
+  * Made zcav report in GiB and MiB/s, and made the default 256MiB.
+  * Improved bonnie++.8 documentation of the -y and -p options.
+  * Made zcav support skipping blocks for faster completion.
+  * Fixed the autoconf checks for 64bit seek.
+
+ -- Russell Coker <russell@coker.com.au>  Tue, 19 Aug 2008 18:36:08 +1000
+
+bonnie++ (1.93d) unstable; urgency=low
+
+  * Documented the default chunk size in bonnie++.8.
+
+  * Added support for testing write speed to zcav.
+
+  * Made default block size for zcav 200M.
+
+ -- Russell Coker <russell@coker.com.au>  Mon,  3 Dec 2007 10:18:00 +1100
+
+bonnie++ (1.93c) unstable; urgency=low
+
+  * Made it compile with GCC 3.2.
+
+ -- Russell Coker <russell@coker.com.au>  Wed,  8 Jan 2003 23:13:00 +0100
+
+bonnie++ (1.93b) unstable; urgency=low
+
+  * Fixed an error in calculating seeks, it used to add an extra 5 seconds to
+    the test time before calculation and therefore under-reported the results.
+
+  * Fixed the signal handling error on Irix.
+
+  * Fixed <algo> check to work with GCC 3.2.
+
+  * Fixed a bug where it would SEGV if you specified more than 999 directories
+    (now it handles 99,999 and displays an error message if you ask for more).
+
+  * Fixed a bug in error handling during a stat test with multiple directories.
+
+  * Fixed the mandir for RPM package building.
+
+ -- Russell Coker <russell@coker.com.au>  Wed,  1 Jan 2003 18:02:00 +0100
+
+bonnie++ (1.93a) unstable; urgency=low
+
+  * Made the signal handler extern "C".
+
+  * Updated the RPM packaging.
+
+  * Improved the NT portability code.
+
+ -- Russell Coker <russell@coker.com.au>  Fri,  1 Mar 2002 17:28:00 +0100
+
+bonnie++ (1.93) unstable; urgency=low
+
+  * Updated to latest debian standards version and follow the latest Debian
+    policy on stripping and debug generation.
+
+  * Removed optind=0 because it caused problems on BSD.
+
+  * Added new test program getc_putc for per char IO.
+
+ -- Russell Coker <russell@coker.com.au>  Sun,  9 Dec 2001 15:52:00 +0100
+
+bonnie++ (1.92b) unstable; urgency=low
+
+  * Fixed a buffer overflow in the random number management code.
+
+  * Fixed a bug where bonnie++ would SEGV if ^C was pressed at the start of the
+    file creation tests.
+ 
+  * Clarified the -r option to bonnie++ in the man page.
+
+  * Finished adding the support for specifying the seed.  Fixed the bon_csv2*
+    programs and their documentation.
+
+ -- Russell Coker <russell@coker.com.au>  Sun, 7 Jun 2001 14:03:54 +0200
+
+bonnie++ (1.92a) unstable; urgency=low
+
+  * Made the -d option to bonnie++ work with relative paths.  Now it does
+    chdir() to the specifed directory and proceeds as usual.
+
+  * Fixed a tricky bug related to thread management which caused SEGV.  For
+    some time I had known of the existance of the bug but I couldn't work
+    out how to reproduce it.
+
+  * Added a feature of specifying the random number seed for repeatable tests.
+    Also made a separate class to manage all random numbers as part of this.
+
+  * Made bonnie++ have the facility to read from a file containing random
+    numbers and created a program to generate them.
+
+  * Added a "make dep" rule and include it's output in the archive.
+
+  * Now I don't use stupid macro names like _close which break on BSD!
+
+ -- Russell Coker <russell@coker.com.au>  Mon, 11 Jun 2001 13:39:36 +0200
+
+bonnie++ (1.92) unstable; urgency=low
+
+  * Made the per-byte code use read() and write() instead of putc() and getc().
+    Using the stream functions gives too much variance and isn't as interesting
+    nowadays.  I will soon add a separate benchmark for streams vs write() for
+    byte at a time.
+
+  * Made it use a single file >2G on systems that have LFS support.  On systems
+    that lack it there will be no more support of more than 2G of data.
+    I believe that now any machine with 1G of RAM should have LFS support!
+    Note that the ./configure test for this takes ages on ReiserFS.
+
+  * Made it remove the ./configure cache files before Debian package build.
+    This fixes the problems with incorrect data being cached for ports.
+
+  * Fixed the memory checks for file creation tests, thanks to
+    Andreas Dilger <adilger@turbolinux.com> .
+
+  * Fixed a minor field alignment bug in bon_csv2html.
+
+  * Made bon_csv2html not display columns that contain no data.
+
+  * Fixed a bug where bon_csv2html could crash on bad data.
+
+  * Fixed a bug where bonnie++ would generate bad CSV data if run with "-n0".
+
+ -- Russell Coker <russell@coker.com.au>  Fri, 11 May 2001 16:34:58 +0100
+
+bonnie++ (1.91c) unstable; urgency=low
+
+  * Now compiles with GCC 3.0.
+
+  * Stopped it giving a SIGFPE on Alpha and tidied up the relevant code in the
+    results printing.
+
+  * Fixed the CSV output.
+
+  * Fixed a minor warning.
+
+ -- Russell Coker <russell@coker.com.au>  Mon, 16 Apr 2001 18:49:03 +0100
+
+bonnie++ (1.91b) unstable; urgency=low
+
+  * Added an fflush(NULL) to the Sync code to make it display the prompt on
+    buffered devices.
+
+  * Added autoconf check for snprintf().
+
+  * Fixed some minor warnings.
+
+ -- Russell Coker <russell@coker.com.au>  Tue, 6 Mar 2001 20:17:17 +0100
+
+bonnie++ (1.91a) unstable; urgency=low
+
+  * Fixed the -p/-y options.
+
+  * Made -n take "k" suffix for kilobytes for the size and the "m" suffix
+    for creating millions of files.  Also allow specifying the chunk size
+    for small file tests.
+
+  * Changed readme.html to make it more up to date.
+
+  * Made it conflict/provide/replace the bonnie package.  Bonnie++ does
+    everything that bonnie does and fixes some bugs including doing srand()
+    after fork(), and having sensible defaults and detection of RAM installed
+    to avoid meaningless test results.
+    There is no need to have bonnie and bonnie++ installed.
+
+  * Use @exec_prefix@ in autoconf for better standards compliance.
+
+  * Made it possible to specify chunk_size for IO and file tests separately.
+    Added a new field in position 21 in the csv file to record this.  So I
+    changed the compatibility number for the bon_csv2* programs.
+
+  * Removed the "wait" code in zcav which caused all the broken-ness.  It
+    probably didn't gain us much anyway.
+
+ -- Russell Coker <russell@coker.com.au>  Sun, 25 Feb 2001 17:38:49 +0100
+
+bonnie++ (1.91) unstable; urgency=low
+
+  * Fixed the bon_csv2html bug that made the columns not line up if different
+    rows had different numbers of blank columns.
+
+  * Fixed a bug introduced in 1.90f which resulted in Random Seeks always
+    being reported as 0.
+
+  * Made quiet mode not tell you which UID it uses.
+
+ -- Russell Coker <russell@coker.com.au>  Sun, 11 Feb 2001 11:23:10 +0100
+
+bonnie++ (1.90g) unstable; urgency=low
+
+  * Added latency parsing support to bon_csv2html.
+
+  * Fixed a number of bugs in bon_csv2html, now does colors correctly.
+
+ -- Russell Coker <russell@coker.com.au>  Tue, 6 Feb 2001 14:20:15 +0100
+
+bonnie++ (1.90f) unstable; urgency=low
+
+  * Now use mode "b" for fopen() for NT and OS/2.
+
+  * Made the latency numbers print out correctly.
+
+  * Added latency parsing support to bon_csv2txt.
+
+ -- Russell Coker <russell@coker.com.au>  Tue, 30 Jan 2001 16:00:19 +0100
+
+bonnie++ (1.90e) unstable; urgency=low
+
+  * Now should compile properly on NT and OS/2 (NB ZCAV still won't fully work).
+
+ -- Russell Coker <russell@coker.com.au>  Thu, 18 Jan 2001 11:08:37 +1100
+
+bonnie++ (1.90d) unstable; urgency=low
+
+  * Updated standards version to 3.2.1.
+
+  * Done some serious work on porting to OS/2 and NT.  This may break compile
+    on some versions of UNIX.  If so I'll fix it as soon as it gets reported.
+
+ -- Russell Coker <russell@coker.com.au>  Thu, 11 Jan 2001 14:01:00 +1100
+
+bonnie++ (1.90c) unstable; urgency=low
+
+  * Rewrote bon_csv2html in C++ and made it assign colors to the fields to show
+    how fast or slow the values are (red for slow, green for fast).
+
+ -- Russell Coker <russell@coker.com.au>  Mon, 11 Dec 2000 22:31:20 +0100
+
+bonnie++ (1.90b) unstable; urgency=low
+
+  * Added first stage of support for synchronising bonnie++ instances over a
+    network.
+    This required changing the way the -y option operates.
+    Also created a new Sync class to do this generically.
+
+  * Added code to check the latency of operations in micro-seconds (us).
+
+ -- Russell Coker <russell@coker.com.au>  Tue, 5 Dec 2000 17:04:27 +0100
+
+bonnie++ (1.90a) unstable; urgency=low
+
+  * This is the start of the new 2.00 series of Bonnie++.  The aim is to do
+    serious performance testing of RAID arrays.  All programs will be multi-
+    threaded.
+
+  * Added the multi-threaded zcav that I had removed from the 1.00 series and
+    make Bonnie++ use threads instead of fork().  Next step is to add extra
+    concurency through threads.
+
+  * Changed the format of the csv files.  Added a format version number and a
+    place for the version of Bonnie++ that created the data.  Made the
+    bon_csv2txt and bon_csv2html programs understand the new format.
+
+ -- Russell Coker <russell@coker.com.au>  Wed, 29 Nov 2000 23:53:13 +0100
+
+bonnie++ (1.00f) unstable; urgency=low
+
+  * Fixed the bugs in timing of seeks.
+
+  * Changed the number of seeks from 8000 to 8192.
+
+  * Now the minimum time for a test that will be considered valid is 500ms (for
+    bonnie++ and zcav), it was previously 1000ms but I have been convinced that
+    system clocks are accurate enough for this.
+
+  * Changed the default number of files created for file creation tests from
+    30K to 16K, this change makes the test time bearable on obsolete file
+    systems like UFS but relies on the above change to work on ReiserFS on
+    Pentium4 class CPUs.
+
+  * Changed the default file size to 300M for IO tests, this reflects the
+    increase in RAM sizes over the last year.
+
+  * Added some more compile warnings and fixed some more trivial bugs.
+
+  * Made the loops: line in zcav output always be prefixed by a '#' for a
+    gnuplot comment.
+
+  * Made zcav correctly display the position in megabytes instead of block-size
+    units.
+
+ -- Russell Coker <russell@coker.com.au>  Mon, 27 Nov 2000 09:45:30 +0100
+
+bonnie++ (1.00e) unstable; urgency=low
+
+  * Now exit on sync errors.
+
+  * When directory can't be synced it will display one warning and not try to
+    sync again.
+
+  * Stopped it crashing when there is only one directory to be synced.
+
+  * Made the version number managed by autoconf so I don't release it with
+    inconsistant version numbers again!
+
+ -- Russell Coker <russell@coker.com.au>  Thu, 9 Nov 2000 03:26:15 +0100
+
+bonnie++ (1.00d) unstable; urgency=low
+
+  * Use SA_RESETHAND instead of SA_ONESHOT for the benefit of Solaris.
+
+  * Added a specific rule for bon_suid.cpp as it doesn't have a header file.
+
+  * Added --prefix support to the ./configure , also made the default prefix
+    be /usr/local instead of /usr .
+
+  * Changed the autoconf support for checking for C++ slightly.  It should
+    now work better for some strange setups and work the same for everyone
+    else (I hope).
+
+  * Made the autoconf tests for semaphore headers work correctly, now it
+    should compile on *BSD.
+
+  * Added --disable-stripping option for ./configure if you don't want binaries
+    stripped.
+
+  * Added autoconf checking for bool, now it should compile on AIX using ICC
+    without any special options!
+
+  * Reverted zcav to the 1.00a version and then added the code for -u, -g, and
+    the fix for large numbers of data points.  The multi-threaded zcav code
+    will go into 1.90 (the pre-2.00 tree).
+    Bonnie++ versions < 1.90 will never again have threading code.
+
+  * Made bon_csv2txt use every available character for the description.
+
+  * Made it install man pages by default.
+
+  * Added sun package support - "make -C sun"!
+
+ -- Russell Coker <russell@coker.com.au>  Thu, 28 Sep 2000 16:22:15 +0100
+
+bonnie++ (1.00c) unstable; urgency=low
+
+  * Closes:#53545
+    Fixed in 0.99e, should have been closed in Debian BTS.
+
+  * Closes:#53546
+    Fixed in 0.99e, should have been closed in Debian BTS.
+
+  * Closes:#61925
+    Fixed in 1.00a.
+
+  * Closes:#64995
+    It is in /usr/sbin because it can only sensibly be run by the administrator
+    of the machine, otherwise it probably will give bad results and may impact
+    the performance of the machine in question.  Also it can now change
+    UID/GID.  The new way of dealing with the running as root issue is in the
+    next change.
+
+  * Made zcav and bonnie++ take -u and -g options to set the UID and GID to run
+    as.  For bonnie++ it is now mandatory to use the -u option when running as
+    root.
+
+  * Made bonnie++ not change it's command-line.
+
+  * Documented the K and G suffixes for sizes on the command-line.
+
+  * Now the CPU time field also displays as "+++" if the elapsed time is < 1s.
+
+  * Fixed the machine-name broken-ness from 1.00b, and made the machine name
+    default to the nodename as reported by utsname() (also the output of
+    `hostname` or `uname -n`).
+
+  * Now uses sysconf() to check the ram size, you can use -r to over-ride it.
+    Also the default file size for IO tests will be twice the reported RAM
+    size or 200M (whichever is larger).
+
+  * Now Bonnie++ handles ^C from the keyboard, the XCPU and XFSZ (excessive CPU
+    and excessive file size) flags and aborts the program cleanly removing all
+    files when it receives them.  Also ignores SIGHUP.
+
+  * Added AC_PROG_CC to configure.in so that it can compile on systems with
+    strange C compiler setups.
+
+ -- Russell Coker <russell@coker.com.au>  Fri, 08 Sep 2000 08:22:47 +0100
+
+bonnie++ (1.00b) unstable; urgency=low
+
+  * Added more warnings to the compile and removed assertions.  Made some
+    trivial changes to the code (like changing variable names) to stop the
+    warnings.
+
+  * Fixed the memory management problem on bonnie++, these made it not work on
+    IA64 (and stopped it working correctly on most platforms).  Thanks to
+    Electric Fence by Bruce Perens for the discovery of this.
+    The worst part of it was introduced in testing this version, so it only
+    hit me and my alpha-testers.
+
+  * Fixed zcav for large numbers of data points.
+
+  * Made zcav multi-threaded to test multiple hard drives at once.  Changed the
+    way it works totally.
+
+  * Removed some dependencies on extensions to the C++ standard which are not
+    supported in all compilers, also removed some trivial header file issues.
+    These were found in testing on Tru64Unix.
+
+  * Fixed a bug in bonnie++, it would go into an infinite loop when the file
+    creation tests had a non-zero size.
+
+  * Made bonnie++ work for block-reads that return partial blocks, now it will
+    print an error and do another read for the rest.
+
+  * Made Bonnie++ accept machine names up to 4095 bytes and not crash if the
+    name is longer.  Previously the limit was 20 bytes and it crashed when you
+    exceeded it.
+
+  * This version is fairly experimental but I'm releasing it now because I need
+    wider testing of the new features.
+
+ -- Russell Coker <russell@coker.com.au>  Fri, 25 Aug 2000 12:15:06 +0200
+
+bonnie++ (1.00a) unstable; urgency=low
+
+  * Added a 30 second startup delay when run as root.  A user lost some data
+    because of running it as root, if they had run it as a regular account
+    they would be OK.  I don't want this to happen again.
+
+  * Zcav now displays an error if it can't read a single block.
+
+  * Added some basic autoconf support which I will use to increase portability
+    in future versions.
+
+  * Now provides zcav.
+
+  * Should compile with all old versions of gcc.
+
+  * Fixed a warning on Alpha.
+
+ -- Russell Coker <russell@coker.com.au>  Mon, 24 Apr 2000 23:34:02 +0100
+
+bonnie++ (1.00) unstable; urgency=low
+
+  * Now include ZCAV in the same package.  ZCAV package should disappear.
+
+  * License is now GPL.  Tim Bray agrees to the GPL for his parts, the license
+    conflict was stopping me from putting ZCAV into the archive.
+
+  * ZCAV reads through a hard drive sequentially and reports the IO speeds for
+    different zones of the drive.
+
+  * Fixed a few minor issues with the documentation, and put the test programs
+    in /usr/sbin as they aren't generally run by regular users.  Also use man
+    section 8.
+
+ -- Russell Coker <russell@coker.com.au>  Sat, 01 Mar 2000 12:01:00 +0100
+
+bonnie++ (0.99j) unstable; urgency=low
+
+  * 0.99h core dumped when you didn't specify "-b" for file creation tests,
+    fixed.
+
+ -- Russell Coker <russell@coker.com.au>  Sun, 05 Mar 2000 11:16:42 +0100
+
+bonnie++ (0.99h) unstable; urgency=low
+
+  * Fixed a variety of bugs in the semaphore code which were introduced in
+    0.99g.
+
+  * Fixed formatting of output.
+
+  * Added "-b" option to sync all writes.
+
+  * Changed the semaphore code to make it more easily hackable for BSD users,
+    it won't compile as-is on BSD at the moment...
+
+ -- Russell Coker <russell@coker.com.au>  Sun, 05 Mar 2000 11:16:42 +0100
+
+bonnie++ (0.99g) unstable; urgency=low
+
+  * Now use getopt() for checking command-line options.
+
+  * Added new versions of fork and semaphore code, initially developed for
+    postal.
+
+  * Fixed the message that's displayed when bad command-line parameters are
+    entered.
+
+  * Version 1.[0-8]0 will use fork().  Version 1.90 and above will use POSIX
+    threads and include the concurrant bonnie++ functionality I've been
+    promising for so long.
+
+ -- Russell Coker <russell@coker.com.au>  Wed, 23 Feb 2000 22:16:23 +0100
+
+bonnie++ (0.99f) unstable; urgency=low
+
+  * Added "-f" parameter to skip per-char tests and semaphore code to
+    synchronise multiple instances of Bonnie++.  Thanks to
+    Christian Kagerhuber <c.kagerhuber@t-online.net> for the patch!
+
+  * Added srand() after the fork so each child gets different random numbers.
+
+ -- Russell Coker <russell@coker.com.au>  Wed, 12 Jan 2000 16:45:28 +1100
+
+bonnie++ (0.99e) unstable; urgency=low
+
+  * Fixed the operation of "-x" parameter (used to just cause crashes).
+ 
+  * Made it cleanly exit under some error conditions where it used to crash.
+
+  * Improved the bonnie++ man page.
+ 
+  * Fixed some checking of command-line parameters.
+
+  * Merged code from the OS/2 port, needs lots of testing...
+
+ -- Russell Coker <russell@coker.com.au>  Wed, 12 Jan 2000 16:45:28 +1100
+
+bonnie++ (0.99d) unstable; urgency=low
+
+  * Added some more functionality. Tests hard and soft link creation.
+
+  * Fixed CSV output of <100 seeks per second.
+
+ -- Russell Coker <russell@coker.com.au>  Sun, 21 Nov 1999 22:37:42 +0200
+
+bonnie++ (0.99c) unstable; urgency=low
+
+  * Fix some bugs with big IO (fseek related) and include man pages.
+
+  * Made it always print the CSV data.
+
+ -- Russell Coker <russell@coker.com.au>  Sun, 21 Nov 1999 22:37:42 +0200
+
+bonnie++ (0.99b) unstable; urgency=low
+
+  * Initial Release as a Debian package.
+
+
+0.99
+Files are created mode 0600 not 0777.
+
+Fixed some bugs in 0.98 where the results from several tests were totally
+wrong.
+
+Now the random file code will take less CPU time when there are extremely
+large numbers of files.
+
+Changed the format of all the output files slightly.  Notable change is that
+the percentages of CPU time are now rounded off to the nearest percent.  This
+is because it's not that accurate anyway (results that are provably more than
+1% wrong are not uncommon), and because I needed the extra 1 character per
+field.  Also now it handles CPU time >100% properly.  This is for SMP systems
+where more than 1 CPU is being used.  Concurrant Bonnie++ will return many
+results significantly greater than 100% on OSs that work well with SMP.
+
+Added a csv2txt.pl program.  The main aim of this is to display data well
+for 80 column braille displays for the blind.
+
+Added "-q" option for quiet mode (less output).
+
+Now the "-n" option works on a multiple of 1024.  So "-n 10" means create
+10240 files.  This change is to allow the output to display in the same
+format and save space in display (who would want to test as a lower resolution
+than per 1024 files anyway).
+
+The -n option is now of the form "num[:max[:min]]" where max is the maximum
+size (default 0) and min is the minimum size (default 0).  To simulate Squid
+use a max of 15000 and a min of 300.  To simulate INN use a maximum of 4096
+and a minimum of 512.
+
+1.0 will be out soon!
+
+0.98
+Fixed a bug where the data size couldn't be an exact multiple of the size of
+each file (1 gig).  Fixed a number of other minor bugs related to that and
+added more error checking as well.
+Changed the code to support up to 1000 files for the IO test, if each is a
+gig then you can test a tera-byte of data.  Changing the code to have more
+than 1000 files wouldn't be that difficult to do.
+
+Use the new C++ type conversions.
+
+0.97
+I have stopped using cout/cerr and never plan to use them again.  They caused
+me significant pain when trying to get it going on an ancient SGI system.
+
+Also changed the code structure a bit to make it cleaner.  One advantage of
+this is that there is now a "-x" option to tell bonnie++ to run the same test
+a number of times (it's interesting to see the variance in the results).
+
+Now use fflush() after writing each set of results.  This means that killing
+the program unexpectedly won't result in results being lost.  Also fixes a
+strange bug related to printf() on Linux which I am still looking into.
+
+
+ -- Russell Coker <russell@coker.com.au>  Wed, 13 Oct 1999 22:15:53 +0200
+
+Local variables:
+mode: debian-changelog
+End:

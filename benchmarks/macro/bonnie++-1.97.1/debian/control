@@ -1,0 +1,21 @@
+Source: bonnie++
+Section: utils
+Priority: optional
+Maintainer: Russell Coker <russell@coker.com.au>
+Standards-Version: 3.5.6
+Build-Depends: debhelper
+
+Package: bonnie++
+Architecture: any
+Depends: ${shlibs:Depends}
+Conflicts: zcav, bonnie, bonnie++
+Replaces: zcav, bonnie
+Provides: zcav, bonnie
+Description: Hard drive benchmark suite
+  Based on the old Bonnie benchmark, Bonnie++ is a toolkit for testing
+  hard drive and file system performance.
+  .
+  As well as bonnie++ itself and some output filters, the suite provides
+  some other benchmarking tools including zcav, which can compare the
+  raw-read performance of different zones on a drive, and gives output
+  suitable for gnuplot.

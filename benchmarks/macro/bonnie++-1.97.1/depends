@@ -1,0 +1,18 @@
+# DO NOT DELETE
+
+bon_add.o: bonnie.h port.h
+bon_csv2html.o: bonnie.h port.h
+bon_file.o: bonnie.h port.h bon_file.h bon_time.h duration.h rand.h
+bon_io.o: bonnie.h port.h sync.h semaphore.h bon_io.h thread.h bon_time.h
+bon_io.o: duration.h rand.h
+bon_suid.o: bonnie.h port.h
+bon_time.o: bon_time.h bonnie.h port.h duration.h rand.h
+bonnie++.o: bonnie.h port.h sync.h semaphore.h bon_io.h thread.h bon_file.h
+bonnie++.o: bon_time.h duration.h rand.h
+duration.o: duration.h port.h
+rand.o: rand.h port.h
+semaphore.o: port.h semaphore.h
+sync.o: port.h semaphore.h sync.h
+thread.o: thread.h port.h
+zcav.o: port.h zcav_io.h bonnie.h duration.h thread.h
+zcav_io.o: zcav_io.h bonnie.h port.h duration.h
