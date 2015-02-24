@@ -1,4 +1,5 @@
 *.ko
+*.o
 *.cmd
 .tmp_versions
 
