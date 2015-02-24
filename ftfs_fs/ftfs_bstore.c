@@ -69,17 +69,14 @@ static void dbt_init(DBT *dbt, const void *data, size_t size)
 /*
  * Copy the buffers referred to by one dbt into another.
  */
-static int dbt_copy_allocate(DBT *src, DBT *dest)
+static void dbt_copy_allocate(DBT *a, DBT *b)
 {
-	memset(dest, 0, sizeof(DBT));
-	dest->data = kmalloc(src->size, GFP_KERNEL);
-	if(!dest->data)
-		return -ENOMEM;
-	memcpy(dest->data, src->data, src->size);
-	dest->size = src->size;
-	dest->ulen = src->ulen;
-	dest->flags = src->flags;
-	return 0;
+	memset(b, 0, sizeof(DBT));
+	b->data = kmalloc(a->size, GFP_KERNEL);
+	memcpy(b->data, a->data, a->size);
+	b->size = a->size;
+	b->ulen = a->ulen;
+	b->flags = a->flags;
 }
 
 /*
@@ -102,8 +99,10 @@ static inline unsigned count_slash(const char *str)
 static void generate_meta_key_dbt(DBT *key_dbt, char *key_buf,
 	size_t key_len, const char *name)
 {
-	size_t key_name_prefix_len = key_len - 1;
-	memcpy(key_buf, name, key_name_prefix_len);
+	unsigned slash_count = cpu_to_le32(count_slash(name));
+	size_t key_name_prefix_len = key_len - sizeof(unsigned) - 1;
+	memcpy(key_buf, &slash_count, sizeof(unsigned));
+	memcpy(key_buf + sizeof(unsigned), name, key_name_prefix_len);
 	key_buf[key_len - 1] = 0;
 	dbt_init(key_dbt, key_buf, key_len);
 }
@@ -123,8 +122,8 @@ static void generate_data_key_dbt(DBT *key_dbt, char *key_buf,
 	dbt_init(key_dbt, key_buf, key_buf_len);
 }
 
-/* str (including last \0) + 0 (magic) */
-#define META_KEY_BUF_LEN(str) (strlen(str) + 2)
+/* (unsigned slash_count) + str (including last \0) + 0 (magic) */
+#define META_KEY_BUF_LEN(str) (strlen(str) + sizeof(unsigned) + 2)
 /* str (including last \0) + (uint64_t block_num) + MAGIC (magic) */
 #define DATA_KEY_BUF_LEN(str) (strlen(str) + sizeof(uint64_t) + 2)
 
@@ -146,15 +145,13 @@ int alloc_and_gen_meta_key_dbt(DBT *dbt, const char *name)
 
 char *get_path_from_meta_key_dbt(DBT *dbt)
 {
-	return ((char *)dbt->data);
+	return ((char *)dbt->data) + sizeof(unsigned);
 }
 
-#if 0
 static unsigned get_meta_key_slash_count(DBT const *key)
 {
 	return le32_to_cpu(*((unsigned *)key->data));
 }
-#endif
 
 static uint64_t get_data_key_block_num(DBT const *key)
 {
@@ -163,64 +160,66 @@ static uint64_t get_data_key_block_num(DBT const *key)
 }
 
 /*
- * Key comparison function in databas
- * Find the first place where the two keys differ
- * 	Let a and b be the entries in which they differ
- * If both paths have a / at or after the differing point
- * 	Sort by a and b
- * If both paths don't have a / at or after the differing point
- * 	Sort by a and b
- * Otherwise, the path without a / at or after the differing point goes first
+ * Key comparison function in database
+ * meta keys are sorted by num of slashes and then memcpy
+ * data keys are sorted by memcpy directly
  */
 static int env_keycmp(DB *DB, DBT const *a, DBT const *b)
 {
-	const char *ka = a->data;
-	const char *kb = b->data;
-	const uint64_t *a64 = a->data;
-	const uint64_t *b64 = b->data;
-	int alen = a->size;
-	int blen = b->size;
-	int comparelen;
+	unsigned char *k1 = a->data;
+	unsigned char *k2 = b->data;
+	int v1, v2, comparelen;
+	unsigned num_slashes_k1, num_slashes_k2;
 
-	BUG_ON(*ka != '/');
-	BUG_ON(*kb != '/');
-	
 	/* check the last bytes of the keys to see whether its meta
 	 * or data key */
-	int magic = *(ka + alen - 1);
+	int magic = *(k1 + a->size - 1);
 	if (magic == DATA_DB_KEY_MAGIC) {
-		alen -= sizeof(uint64_t);
-		blen -= sizeof(uint64_t); 
+		comparelen = min(a->size, b->size) - sizeof(uint64_t) - 1;
+		goto just_memcmp;
 	}
-	comparelen = min(alen, blen);
-	
-  	while (comparelen >= 8 && *a64 == *b64) {
-    		comparelen -= 8;
-    		a64++;
-    		b64++;
-  	}
-	const char *pa = (const char *)a64, *pb = (const char *)b64;
-  	while (comparelen > 0 && *pa == *pb) {
-    		comparelen--;
-    		pa++;
-    		pb++;
-  	}
-  	if (comparelen == 0)
-    		return alen < blen ? -4 : (alen > blen) ? 4 : 0;	
-
-	const char *a_next_slash = memchr(pa, '/', alen - (pa - ka));
-	const char *b_next_slash = memchr(pb, '/', blen - (pb - kb));
-  	
-	if ((a_next_slash == NULL) == (b_next_slash == NULL)) {
-    		if (*pa == '/')
-      			return pa > ka && *(pa-1) == '/' ? 5 : -1;
-    		else if (*pb == '/')
-      			return pb > kb && *(pb-1) == '/' ? -5 : 1;
-    		return *pa < *pb ? -2 : 2;
-  	} else if (a_next_slash) {
-    		return 3;
-  	}
-  	return -3;
+	/* for meta db, we need to check num of slashs first */
+	num_slashes_k1 = get_meta_key_slash_count(a);
+	num_slashes_k2 = get_meta_key_slash_count(b);
+	if (num_slashes_k1 > num_slashes_k2) {
+		return 1;
+	} else if (num_slashes_k1 < num_slashes_k2) {
+		return -1;
+	}
+	k1 += sizeof(unsigned);
+	k2 += sizeof(unsigned);
+	comparelen = min(a->size, b->size) - sizeof(unsigned);
+just_memcmp:
+#undef UNROLL
+#define UNROLL 8
+#define CMP_BYTE(i) v1 = k1[i]; v2 = k2[i]; if (v1 != v2) return v1 - v2;
+	for (; comparelen > UNROLL; 
+			k1 += UNROLL, k2 += UNROLL, comparelen -= UNROLL) {
+		if (*(uint64_t *)k1 == *(uint64_t *)k2)
+			continue;
+		CMP_BYTE(0);
+		CMP_BYTE(1);
+		CMP_BYTE(2);
+		CMP_BYTE(3);
+		CMP_BYTE(4);
+		CMP_BYTE(5);
+		CMP_BYTE(6);
+		CMP_BYTE(7);
+	}
+	for (; comparelen > 0; k1++, k2++, comparelen--) {
+		CMP_BYTE(0);
+	}
+#undef UNROLL
+#undef CMP_BYTE
+	if (a->size == b->size && magic == DATA_DB_KEY_MAGIC) {
+		/*return le64_to_cpu(*((uint64_t *)k1))
+		       - le64_to_cpu(*((uint64_t *)k2));
+		 * easier for understanding and maintainance
+		 */
+		return get_data_key_block_num(a)
+		       - get_data_key_block_num(b);
+	}
+	return (a->size - b->size);
 }
 
 /*
@@ -379,12 +378,12 @@ int ftfs_bstore_env_open(void)
 	ret = bstore_txn_begin(NULL, &txn, 0);
 	BUG_ON(ret !=0);
 
-      	/* open data db */
+	/* open data db */
 	db_flags = DB_CREATE | DB_THREAD;
 	BUG_ON(data_db != NULL);
 	ret = db_create(&data_db, db_env, 0);
 	BUG_ON(ret != 0);
-
+	// db_set_read_params(data_db);
 	ret = data_db->open(data_db, txn, DATA_DB_NAME, NULL,
 			DB_BTREE, db_flags, 0644);
 	BUG_ON(ret != 0);
@@ -393,7 +392,7 @@ int ftfs_bstore_env_open(void)
 	BUG_ON(meta_db != NULL);
 	ret = db_create(&meta_db, db_env, 0);
 	BUG_ON(ret != 0);
-
+	// db_set_read_params(meta_db);
 	ret = meta_db->open(meta_db, NULL, META_DB_NAME, NULL,
 			DB_BTREE, db_flags, 0644);
 	BUG_ON(ret != 0);
@@ -402,11 +401,11 @@ int ftfs_bstore_env_open(void)
 	BUG_ON(ret != 0);
 
 	/* set the cleaning and checkpointing thread periods */
-	db_env_flags = 60; /* in s */
+	db_env_flags = 60;
 	db_env->checkpointing_set_period(db_env, db_env_flags);
-	db_env_flags = 1; /* in s */
+	db_env_flags = 1;
 	db_env->cleaner_set_period(db_env, db_env_flags);
-	db_env_flags = 1000; /* in ms */
+	db_env_flags = 1000;
 	db_env->change_fsync_log_period(db_env, db_env_flags);
 
 	return 0;
@@ -465,7 +464,8 @@ int ftfs_bstore_meta_get(const char *name, DB_TXN *txn, void *buf, size_t size)
 	return ret;
 }
 
-int ftfs_bstore_meta_put(DBT *meta_key, DB_TXN *txn, struct ftfs_metadata *meta)
+int
+ftfs_bstore_meta_put(DBT *meta_key, DB_TXN *txn, struct ftfs_metadata *meta)
 {
 	int ret;
 	DBT value;
@@ -476,7 +476,8 @@ int ftfs_bstore_meta_put(DBT *meta_key, DB_TXN *txn, struct ftfs_metadata *meta)
 	return ret;
 }
 
-int ftfs_bstore_meta_delete(DBT *meta_key, DB_TXN *txn)
+int
+ftfs_bstore_meta_delete(DBT *meta_key, DB_TXN *txn)
 {
 	return meta_db->del(meta_db, txn, meta_key, DB_DEL_FLAGS);
 }
@@ -562,6 +563,7 @@ static int meta_scan_cb(DBT const *key, DBT const *val, void *extra)
  * key is greater than or equal to the given name.
  * (usually it's path_with_slashs, so return next entry in meta_db)
  * works like bstore_scan otherwise.
+ * XXX: wkj correct cursor flags for proper isolation
  */
 int ftfs_bstore_meta_scan(const char *name, DB_TXN *txn,
 	bstore_meta_scan_callback_fn cb, void *extra)
@@ -699,22 +701,6 @@ static int truncate_cursor_cb(DBT const *key, DBT const *value, void *extra)
 	return 0;
 }
 
-int bstore_hot_flush_all(void)
-{
-	int ret;
-	uint64_t loops = 0;
-	if (!data_db)
-		return -EINVAL;
-
-	ret = data_db->hot_optimize(data_db, NULL, NULL,
-				NULL, NULL, &loops);
-
-	ftfs_log(__func__, "%llu loops, returning %d", loops, ret);
-
-	return ret;
-
-}
-
 int bstore_hot_flush(DBT *meta_key, uint64_t start, uint64_t end)
 {
 	int ret;
@@ -747,6 +733,7 @@ int bstore_hot_flush(DBT *meta_key, uint64_t start, uint64_t end)
 /*
  * truncate a bstore, deleting any blocks greater than or
  * equal to the given block number
+ * XXX: wkj understand txn flags
  */
 int ftfs_bstore_truncate(DBT *meta_key, DB_TXN *txn, uint64_t block_num)
 {
@@ -791,6 +778,7 @@ int ftfs_bstore_truncate(DBT *meta_key, DB_TXN *txn, uint64_t block_num)
 		if (ret && ret != DB_NOTFOUND)
 			goto out;
 
+		/* wkj: why not set DB_WRITECURSOR and do cursor->del? */
 		data_db->del(data_db, txn, &prev_key, 0);
 		/* do we care about this return value?  if we do,
 		   should we just gtfo on any nonzero? what about
@@ -911,7 +899,7 @@ out:
 
 /*
  * This function must be called after previous (rename_cursor_current_prefix)
- * function in order to delete old entry in database and clean things up in
+ * function in order to deletion old entry in database and clean things up in
  * del_info_key. May be we can do it in a better way...
  */
 static inline int rename_delete(DB *db, DB_TXN *txn, DBT *del_info_key)
@@ -1064,8 +1052,8 @@ close_cursor_out:
 }
 
 /*
- * rename all bstores with name that matches the given prefix by
- * replacing the original prefix with the new one.
+ * rename all bstores whos name matches the given prefix
+ * by replacing the original prefix with the new one.
  */
 int ftfs_bstore_rename_prefix(const char *oldprefix, const char *newprefix,
 			DB_TXN *parent)
@@ -1465,9 +1453,9 @@ static struct ftio *ftio_alloc(int nr_iovecs)
 	struct bio_vec *bvl = NULL;
 
 	if (nr_iovecs > FTIO_MAX_INLINE) {
-		/* TODO: do stuff to allocate an array of bio_vecs,
-		 * assign to bvl, set flag indicating we are
-		 * responsible for freeing them ourselves. */
+		/* do stuff to allocate an array of bio_vecs, assign
+		 * to bvl, set flag indicating we are responsible for
+		 * freeing them ourselves. */
 		ftfs_error(__func__, "have not yet coded for this many bios:"
 			"%d", nr_iovecs);
 		return NULL;
@@ -1504,7 +1492,7 @@ static int ftfs_page_cmp(void *priv, struct list_head *a, struct list_head *b)
 }
 
 /*
- * This needs to be changed if page size exceeds block size
+ * wkj: Needs to be changed if page size exceeds block size
  */
 static void ftio_add_page(struct ftio *ftio, struct page *page)
 {
@@ -1622,6 +1610,35 @@ freekeys_out:
 out:
 	kfree(key_buf);
 	return ret;
+#if 0
+	unsigned page_idx;
+	int ret;
+	for (page_idx = 0; page_idx < nr_pages; page_idx++) {
+		struct page *page = list_entry(pages->prev, struct page, lru);
+
+		prefetchw(&page->flags);
+		list_del(&page->lru);
+		if (!add_to_page_cache_lru(page, mapping,
+					page->index, GFP_KERNEL)) {
+			/* pass remaining page count as a hint so they
+			 * know when we are done calling them */
+			offset = page_offset(page);
+			fillsize = size - offset > PAGE_SIZE ?
+				PAGE_SIZE : size - offset;
+			buf = kmap(page);
+			BUG_ON(!buf);
+			ret = ftfs_bstore_scanpage(path, buf, fillsize, offset,
+						nr_pages - page_idx);
+			if (fillsize < PAGE_SIZE)
+				memset(buf+fillsize, 0, PAGE_SIZE-fillsize);
+			flush_dcache_page(page);
+			SetPageUptodate(page);
+		}
+		page_cache_release(page);
+	}
+	BUG_ON(!list_empty(pages));
+	return 0;
+#endif
 }
 
 int ftfs_bstore_scan_pages(struct ftfs_dbt *meta_key,
@@ -1642,7 +1659,7 @@ int ftfs_bstore_scan_pages(struct ftfs_dbt *meta_key,
 		ftfs_error(__func__, "setup_ftio: %d)", ret);
 		goto ftio_cleanup;
 	}
-	/* above code is suspect. maybe break ftio into ranges? */
+	/* wkj: above code is suspect. maybe break ftio into ranges? */
 
 retry:
 	bstore_txn_begin(NULL, &txn, TXN_READONLY);
