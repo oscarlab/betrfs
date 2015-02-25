@@ -17,7 +17,6 @@ extern int test_test_cachesize(void);
 extern int test_slab(void);
 extern int test_assert(void);
 extern int test_directio(void);
-extern int list_open_southbound_files(void);
 extern int test_posix_memalign(void);
 extern int test_ftfs_realloc(void);
 extern int test_remove(void);
@@ -741,7 +740,6 @@ struct {
 	{ "test-abort4", test_test_abort4},
 	{ "test-abort5", test_test_abort5},
 	{ "test-abort-delete-first", test_test_abort_delete_first},
-	{ "list-files", list_open_southbound_files },
 	{ "list-tests", list_tests },
 	{ "mempool",    test_mempool },
 	{ "marked-omt", test_marked_omt },

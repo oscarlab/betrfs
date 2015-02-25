@@ -35,7 +35,7 @@ list(APPEND all_hdrs
   ${CMAKE_CURRENT_BINARY_DIR}/ft/log_header.h
   )
 
-option(USE_CTAGS "Build the ctags database." ON)
+option(USE_CTAGS "Build the ctags database." OFF)
 if (USE_CTAGS AND
     # Macs by default are not case-sensitive, so tags and TAGS clobber each other.  Do etags and not ctags in that case, because Emacs is superior. :P
     (NOT APPLE OR NOT USE_ETAGS))
@@ -52,7 +52,7 @@ if (USE_CTAGS AND
   endif ()
 endif ()
 
-option(USE_ETAGS "Build the etags database." ON)
+option(USE_ETAGS "Build the etags database." OFF)
 if (USE_ETAGS)
   find_program(ETAGS "etags")
   if (NOT ETAGS MATCHES NOTFOUND)
@@ -67,7 +67,7 @@ if (USE_ETAGS)
   endif ()
 endif ()
 
-option(USE_CSCOPE "Build the cscope database." ON)
+option(USE_CSCOPE "Build the cscope database." OFF)
 if (USE_CSCOPE)
   find_program(CSCOPE "cscope")
   if (NOT CSCOPE MATCHES NOTFOUND)
@@ -89,7 +89,7 @@ if (USE_CSCOPE)
   endif ()
 endif ()
 
-option(USE_GTAGS "Build the gtags database." ON)
+option(USE_GTAGS "Build the gtags database." OFF)
 if (USE_GTAGS)
   find_program(GTAGS "gtags")
   if (NOT GTAGS MATCHES NOTFOUND)
@@ -113,7 +113,7 @@ if (USE_GTAGS)
   endif ()
 endif ()
 
-option(USE_MKID "Build the idutils database." ON)
+option(USE_MKID "Build the idutils database." OFF)
 if (USE_MKID)
   find_program(MKID "mkid")
   if (NOT MKID MATCHES NOTFOUND)
