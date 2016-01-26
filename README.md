@@ -20,7 +20,7 @@ The BetrFS prototype (*) fits into the Linux storage stack as follows:
     |     ext4     |
     |______________|
 
- 
+
 Like any other file system, BetrFS is registered with the VFS as a
 file system during module load. But BetrFS has a stacked file system
 design. When you mount BetrFS, it loads a B^e-tree index from a
@@ -85,10 +85,14 @@ the data structures.
 Compiling the code
 ------------------
 
-First you must compile and install the provided Linux kernel. There
-are many guides on how to do this, so please read one if you have
+Apply the provided patch (linux-3.11.10.diff) to the 3.11.10 Linux kernel
+available from https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.11.10.tar.bz2.
+There are many guides on how to do this, so please read one if you have
 never compiled your own kernel. An abbreviated version;
-      cd linux-3.11.10/
+	  wget https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.11.10.tar.gz
+	  tar -xvf linux-3.11.10.tar.gz
+	  cd linux-3.11.10
+	  patch < ../linux-3.11.10.diff
       make oldconfig
       make
       make modules
