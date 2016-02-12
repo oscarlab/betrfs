@@ -91,7 +91,8 @@ Apply the provided patch (linux-3.11.10.diff) to the 3.11.10 Linux kernel
 available from https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.11.10.tar.bz2.
 There are many guides on how to do this, so please read one if you have
 never compiled your own kernel. An abbreviated version;
-	  ``` Shell
+
+	```
     wget https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.11.10.tar.gz
 	  tar -xvf linux-3.11.10.tar.gz
 	  cd linux-3.11.10
@@ -101,13 +102,14 @@ never compiled your own kernel. An abbreviated version;
       make modules
       make modules_install
       make install
-    ```
+  ```
 
 The next step is to build TokuDB. TokuDB uses cmake, and it is very finicky.
 You must have the right versions of gcc, and g++: gcc-4.7, g++-4.7.
 
 For those unfamiliar with cmake, I would suggest an out-of-source
 build. The following commands should work:
+
   ``` Shell
     mkdir build
     cd build
