@@ -88,7 +88,8 @@ Compiling the code
 ------------------
 
 Apply the provided patch (linux-3.11.10.diff) to the 3.11.10 Linux kernel
-available from https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.11.10.tar.bz2.
+available from https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.11.10.tar.bz2. Please remember to turn off Transparent Huge Pages when configuring the kernel. You may set it to madvise or never. The MongoDB project has a <a href="https://docs.mongodb.org/manual/tutorial/transparent-huge-pages/">good guide </a>on doing this with an init script if you don't want to mess with your kernel config.
+
 There are many guides on how to do this, so please read one if you have
 never compiled your own kernel. An abbreviated version;
 
@@ -136,10 +137,11 @@ You need a couple of things:
 
   2. The southbound file system must also be set up with some files
   and directories that TokuDB expects at certain places, including:
-
+  ```
     db/
     /dev/null
     /tmp
+  ```
 
   3. The compiled module from the filesystem/ folder
 
