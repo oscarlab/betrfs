@@ -51,6 +51,7 @@ directories contain most of the TokuDB code and configuration files.
 To port the B^e-tree to the kernel, we reimplemented the userspace
 libraries used by TokuDB that were not compatible with the
 kernel. These can be found in the filesystem/ directory
+```
   ftfs_pthreads.*
   ftfs_files.*
   ftfs_stat.*
@@ -61,6 +62,7 @@ kernel. These can be found in the filesystem/ directory
   ftfs_random.*
   toku_linkage.c
   ...
+```
 We import TokuDB as a binary blob, and overwrite TokuDB symbols using
 symbols from these files.
 
@@ -89,7 +91,8 @@ Apply the provided patch (linux-3.11.10.diff) to the 3.11.10 Linux kernel
 available from https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.11.10.tar.bz2.
 There are many guides on how to do this, so please read one if you have
 never compiled your own kernel. An abbreviated version;
-	  wget https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.11.10.tar.gz
+	  ``` Shell
+    wget https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.11.10.tar.gz
 	  tar -xvf linux-3.11.10.tar.gz
 	  cd linux-3.11.10
 	  patch < ../linux-3.11.10.diff
@@ -98,28 +101,33 @@ never compiled your own kernel. An abbreviated version;
       make modules
       make modules_install
       make install
+    ```
 
 The next step is to build TokuDB. TokuDB uses cmake, and it is very finicky.
 You must have the right versions of gcc, and g++: gcc-4.7, g++-4.7.
 
 For those unfamiliar with cmake, I would suggest an out-of-source
 build. The following commands should work:
-       mkdir build
-       cd build
-       CC=gcc-4.7 CXX=g++-4.7 cmake \
-         -D CMAKE_BUILD_TYPE=$TYPE \
-         -D USE_BDB=OFF \
-         -D USE_TDB=ON \
-         -D BUILD_TESTING=OFF \
-         -D CMAKE_INSTALL_PREFIX=../ft-install/ \
-         -D BUILD_FOR_LINUX_KERNEL_MODULE=ON \
-        ..
+  ``` Shell
+    mkdir build
+    cd build
+    CC=gcc-4.7 CXX=g++-4.7 cmake \
+      -D CMAKE_BUILD_TYPE=$TYPE \
+      -D USE_BDB=OFF \
+      -D USE_TDB=ON \
+      -D BUILD_TESTING=OFF \
+      -D CMAKE_INSTALL_PREFIX=../ft-install/ \
+      -D BUILD_FOR_LINUX_KERNEL_MODULE=ON \
+      ..
 
-       cmake --build . --target install
+    cmake --build . --target install
+  ```
 
 After building TokuDB, you can finally build the actual BetrFS code.
+  ``` Shell
       cd filesystem/
       make
+  ```
 
 
 Mounting the file system
@@ -132,6 +140,7 @@ You need a couple of things:
 
   2. The southbound file system must also be set up with some files
   and directories that TokuDB expects at certain places, including:
+
     db/
     /dev/null
     /tmp
@@ -147,7 +156,7 @@ You need a couple of things:
 This example code was used to set up the file system on a setup where
 we had a second disk with a partition for our "southbound" file system
 at /dev/sdb1. Change the parameters to fit your needs.
-
+``` Shell
   USER=betrfs
   REPO=/home/$USER/ft-index
   MODDIR=filesystem
@@ -175,3 +184,4 @@ at /dev/sdb1. Change the parameters to fit your needs.
   touch dummy.dev
   sudo losetup /dev/loop0 dummy.dev
   sudo mount -t ftfs /dev/loop0 $MOUNTPOINT
+```
