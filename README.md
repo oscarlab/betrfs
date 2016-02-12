@@ -92,7 +92,6 @@ available from https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.11.10.tar.bz
 There are many guides on how to do this, so please read one if you have
 never compiled your own kernel. An abbreviated version;
 
-	```
     wget https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.11.10.tar.gz
 	  tar -xvf linux-3.11.10.tar.gz
 	  cd linux-3.11.10
@@ -102,7 +101,6 @@ never compiled your own kernel. An abbreviated version;
       make modules
       make modules_install
       make install
-  ```
 
 The next step is to build TokuDB. TokuDB uses cmake, and it is very finicky.
 You must have the right versions of gcc, and g++: gcc-4.7, g++-4.7.
@@ -110,7 +108,6 @@ You must have the right versions of gcc, and g++: gcc-4.7, g++-4.7.
 For those unfamiliar with cmake, I would suggest an out-of-source
 build. The following commands should work:
 
-  ``` Shell
     mkdir build
     cd build
     CC=gcc-4.7 CXX=g++-4.7 cmake \
@@ -123,14 +120,11 @@ build. The following commands should work:
       ..
 
     cmake --build . --target install
-  ```
 
 After building TokuDB, you can finally build the actual BetrFS code.
-  ``` Shell
+
       cd filesystem/
       make
-  ```
-
 
 Mounting the file system
 ------------------------
@@ -158,7 +152,7 @@ You need a couple of things:
 This example code was used to set up the file system on a setup where
 we had a second disk with a partition for our "southbound" file system
 at /dev/sdb1. Change the parameters to fit your needs.
-``` Shell
+```
   USER=betrfs
   REPO=/home/$USER/ft-index
   MODDIR=filesystem
