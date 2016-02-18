@@ -104,6 +104,11 @@ enum {
     TOKU_LOG_MIN_SUPPORTED_VERSION = FT_LAYOUT_MIN_SUPPORTED_VERSION,
 };
 
+//these are just for bill to debug
+void swap_inbuf_outbuf (TOKULOGGER logger);
+void write_outbuf_to_logfile (TOKULOGGER logger, LSN *fsynced_lsn, unsigned int n);
+void release_output (TOKULOGGER logger, LSN fsynced_lsn);
+
 int toku_logger_create (TOKULOGGER *resultp);
 int toku_logger_open (const char *directory, TOKULOGGER logger);
 int toku_logger_open_with_last_xid(const char *directory, TOKULOGGER logger, TXNID last_xid);
@@ -113,6 +118,19 @@ void toku_logger_initialize_rollback_cache(TOKULOGGER logger, FT ft);
 int toku_logger_open_rollback(TOKULOGGER logger, CACHETABLE cachetable, bool create);
 void toku_logger_close_rollback(TOKULOGGER logger);
 bool toku_logger_rollback_is_open (TOKULOGGER); // return true iff the rollback is open.
+
+typedef enum {
+    UBI_INSERTING=0,			/* about to be inserted, no node yet. */
+    UBI_UNBOUND=1,			/* in some node, but unbound. */
+    UBI_QUEUED=2,			/* logger has seen this and is about to schedule writeback */
+    UBI_BINDING=3,			/* node writeback is pending */
+    UBI_BOUND=4,			/* bound. */
+} ubi_state_t;
+
+struct unbound_insert_entry *toku_alloc_unbound_insert_entry(ubi_state_t state, LSN lsn,// FT_HANDLE ft_h,
+ MSN msn, DBT * k);
+extern "C" int toku_logger_bind_insert_location(TOKULOGGER logger, FT_MSG msg, DISKOFF diskoff, DISKOFF size);
+extern "C" void toku_logger_append_unbound_insert_entry(TOKULOGGER logger, struct unbound_insert_entry * entry);
 
 void toku_logger_fsync (TOKULOGGER logger);
 void toku_logger_fsync_if_lsn_not_fsynced(TOKULOGGER logger, LSN lsn);
@@ -146,8 +164,11 @@ int toku_fread_uint8_t (FILE *f, uint8_t *v, struct x1764 *mm, uint32_t *len);
 int toku_fread_uint32_t_nocrclen (FILE *f, uint32_t *v);
 int toku_fread_uint32_t (FILE *f, uint32_t *v, struct x1764 *checksum, uint32_t *len);
 int toku_fread_uint64_t (FILE *f, uint64_t *v, struct x1764 *checksum, uint32_t *len);
+int toku_fread_int64_t (FILE *f, int64_t *v, struct x1764 *checksum, uint32_t *len);
 int toku_fread_bool (FILE *f, bool *v, struct x1764 *checksum, uint32_t *len);
 int toku_fread_LSN     (FILE *f, LSN *lsn, struct x1764 *checksum, uint32_t *len);
+int toku_fread_MSN     (FILE *f, MSN *msn, struct x1764 *checksum, uint32_t *len);
+int toku_fread_DISKOFF (FILE *f, DISKOFF *diskoff, struct x1764 *checksum, uint32_t *len);
 int toku_fread_BLOCKNUM (FILE *f, BLOCKNUM *lsn, struct x1764 *checksum, uint32_t *len);
 int toku_fread_FILENUM (FILE *f, FILENUM *filenum, struct x1764 *checksum, uint32_t *len);
 int toku_fread_TXNID   (FILE *f, TXNID *txnid, struct x1764 *checksum, uint32_t *len);
@@ -157,13 +178,16 @@ int toku_fread_BYTESTRING (FILE *f, BYTESTRING *bs, struct x1764 *checksum, uint
 int toku_fread_FILENUMS (FILE *f, FILENUMS *fs, struct x1764 *checksum, uint32_t *len);
 
 int toku_logprint_LSN (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format __attribute__((__unused__)));
+int toku_logprint_MSN (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format __attribute__((__unused__)));
 int toku_logprint_TXNID (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format __attribute__((__unused__)));
 int toku_logprint_TXNID_PAIR (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format __attribute__((__unused__)));
 int toku_logprint_XIDP (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format __attribute__((__unused__)));
 int toku_logprint_uint8_t (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format);
 int toku_logprint_uint32_t (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format);
 int toku_logprint_BLOCKNUM (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format);
+int toku_logprint_DISKOFF (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format);
 int toku_logprint_uint64_t (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format);
+int toku_logprint_int64_t (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format);
 int toku_logprint_bool (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format __attribute__((__unused__)));
 void toku_print_BYTESTRING (FILE *outf, uint32_t len, char *data);
 int toku_logprint_BYTESTRING (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format __attribute__((__unused__)));

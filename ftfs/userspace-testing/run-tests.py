@@ -5,8 +5,7 @@ import sys, os, string, subprocess, fileinput, random
 DEF_INTERP="default-interp.py"
 DEF_PRE="default-pre.py"
 DEF_POST="default-post.py"
-#procfile="/proc/toku_test"
-procfile="testoutput"
+procfile="/proc/toku_test"
 
 def run_one_test(test, interp, pre, post):
     """ the main testing worker
@@ -18,13 +17,14 @@ def run_one_test(test, interp, pre, post):
     """
     
     # run pre-test script
-    command = "./{0}".format(pre)
+    command = "./{0} --test={1}".format(pre, test)
     ret = subprocess.call(command, shell=True)
     if ret :
-        print "pre test script {0} returning nonzero: {1}".format(pre, ret)
+        print "pre test ({0}) script {1} returning nonzero: {2}".format(test, pre, ret)
         return ret
 
     # run the test
+    print "beginning test " + test
     command = "echo {0} > {1}".format(test, procfile)
     ret = subprocess.call(command, shell=True)
     if ret :
@@ -33,15 +33,17 @@ def run_one_test(test, interp, pre, post):
         return ret
 
     # interpret the results (script should read from the proc file internally)
-    command = "./{0}".format(interp)
+    command = "./{0} --test={1}".format(interp, test)
     ret = subprocess.call(command, shell=True)
     if ret :
         print "\terror interpreting test {0} results.".format(test)
         print "\tinterpreter returning nonzero: {0}.".format(ret)
         return ret
 
+    print "test {0} returned successful".format(test)
+
     # run post-test script
-    command = "./{0}".format(post)
+    command = "./{0} --test={1}".format(post, test)
     ret = subprocess.call(command, shell=True)
     if ret :
         print "\tpost test script {0}".format(test)
@@ -103,7 +105,7 @@ def run_all_tests(test_file, shuffle) :
             return -1
 
     if (shuffle) :
-        print "Shuffle truffle"
+        print "Shuffling tests order"
         random.shuffle(test_array)
 
     return run_test_set(test_array)

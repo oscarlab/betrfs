@@ -1,7 +1,0 @@
-set size 512 102400
-set read 4096
-set write 4096
-set transactions 8000
-set number 8000
-show
-run

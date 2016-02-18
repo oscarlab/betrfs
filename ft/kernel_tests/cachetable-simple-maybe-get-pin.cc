@@ -90,7 +90,6 @@ PATENT RIGHTS GRANT:
 
 #include "log-test3.h"
 #include "cachetable-test.h"
-
 //
 // simple tests for maybe_get_and_pin(_clean)
 //
@@ -137,7 +136,7 @@ cachetable_test (void) {
     assert(r==0);
     r = toku_test_cachetable_unpin(f1, make_blocknum(1), 1, CACHETABLE_DIRTY, make_pair_attr(8));
     CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
-    toku_cachetable_begin_checkpoint(cp, NULL);
+    toku_cachetable_begin_checkpoint(cp, NULL, false);
     // now these should fail, because the node should be pending a checkpoint
     r = toku_cachetable_maybe_get_and_pin(f1, make_blocknum(1), 1, PL_WRITE_EXPENSIVE, &v1);
     assert(r==-1);
@@ -147,8 +146,9 @@ cachetable_test (void) {
         cp, 
         NULL, 
         NULL,
-        NULL
-        );
+        NULL,
+        false
+	);
 
     toku_cachetable_verify(ct);
     toku_cachefile_close(&f1, false, ZERO_LSN);
@@ -157,6 +157,9 @@ cachetable_test (void) {
 
 extern "C" int test_cachetable_simple_maybegetpin(void);
 int test_cachetable_simple_maybegetpin(void) {
-  cachetable_test();
-  return 0;
+    int rinit = toku_ft_layer_init(); 
+    CKERR(rinit);
+    cachetable_test();
+    toku_ft_layer_destroy();
+    return 0;
 }

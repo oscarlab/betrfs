@@ -462,7 +462,6 @@ main(int argc, char const * const argv[])
     if (argc == 4) {
         set_errno(0);
         pct = strtod(argv[3], NULL);
-        assert_zero(get_maybe_error_errno());
         assert(pct > 0.0 && pct <= 100.0);
     }
 

@@ -1,0 +1,1 @@
+cmd='<SOURCE_DIR>/configure;--enable-static;--disable-shared;CC=/usr/bin/gcc;--prefix=/home/yang/tmp/betrfs/build/./xz'

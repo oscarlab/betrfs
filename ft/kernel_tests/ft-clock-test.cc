@@ -317,6 +317,7 @@ test_serialize_nonleaf(void) {
     sn.n_children = 2;
     sn.dirty = 1;
     sn.oldest_referenced_xid_known = TXNID_NONE;
+    sn.unbound_insert_count = 0;
     hello_string = toku_strdup("hello");
     MALLOC_N(2, sn.bp);
     MALLOC_N(1, sn.childkeys);
@@ -337,9 +338,24 @@ test_serialize_nonleaf(void) {
     r = xids_create_child(xids_123, &xids_234, (TXNID)234);
     CKERR(r);
 
-    toku_bnc_insert_msg(BNC(&sn, 0), "a", 2, "aval", 5, FT_NONE, next_dummymsn(), xids_0, true, NULL, string_key_cmp);
-    toku_bnc_insert_msg(BNC(&sn, 0), "b", 2, "bval", 5, FT_NONE, next_dummymsn(), xids_123, false, NULL, string_key_cmp);
-    toku_bnc_insert_msg(BNC(&sn, 1), "x", 2, "xval", 5, FT_NONE, next_dummymsn(), xids_234, true, NULL, string_key_cmp);
+    FT_MSG_S msg;
+    DBT k,v;
+    toku_fill_dbt(&k, "a",2);
+    toku_fill_dbt(&v, "aval",5);
+    ft_msg_init(&msg, FT_NONE, next_dummymsn(), xids_0, &k, &v);
+    toku_bnc_insert_msg(BNC(&sn, 0), NULL,  &msg, true, NULL, string_key_cmp);
+    
+    FT_MSG_S msg2;
+    toku_fill_dbt(&k, "b",2);
+    toku_fill_dbt(&v, "bval",5);
+    ft_msg_init(&msg2, FT_NONE, next_dummymsn(), xids_123, &k, &v);
+    toku_bnc_insert_msg(BNC(&sn, 0), NULL, &msg2, false, NULL, string_key_cmp);
+    
+    FT_MSG_S msg3;
+    toku_fill_dbt(&k, "x",2);
+    toku_fill_dbt(&v, "xval",5);
+    ft_msg_init(&msg3, FT_NONE, next_dummymsn(), xids_234, &k, &v);
+    toku_bnc_insert_msg(BNC(&sn, 1), NULL, &msg3, true, NULL, string_key_cmp);
     //Cleanup:
     xids_destroy(&xids_0);
     xids_destroy(&xids_123);
@@ -365,9 +381,9 @@ test_serialize_nonleaf(void) {
     }
     assert(b.b == 20);
 
+    DISKOFF offset;
+    DISKOFF size;
     {
-        DISKOFF offset;
-        DISKOFF size;
         toku_blocknum_realloc_on_disk(brt_h->blocktable, b, 100, &offset, brt_h, fd, false);
         assert(offset==BLOCK_ALLOCATOR_TOTAL_HEADER_RESERVE);
 
@@ -376,7 +392,7 @@ test_serialize_nonleaf(void) {
         assert(size   == 100);
     }
     FTNODE_DISK_DATA ndd = NULL;
-    r = toku_serialize_ftnode_to(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false);
+    r = toku_serialize_ftnode_to(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false, &offset, &size);
     assert(r==0);
 
     test1(fd, brt_h, &dn);
@@ -416,6 +432,7 @@ test_serialize_leaf(void) {
     sn.n_children = 2;
     sn.dirty = 1;
     sn.oldest_referenced_xid_known = TXNID_NONE;
+    sn.unbound_insert_count = 0;
     MALLOC_N(sn.n_children, sn.bp);
     MALLOC_N(1, sn.childkeys);
     toku_memdup_dbt(&sn.childkeys[0], "b", 2);
@@ -438,7 +455,7 @@ test_serialize_leaf(void) {
                  128*1024,
                  TOKU_DEFAULT_COMPRESSION_METHOD);
     brt->ft = brt_h;
-    
+  
     toku_blocktable_create_new(&brt_h->blocktable);
     { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
     //Want to use block #20
@@ -448,9 +465,9 @@ test_serialize_leaf(void) {
     }
     assert(b.b == 20);
 
+    DISKOFF offset;
+    DISKOFF size;
     {
-        DISKOFF offset;
-        DISKOFF size;
         toku_blocknum_realloc_on_disk(brt_h->blocktable, b, 100, &offset, brt_h, fd, false);
         assert(offset==BLOCK_ALLOCATOR_TOTAL_HEADER_RESERVE);
 
@@ -459,11 +476,11 @@ test_serialize_leaf(void) {
         assert(size   == 100);
     }
     FTNODE_DISK_DATA ndd = NULL;
-    r = toku_serialize_ftnode_to(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false);
+    r = toku_serialize_ftnode_to(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false, &offset, &size);
     assert(r==0);
-
     test1(fd, brt_h, &dn);
     test3_leaf(fd, brt_h,&dn);
+
 
     for (int i = 0; i < sn.n_children-1; ++i) {
         toku_free(sn.childkeys[i].data);

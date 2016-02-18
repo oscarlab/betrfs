@@ -147,10 +147,10 @@ int toku_cachefile_of_iname_in_env (CACHETABLE ct, const char *iname_in_env, CAC
 // Return the filename
 char *toku_cachefile_fname_in_cwd (CACHEFILE cf);
 
-void toku_cachetable_begin_checkpoint (CHECKPOINTER cp, TOKULOGGER);
+void toku_cachetable_begin_checkpoint (CHECKPOINTER cp, TOKULOGGER, bool);
 
 void toku_cachetable_end_checkpoint(CHECKPOINTER cp, TOKULOGGER logger, 
-                                   void (*testcallback_f)(void*),  void * testextra);
+                                   void (*testcallback_f)(void*),  void * testextra, bool);
 
 // Shuts down checkpoint thread
 // Requires no locks be held that are taken by the checkpoint function
@@ -641,5 +641,6 @@ void toku_pair_list_set_lock_size(uint32_t num_locks);
 // layer.
 __attribute__((const,nonnull))
 bool toku_ctpair_is_write_locked(PAIR pair);
-
+void toku_write_lock_ctpair(PAIR pair, bool exp);
+void toku_write_unlock_ctpair(PAIR pair);
 #endif /* CACHETABLE_H */

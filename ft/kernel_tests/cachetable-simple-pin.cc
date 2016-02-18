@@ -167,7 +167,7 @@ static void run_test (void)
 
 	// now this should mark the pair for checkpoint
 	CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
-	toku_cachetable_begin_checkpoint(cp, NULL);
+	toku_cachetable_begin_checkpoint(cp, NULL, false);
 
 	//
 	// now we pin the pair again, and verify in flush callback that the pair is being checkpointed
@@ -184,7 +184,8 @@ static void run_test (void)
 			cp, 
 			NULL, 
 			NULL,
-			NULL
+			NULL,
+			false
 			);
 
 	toku_cachetable_verify(ct);

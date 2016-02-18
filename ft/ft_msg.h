@@ -97,6 +97,8 @@ PATENT RIGHTS GRANT:
 #ident "Copyright (c) 2007-2013 Tokutek Inc.  All rights reserved."
 #ident "The technology is licensed by the Massachusetts Institute of Technology, Rutgers State University of New Jersey, and the Research Foundation of State University of New York at Stony Brook under United States of America Serial No. 11/760379 and to the patents and/or patent applications resulting from it."
 
+//#include "ft/wbuf.h"
+//#include "ft/rbuf.h"
 
 uint32_t ft_msg_get_keylen(FT_MSG ft_msg);
 
@@ -108,10 +110,26 @@ void * ft_msg_get_key(FT_MSG ft_msg);
 
 void * ft_msg_get_val(FT_MSG ft_msg);
 
+void * ft_msg_get_max_key(FT_MSG ft_msg);
+
+uint32_t ft_msg_get_max_keylen(FT_MSG ft_msg);
+
+enum pacman_status ft_msg_get_pm_status(FT_MSG ft_msg);
+
 enum ft_msg_type ft_msg_get_type(FT_MSG ft_msg);
 
 void ft_msg_from_fifo_msg(FT_MSG ft_msg, FIFO_MSG fifo_msg);
 
+void ft_msg_init(FT_MSG, enum ft_msg_type, MSN, XIDS, const DBT *, const DBT *);
+
+MSN ft_msg_get_msn(FT_MSG);
+void ft_msg_multicast_init(FT_MSG, enum ft_msg_type, MSN, XIDS, const DBT *, const DBT *, const DBT *, bool, enum pacman_status);
+
+void ft_msg_read_from_rbuf(FT_MSG, DBT *, DBT *, DBT *, struct rbuf *, XIDS *, bool *);
+bool is_dbt_empty(const DBT *);
+const DBT * get_dbt_empty(void);
+
+void ft_msg_write_to_wbuf(FT_MSG, struct wbuf *, int );
 #if 0
 
 void ft_msg_from_dbts(FT_MSG ft_msg, DBT *key, DBT *val, XIDS xids, enum ft_msg_type type);

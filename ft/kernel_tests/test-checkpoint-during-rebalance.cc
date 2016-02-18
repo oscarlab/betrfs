@@ -142,7 +142,7 @@ static void *do_checkpoint(void *arg) {
     // first verify that checkpointed_data is correct;
     if (verbose) printf("starting a checkpoint from %s\n",__FILE__);
     CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
-    int r = toku_checkpoint(cp, NULL, checkpoint_callback, NULL, NULL, NULL, CLIENT_CHECKPOINT);
+    int r = toku_checkpoint(cp, NULL, checkpoint_callback, NULL, NULL, NULL, CLIENT_CHECKPOINT,false);
     assert_zero(r);
     if (verbose) printf("completed a checkpoint\n");
     return arg;
@@ -210,7 +210,8 @@ doit (int state) {
         "a",
         2,
         NULL,
-        0
+        0,
+	FT_INSERT
         );
     assert_zero(r);
     r = toku_testsetup_insert_to_leaf(
@@ -219,7 +220,8 @@ doit (int state) {
         "x",
         2,
         dummy_val,
-        sizeof(dummy_val)
+        sizeof(dummy_val),
+	FT_INSERT
         );
     assert_zero(r);
     r = toku_testsetup_insert_to_leaf(
@@ -228,7 +230,8 @@ doit (int state) {
         "y",
         2,
         dummy_val,
-        sizeof(dummy_val)
+        sizeof(dummy_val),
+	FT_INSERT
         );
     assert_zero(r);
     r = toku_testsetup_insert_to_leaf(
@@ -237,7 +240,8 @@ doit (int state) {
         "z",
         2,
         NULL,
-        0
+        0,
+	FT_INSERT
         );
     assert_zero(r);
 

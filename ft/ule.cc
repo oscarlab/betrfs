@@ -210,13 +210,13 @@ static void ule_do_implicit_promotions(ULE ule, XIDS xids);
 static void ule_try_promote_provisional_outermost(ULE ule, TXNID oldest_possible_live_xid);
 static void ule_promote_provisional_innermost_to_index(ULE ule, uint32_t index);
 static void ule_promote_provisional_innermost_to_committed(ULE ule);
-static void ule_apply_insert(ULE ule, XIDS xids, uint32_t vallen, void * valp);
+static void ule_apply_insert(ULE ule, XIDS xids, uint32_t vallen, void * valp, enum uxr_type);
 static void ule_apply_delete(ULE ule, XIDS xids);
 static void ule_prepare_for_new_uxr(ULE ule, XIDS xids);
 static void ule_apply_abort(ULE ule, XIDS xids);
 static void ule_apply_broadcast_commit_all (ULE ule);
 static void ule_apply_commit(ULE ule, XIDS xids);
-static void ule_push_insert_uxr(ULE ule, bool is_committed, TXNID xid, uint32_t vallen, void * valp);
+static void ule_push_insert_uxr(ULE ule, bool is_committed, TXNID xid, uint32_t vallen, void * valp, enum uxr_type type);
 static void ule_push_delete_uxr(ULE ule, bool is_committed, TXNID xid);
 static void ule_push_placeholder_uxr(ULE ule, TXNID xid);
 static UXR ule_get_innermost_uxr(ULE ule);
@@ -312,10 +312,25 @@ xid_reads_committed_xid(TXNID tl1, TXNID xc, const xid_omt_t &snapshot_txnids, c
 // than oldest_referenced_xid. All elements below this entry are garbage,
 // so we get rid of them.
 //
+#if 1
+static bool
+ule_contains_unbound_uxr(ULE ule) {
+	for(uint32_t i =0; i < ule->num_cuxrs + ule->num_puxrs; i++) {
+		if(ule->uxrs[i].type == XR_UNBOUND_INSERT) {
+			return true;
+		}
+	}
+	return false;
+}
+#endif
 static void
 ule_simple_garbage_collection(ULE ule, TXNID oldest_referenced_xid, GC_INFO gc_info) {
     uint32_t curr_index = 0;
     uint32_t num_entries;
+     
+    if(ule_contains_unbound_uxr(ule)) {
+	goto done;
+    }
     if (ule->num_cuxrs == 1) {
         goto done;
     }
@@ -354,6 +369,9 @@ ule_garbage_collect(ULE ule, const xid_omt_t &snapshot_xids, const rx_omt_t &ref
     // will fail if too many num_cuxrs
     bool necessary_static[MAX_TRANSACTION_RECORDS];
     bool *necessary;
+    if(ule_contains_unbound_uxr(ule)) {
+    	goto done; 
+    }
     necessary = necessary_static;
     if (ule->num_cuxrs >= MAX_TRANSACTION_RECORDS) {
         XMALLOC_N(ule->num_cuxrs, necessary);
@@ -561,6 +579,55 @@ bool toku_le_worth_running_garbage_collection(LEAFENTRY le, TXNID oldest_referen
 // -- referenced_xids : list of in memory active transactions.
 // NOTE: it is not a good idea to garbage collect a leaf
 // entry with only one committed value.
+
+void
+toku_le_flip_uxr_type(LEAFENTRY old_leaf_entry, 
+		      bn_data * data_buffer, 
+        	      uint32_t idx,
+	              void* keyp,
+                      uint32_t keylen,
+                      LEAFENTRY *new_leaf_entry
+) {
+    ULE_S *ule = toku_ule_get();
+    LEAFENTRY copied_old_le = NULL;
+    bool old_le_malloced = false;
+    if (old_leaf_entry) {
+        size_t old_le_size = leafentry_memsize(old_leaf_entry);
+        if (old_le_size > 100*1024) { // completely arbitrary limit
+            CAST_FROM_VOIDP(copied_old_le, toku_malloc(old_le_size));
+            old_le_malloced = true;
+        }
+        else {
+            CAST_FROM_VOIDP(copied_old_le, alloca(old_le_size));
+        }
+        memcpy(copied_old_le, old_leaf_entry, old_le_size);
+    }
+
+    le_unpack(ule, copied_old_le);
+    uint32_t old_mem_size = leafentry_memsize(old_leaf_entry);
+
+    for(uint32_t i = 0; i<ule->num_cuxrs+ule->num_puxrs; i++) {
+		UXR uxr = &ule->uxrs[i];
+		if(uxr->type == XR_UNBOUND_INSERT) {
+			uxr->type =XR_INSERT;
+		}
+	}
+
+    int r = le_pack(
+        ule,
+        data_buffer,
+        idx,
+        keyp,
+        keylen,
+        old_mem_size,
+        new_leaf_entry
+        );
+    assert(r == 0);
+    toku_ule_free(ule);
+    if (old_le_malloced) {
+        toku_free(copied_old_le);
+    }
+}
 void
 toku_le_garbage_collect(LEAFENTRY old_leaf_entry,
                         bn_data* data_buffer,
@@ -653,6 +720,7 @@ msg_modify_ule(ULE ule, FT_MSG msg) {
         ule_do_implicit_promotions(ule, xids);
     }
     switch (type) {
+    case FT_NONE: break;
     case FT_INSERT_NO_OVERWRITE: {
         UXR old_innermost_uxr = ule_get_innermost_uxr(ule);
         //If something exists, quit (no overwrite).
@@ -660,24 +728,35 @@ msg_modify_ule(ULE ule, FT_MSG msg) {
         //else it is just an insert, so
         //fall through to FT_INSERT on purpose.
     }
-    case FT_INSERT: {
+   case FT_INSERT: {
         uint32_t vallen = ft_msg_get_vallen(msg);
         invariant(IS_VALID_LEN(vallen));
         void * valp      = ft_msg_get_val(msg);
-        ule_apply_insert(ule, xids, vallen, valp);
+        ule_apply_insert(ule, xids, vallen, valp, XR_INSERT);
+        break;
+    }   
+    case FT_UNBOUND_INSERT: {
+        uint32_t vallen = ft_msg_get_vallen(msg);
+        invariant(IS_VALID_LEN(vallen));
+        void * valp      = ft_msg_get_val(msg);
+        ule_apply_insert(ule, xids, vallen, valp, XR_UNBOUND_INSERT);
         break;
     }
+    case FT_DELETE_MULTICAST:
     case FT_DELETE_ANY:
         ule_apply_delete(ule, xids);
         break;
+    case FT_ABORT_MULTICAST_TXN:
     case FT_ABORT_ANY:
     case FT_ABORT_BROADCAST_TXN:
         ule_apply_abort(ule, xids);
         break;
+    case FT_COMMIT_MULTICAST_ALL:
     case FT_COMMIT_BROADCAST_ALL:
         ule_apply_broadcast_commit_all(ule);
         break;
     case FT_COMMIT_ANY:
+    case FT_COMMIT_MULTICAST_TXN:
     case FT_COMMIT_BROADCAST_TXN:
         ule_apply_commit(ule, xids);
         break;
@@ -689,9 +768,9 @@ msg_modify_ule(ULE ule, FT_MSG msg) {
     case FT_UPDATE_BROADCAST_ALL:
         assert(false); // These messages don't get this far.  Instead they get translated (in setval_fun in do_update) into FT_INSERT messages.
         break;
-    default:
-        assert(false /* illegal FT_MSG.type */);
-        break;
+    //default:
+      //  assert(false /* illegal FT_MSG.type */);
+        //break;
     }
 }
 
@@ -1609,7 +1688,8 @@ ule_promote_provisional_innermost_to_committed(ULE ule) {
         ule_push_insert_uxr(ule, true,
                             old_outermost_uncommitted_uxr->xid,
                             old_innermost_uxr->vallen,
-                            old_innermost_uxr->valp);
+                            old_innermost_uxr->valp,
+			    (enum uxr_type)old_innermost_uxr->type);
     }
 }
 
@@ -1642,7 +1722,8 @@ ule_promote_provisional_innermost_to_index(ULE ule, uint32_t index) {
         ule_push_insert_uxr(ule, false,
                             new_innermost_xid,
                             old_innermost_uxr->vallen,
-                            old_innermost_uxr->valp);
+                            old_innermost_uxr->valp,
+			    (enum uxr_type)old_innermost_uxr->type);
     }
 }
 
@@ -1654,10 +1735,10 @@ ule_promote_provisional_innermost_to_index(ULE ule, uint32_t index) {
 
 // Purpose is to apply an insert message to this leafentry:
 static void 
-ule_apply_insert(ULE ule, XIDS xids, uint32_t vallen, void * valp) {
+ule_apply_insert(ULE ule, XIDS xids, uint32_t vallen, void * valp, enum uxr_type type) {
     ule_prepare_for_new_uxr(ule, xids);
     TXNID this_xid = xids_get_innermost_xid(xids);  // xid of transaction doing this insert
-    ule_push_insert_uxr(ule, this_xid == TXNID_NONE, this_xid, vallen, valp);
+    ule_push_insert_uxr(ule, this_xid == TXNID_NONE, this_xid, vallen, valp, type);
 }
 
 // Purpose is to apply a delete message to this leafentry:
@@ -1760,7 +1841,7 @@ void ule_apply_commit(ULE ule, XIDS xids) {
 
 // Purpose is to record an insert for this transaction (and set type correctly).
 static void 
-ule_push_insert_uxr(ULE ule, bool is_committed, TXNID xid, uint32_t vallen, void * valp) {
+ule_push_insert_uxr(ULE ule, bool is_committed, TXNID xid, uint32_t vallen, void * valp, enum uxr_type type) {
     UXR uxr     = ule_get_first_empty_uxr(ule);
     if (is_committed) {
         invariant(ule->num_puxrs==0);
@@ -1772,7 +1853,7 @@ ule_push_insert_uxr(ULE ule, bool is_committed, TXNID xid, uint32_t vallen, void
     uxr->xid    = xid;
     uxr->vallen = vallen;
     uxr->valp   = valp;
-    uxr->type   = XR_INSERT;
+    uxr->type   = type;
 }
 
 // Purpose is to record a delete for this transaction.  If this transaction
@@ -1944,7 +2025,7 @@ ule_get_innermost_numbytes(ULE ule, uint32_t keylen) {
 
 static inline bool
 uxr_type_is_insert(uint8_t type) {
-    bool rval = (bool)(type == XR_INSERT);
+    bool rval = (bool)(type == XR_INSERT || type == XR_UNBOUND_INSERT);
     return rval;
 }
 

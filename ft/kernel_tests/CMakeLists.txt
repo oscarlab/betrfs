@@ -1,4 +1,5 @@
 set(tokuft_kernel_srcs
+test-ubi-root-chkpt
 test3856
 test3681
 test-inc-split
@@ -186,6 +187,9 @@ cachetable-clone-partial-fetch-pinned-node
 quicklz-test
 test-pick-child-to-flush
 test-ft-overflow
+test-range-del
+test-range-del2
+recovery-range-delete
 )
 
 add_library(tokuft_kernel_static STATIC ${tokuft_kernel_srcs})

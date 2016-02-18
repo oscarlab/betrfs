@@ -106,7 +106,7 @@ create_files(int N, int fds[/*N*/]) {
     int i;
     char name[30];
     for (i = 0; i < N; i++) {
-        snprintf(name, sizeof(name), "%d", i);
+        snprintf(name, sizeof(name), "%s/%d", TOKU_TEST_FILENAME, i);
         fds[i] = open(name, O_CREAT|O_WRONLY, 0644);
         if (fds[i] < 0) {
             CKERR(fds[i]);
@@ -290,8 +290,6 @@ int test_fsync_options(int N, int bytes) {
    
     toku_os_recursive_delete(TOKU_TEST_FILENAME);
     r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
-    CKERR(r);
-    r = chdir(TOKU_TEST_FILENAME);
     CKERR(r);
 
     int fds[N];

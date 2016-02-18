@@ -1664,6 +1664,7 @@ struct __db {
 		DB_TXN *, DBT *, DBT *, DB_COMPACT *, uint32_t, DBT *));
 	int  (*cursor) __P((DB *, DB_TXN *, DBC **, uint32_t));
 	int  (*del) __P((DB *, DB_TXN *, DBT *, uint32_t));
+	int  (*del_multi) __P((DB *, DB_TXN *, DBT *, DBT *, bool, uint32_t));
 	void (*err) __P((DB *, int, const char *, ...));
 	void (*errx) __P((DB *, const char *, ...));
 	int  (*exists) __P((DB *, DB_TXN *, DBT *, uint32_t));

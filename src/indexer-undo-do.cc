@@ -651,7 +651,7 @@ indexer_ft_insert_committed(DB_INDEXER *indexer, DB *hotdb, DBT *hotkey, DBT *ho
     } else {
         result = toku_ydb_check_avail_fs_space(indexer->i->env);
         if (result == 0) {
-            toku_ft_send_insert(db_struct_i(hotdb)->ft_handle, hotkey, hotval, xids, FT_INSERT, TXNID_NONE, make_gc_info(true));
+            toku_ft_send_insert(db_struct_i(hotdb)->ft_handle, hotkey, hotval, xids, FT_INSERT, nullptr, TXNID_NONE, make_gc_info(true));
         }
     }
     return result;

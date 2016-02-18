@@ -170,7 +170,7 @@ static void*
 do_checkpoint (void *UU(v))
 {
     CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
-    int r = toku_checkpoint(cp, NULL, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT);
+    int r = toku_checkpoint(cp, NULL, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, false);
     assert(r == 0);
     return 0;
 }
@@ -187,7 +187,7 @@ static void checkpoint_pending(void) {
     int r;
     toku_cachetable_create(&ct, test_limit*sizeof(int), ZERO_LSN, NULL_LOGGER);
     const char *fname1 = TOKU_TEST_FILENAME;
-    r = unlink(fname1); if (r!=0) CKERR2(get_error_errno(r), ENOENT);
+    r = unlink(fname1);
     r = toku_cachetable_openf(&cf, ct, fname1, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO); assert(r == 0);
     create_dummy_functions(cf);
     
@@ -222,14 +222,14 @@ static void checkpoint_pending(void) {
     //printf("E43\n");
     n_flush = n_write_me = n_keep_me = n_fetch = 0; expect_value = 43;
     CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
-    r = toku_checkpoint(cp, NULL, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT);
+    r = toku_checkpoint(cp, NULL, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, false);
     assert(r == 0);
     assert(n_flush == N && n_write_me == N && n_keep_me == N);
 
     // a subsequent checkpoint should cause no flushes, or writes since all of the items are clean
     n_flush = n_write_me = n_keep_me = n_fetch = 0;
 
-    r = toku_checkpoint(cp, NULL, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT);
+    r = toku_checkpoint(cp, NULL, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, false);
     assert(r == 0);
     assert(n_flush == 0 && n_write_me == 0 && n_keep_me == 0);
 

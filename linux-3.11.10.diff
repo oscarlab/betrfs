@@ -1,6 +1,6 @@
 diff -ru linux-3.11.10-orig/arch/x86/include/asm/page_64_types.h linux-3.11.10/arch/x86/include/asm/page_64_types.h
---- linux-3.11.10-orig/arch/x86/include/asm/page_64_types.h
-+++ linux-3.11.10/arch/x86/include/asm/page_64_types.h
+--- linux-3.11.10-orig/arch/x86/include/asm/page_64_types.h	2013-11-29 13:42:37.000000000 -0500
++++ linux-3.11.10/arch/x86/include/asm/page_64_types.h	2016-02-13 17:20:55.178810833 -0500
 @@ -1,7 +1,7 @@
  #ifndef _ASM_X86_PAGE_64_DEFS_H
  #define _ASM_X86_PAGE_64_DEFS_H
@@ -11,8 +11,8 @@ diff -ru linux-3.11.10-orig/arch/x86/include/asm/page_64_types.h linux-3.11.10/a
  #define CURRENT_MASK (~(THREAD_SIZE - 1))
  
 diff -ru linux-3.11.10-orig/fs/direct-io.c linux-3.11.10/fs/direct-io.c
---- linux-3.11.10-orig/fs/direct-io.c
-+++ linux-3.11.10/fs/direct-io.c
+--- linux-3.11.10-orig/fs/direct-io.c	2013-11-29 13:42:37.000000000 -0500
++++ linux-3.11.10/fs/direct-io.c	2016-02-12 23:28:35.200314074 -0500
 @@ -154,6 +154,43 @@
  	return sdio->tail - sdio->head;
  }
@@ -82,137 +82,9 @@ diff -ru linux-3.11.10-orig/fs/direct-io.c linux-3.11.10/fs/direct-io.c
  
  	if (ret < 0 && sdio->blocks_available && (dio->rw & WRITE)) {
  		struct page *page = ZERO_PAGE(0);
-@@ -194,7 +239,7 @@
- 		ret = 0;
- 	}
- out:
--	return ret;	
-+	return ret;
- }
- 
- /*
-@@ -272,7 +317,7 @@
- 
- static int dio_bio_complete(struct dio *dio, struct bio *bio);
- /*
-- * Asynchronous IO callback. 
-+ * Asynchronous IO callback.
-  */
- static void dio_bio_end_aio(struct bio *bio, int error)
- {
-@@ -635,7 +680,7 @@
- 	}
- 	return ret;
- }
--		
-+
- /*
-  * Put cur_page under IO.  The section of cur_page which is described by
-  * cur_page_offset,cur_page_len is put into a BIO.  The section of cur_page
-@@ -697,7 +742,7 @@
-  * An autonomous function to put a chunk of a page under deferred IO.
-  *
-  * The caller doesn't actually know (or care) whether this piece of page is in
-- * a BIO, or is under IO or whatever.  We just take care of all possible 
-+ * a BIO, or is under IO or whatever.  We just take care of all possible
-  * situations here.  The separation between the logic of do_direct_IO() and
-  * that of submit_page_section() is important for clarity.  Please don't break.
-  *
-@@ -815,7 +860,7 @@
- 	 * We need to zero out part of an fs block.  It is either at the
- 	 * beginning or the end of the fs block.
- 	 */
--	if (end) 
-+	if (end)
- 		this_chunk_blocks = dio_blocks_per_fs_block - this_chunk_blocks;
- 
- 	this_chunk_bytes = this_chunk_blocks << sdio->blkbits;
-@@ -1043,7 +1088,7 @@
-  */
- static inline ssize_t
- do_blockdev_direct_IO(int rw, struct kiocb *iocb, struct inode *inode,
--	struct block_device *bdev, const struct iovec *iov, loff_t offset, 
-+	struct block_device *bdev, const struct iovec *iov, loff_t offset,
- 	unsigned long nr_segs, get_block_t get_block, dio_iodone_t end_io,
- 	dio_submit_t submit_io,	int flags)
- {
 diff -ru linux-3.11.10-orig/fs/fcntl.c linux-3.11.10/fs/fcntl.c
---- linux-3.11.10-orig/fs/fcntl.c
-+++ linux-3.11.10/fs/fcntl.c
-@@ -347,7 +347,7 @@
- }
- 
- SYSCALL_DEFINE3(fcntl, unsigned int, fd, unsigned int, cmd, unsigned long, arg)
--{	
-+{
- 	struct fd f = fdget_raw(fd);
- 	long err = -EBADF;
- 
-@@ -372,7 +372,7 @@
- #if BITS_PER_LONG == 32
- SYSCALL_DEFINE3(fcntl64, unsigned int, fd, unsigned int, cmd,
- 		unsigned long, arg)
--{	
-+{
- 	struct fd f = fdget_raw(fd);
- 	long err = -EBADF;
- 
-@@ -387,7 +387,7 @@
- 	err = security_file_fcntl(f.file, cmd, arg);
- 	if (err)
- 		goto out1;
--	
-+
- 	switch (cmd) {
- 		case F_GETLK64:
- 			err = fcntl_getlk64(f.file, (struct flock64 __user *) arg);
-@@ -452,8 +452,8 @@
- 		siginfo_t si;
- 		default:
- 			/* Queue a rt signal with the appropriate fd as its
--			   value.  We use SI_SIGIO as the source, not 
--			   SI_KERNEL, since kernel signals always get 
-+			   value.  We use SI_SIGIO as the source, not
-+			   SI_KERNEL, since kernel signals always get
- 			   delivered even if we can't queue.  Failure to
- 			   queue in this case _should_ be reported; we fall
- 			   back to SIGIO in that case. --sct */
-@@ -483,7 +483,7 @@
- 	enum pid_type type;
- 	struct pid *pid;
- 	int group = 1;
--	
-+
- 	read_lock(&fown->lock);
- 
- 	type = fown->pid_type;
-@@ -495,7 +495,7 @@
- 	pid = fown->pid;
- 	if (!pid)
- 		goto out_unlock_fown;
--	
-+
- 	read_lock(&tasklist_lock);
- 	do_each_pid_task(pid, type, p) {
- 		send_sigio_to_task(p, fown, fd, band, group);
-@@ -519,7 +519,7 @@
- 	struct pid *pid;
- 	int group = 1;
- 	int ret = 0;
--	
-+
- 	read_lock(&fown->lock);
- 
- 	type = fown->pid_type;
-@@ -533,7 +533,7 @@
- 		goto out_unlock_fown;
- 
- 	ret = 1;
--	
-+
- 	read_lock(&tasklist_lock);
- 	do_each_pid_task(pid, type, p) {
- 		send_sigurg_to_task(p, fown, group);
+--- linux-3.11.10-orig/fs/fcntl.c	2013-11-29 13:42:37.000000000 -0500
++++ linux-3.11.10/fs/fcntl.c	2016-02-12 23:30:28.436311429 -0500
 @@ -730,14 +730,15 @@
  	 * Exceptions: O_NONBLOCK is a two bit define on parisc; O_NDELAY
  	 * is defined as O_NONBLOCK on some platforms and not on others.
@@ -231,167 +103,10 @@ diff -ru linux-3.11.10-orig/fs/fcntl.c linux-3.11.10/fs/fcntl.c
  		));
  
  	fasync_cache = kmem_cache_create("fasync_cache",
-diff -ru linux-3.11.10-orig/fs/file.c linux-3.11.10/fs/file.c
---- linux-3.11.10-orig/fs/file.c
-+++ linux-3.11.10/fs/file.c
-@@ -186,7 +186,7 @@
-  * expanded and execution may have blocked.
-  * The files->file_lock should be held on entry, and will be held on exit.
-  */
--static int expand_files(struct files_struct *files, int nr)
-+int expand_files(struct files_struct *files, int nr)
- {
- 	struct fdtable *fdt;
- 
-@@ -203,6 +203,7 @@
- 	/* All good, so we try */
- 	return expand_fdtable(files, nr);
- }
-+EXPORT_SYMBOL(expand_files);
- 
- static inline void __set_close_on_exec(int fd, struct fdtable *fdt)
- {
-@@ -777,7 +778,7 @@
- 	return res;
- }
- 
--static int do_dup2(struct files_struct *files,
-+int do_dup2(struct files_struct *files,
- 	struct file *file, unsigned fd, unsigned flags)
- {
- 	struct file *tofree;
-@@ -819,6 +820,7 @@
- 	spin_unlock(&files->file_lock);
- 	return -EBUSY;
- }
-+EXPORT_SYMBOL(do_dup2);
- 
- int replace_fd(unsigned fd, struct file *file, unsigned flags)
- {
-diff -ru linux-3.11.10-orig/fs/locks.c linux-3.11.10/fs/locks.c
---- linux-3.11.10-orig/fs/locks.c
-+++ linux-3.11.10/fs/locks.c
-@@ -1723,35 +1723,11 @@
- 
- EXPORT_SYMBOL(flock_lock_file_wait);
- 
--/**
-- *	sys_flock: - flock() system call.
-- *	@fd: the file descriptor to lock.
-- *	@cmd: the type of lock to apply.
-- *
-- *	Apply a %FL_FLOCK style lock to an open file descriptor.
-- *	The @cmd can be one of
-- *
-- *	%LOCK_SH -- a shared lock.
-- *
-- *	%LOCK_EX -- an exclusive lock.
-- *
-- *	%LOCK_UN -- remove an existing lock.
-- *
-- *	%LOCK_MAND -- a `mandatory' flock.  This exists to emulate Windows Share Modes.
-- *
-- *	%LOCK_MAND can be combined with %LOCK_READ or %LOCK_WRITE to allow other
-- *	processes read and write access respectively.
-- */
--SYSCALL_DEFINE2(flock, unsigned int, fd, unsigned int, cmd)
-+int do_flock(struct fd f, unsigned int cmd)
- {
--	struct fd f = fdget(fd);
- 	struct file_lock *lock;
- 	int can_sleep, unlock;
--	int error;
--
--	error = -EBADF;
--	if (!f.file)
--		goto out;
-+	int error = -EBADF;
- 
- 	can_sleep = !(cmd & LOCK_NB);
- 	cmd &= ~LOCK_NB;
-@@ -1759,11 +1735,11 @@
- 
- 	if (!unlock && !(cmd & LOCK_MAND) &&
- 	    !(f.file->f_mode & (FMODE_READ|FMODE_WRITE)))
--		goto out_putf;
-+		goto out;
- 
- 	error = flock_make_lock(f.file, &lock, cmd);
- 	if (error)
--		goto out_putf;
-+		goto out;
- 	if (can_sleep)
- 		lock->fl_flags |= FL_SLEEP;
- 
-@@ -1780,8 +1756,40 @@
- 
-  out_free:
- 	locks_free_lock(lock);
-+ out:
-+	return error;
-+}
-+
-+/**
-+ *	sys_flock: - flock() system call.
-+ *	@fd: the file descriptor to lock.
-+ *	@cmd: the type of lock to apply.
-+ *
-+ *	Apply a %FL_FLOCK style lock to an open file descriptor.
-+ *	The @cmd can be one of
-+ *
-+ *	%LOCK_SH -- a shared lock.
-+ *
-+ *	%LOCK_EX -- an exclusive lock.
-+ *
-+ *	%LOCK_UN -- remove an existing lock.
-+ *
-+ *	%LOCK_MAND -- a `mandatory' flock.  This exists to emulate Windows Share Modes.
-+ *
-+ *	%LOCK_MAND can be combined with %LOCK_READ or %LOCK_WRITE to allow other
-+ *	processes read and write access respectively.
-+ */
-+SYSCALL_DEFINE2(flock, unsigned int, fd, unsigned int, cmd)
-+{
-+	struct fd f = fdget(fd);
-+	int error;
-+
-+	error = -EBADF;
-+	if (!f.file)
-+		goto out;
-+
-+	error = do_flock(f, cmd);
- 
-- out_putf:
- 	fdput(f);
-  out:
- 	return error;
-diff -ru linux-3.11.10-orig/include/linux/init_task.h linux-3.11.10/include/linux/init_task.h
---- linux-3.11.10-orig/include/linux/init_task.h
-+++ linux-3.11.10/include/linux/init_task.h
-@@ -213,6 +213,7 @@
- 		[PIDTYPE_SID]  = INIT_PID_LINK(PIDTYPE_SID),		\
- 	},								\
- 	.thread_group	= LIST_HEAD_INIT(tsk.thread_group),		\
-+	.errno		= 0,						\
- 	INIT_IDS							\
- 	INIT_PERF_EVENTS(tsk)						\
- 	INIT_TRACE_IRQFLAGS						\
-diff -ru linux-3.11.10-orig/include/linux/sched.h linux-3.11.10/include/linux/sched.h
---- linux-3.11.10-orig/include/linux/sched.h
-+++ linux-3.11.10/include/linux/sched.h
-@@ -1410,6 +1410,8 @@
- 	unsigned int	sequential_io;
- 	unsigned int	sequential_io_avg;
- #endif
-+	/* used by FTFS klibc */
-+	int errno;
- };
- 
- /* Future-safe accessor for struct task_struct's cpus_allowed. */
 diff -ru linux-3.11.10-orig/include/uapi/asm-generic/fcntl.h linux-3.11.10/include/uapi/asm-generic/fcntl.h
---- linux-3.11.10-orig/include/uapi/asm-generic/fcntl.h
-+++ linux-3.11.10/include/uapi/asm-generic/fcntl.h
-@@ -88,9 +88,14 @@
+--- linux-3.11.10-orig/include/uapi/asm-generic/fcntl.h	2013-11-29 13:42:37.000000000 -0500
++++ linux-3.11.10/include/uapi/asm-generic/fcntl.h	2016-02-12 23:30:49.772310930 -0500
+@@ -88,6 +88,11 @@
  #define __O_TMPFILE	020000000
  #endif
  
@@ -402,8 +117,4 @@ diff -ru linux-3.11.10-orig/include/uapi/asm-generic/fcntl.h linux-3.11.10/inclu
 +
  /* a horrid kludge trying to make sure that this will fail on old kernels */
  #define O_TMPFILE (__O_TMPFILE | O_DIRECTORY)
--#define O_TMPFILE_MASK (__O_TMPFILE | O_DIRECTORY | O_CREAT)      
-+#define O_TMPFILE_MASK (__O_TMPFILE | O_DIRECTORY | O_CREAT)
- 
- #ifndef O_NDELAY
- #define O_NDELAY	O_NONBLOCK
+ #define O_TMPFILE_MASK (__O_TMPFILE | O_DIRECTORY | O_CREAT)      

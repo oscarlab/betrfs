@@ -431,9 +431,9 @@ test_prefetching(void) {
     }
     assert(b.b == 20);
 
+    DISKOFF offset;
+    DISKOFF size;
     {
-        DISKOFF offset;
-        DISKOFF size;
         toku_blocknum_realloc_on_disk(brt_h->blocktable, b, 100, &offset, brt_h, fd, false);
         assert(offset==BLOCK_ALLOCATOR_TOTAL_HEADER_RESERVE);
 
@@ -442,7 +442,7 @@ test_prefetching(void) {
         assert(size   == 100);
     }
     FTNODE_DISK_DATA ndd = NULL;
-    r = toku_serialize_ftnode_to(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false);
+    r = toku_serialize_ftnode_to(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false, &offset, &size);
     assert(r==0);
 
     test_prefetch_read(fd, brt, brt_h);    

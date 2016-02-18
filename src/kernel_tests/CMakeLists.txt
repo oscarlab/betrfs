@@ -1,4 +1,5 @@
 set(tokusrc_kernel_srcs
+seq-io
 bench
 big-nested-abort-abort
 big-nested-abort-commit
@@ -238,7 +239,7 @@ test3039 # -n 1000
 test3219
 test3522b
 test3522
-test3529  #phenominally loooong test
+#test3529  #phenominally loooong test
 test_3529_insert_2
 test_3529_table_lock
 test_3645

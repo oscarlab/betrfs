@@ -131,6 +131,13 @@ static inline void toku_list_insert_between(struct toku_list *a, struct toku_lis
     a->next = b->prev = toku_list;
 }
 
+static inline void toku_list_insert_m_between(struct toku_list *a, struct toku_list *first, struct toku_list *last, struct toku_list *b) {
+
+    last->next = a->next;
+    first->prev = b->prev;
+    a->next = first;
+    b->prev = last;
+}
 static inline void toku_list_push(struct toku_list *head, struct toku_list *toku_list) {
     toku_list_insert_between(head->prev, toku_list, head);
 }

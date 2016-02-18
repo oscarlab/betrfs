@@ -110,9 +110,10 @@ PATENT RIGHTS GRANT:
 
 
 //Types of transaction records.
-enum {XR_INSERT      = 1,
+enum uxr_type {XR_INSERT      = 1,
       XR_DELETE      = 2,
-      XR_PLACEHOLDER = 3};
+      XR_PLACEHOLDER = 3,
+      XR_UNBOUND_INSERT =4 };
 
 typedef struct uxr {     // unpacked transaction record
     uint8_t   type;     // delete/insert/placeholder
@@ -122,6 +123,7 @@ typedef struct uxr {     // unpacked transaction record
     // Note: when packing ule into a new leafentry, will need
     //       to copy actual data from valp to new leafentry
 } UXR_S, *UXR;
+
 
 
 // Unpacked Leaf Entry is of fixed size because it's just on the 

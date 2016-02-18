@@ -120,7 +120,7 @@ int test_mvcc_many_committed(void) {
         abort();
 
     DB_TXN* read_uncommitted_txn;
-    memset(read_txns, 0, sizeof(read_txns));
+    memset(read_txns, 0, num_read_txns * sizeof(*read_txns));
 
     r = env->txn_begin(env, NULL, &create_txn, 0);                                        CKERR(r);
 

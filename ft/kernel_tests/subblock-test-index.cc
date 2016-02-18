@@ -138,7 +138,7 @@ test_sub_block_index(void) {
     }
     
     r = get_sub_block_index(n_sub_blocks, sub_block, max_offset);
-    assert(r == -1);
+    assert(r < 0);
 }
 
 extern "C" int test_subblock_test_index(void);

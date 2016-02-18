@@ -260,6 +260,11 @@ static inline void wbuf_DISKOFF (struct wbuf *w, DISKOFF off) {
     wbuf_ulonglong(w, (uint64_t)off);
 }
 
+static inline void wbuf_nocrc_DISKOFF (struct wbuf *w, DISKOFF off) {
+    wbuf_nocrc_ulonglong(w, (uint64_t)off);
+}
+
+
 static inline void wbuf_BLOCKNUM (struct wbuf *w, BLOCKNUM b) {
     wbuf_ulonglong(w, b.b);
 }
@@ -299,6 +304,11 @@ static inline void wbuf_LSN (struct wbuf *w, LSN lsn) {
 static inline void wbuf_MSN (struct wbuf *w, MSN msn) {
     wbuf_ulonglong(w, msn.msn);
 }
+
+static inline void wbuf_nocrc_MSN (struct wbuf *w, MSN msn) {
+    wbuf_nocrc_ulonglong(w, msn.msn);
+}
+
 
 static inline void wbuf_nocrc_FILENUM (struct wbuf *w, FILENUM fileid) {
     wbuf_nocrc_uint(w, fileid.fileid);

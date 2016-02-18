@@ -105,7 +105,7 @@ populate(DB_ENV *env, DB *db, int nrows) {
     char *kk = (char *)toku_xmalloc(4096 * sizeof *kk); // 4 KB key
     for (int i = 0; i < nrows; i++) {
         int k = htonl(i);
-        memset(kk, 0, sizeof kk);
+        memset(kk, 0, 4096 * sizeof *kk);
         memcpy(kk, &k, sizeof k);
         DBT key = { .data = &kk, .size = sizeof kk };
         DBT val = { .data = NULL, .size = 0 };

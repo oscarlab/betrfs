@@ -3,10 +3,8 @@
 
 #include <pthread_union_config_options.h>
 #include <pthread.h>
+#include "util/list.h"
 
-struct list_head {
-	struct list_head *next, *prev;
-};
 
 typedef struct {
 	long counter;

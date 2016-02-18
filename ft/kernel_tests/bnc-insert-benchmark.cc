@@ -151,23 +151,27 @@ run_test(unsigned long eltsize, unsigned long nodesize, unsigned long repeat)
     DBG;
     assert_zero(r);  
 
-    for (i = 0; i < repeat; ++i) {
-
+    for (unsigned int j = 0; j < repeat; ++j) {
         bnc = toku_create_empty_nl();
         for (; toku_bnc_nbytesinbuf(bnc) <= nodesize; ++cur) {
-           toku_bnc_insert_msg(bnc,
-                                &keys[cur % 1024], 
-                                sizeof keys[cur % 1024],
-                                vals[cur % 1024], 
-                                eltsize - (sizeof keys[cur % 1024]),
-                                FT_NONE, next_dummymsn(), xids_123, true,
-                                NULL, long_key_cmp); 
-        } 
-        
-        nbytesinserted +=  toku_bnc_nbytesinbuf(bnc);
+            FT_MSG_S msg;
+            DBT key, val;
+            toku_fill_dbt(&key, &keys[cur % 1024], sizeof keys[cur % 1024]);
+            toku_fill_dbt(&val,vals[cur % 1024], eltsize - (sizeof keys[cur % 1024]));
+            ft_msg_init(&msg, FT_NONE, next_dummymsn(), xids_123, &key, &val); 
+            
+            toku_bnc_insert_msg(bnc,
+                                NULL,
+                                &msg,
+                                true,
+                                NULL,
+                                long_key_cmp); 
+            assert_zero(r);
+        }
+        nbytesinserted += toku_bnc_nbytesinbuf(bnc);
         destroy_nonleaf_childinfo(bnc);
-        //DBG;
     }
+    
 
     for (i=0; i< 1024; i++) {
 	if(vals[i] != NULL) 

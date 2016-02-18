@@ -113,7 +113,7 @@ cachetable_unpin_test (int n) {
 
         void *v;
         r = toku_cachetable_maybe_get_and_pin(f1, make_blocknum(i), hi, PL_WRITE_EXPENSIVE, &v);
-        assert(r == -1);
+        assert(r < 0);
         assert(toku_cachefile_count_pinned(f1, 0) == i);
 
         //r = toku_test_cachetable_unpin(f1, make_blocknum(i), hi, CACHETABLE_CLEAN, 1);

@@ -26,10 +26,11 @@
 #include "toku_engine_status.h"
 #include "toku_checkpoint.h"
 #include "toku_flusher.h"
+#include "toku_memleak_detect.h"
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("");
-MODULE_DESCRIPTION("B^e tree file system");
+MODULE_AUTHOR("Stony Brook University");
+MODULE_DESCRIPTION("Fractal Tree File System");
 
 static char *sb_dev = NULL;
 module_param(sb_dev, charp, 0);
@@ -42,11 +43,12 @@ MODULE_PARM_DESC(sb_fstype, "the southbound file system type (ex: ext4)");
 int toku_ncpus = (1<<30);
 module_param(toku_ncpus, int, 0);
 MODULE_PARM_DESC(toku_ncpus, "Limit on the number of CPUs used by the FT code");
-
+long txn_count = 0;
+long seq_count = 0;
+long non_seq_count = 0;
 extern int toku_ydb_init(void);
 extern void toku_ydb_destroy(void);
-
-/* log serious errors */
+extern void printf_count_blindwrite(void);
 inline void ftfs_error (const char * function, const char * fmt, ...)
 {
 	va_list args;
@@ -58,7 +60,7 @@ inline void ftfs_error (const char * function, const char * fmt, ...)
 	va_end(args);
 }
 
-/* logging used only when debugging */
+//samething as ftfs_error...when ftfs fs calls needs to dump info out
 inline void ftfs_log(const char * function, const char * fmt, ...)
 {
 #ifdef FTFS_DEBUG
@@ -70,24 +72,24 @@ inline void ftfs_log(const char * function, const char * fmt, ...)
 	va_end(args);
 #endif
 }
-
 static void __exit ftfs_module_exit(void)
 {
 	destroy_ft_index();
-
+	destroy_ftfs_vmalloc_cache();
 	exit_ftfs_fs();
 
 	put_ftfs_southbound();
 
+	TOKU_MEMLEAK_EXIT;
 	toku_engine_status_exit();
 	toku_checkpoint_exit();
 	toku_flusher_exit();
-
+	printf_count_blindwrite();
 	if (ftfs_private_umount())
 		ftfs_error(__func__, "unable to umount ftfs southbound");
+	ftfs_error(__func__, "seq count = %ld, non seq count = %ld, txn count = %ld\n", seq_count, non_seq_count, txn_count);
 }
 
-/* lookup symbols we need that weren't exported */
 static int resolve_ftfs_symbols(void)
 {
 	if (resolve_ftfs_southbound_symbols() ||
@@ -128,7 +130,7 @@ static int __init ftfs_module_init(void)
 	 * Now we create a disconnected mount for our southbound file
 	 * system. It will not be inserted into any mount trees, but
 	 * we pin a global struct vfsmount that we use for all path
-	 * resolution internally in the fractal tree.
+	 * resolution.
 	 */
 
 	ret = ftfs_private_mount(sb_dev, sb_fstype, data);
@@ -141,9 +143,9 @@ static int __init ftfs_module_init(void)
 	BUG_ON(ftfs_files);
 
 	/*
-	 * Actually create the southbound "file system context"
-	 * for fractal tree path name resolution.
-	 * we need our own file system root and file table
+	 * The southbound "file system context" needs to be created to
+	 * force all fractal tree worker threads to "see" our file
+	 * system as if they were running in user space.
 	 */
 
 	ret = init_ftfs_southbound();
@@ -158,32 +160,24 @@ static int __init ftfs_module_init(void)
 		return ret;
 	}
 
-	/* print fractal tree statistics by writing to /proc/toku_engine_status */
 	ret = toku_engine_status_init();
 	if (ret) {
 		ftfs_error(__func__, "can't init toku engine proc");
 		return ret;
 	}
 
-	/* intiate a checkpoint by writing to /proc/toku_checkpoint */
 	ret = toku_checkpoint_init();
 	if (ret) {
 		ftfs_error(__func__, "can't init toku checkpoint proc");
 		return ret;
 	}
 
-	/* intiate a hot optimize  by writing to /proc/toku_flusht */
 	ret = toku_flusher_init();
 	if (ret) {
 		ftfs_error(__func__, "can't init toku flusher proc");
 		return ret;
 	}
 
-	/* we commonly allocate and then quickly free buffers for the
-	 * cachetable. we found that keeping a few handy increases
-	 * performance significantly without requiring a complete
-	 * overhaul of the fractal tree memory allocators
-	 */
 	ret = init_ftfs_vmalloc_cache();
 	if (ret) {
 		ftfs_error(__func__, "can't init vmalloc caches");

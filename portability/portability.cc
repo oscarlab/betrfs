@@ -284,10 +284,9 @@ toku_os_lock_file(const char *name) {
     if (fd>=0) {
         r = flock(fd, LOCK_EX | LOCK_NB);
         if (r!=0) {
-            r = get_error_errno(r); //Save errno from flock.
+            r = 1;
             close(fd);
             fd = -1; //Disable fd.
-            set_errno(r);
         }
     }
     return fd;
@@ -327,8 +326,8 @@ toku_os_get_process_times(struct timeval *usertime, struct timeval *kerneltime) 
     #else
     r = getrusage_ftfs(RUSAGE_SELF, &rusage);
     #endif
-    if (r == -1)
-        return get_error_errno(r);
+    if (r < 0)
+        return 1;
     if (usertime) 
         *usertime = rusage.ru_utime;
     if (kerneltime)
@@ -368,7 +367,7 @@ toku_os_get_max_process_data_size(uint64_t *maxdata) {
             d = 1ULL << 31;
 	*maxdata = d;
     } else
-        r = get_error_errno(r);
+        r = 1;
     return r;
 }
 #endif
@@ -402,7 +401,7 @@ toku_get_processor_frequency_sys(uint64_t *hzret) {
     FILE *fp = fopen("/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq", "r");
     if (!fp) {
         // Can't cast fp to an int :(
-        r = get_error_errno(-ENOSYS);
+        r = ENOSYS;
     } else {
         unsigned int khz = 0;
         if (fscanf(fp, "%u", &khz) == 1) {
@@ -423,7 +422,7 @@ toku_get_processor_frequency_cpuinfo(uint64_t *hzret) {
     FILE *fp = fopen("/proc/cpuinfo", "r");
     if (!fp) {
         // Can't cast fp to an int :(
-        r = get_error_errno(-ENOSYS);
+        r = ENOSYS;
     } else {
         uint64_t maxhz = 0;
         char *buf = NULL;
@@ -508,8 +507,8 @@ toku_get_filesystem_sizes(const char *path, uint64_t *avail_size, uint64_t *free
     r = statvfs64(path, &s);
 #endif
 
-    if (r == -1) {
-        r = get_error_errno(r);
+    if (r < 0){
+        r = 0;
     } else {
 
         // get the block size in bytes

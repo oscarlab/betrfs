@@ -132,6 +132,7 @@ create_populate_tree(const char *logdir, const char *fname, int n) {
     assert(error == 0);
     CACHETABLE ct = NULL;
     toku_cachetable_create(&ct, 0, ZERO_LSN, logger);
+    toku_cachetable_set_env_dir(ct, logdir);
     toku_logger_set_cachetable(logger, ct);
     error = toku_logger_open_rollback(logger, ct, true);
     assert(error == 0);
@@ -172,12 +173,12 @@ create_populate_tree(const char *logdir, const char *fname, int n) {
     assert(error == 0);
     
     CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
-    error = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT);
+    error = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, false);
     assert(error == 0);
 
     toku_logger_close_rollback(logger);
     
-    error = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT);
+    error = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, false);
     assert(error == 0);
 
     toku_logger_shutdown(logger);
@@ -202,6 +203,7 @@ test_provdel(const char *logdir, const char *fname, int n) {
     assert(error == 0);
     CACHETABLE ct = NULL;
     toku_cachetable_create(&ct, 0, ZERO_LSN, logger);
+    toku_cachetable_set_env_dir(ct,logdir);
     toku_logger_set_cachetable(logger, ct);
     error = toku_logger_open_rollback(logger, ct, false);
     assert(error == 0);
@@ -272,7 +274,7 @@ test_provdel(const char *logdir, const char *fname, int n) {
     error = toku_close_ft_handle_nolsn(brt, NULL);
     assert(error == 0);
     CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
-    error = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT);
+    error = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, false);
     assert(error == 0);
 
     toku_logger_close_rollback(logger);
@@ -305,12 +307,12 @@ test_le_cursor_provdel() {
     char logdir[TOKU_PATH_MAX+1];
     toku_path_join(logdir, 2, TOKU_TEST_FILENAME, "logdir");
     init_logdir(logdir);
-    int error = chdir(logdir);
-    assert(error == 0);
+    //int error = chdir(logdir);
+    //assert(error == 0);
 
     const int n = 10;
-    create_populate_tree(".", "ftfile", n);
-    test_provdel(".", "ftfile", n);
+    create_populate_tree(logdir, "ftfile", n);
+    test_provdel(logdir, "ftfile", n);
 
     toku_ft_layer_destroy();
     return 0;

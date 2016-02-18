@@ -159,6 +159,9 @@ void toku_set_assert_on_write_enospc(int do_assert) __attribute__((__visibility_
 // *enospc_total     is the number of times ENOSPC was returned by write or pwrite
 void toku_fs_get_write_info(time_t *enospc_last_time, uint64_t *enospc_current, uint64_t *enospc_total);
 
+// XXX: Adding the logger specific function for fdatasync
+void toku_logger_maybe_sync_internal_no_flags_no_callbacks (int fd);
+
 void toku_fsync_dirfd_without_accounting(DIR *dirp);
 
 int toku_fsync_dir_by_name_without_accounting(const char *dir_name);

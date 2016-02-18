@@ -135,6 +135,7 @@ create_populate_tree(const char *logdir, const char *fname, int n) {
     assert(error == 0);
     CACHETABLE ct = NULL;
     toku_cachetable_create(&ct, 0, ZERO_LSN, logger);
+    toku_cachetable_set_env_dir(ct, logdir); 
     toku_logger_set_cachetable(logger, ct);
     error = toku_logger_open_rollback(logger, ct, true);
     assert(error == 0);
@@ -174,12 +175,12 @@ create_populate_tree(const char *logdir, const char *fname, int n) {
     assert(error == 0);
 
     CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
-    error = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT);
+    error = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, false);
     assert(error == 0);
     toku_logger_close_rollback(logger);
     assert(error == 0);
 
-    error = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT);
+    error = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, false);
     assert(error == 0);
 
     toku_logger_shutdown(logger);
@@ -192,13 +193,14 @@ create_populate_tree(const char *logdir, const char *fname, int n) {
 
 // test toku_le_cursor_is_key_greater when the LE_CURSOR is positioned at +infinity
 static void 
-test_pos_infinity(const char *fname, int n) {
+test_pos_infinity(const char * logdir, const char *fname, int n) {
     if (verbose) fprintf(stderr, "%s %s %d\n", __FUNCTION__, fname, n);
     int error;
 
     CACHETABLE ct = NULL;
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
-
+    toku_cachetable_set_env_dir(ct, logdir); 
+ 
     FT_HANDLE brt = NULL;
     error = toku_open_ft_handle(fname, 1, &brt, 1<<12, 1<<9, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, test_keycompare);
     assert(error == 0);
@@ -226,12 +228,13 @@ test_pos_infinity(const char *fname, int n) {
 
 // test toku_le_cursor_is_key_greater when the LE_CURSOR is positioned at -infinity
 static void 
-test_neg_infinity(const char *fname, int n) {
+test_neg_infinity(const char * logdir, const char *fname, int n) {
     if (verbose) fprintf(stderr, "%s %s %d\n", __FUNCTION__, fname, n);
     int error;
 
     CACHETABLE ct = NULL;
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
+    toku_cachetable_set_env_dir(ct, logdir); 
 
     FT_HANDLE brt = NULL;
     error = toku_open_ft_handle(fname, 1, &brt, 1<<12, 1<<9, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, test_keycompare);
@@ -280,12 +283,13 @@ test_neg_infinity(const char *fname, int n) {
 
 // test toku_le_cursor_is_key_greater when the LE_CURSOR is positioned in between -infinity and +infinity
 static void 
-test_between(const char *fname, int n) {
+test_between(const char * logdir, const char *fname, int n) {
     if (verbose) fprintf(stderr, "%s %s %d\n", __FUNCTION__, fname, n);
     int error;
 
     CACHETABLE ct = NULL;
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
+    toku_cachetable_set_env_dir(ct, logdir); 
 
     FT_HANDLE brt = NULL;
     error = toku_open_ft_handle(fname, 1, &brt, 1<<12, 1<<9, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, test_keycompare);
@@ -367,14 +371,12 @@ test_le_cursor_right (void) {
     char logdir[TOKU_PATH_MAX+1];
     toku_path_join(logdir, 2, TOKU_TEST_FILENAME, "logdir");
     init_logdir(logdir);
-    int error = chdir(logdir);
-    assert(error == 0);
 
     const int n = 10;
-    create_populate_tree(".", "ftfile", n);
-    test_pos_infinity("ftfile", n);
-    test_neg_infinity("ftfile", n);
-    test_between("ftfile", n);
+    create_populate_tree(logdir, "ftfile", n);
+    test_pos_infinity(logdir, "ftfile", n);
+    test_neg_infinity(logdir, "ftfile", n);
+    test_between(logdir, "ftfile", n);
 
     toku_ft_layer_destroy();
     return 0;

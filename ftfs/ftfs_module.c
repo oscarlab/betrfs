@@ -49,7 +49,7 @@ MODULE_PARM_DESC(toku_ncpus, "Limit on the number of CPUs used by the FT code");
 static struct proc_dir_entry *toku_proc_entry;
 static int last_result;
 
-inline void ftfs_error (const char * function, const char * fmt, ...)
+void ftfs_error (const char * function, const char * fmt, ...)
 {
 	va_list args;
 
@@ -61,7 +61,7 @@ inline void ftfs_error (const char * function, const char * fmt, ...)
 }
 
 //samething as ftfs_error...when ftfs fs calls needs to dump info out
-inline void ftfs_log(const char * function, const char * fmt, ...)
+void ftfs_log(const char * function, const char * fmt, ...)
 {
 #ifdef FTFS_DEBUG
 	va_list args;
@@ -176,7 +176,7 @@ static void __exit ftfs_module_exit(void)
 
 	if (ftfs_private_umount())
 		ftfs_error(__func__, "unable to umount ftfs southbound");
-
+	destroy_ftfs_vmalloc_cache();
 	toku_test_exit();
 }
 
@@ -244,6 +244,11 @@ static int __init ftfs_module_init(void)
 		return ret;
 	}
 
+	ret = init_ftfs_vmalloc_cache();
+	if (ret) {
+		ftfs_error(__func__, "can't init vmalloc caches");
+		return ret;
+	}
 
 	return toku_test_init();
 }

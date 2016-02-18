@@ -190,7 +190,7 @@ cachetable_test (bool write_first, bool write_second, bool start_checkpoint) {
         //
         // should mark the v1 and v2 as pending
         //
-        toku_cachetable_begin_checkpoint(cp, NULL);
+        toku_cachetable_begin_checkpoint(cp, NULL, false);
     }
     //
     // This call should cause a flush for both
@@ -230,8 +230,9 @@ cachetable_test (bool write_first, bool write_second, bool start_checkpoint) {
             cp, 
             NULL, 
             NULL,
-            NULL
-            );
+            NULL,
+           false
+	    );
     }
 
     toku_cachetable_verify(ct);

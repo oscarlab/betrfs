@@ -203,17 +203,17 @@ basement nodes, bulk fetch,  and partial fetch:
 #include "checkpoint.h"
 #include "ft.h"
 #include "ft-cachetable-wrappers.h"
+#include "log-internal.h"
 #include "ft-flusher.h"
 #include "ft-internal.h"
 #include "ft_layout_version.h"
 #include "key.h"
-#include "log-internal.h"
 #include "sub_block.h"
 #include "txn_manager.h"
 #include "leafentry.h"
 #include "xids.h"
 #include "ft_msg.h"
-
+#include "ule.h"
 #include <toku_race_tools.h>
 
 #include <portability/toku_atomic.h>
@@ -224,7 +224,7 @@ basement nodes, bulk fetch,  and partial fetch:
 #include <util/sort.h>
 
 #include <stdint.h>
-
+static TOKULOGGER global_logger = nullptr;
 static const uint32_t this_version = FT_LAYOUT_VERSION;
 
 /* Status is intended for display to humans to help understand system behavior.
@@ -362,6 +362,12 @@ status_init(void)
     STATUS_INIT(FT_PRO_NUM_STOP_CHILD_INMEM,               PROMOTION_STOPPED_CHILD_NOT_FULLY_IN_MEMORY, PARCOUNT, "promotion: stopped because the child was not fully in memory", TOKU_ENGINE_STATUS|TOKU_GLOBAL_STATUS);
     STATUS_INIT(FT_PRO_NUM_DIDNT_WANT_PROMOTE,             PROMOTION_STOPPED_AFTER_LOCKING_CHILD, PARCOUNT, "promotion: stopped anyway, after locking the child", TOKU_ENGINE_STATUS|TOKU_GLOBAL_STATUS);
 
+STATUS_INIT(FT_DISK_IO_OTHER,                      	   ALL_OTHER_DISK_IO_BYTES, PARCOUNT, "all other disk io, including the descriptors, translation table, ft header, roll log writing", TOKU_ENGINE_STATUS|TOKU_GLOBAL_STATUS);
+STATUS_INIT(FT_DISK_IO_DESCRIPTOR,                         DESCRIPTOR_DISK_IO_BYTES, PARCOUNT, "descriptor bytes", TOKU_ENGINE_STATUS|TOKU_GLOBAL_STATUS);
+STATUS_INIT(FT_DISK_IO_TT,                      	   TRANSLATION_TABLE_DISK_IO_BYTES, PARCOUNT, "translation table bytes", TOKU_ENGINE_STATUS|TOKU_GLOBAL_STATUS);
+STATUS_INIT(FT_DISK_IO_HEADER,                      	   FT_HEADER_IO_BYTES, PARCOUNT, "ft header bytes", TOKU_ENGINE_STATUS|TOKU_GLOBAL_STATUS);
+STATUS_INIT(FT_DISK_IO_PREALLOC,                      	   PREALLOC_DISK_IO_BYTES, PARCOUNT, "preallocation bytes", TOKU_ENGINE_STATUS|TOKU_GLOBAL_STATUS);
+STATUS_INIT(FT_DISK_IO_ROLLBACK,                      	   ROLLBACK_DISK_IO_BYTES, PARCOUNT, "rollback log bytes", TOKU_ENGINE_STATUS|TOKU_GLOBAL_STATUS);
     ft_status.initialized = true;
 }
 static void status_destroy(void) {
@@ -387,6 +393,9 @@ toku_ft_get_status(FT_STATUS s) {
         }                                                                           \
     } while (0)
 
+void status_inc(ft_status_entry x, int d) {
+    STATUS_INC(x,d);
+}
 bool is_entire_node_in_memory(FTNODE node) {
     for (int i = 0; i < node->n_children; i++) {
         if(BP_STATE(node,i) != PT_AVAIL) {
@@ -444,6 +453,27 @@ get_node_reactivity (FTNODE node, uint32_t nodesize) {
     else
         return get_nonleaf_reactivity(node);
 }
+
+uint32_t 
+toku_bnc_n_unbound_insert_entries(NONLEAF_CHILDINFO bnc) {
+/*
+    switch (bnc->state) {
+    case PT_INVALID:
+    case PT_ON_DISK:
+    case PT_COMPRESSED:
+        return 0;
+    case PT_AVAIL:
+        //determine if internal node or leaf
+        //SOSP TODO: Bill
+        return 0;
+    default:
+        // in case we miss any in the future
+        abort();
+    }
+*/
+    return bnc->unbound_insert_count;
+}
+
 
 unsigned int
 toku_bnc_nbytesinbuf(NONLEAF_CHILDINFO bnc)
@@ -784,6 +814,11 @@ void toku_ft_status_update_flush_reason(FTNODE node,
     }
 }
 
+void toku_ft_status_update_io_reason(ft_status_entry entry, uint64_t bytes_written) {
+    STATUS_INC(entry, bytes_written);
+    STATUS_INC(FT_DISK_IO_OTHER, bytes_written);
+}
+
 static void ftnode_update_disk_stats(
     FTNODE ftnode,
     FT ft,
@@ -807,6 +842,7 @@ static void ftnode_update_disk_stats(
         toku_ft_update_stats(&ft->checkpoint_header->on_disk_stats, deltas);
     }
 }
+
 
 static void ftnode_clone_partitions(FTNODE node, FTNODE cloned_node) {
     for (int i = 0; i < node->n_children; i++) {
@@ -836,6 +872,110 @@ void toku_ftnode_checkpoint_complete_callback(void *value_data) {
     }
 }
 
+void ftnode_promise_to_bind_msgs(FTNODE node) {
+    assert(has_unbound_msgs(node));
+    for (int i=0; i<node->n_children; i++) {
+        toku_list * unbound_msgs;
+        if (node->height > 0) {
+            unbound_msgs = &BNC(node,i)->unbound_inserts;
+        } else {
+            unbound_msgs = &BLB(node, i)->unbound_inserts;
+        }
+        struct toku_list * list = unbound_msgs->next;
+        while(list!=unbound_msgs) {
+            struct unbound_insert_entry * entry = toku_list_struct(list, struct unbound_insert_entry, node_list);
+            paranoid_invariant(entry->state == UBI_UNBOUND || entry->state == UBI_QUEUED);
+            entry->state = UBI_BINDING;
+            list = list->next;
+        }
+    }
+}
+
+
+void ftnode_reset_unbound_counter(FTNODE node) {
+    node->unbound_insert_count = 0;
+    for(int i =0 ; i< node->n_children; i++) {
+        if(node->height >0 ){
+            BNC(node,i)->unbound_insert_count = 0;
+        } else {
+            BLB(node,i)->unbound_insert_count = 0;
+        }
+    }
+}
+#if 0
+void ftnode_remove_unbound_insert_list(FTNODE node) {
+   toku_assert_entire_node_in_memory(node);
+    for(int i=0; i<node->n_children; i++) {
+        if(node->height > 0 ) {
+            toku_list_init(&BNC(node,i)->unbound_inserts);
+        } else {
+            toku_list_init(&BLB(node, i)->unbound_inserts);
+        }
+    }
+}
+#endif
+
+static void toku_assert_all_entries_in_node_are_bound(FTNODE node){
+	for (int i=0; i<node->n_children; i++) {
+    		toku_list * unbound_msgs;
+    		if (node->height > 0) {
+			unbound_msgs = &BNC(node,i)->unbound_inserts;
+    		} else {
+			unbound_msgs = &BLB(node, i)->unbound_inserts;
+    		}
+    	struct toku_list * list = unbound_msgs->next;
+   	 while(list!=unbound_msgs) {
+		struct unbound_insert_entry * entry = toku_list_struct(list, struct unbound_insert_entry, node_list);
+		paranoid_invariant(entry->state == UBI_BOUND);
+		list = list->next;
+    	}
+   }
+
+}
+void ftnode_remove_unbound_insert_list_and_reset_count(FTNODE node) {
+    toku_assert_entire_node_in_memory(node);
+    toku_assert_all_entries_in_node_are_bound(node);
+    for(int i=0; i<node->n_children; i++) {
+        if(node->height > 0 ) {
+            toku_list_init(&BNC(node,i)->unbound_inserts);
+	    BNC(node,i) -> unbound_insert_count = 0;
+        } else {
+            toku_list_init(&BLB(node, i)->unbound_inserts);
+	    BLB(node, i) -> unbound_insert_count = 0;
+        }
+    }
+    node->unbound_insert_count = 0;
+}
+void ftnode_flip_unbound_msgs_type(FTNODE node) {
+    assert(node->unbound_insert_count>0);
+    toku_assert_entire_node_in_memory(node);
+    if(node->height >0) {
+        for(int childnum = 0; childnum < node->n_children; childnum++) {
+            NONLEAF_CHILDINFO bnc = BNC(node, childnum);
+            toku_fifo_iterate_flip_msg_type(bnc->buffer, FT_UNBOUND_INSERT, FT_INSERT);		
+        }
+    } else { //uxr fix, flip the type in the uxr so gc would work.
+        for(int i =0; i < node->n_children; i++) {
+            BASEMENTNODE bn = BLB(node, i);
+            for (uint32_t j =0 ; j<bn->data_buffer.omt_size(); j++) {
+                void* keyp = NULL;
+                uint32_t keylen = 0;
+                LEAFENTRY leaf_entry;
+                LEAFENTRY new_leaf_entry;
+                new_leaf_entry = NULL;
+
+                int r = bn->data_buffer.fetch_klpair(j, &leaf_entry, &keylen, &keyp);
+                assert_zero(r);
+                paranoid_invariant(leaf_entry);
+                if(leaf_entry->type != LE_MVCC) {
+                    continue;
+                } else {
+                    toku_le_flip_uxr_type(leaf_entry, &bn->data_buffer, j, keyp, keylen, &new_leaf_entry);	
+                }
+            }
+        }
+    }
+}
 void toku_ftnode_clone_callback(
     void* value_data,
     void** cloned_value_data,
@@ -879,6 +1019,11 @@ void toku_ftnode_clone_callback(
     // clone partition
     ftnode_clone_partitions(node, cloned_node);
 
+    cloned_node->unbound_insert_count = node->unbound_insert_count;
+    if(node->unbound_insert_count > 0) {
+	ftnode_flip_unbound_msgs_type(node);
+        ftnode_reset_unbound_counter(node);
+     }
     // clear dirty bit
     node->dirty = 0;
     cloned_node->dirty = 0;
@@ -892,10 +1037,127 @@ void toku_ftnode_clone_callback(
     }
     *clone_size = ftnode_memory_size(cloned_node);
     *cloned_value_data = cloned_node;
+    cloned_node->ct_pair = node->ct_pair; 	
+    toku_ft_node_empty_unbound_inserts_validation(node);
+    toku_ft_node_unbound_inserts_validation(cloned_node);
 }
 
 static void ft_leaf_run_gc(FTNODE node, FT ft);
 
+static void bill_debug_break(void) {
+    printf ("oops\n");
+}
+
+static void note_diskoff_size_and_bound(FTNODE node, DISKOFF bound_offset, DISKOFF bound_size) {
+
+	assert(has_unbound_msgs(node));
+	
+        toku_list * unbound_msgs;
+	for(int i=0;i<node->n_children;i++) {	
+		if(node->height>0) {
+			unbound_msgs = &BNC(node, i) ->unbound_inserts;
+		} else {
+			unbound_msgs = &BLB(node, i)->unbound_inserts;
+		}
+        	struct toku_list * list = unbound_msgs -> next;
+		while(list != unbound_msgs) {
+			struct unbound_insert_entry * entry = toku_list_struct(list, struct unbound_insert_entry, node_list);
+                        if (entry->state != UBI_BINDING && entry->state != UBI_QUEUED)
+                            bill_debug_break();
+			paranoid_invariant(entry->state == UBI_BINDING || entry->state == UBI_QUEUED);
+			entry->state = UBI_BOUND;
+			entry->diskoff = bound_offset;
+			entry->size = bound_size;		
+			list = list->next;
+		}
+	}
+}
+void toku_ftnode_flush_callback(
+    CACHEFILE cachefile,
+    int fd,
+    BLOCKNUM nodename,
+    void *ftnode_v,
+    void** disk_data,
+    void *extraargs,
+    PAIR_ATTR size __attribute__((unused)),
+    PAIR_ATTR* new_size,
+    bool write_me,
+    bool keep_me,
+    bool for_checkpoint,
+    bool is_clone
+    )
+{
+    FT h = (FT) extraargs;
+    TOKULOGGER logger = nullptr;
+    FTNODE ftnode = (FTNODE) ftnode_v;
+    bool is_unbound = has_unbound_msgs(ftnode);	
+    
+    FTNODE_DISK_DATA* ndd = (FTNODE_DISK_DATA*)disk_data;
+    assert(ftnode->thisnodename.b==nodename.b);
+    int height = ftnode->height;
+    
+    DISKOFF bound_size = 0;
+    DISKOFF bound_offset = 0;
+    if (write_me) {
+        toku_assert_entire_node_in_memory(ftnode);
+        if (height == 0) {
+            ft_leaf_run_gc(ftnode, h);
+        }
+        if (height == 0 && !is_clone) {
+            ftnode_update_disk_stats(ftnode, h, for_checkpoint);
+        }
+
+	int r = toku_serialize_ftnode_to(fd, ftnode->thisnodename, ftnode, ndd, !is_clone, h, for_checkpoint, &bound_size, &bound_offset);   	
+	if(is_unbound) {
+		//grab the fat link lock--do i have to ? FIXME
+		logger = toku_cachefile_logger(cachefile);
+		toku_mutex_lock(&logger->ubi_lock);
+
+		// ref count of physical block + 1
+		block_table_log_get_block(h->blocktable, bound_offset);
+		
+		//update the logger ubi hashtable with diskoff and size
+		note_diskoff_size_and_bound(ftnode, bound_offset, bound_size);
+        	//FIXME remove the unbound msg list from the node??
+		 ftnode_remove_unbound_insert_list_and_reset_count(ftnode);		
+//FIXME Bill, who would free unbound_msg_entry that were just bound from the in/out list in logger? will you do it upon log flush?		
+		toku_mutex_unlock(&logger->ubi_lock);
+	}
+        //debugging code
+	toku_ft_node_empty_unbound_inserts_validation(ftnode);
+        
+	assert_zero(r);
+        ftnode->layout_version_read_from_disk = FT_LAYOUT_VERSION;
+    }
+    if (!keep_me) {
+        if (!is_clone) {
+            long node_size = ftnode_memory_size(ftnode);
+            if (ftnode->height == 0) {
+                STATUS_INC(FT_FULL_EVICTIONS_LEAF, 1);
+                STATUS_INC(FT_FULL_EVICTIONS_LEAF_BYTES, node_size);
+            } else {
+                STATUS_INC(FT_FULL_EVICTIONS_NONLEAF, 1);
+                STATUS_INC(FT_FULL_EVICTIONS_NONLEAF_BYTES, node_size);
+            }
+            toku_free(*disk_data);
+        }
+        else {
+            if (ftnode->height == 0) {
+                for (int i = 0; i < ftnode->n_children; i++) {
+                    if (BP_STATE(ftnode,i) == PT_AVAIL) {
+                        BASEMENTNODE bn = BLB(ftnode, i);
+                        toku_ft_decrease_stats(&h->in_memory_stats, bn->stat64_delta);
+                    }
+                }
+            }
+        }
+        toku_ftnode_free(&ftnode);
+    }
+    else {
+        *new_size = make_ftnode_pair_attr(ftnode);
+    }
+}
+#if 0
 void toku_ftnode_flush_callback(
     CACHEFILE UU(cachefile),
     int fd,
@@ -956,7 +1218,7 @@ void toku_ftnode_flush_callback(
         *new_size = make_ftnode_pair_attr(ftnode);
     }
 }
-
+#endif
 void
 toku_ft_status_update_pivot_fetch_reason(struct ftnode_fetch_extra *bfe)
 {
@@ -1430,10 +1692,6 @@ int toku_ftnode_pf_callback(void* ftnode_pv, void* disk_data, void* read_extraar
                 fprintf(stderr,
                         "Checksum failure while reading node partition in file %s.\n",
                         toku_cachefile_fname_in_env(bfe->h->cf));
-            } else {
-                fprintf(stderr,
-                        "Error while reading node partition %d\n",
-                        get_maybe_error_errno());
             }
             abort();
         }
@@ -1479,7 +1737,7 @@ void toku_destroy_ftnode_internals(FTNODE node)
     }
     toku_free(node->childkeys);
     node->childkeys = NULL;
-
+    node->unbound_insert_count = 0;
     for (int i=0; i < node->n_children; i++) {
         if (BP_STATE(node,i) == PT_AVAIL) {
             if (node->height > 0) {
@@ -1538,7 +1796,7 @@ toku_initialize_empty_ftnode (FTNODE n, BLOCKNUM nodename, int height, int num_c
     n->bp = 0;
     n->n_children = num_children;
     n->oldest_referenced_xid_known = TXNID_NONE;
-
+    n->unbound_insert_count = 0;
     if (num_children > 0) {
         XMALLOC_N(num_children-1, n->childkeys);
         XMALLOC_N(num_children, n->bp);
@@ -1651,6 +1909,71 @@ init_childkey(FTNODE node, int childnum, const DBT *pivotkey) {
     node->totalchildkeylens += pivotkey->size;
 }
 
+//if it is not empty, return;
+//else check 
+//this is a fast version of validation that only checks on empty unbound inserts.
+void toku_ft_node_empty_unbound_inserts_validation(FTNODE UU(node)) {
+#ifdef DEBUG_SEQ_IO
+	if(node->unbound_insert_count > 0) return;
+	else {
+		for(int i = 0; i < node->n_children; i++) {
+			if(node->height>0) {
+				if(!toku_list_empty(&BNC(node,i)->unbound_inserts) || BNC(node, i)->unbound_insert_count>0) 
+					printf("\nnode %p failed zero validation at %dth bnc child\n", node, i);
+				paranoid_invariant(toku_list_empty(&BNC(node, i) -> unbound_inserts));
+				paranoid_invariant(BNC(node, i)->unbound_insert_count == 0);
+				
+			} else {
+				if(!toku_list_empty(&BLB(node,i)->unbound_inserts) || BLB(node, i)->unbound_insert_count>0) 
+					printf("\nnode %p failed zero validation at %dth blb child\n", node, i);
+				paranoid_invariant(toku_list_empty(&BLB(node, i) -> unbound_inserts));
+				paranoid_invariant(BLB(node, i)->unbound_insert_count == 0);
+			
+		}
+	    }
+	}
+#endif
+}	
+#ifdef DEBUG_SEQ_IO
+static void verify_unbound_list_count(toku_list * head, int count, FTNODE UU(node)) {
+	toku_list * item = head->next;
+	int i = 0;
+	while(item != head) {
+		i++;
+		item = item->next;
+	}
+	if(count!=i) 
+	   printf("%s,%d:count =%d, i = %d\n", __func__, __LINE__, count, i);
+	paranoid_invariant(count == i);
+	
+}
+#endif
+void toku_ft_node_unbound_inserts_validation(FTNODE UU(node)) {
+#ifdef DEBUG_SEQ_IO
+//	printf("\n%s:%d, going to validate node:%p\n", __func__, __LINE__, node);
+	int childnum = node->n_children;
+	int n_unbound_insert_node = node->unbound_insert_count;
+	int sum_child_ubi = 0;
+	for(int i = 0; i < childnum; i++) {
+		toku_list * head;
+		if(node->height>0) {
+			head = &BNC(node, i) -> unbound_inserts;
+			int n_unbound_insert_count_bnc = BNC(node, i)->unbound_insert_count;
+			verify_unbound_list_count(head, n_unbound_insert_count_bnc, node);
+			sum_child_ubi += n_unbound_insert_count_bnc;
+		} else {
+			head = &BLB(node, i) -> unbound_inserts;
+			int n_unbound_insert_count_blb = BLB(node, i)->unbound_insert_count;
+			verify_unbound_list_count(head, n_unbound_insert_count_blb, node);
+			sum_child_ubi += n_unbound_insert_count_blb;
+		}
+	}
+	if(n_unbound_insert_node != sum_child_ubi) {
+		printf("%s:%d, n_unbound_insert_node=%d, sum_child_ubi=%d\n", __func__, __LINE__,n_unbound_insert_node, sum_child_ubi);
+	}
+	paranoid_invariant(n_unbound_insert_node == sum_child_ubi);
+#endif
+}
 // Used only by test programs: append a child node to a parent node
 void
 toku_ft_nonleaf_append_child(FTNODE node, FTNODE child, const DBT *pivotkey) {
@@ -1669,6 +1992,7 @@ toku_ft_nonleaf_append_child(FTNODE node, FTNODE child, const DBT *pivotkey) {
 void
 toku_ft_bn_apply_cmd_once (
     BASEMENTNODE bn,
+    struct unbound_insert_entry *ubi_entry,
     const FT_MSG cmd,
     uint32_t idx,
     LEAFENTRY le,
@@ -1689,6 +2013,11 @@ toku_ft_bn_apply_cmd_once (
     uint32_t key_storage_size = ft_msg_get_keylen(cmd) + sizeof(uint32_t);
     if (le) {
         oldsize = leafentry_memsize(le) + key_storage_size;
+    }
+
+    if (ft_msg_get_type(cmd) == FT_UNBOUND_INSERT && ubi_entry) {
+        bn->unbound_insert_count++;
+        toku_list_push(&bn->unbound_inserts, &ubi_entry->node_list);
     }
 
     // toku_le_apply_msg() may call mempool_malloc_from_omt() to allocate more space.
@@ -1770,17 +2099,20 @@ static void setval_fun (const DBT *new_val, void *svextra_v) {
         // can't leave scope until toku_ft_bn_apply_cmd_once if
         // this is a delete
         DBT val;
-        FT_MSG_S msg = { FT_NONE, svextra->msn, svextra->xids,
-                         .u = { .id = {svextra->key, NULL} } };
+        FT_MSG_S msg;
+        ft_msg_init(&msg, FT_NONE, svextra->msn, svextra->xids,
+                        svextra->key, NULL);
         if (new_val) {
             msg.type = FT_INSERT;
-            msg.u.id.val = new_val;
+            msg.val = new_val;
         } else {
             msg.type = FT_DELETE_ANY;
             toku_init_dbt(&val);
-            msg.u.id.val = &val;
+            msg.val = &val;
         }
-        toku_ft_bn_apply_cmd_once(svextra->bn, &msg,
+
+        // SOSP TODO: this cannot be called for an FT_UNBOUND_INSERT...
+        toku_ft_bn_apply_cmd_once(svextra->bn, nullptr, &msg,
                                   svextra->idx, svextra->le,
                                   svextra->oldest_referenced_xid, svextra->gc_info,
                                   svextra->workdone, svextra->stats_to_update);
@@ -1813,8 +2145,8 @@ static int do_update(ft_update_func update_fun, DESCRIPTOR desc, BASEMENTNODE bn
         // key is passed in with command (should be same as from le)
         // update function extra is passed in with command
         STATUS_INC(FT_UPDATES, 1);
-        keyp = cmd->u.id.key;
-        update_function_extra = cmd->u.id.val;
+        keyp = cmd->key;
+        update_function_extra = cmd->val;
     } else if (cmd->type == FT_UPDATE_BROADCAST_ALL) {
         // key is not passed in with broadcast, it comes from le
         // update function extra is passed in with command
@@ -1822,10 +2154,10 @@ static int do_update(ft_update_func update_fun, DESCRIPTOR desc, BASEMENTNODE bn
                      // so this cannot be null
         paranoid_invariant(keydata);
         paranoid_invariant(keylen);
-        paranoid_invariant(cmd->u.id.key->size == 0);
+        paranoid_invariant(cmd->key->size == 0);
         STATUS_INC(FT_UPDATES_BROADCAST, 1);
         keyp = toku_fill_dbt(&key, keydata, keylen);
-        update_function_extra = cmd->u.id.val;
+        update_function_extra = cmd->val;
     } else {
         abort();
     }
@@ -1857,12 +2189,88 @@ static int do_update(ft_update_func update_fun, DESCRIPTOR desc, BASEMENTNODE bn
     return r;
 }
 
+
+static bool le_needs_broadcast_msg_applied(FT_MSG msg, LEAFENTRY le) {
+    enum ft_msg_type type = ft_msg_get_type(msg);
+    XIDS xids = ft_msg_get_xids(msg);
+    paranoid_invariant(ft_msg_type_applies_multiple(type));
+    switch (type) {
+    case FT_OPTIMIZE_FOR_UPGRADE:
+    case FT_COMMIT_BROADCAST_ALL:
+    case FT_OPTIMIZE:
+        return !le_is_clean(le);
+    case FT_COMMIT_BROADCAST_TXN:
+    case FT_ABORT_BROADCAST_TXN:
+        return le_has_xids(le, xids);
+    default:
+        // in case we miss any in the future
+        return true;
+    }
+}
+static void find_idx_for_msg(
+    ft_compare_func compare_fun,
+    BASEMENTNODE bn,
+    FT_MSG msg,
+    DESCRIPTOR desc,
+    bool use_max, // for multicast messages
+    uint32_t* idx, // output, position where we are to apply the message
+    LEAFENTRY* old_le, // output, old leafentry we are to overwrite, if NULL, means we are to insert at idx
+    void** key,
+    uint32_t* keylen // output, keylen
+    )
+{
+    int r;
+    struct cmd_leafval_heaviside_extra be = {compare_fun, desc, use_max?msg->max_key:msg->key};
+    bool is_insert = (msg->type== FT_INSERT || msg->type == FT_INSERT_NO_OVERWRITE);
+    paranoid_invariant(msg->type != FT_UNBOUND_INSERT);
+    unsigned int doing_seqinsert = bn->seqinsert;
+    bn->seqinsert = 0;
+    if (is_insert && doing_seqinsert) {
+        *idx = bn->data_buffer.omt_size();
+        DBT kdbt;
+        r = bn->data_buffer.fetch_le_key_and_len((*idx)-1, &kdbt.size, &kdbt.data);
+        if (r != 0) goto fz;
+        int c = toku_cmd_leafval_heaviside(kdbt, be);
+        if (c >= 0) goto fz;
+        r = DB_NOTFOUND;
+    } else {
+    fz:
+        r = bn->data_buffer.find_zero<decltype(be), toku_cmd_leafval_heaviside>(
+            be,
+            old_le,
+            key,
+            keylen,
+            idx
+            );
+    }
+    if (r==DB_NOTFOUND) {
+        *old_le = nullptr;
+    } else {
+        assert_zero(r);
+    }
+    
+    // if the insertion point is within a window of the right edge of
+    // the leaf then it is sequential
+    // window = min(32, number of leaf entries/16)
+    if (is_insert) {
+        uint32_t s = bn->data_buffer.omt_size();
+        uint32_t w = s / 16;
+        if (w == 0) w = 1;
+        if (w > 32) w = 32;
+    
+        // within the window?
+        if (s - *idx <= w)
+            bn->seqinsert = doing_seqinsert + 1;
+    }
+}
 // Should be renamed as something like "apply_cmd_to_basement()."
 void
 toku_ft_bn_apply_cmd (
+    FT UU(ft), // SOSP TODO: will be used to update unbound_cmd_count for nodes
     ft_compare_func compare_fun,
     ft_update_func update_fun,
     DESCRIPTOR desc,
+    struct unbound_insert_entry *ubi_entry,
     BASEMENTNODE bn,
     FT_MSG cmd,
     TXNID oldest_referenced_xid_known,
@@ -1881,15 +2289,27 @@ toku_ft_bn_apply_cmd (
 
     uint32_t omt_size;
     int r;
-    struct cmd_leafval_heaviside_extra be = {compare_fun, desc, cmd->u.id.key};
+    struct cmd_leafval_heaviside_extra be = {compare_fun, desc, cmd->key};
 
     unsigned int doing_seqinsert = bn->seqinsert;
     bn->seqinsert = 0;
 
+    if (cmd->type != FT_UNBOUND_INSERT) {
+        paranoid_invariant(ubi_entry == nullptr);
+    } else {
+        paranoid_invariant(ubi_entry);
+    }
+
     switch (cmd->type) {
     case FT_INSERT_NO_OVERWRITE:
-    case FT_INSERT: {
+    case FT_INSERT:
+    case FT_UNBOUND_INSERT: {
         uint32_t idx;
+	#if 0
+        if (cmd->type == FT_UNBOUND_INSERT && !doing_seqinsert)   
+	 printf("toku_ft_bn_apply_cmd: seqinsert message but not doing_seqinsert.\n"
+                   "figure this out.");
+	#endif
         if (doing_seqinsert) {
             idx = bn->data_buffer.omt_size();
             DBT kdbt;
@@ -1913,7 +2333,7 @@ toku_ft_bn_apply_cmd (
         } else {
             assert_zero(r);
         }
-        toku_ft_bn_apply_cmd_once(bn, cmd, idx, storeddata, oldest_referenced_xid_known, gc_info, workdone, stats_to_update);
+        toku_ft_bn_apply_cmd_once(bn, ubi_entry, cmd, idx, storeddata, oldest_referenced_xid_known, gc_info, workdone, stats_to_update);
 
         // if the insertion point is within a window of the right edge of
         // the leaf then it is sequential
@@ -1945,8 +2365,7 @@ toku_ft_bn_apply_cmd (
             );
         if (r == DB_NOTFOUND) break;
         assert_zero(r);
-        toku_ft_bn_apply_cmd_once(bn, cmd, idx, storeddata, oldest_referenced_xid_known, gc_info, workdone, stats_to_update);
-
+        toku_ft_bn_apply_cmd_once(bn, nullptr, cmd, idx, storeddata, oldest_referenced_xid_known, gc_info, workdone, stats_to_update);
         break;
     }
     case FT_OPTIMIZE_FOR_UPGRADE:
@@ -1964,10 +2383,10 @@ toku_ft_bn_apply_cmd (
             toku_fill_dbt(&curr_keydbt, curr_keyp, curr_keylen);
             // because this is a broadcast message, we need
             // to fill the key in the msg that we pass into toku_ft_bn_apply_cmd_once
-            cmd->u.id.key = &curr_keydbt;
+            cmd->key = &curr_keydbt;
             int deleted = 0;
             if (!le_is_clean(storeddata)) { //If already clean, nothing to do.
-                toku_ft_bn_apply_cmd_once(bn, cmd, idx, storeddata, oldest_referenced_xid_known, gc_info, workdone, stats_to_update);
+                toku_ft_bn_apply_cmd_once(bn, nullptr, cmd, idx, storeddata, oldest_referenced_xid_known, gc_info, workdone, stats_to_update);
                 uint32_t new_omt_size = bn->data_buffer.omt_size();
                 if (new_omt_size != omt_size) {
                     paranoid_invariant(new_omt_size+1 == omt_size);
@@ -1996,10 +2415,10 @@ toku_ft_bn_apply_cmd (
             toku_fill_dbt(&curr_keydbt, curr_keyp, curr_keylen);
             // because this is a broadcast message, we need
             // to fill the key in the msg that we pass into toku_ft_bn_apply_cmd_once
-            cmd->u.id.key = &curr_keydbt;
+            cmd->key = &curr_keydbt;
             int deleted = 0;
             if (le_has_xids(storeddata, cmd->xids)) {
-                toku_ft_bn_apply_cmd_once(bn, cmd, idx, storeddata, oldest_referenced_xid_known, gc_info, workdone, stats_to_update);
+                toku_ft_bn_apply_cmd_once(bn, nullptr, cmd, idx, storeddata, oldest_referenced_xid_known, gc_info, workdone, stats_to_update);
                 uint32_t new_omt_size = bn->data_buffer.omt_size();
                 if (new_omt_size != omt_size) {
                     paranoid_invariant(new_omt_size+1 == omt_size);
@@ -2028,8 +2447,8 @@ toku_ft_bn_apply_cmd (
             {
                 //Point to msg's copy of the key so we don't worry about le being freed
                 //TODO: 46 MAYBE Get rid of this when le_apply message memory is better handled
-                key = cmd->u.id.key->data;
-                keylen = cmd->u.id.key->size;
+                key = cmd->key->data;
+                keylen = cmd->key->size;
             }
             r = do_update(update_fun, desc, bn, cmd, idx, NULL, NULL, 0, oldest_referenced_xid_known, gc_info, workdone, stats_to_update);
         } else if (r==0) {
@@ -2067,8 +2486,68 @@ toku_ft_bn_apply_cmd (
         break;
     }
     case FT_NONE: break; // don't do anything
-    }
+    case FT_DELETE_MULTICAST:
+    case FT_COMMIT_MULTICAST_TXN:
+    case FT_COMMIT_MULTICAST_ALL:
+    case FT_ABORT_MULTICAST_TXN: {
+        // Apply to all leafentries
+        uint32_t num_klpairs = bn->data_buffer.omt_size();
+        uint32_t start_idx = 0;
+        uint32_t end_idx = num_klpairs;
+        enum ft_msg_type type = ft_msg_get_type(cmd);
+        if (ft_msg_type_is_multicast(type)) {
+            void * max_key = ft_msg_get_max_key(cmd);
+            LEAFENTRY old_le = nullptr;
+            bool is_right_excl = ft_msg_is_multicast_rightexcl(cmd);
+            find_idx_for_msg(compare_fun, bn, cmd, desc, false, &start_idx, &old_le, &key, &keylen);
+            old_le = nullptr;
+            find_idx_for_msg(compare_fun, bn, cmd, desc, true, &end_idx, &old_le, &key, &keylen);
+            if (old_le == nullptr || (is_right_excl && !memcmp(key, max_key, keylen))) {
+               //ugly fix for int underflow for now.
+                if(end_idx == 0) return;
+                end_idx--;
+            }
+        }
+        // why are all the indexes using unsigned int? there is apparently potential underflow bug when start_idx is 0 -JYM
+        for (uint32_t idx = start_idx; idx <= end_idx; ) {
+            void* curr_keyp = NULL;
+            uint32_t curr_keylen = 0;
+            num_klpairs = bn->data_buffer.omt_size();
+            r = bn->data_buffer.fetch_klpair(idx, &storeddata, &curr_keylen, &curr_keyp);
+            assert_zero(r);
+            int deleted = 0;
+            if (le_needs_broadcast_msg_applied(cmd, storeddata)) { //If already clean, nothing to do.
+                // message application code needs a key in order to determine how much
+                // work was done by this message. since this is a broadcast message,
+                // we have to create a new message whose key is the current le's key.
+                DBT curr_keydbt;
+                toku_fill_dbt(&curr_keydbt, curr_keyp, curr_keylen);
+                FT_MSG_S curr_msg;
+                ft_msg_init(&curr_msg, ft_msg_get_type(cmd), ft_msg_get_msn(cmd),ft_msg_get_xids(cmd), &curr_keydbt, cmd->val);
+                /*ft_msg curr_msg(toku_fill_dbt(&curr_keydbt, curr_keyp, curr_keylen),
+                                msg.vdbt(), msg.type(), msg.msn(), msg.xids());*/
+                toku_ft_bn_apply_cmd_once(bn, nullptr, &curr_msg, idx, storeddata, oldest_referenced_xid_known, gc_info, workdone, stats_to_update);
+                // at this point, we cannot trust msg.kdbt to be valid.
+                uint32_t new_omt_size = bn->data_buffer.omt_size();
+                if (new_omt_size != num_klpairs) {
+                    paranoid_invariant(new_omt_size + 1 == num_klpairs);
+                    //Item was deleted.
+                    deleted = 1;
+                }
+            }
+            if (deleted) {
+                //ugly fix for int underflow for now.
+                if(end_idx == 0) break;
+                end_idx--;
+            }
+            else {
+                idx++;
+            }
+        }
 
+        break;
+        }
+    }
     return;
 }
 
@@ -2113,7 +2592,7 @@ toku_fifo_entry_key_msn_cmp(const struct toku_fifo_entry_key_msn_cmp_extra &extr
                        extra.desc, extra.cmp);
 }
 
-void toku_bnc_insert_msg(NONLEAF_CHILDINFO bnc, const void *key, ITEMLEN keylen, const void *data, ITEMLEN datalen, enum ft_msg_type type, MSN msn, XIDS xids, bool is_fresh, DESCRIPTOR desc, ft_compare_func cmp)
+void toku_bnc_insert_msg(NONLEAF_CHILDINFO bnc, struct unbound_insert_entry *ubi_insert, FT_MSG msg, bool is_fresh, DESCRIPTOR desc, ft_compare_func cmp)
 // Effect: Enqueue the message represented by the parameters into the
 //   bnc's buffer, and put it in either the fresh or stale message tree,
 //   or the broadcast list.
@@ -2121,7 +2600,16 @@ void toku_bnc_insert_msg(NONLEAF_CHILDINFO bnc, const void *key, ITEMLEN keylen,
 // This is only exported for tests.
 {
     int32_t offset;
-    int r = toku_fifo_enq(bnc->buffer, key, keylen, data, datalen, type, msn, xids, is_fresh, &offset);
+    int r = toku_fifo_enq(bnc->buffer, msg, is_fresh, &offset);
+    void * key = ft_msg_get_key(msg);
+    uint32_t keylen = ft_msg_get_keylen(msg);
+    MSN msn = ft_msg_get_msn(msg);
+    enum ft_msg_type type = ft_msg_get_type(msg);
+    if (type == FT_UNBOUND_INSERT) {
+        bnc->unbound_insert_count++;
+        //SOSP TODO: Bill locking?
+        toku_list_push(&bnc->unbound_inserts, &ubi_insert->node_list);
+    }
     assert_zero(r);
     if (ft_msg_type_applies_once(type)) {
         DBT keydbt;
@@ -2134,7 +2622,7 @@ void toku_bnc_insert_msg(NONLEAF_CHILDINFO bnc, const void *key, ITEMLEN keylen,
             assert_zero(r);
         }
     } else {
-        invariant(ft_msg_type_applies_all(type) || ft_msg_type_does_nothing(type));
+        invariant(ft_msg_type_applies_multiple(type) || ft_msg_type_does_nothing(type));
         const uint32_t idx = bnc->broadcast_list.size();
         r = bnc->broadcast_list.insert_at(offset, idx);
         assert_zero(r);
@@ -2143,20 +2631,20 @@ void toku_bnc_insert_msg(NONLEAF_CHILDINFO bnc, const void *key, ITEMLEN keylen,
 
 // append a cmd to a nonleaf node's child buffer
 // should be static, but used by test programs
-void toku_ft_append_to_child_buffer(ft_compare_func compare_fun, DESCRIPTOR desc, FTNODE node, int childnum, enum ft_msg_type type, MSN msn, XIDS xids, bool is_fresh, const DBT *key, const DBT *val) {
+void toku_ft_append_to_child_buffer(ft_compare_func compare_fun, DESCRIPTOR desc, struct unbound_insert_entry *ubi_insert, FTNODE node, int childnum, FT_MSG msg, bool is_fresh) {
     paranoid_invariant(BP_STATE(node,childnum) == PT_AVAIL);
-    toku_bnc_insert_msg(BNC(node, childnum), key->data, key->size, val->data, val->size, type, msn, xids, is_fresh, desc, compare_fun);
+    toku_bnc_insert_msg(BNC(node, childnum), ubi_insert, msg, is_fresh, desc, compare_fun);
     node->dirty = 1;
 }
 
-static void ft_nonleaf_cmd_once_to_child(ft_compare_func compare_fun, DESCRIPTOR desc, FTNODE node, int target_childnum, FT_MSG cmd, bool is_fresh, size_t flow_deltas[])
+static void ft_nonleaf_cmd_once_to_child(ft_compare_func compare_fun, DESCRIPTOR desc, struct unbound_insert_entry *ubi_insert, FTNODE node, int target_childnum, FT_MSG cmd, bool is_fresh, size_t flow_deltas[])
 // Previously we had passive aggressive promotion, but that causes a lot of I/O a the checkpoint.  So now we are just putting it in the buffer here.
 // Also we don't worry about the node getting overfull here.  It's the caller's problem.
 {
     unsigned int childnum = (target_childnum >= 0
                              ? target_childnum
-                             : toku_ftnode_which_child(node, cmd->u.id.key, desc, compare_fun));
-    toku_ft_append_to_child_buffer(compare_fun, desc, node, childnum, cmd->type, cmd->msn, cmd->xids, is_fresh, cmd->u.id.key, cmd->u.id.val);
+                             : toku_ftnode_which_child(node, cmd->key, desc, compare_fun));
+    toku_ft_append_to_child_buffer(compare_fun, desc, ubi_insert, node, childnum, cmd, is_fresh);
     NONLEAF_CHILDINFO bnc = BNC(node, childnum);
     bnc->flow[0] += flow_deltas[0];
     bnc->flow[1] += flow_deltas[1];
@@ -2226,19 +2714,38 @@ toku_ftnode_hot_next_child(FTNODE node,
 //      such as toku_bnc_insert_msg() and the call stack above it.
 static uint64_t
 ft_msg_size(FT_MSG msg) {
-    size_t keyval_size = msg->u.id.key->size + msg->u.id.val->size;
+    size_t keyval_size = msg->key->size + msg->val->size + msg->max_key->size;
     size_t xids_size = xids_get_serialize_size(msg->xids);
     return keyval_size + KEY_VALUE_OVERHEAD + FT_CMD_OVERHEAD + xids_size;
 }
 
+void get_child_bounds_for_msg_put(ft_compare_func cmp, DESCRIPTOR desc, FTNODE node, FT_MSG msg, int* start, int* end) {
+    *start = 0;
+    *end = node->n_children-1;
+    enum ft_msg_type type = ft_msg_get_type(msg);
+    const DBT * kdbt = msg->key;
+    const DBT* max_kdbt = msg->max_key;
+    if (ft_msg_type_is_multicast(type)) {
+        *start = toku_ftnode_which_child(node, kdbt, desc, cmp);
+        *end = toku_ftnode_which_child(node, max_kdbt, desc, cmp);
+        paranoid_invariant(*start <= *end);
+    }
+}
 static void
-ft_nonleaf_cmd_all (ft_compare_func compare_fun, DESCRIPTOR desc, FTNODE node, FT_MSG cmd, bool is_fresh, size_t flow_deltas[])
+ft_nonleaf_cmd_multiple (ft_compare_func compare_fun, DESCRIPTOR desc, FTNODE node, FT_MSG cmd, bool is_fresh, size_t flow_deltas[])
 // Effect: Put the cmd into a nonleaf node.  We put it into all children, possibly causing the children to become reactive.
 //  We don't do the splitting and merging.  That's up to the caller after doing all the puts it wants to do.
 //  The re_array[i] gets set to the reactivity of any modified child i.         (And there may be several such children.)
 {
-    for (int i = 0; i < node->n_children; i++) {
-        ft_nonleaf_cmd_once_to_child(compare_fun, desc, node, i, cmd, is_fresh, flow_deltas);
+    int start;
+    int end;
+    paranoid_invariant(cmd->type != FT_UNBOUND_INSERT);
+    // in theory we can handle this, but it is hard to think about
+    // right now. multiple bnc lists? do we only need to log one of
+    // the values? uggghhhhhh...
+    get_child_bounds_for_msg_put(compare_fun, desc, node, cmd, &start, &end);
+    for (int i = start; i <= end; i++) {
+        ft_nonleaf_cmd_once_to_child(compare_fun, desc, nullptr, node, i, cmd, is_fresh, flow_deltas);
     }
 }
 
@@ -2249,9 +2756,9 @@ ft_msg_applies_once(FT_MSG cmd)
 }
 
 static bool
-ft_msg_applies_all(FT_MSG cmd)
+ft_msg_applies_multiple(FT_MSG cmd)
 {
-    return ft_msg_type_applies_all(cmd->type);
+    return ft_msg_type_applies_multiple(cmd->type);
 }
 
 static bool
@@ -2261,7 +2768,7 @@ ft_msg_does_nothing(FT_MSG cmd)
 }
 
 static void
-ft_nonleaf_put_cmd (ft_compare_func compare_fun, DESCRIPTOR desc, FTNODE node, int target_childnum, FT_MSG cmd, bool is_fresh, size_t flow_deltas[])
+ft_nonleaf_put_cmd (FT UU(ft), ft_compare_func compare_fun, DESCRIPTOR desc, struct unbound_insert_entry *ubi_entry, FTNODE node, int target_childnum, FT_MSG cmd, bool is_fresh, size_t flow_deltas[])
 // Effect: Put the cmd into a nonleaf node.  We may put it into a child, possibly causing the child to become reactive.
 //  We don't do the splitting and merging.  That's up to the caller after doing all the puts it wants to do.
 //  The re_array[i] gets set to the reactivity of any modified child i.         (And there may be several such children.)
@@ -2277,11 +2784,15 @@ ft_nonleaf_put_cmd (ft_compare_func compare_fun, DESCRIPTOR desc, FTNODE node, i
     MSN cmd_msn = cmd->msn;
     invariant(cmd_msn.msn > node->max_msn_applied_to_node_on_disk.msn);
     node->max_msn_applied_to_node_on_disk = cmd_msn;
-
+    if (cmd->type == FT_UNBOUND_INSERT) {
+	paranoid_invariant(ubi_entry);
+        node->unbound_insert_count++;
+    }
     if (ft_msg_applies_once(cmd)) {
-        ft_nonleaf_cmd_once_to_child(compare_fun, desc, node, target_childnum, cmd, is_fresh, flow_deltas);
-    } else if (ft_msg_applies_all(cmd)) {
-        ft_nonleaf_cmd_all(compare_fun, desc, node, cmd, is_fresh, flow_deltas);
+        ft_nonleaf_cmd_once_to_child(compare_fun, desc, ubi_entry, node, target_childnum, cmd, is_fresh, flow_deltas);
+    } else if (ft_msg_applies_multiple(cmd)) {
+        paranoid_invariant(cmd->type != FT_UNBOUND_INSERT);
+        ft_nonleaf_cmd_multiple(compare_fun, desc, node, cmd, is_fresh, flow_deltas);
     } else {
         paranoid_invariant(ft_msg_does_nothing(cmd));
     }
@@ -2449,6 +2960,387 @@ ft_leaf_run_gc(FTNODE node, FT ft) {
         live_root_txns.destroy();
     }
 }
+//blindwrite
+static void ft_msg_free_nonempty_dbt(const DBT * dbt) {
+	if(!is_dbt_empty(dbt)) {
+		toku_free((void *)dbt);
+	}
+}
+
+static void ft_msg_destroy(FT_MSG msg) {
+	ft_msg_free_nonempty_dbt(msg->key);
+	ft_msg_free_nonempty_dbt(msg->val);
+	ft_msg_free_nonempty_dbt(msg->max_key);
+	toku_free(msg);	
+}
+
+struct opt_msg {
+	FT_MSG msg; //ptr to the msg
+	bool is_fresh; //we need it later
+	struct toku_list all_msgs; //next msg and prev msg
+	struct toku_list range_delete_msgs; //next and prev range delete msgs;
+};
+struct pacman_opt_mgmt {
+	    struct toku_list msg_list; //ptr to the 1st msg
+	    bool done;  //if the last round opt does not change the size of the list, the opt is done
+	    size_t dismissed_size;  // remaining size has to take this into account.    
+	    int n_range_delete; 
+	    struct toku_list range_delete_list;
+};
+
+static bool key_range_strictly_dominates(FT_MSG msg_dominator, FT_MSG msg_dominatee, FT ft) {
+	assert(FT_DELETE_MULTICAST == ft_msg_get_type(msg_dominator));
+ 	const DBT * dominator_key = msg_dominator->key;
+	const DBT * dominator_max_key = msg_dominator->max_key;
+	const DBT * dominatee_key, *dominatee_max_key;
+	if(ft_msg_type_applies_multiple(msg_dominatee->type)) {
+		dominatee_key = msg_dominatee->key;
+		dominatee_max_key = msg_dominatee->max_key;
+	} else {
+		dominatee_key = dominatee_max_key = msg_dominatee->key;
+	}
+	
+	DESCRIPTOR desc = &ft->cmp_descriptor;
+    	ft_compare_func cmp = ft->compare_fun; 
+    	if(dominator_key == toku_dbt_negative_infinity() && dominator_max_key == toku_dbt_positive_infinity()) {
+		return true;
+	} else if(dominator_key == toku_dbt_negative_infinity()){
+		return !(ft_compare_pivot(desc, cmp, dominatee_max_key, dominator_max_key) > 0);
+	} else if(dominator_max_key == toku_dbt_positive_infinity()) {
+		return !(ft_compare_pivot(desc, cmp, dominatee_key, dominator_key) < 0);
+	} else  {
+		return !(ft_compare_pivot(desc, cmp, dominatee_max_key, dominator_max_key) > 0) && !(ft_compare_pivot(desc, cmp, dominatee_key, dominator_key) < 0);
+	}
+
+}
+
+//apparently ran out of the idea of naming.
+static bool your_type_is_cup_of_pacman_tea(enum ft_msg_type type) {
+	bool ret_val = false;
+	switch(type) {
+	case FT_INSERT_NO_OVERWRITE:
+    	case FT_INSERT:
+    	case FT_DELETE_MULTICAST:
+    	case FT_ABORT_MULTICAST_TXN:
+    	case FT_COMMIT_MULTICAST_TXN:
+    	case FT_DELETE_ANY:
+    	case FT_ABORT_ANY:
+    	case FT_COMMIT_ANY:
+     	case FT_NONE:
+    	case FT_UPDATE:
+        	ret_val = true;
+        	break;
+    	case FT_COMMIT_BROADCAST_ALL:
+    	case FT_COMMIT_BROADCAST_TXN:
+    	case FT_ABORT_BROADCAST_TXN:
+    	case FT_OPTIMIZE:
+    	case FT_OPTIMIZE_FOR_UPGRADE:
+    	case FT_UPDATE_BROADCAST_ALL:
+    	case FT_COMMIT_MULTICAST_ALL:
+	case FT_UNBOUND_INSERT:
+        	ret_val = false;
+        	break;
+    	}
+    	return ret_val;
+	
+}
+
+
+static void destroy_opt_msg(struct opt_msg * dead) {
+//do not forget the dimissed_size. the delta has to be updated!
+
+	ft_msg_destroy(dead->msg);
+	toku_list_remove(&dead->all_msgs);
+	if(!toku_list_empty(&dead->range_delete_msgs)) 
+		toku_list_remove(&dead->range_delete_msgs);
+	toku_free(dead);
+//RIP
+
+}
+//target_xid could be the xid of the msg to be devoured
+//or the min_ver_num of the basement node. the code looks crappy but I like it.-JYM
+bool range_delete_is_granted(FT_MSG rd_msg, TXNID target_xid, FT ft) {
+	assert(rd_msg->pm_status != PM_UNCOMMITTED);
+	if(ft_msg_get_pm_status(rd_msg) == PM_GRANTED) return true;
+	struct tokulogger * logger = toku_cachefile_logger(ft->cf);
+	if(logger == NULL) return false ; //this is for tests which do not even init logger
+	TXN_MANAGER txn_manager = logger->txn_manager;	
+	if(txn_manager->num_snapshots == 0)  {
+		//this is the best case we hope for -- no live txns, and from now on
+		//range delete msg is just granted and no further check on it.
+		rd_msg->pm_status = PM_GRANTED;
+		return true; 
+	} else {
+		//most time life is not that easy. now we check
+		//no one is referencing range delete tx, that's say, no live txn that starts running
+		//during the lifespan of rd txn. so everyone sees the delete!
+		TXNID rd_xid = xids_get_outermost_xid(rd_msg->xids);
+		if(toku_txn_manager_is_referenced(txn_manager, rd_xid)) 
+			return false;
+		else {
+			//ok no one references rd txn, now check the live txn starts before rd txn starts 
+			TXNID youngest_live_xid_older_than = toku_txn_manager_youngest_snapshot_older_than_xid(txn_manager, rd_xid); 
+			if(youngest_live_xid_older_than == TXNID_NONE) {
+			//happy case, no concurrent live txn before rd txn ever. lol 
+				rd_msg->pm_status = PM_GRANTED;
+				return true;
+			}  else {
+				//we have reached a point that we can not easily claim range delete
+				//msg is granted. now it depends on specific msg/basement.
+				if(youngest_live_xid_older_than > target_xid)
+					return false;
+				else 
+					return true;
+			}	
+
+		}
+
+	}		
+}
+static void may_void_dead_msgs_below_range_delete(struct pacman_opt_mgmt * pacman_manager, struct opt_msg * range_delete_msg, FT ft) {
+	struct toku_list * elem = range_delete_msg->all_msgs.prev;
+	while(elem != &pacman_manager->msg_list) {
+		struct opt_msg * target_opt_msg = toku_list_struct(elem, struct opt_msg, all_msgs);			      
+		enum ft_msg_type target_type  = ft_msg_get_type(target_opt_msg->msg);
+	
+		if(!your_type_is_cup_of_pacman_tea(target_type)) return;		
+		
+      		if(key_range_strictly_dominates(range_delete_msg->msg, target_opt_msg->msg, ft)) {
+			//now check the liveness of the target msg
+			TXNID target_xid = xids_get_outermost_xid(target_opt_msg->msg->xids);
+			if(range_delete_is_granted(range_delete_msg->msg, target_xid, ft)) {
+				//shot the msg finally!
+				pacman_manager->dismissed_size += toku_ft_msg_memsize_in_fifo(target_opt_msg->msg);
+				elem = elem->prev;
+				destroy_opt_msg(target_opt_msg);			
+				if(pacman_manager->done) 
+					pacman_manager->done = false;
+				continue;
+			}	
+		}     
+		elem = elem->prev;
+	}
+}
+//check if the range delete msg is commited. if no, give up. if yes, set the pm_status = granted.
+//for the simplicity now, we check the whole stack of xids are committed or not, a finer granularity can be achieved if we really want to push that far
+static bool range_delete_is_committed(FT_MSG msg, FT ft) {
+	if(ft_msg_get_pm_status(msg) == PM_GRANTED) return true;
+	XIDS xids = ft_msg_get_xids(msg);
+	if(xids->num_xids > 1) 
+		return false;//no nested txn for now
+	if(msg->pm_status == PM_UNCOMMITTED) {
+	
+		struct tokulogger * logger = toku_cachefile_logger(ft->cf);
+		if(logger == NULL) return false ; //this is for tests which do not even init logger
+		TXN_MANAGER txn_manager = logger->txn_manager;	
+	 	if(is_txnid_live(txn_manager, xids_get_xid(xids,0))) 
+			return false;
+		else {
+			msg->pm_status = PM_COMMITTED;
+			return true;
+		}
+	 } else {
+		return true;
+	 }		
+}
+
+
+
+static void devour_dead_msgs(struct pacman_opt_mgmt * pacman_manager, FT ft) {
+	if(pacman_manager->n_range_delete == 0) return;
+	struct toku_list * range_delete_head = &pacman_manager->range_delete_list;
+	struct toku_list * elem = range_delete_head->next;
+	while(elem != range_delete_head) {
+		struct opt_msg * range_delete_msg = toku_list_struct(elem, struct opt_msg, range_delete_msgs);
+		assert(FT_DELETE_MULTICAST == ft_msg_get_type(range_delete_msg->msg));
+		if(range_delete_is_committed(range_delete_msg->msg, ft)) {
+			may_void_dead_msgs_below_range_delete(pacman_manager, range_delete_msg, ft);
+		}
+		elem = elem->next;
+	}
+}
+
+void default_run_optimization(struct pacman_opt_mgmt * pacman_manager, FT ft) {
+	do {
+		pacman_manager->done = true;
+		devour_dead_msgs(pacman_manager, ft);
+	}
+	while(!pacman_manager->done);
+}
+
+//destroy the opt_msg too
+int default_pacman_opt_iterate(struct pacman_opt_mgmt *pacman_manager, int(*f)(FT_MSG, bool, void*), void * args) {
+	int ret = 0;
+	struct toku_list * head = &pacman_manager->msg_list;
+	struct toku_list* elem = head->next;	
+	while(elem != head) {
+		struct opt_msg * opt_msg = toku_list_struct(elem, struct opt_msg, all_msgs);
+		const DBT * key_before = opt_msg->msg->key;
+		ret = f(opt_msg->msg, opt_msg->is_fresh, args);
+		const DBT * key_after = opt_msg->msg->key;
+		if(key_before != key_after) {
+			toku_free((void *) key_before);
+			opt_msg->msg->key = get_dbt_empty();
+		}
+		if(ret) break;
+		elem = elem->next;
+		destroy_opt_msg(opt_msg);
+
+	}
+	return ret;
+}
+
+
+void pacman_opt_mgmt_init(struct pacman_opt_mgmt * & pacman_mgmt) {
+	pacman_mgmt = (struct pacman_opt_mgmt *)toku_xmalloc(sizeof(struct pacman_opt_mgmt));
+	pacman_mgmt->done = true;
+	pacman_mgmt->dismissed_size = 0;
+	toku_list_init(&pacman_mgmt->msg_list);
+	toku_list_init(&pacman_mgmt->range_delete_list);
+}
+
+void pacman_opt_mgmt_destroy(struct pacman_opt_mgmt * pacman_mgmt) {
+	assert(pacman_mgmt->done);
+	assert(toku_list_empty(&pacman_mgmt->msg_list));
+	assert(toku_list_empty(&pacman_mgmt->range_delete_list));
+	toku_free(pacman_mgmt);
+}
+
+int iterate_fn_bnc_build_pacman_opt(struct fifo_entry *e, void * args, FT_MSG & msg) {
+	struct pacman_opt_mgmt * pacman_manager = (struct pacman_opt_mgmt *) args;
+ 	struct opt_msg * XMALLOC(opt_msg);
+	//I hate this memcpy thing 
+	opt_msg->msg = (FT_MSG)toku_xmalloc(sizeof(FT_MSG_S));
+	DBT * XMALLOC(k);
+	DBT * XMALLOC(m);
+	DBT * XMALLOC(v);
+	fifo_entry_get_msg(opt_msg->msg, e, k, v, m);
+	opt_msg->is_fresh = e->is_fresh;
+
+	if(is_dbt_empty(opt_msg->msg->val))
+		toku_free(v);
+	if(is_dbt_empty(opt_msg->msg->max_key))
+		toku_free(m);
+
+	toku_list_init(&opt_msg->all_msgs);
+	toku_list_init(&opt_msg->range_delete_msgs);
+	toku_list_push(&pacman_manager->msg_list, &opt_msg->all_msgs);
+	if(FT_DELETE_MULTICAST == ft_msg_get_type(opt_msg->msg)) {
+		pacman_manager -> n_range_delete ++;
+		toku_list_push(&pacman_manager->range_delete_list, &opt_msg->range_delete_msgs); 
+	}
+	msg = opt_msg->msg;
+	return 0;
+}
+
+FT_MSG pacman_get_first_msg(struct pacman_opt_mgmt * pacman_manager) {
+	if(toku_list_empty(&pacman_manager->msg_list)) 
+		return NULL;
+	toku_list * elem = pacman_manager->msg_list.next;
+	struct opt_msg * opt_msg = toku_list_struct(elem, struct opt_msg, all_msgs);
+	return opt_msg->msg;
+}
+
+struct iterate_fn_bnc_flush_args {
+    size_t * arg0; //remaining_memsize
+    NONLEAF_CHILDINFO arg1;//bnc
+    FT arg2;//ft
+    FTNODE arg3;// child
+    STAT64INFO_S * arg4;//status_delta
+};
+static int iterate_fn_bnc_flush(FT_MSG msg, bool is_fresh, void * args) {
+        struct iterate_fn_bnc_flush_args * bf_args = (struct iterate_fn_bnc_flush_args*) args;
+            size_t * p_remaining_memsize = bf_args -> arg0;
+            NONLEAF_CHILDINFO bnc = bf_args->arg1;
+            FT ft = bf_args -> arg2;
+            FTNODE child = bf_args -> arg3;
+            STAT64INFO_S* p_stats_delta = bf_args -> arg4;
+            size_t flow_deltas[] = { 0, 0 };
+            size_t entry_size = FIFO_CURRENT_ENTRY_MEMSIZE;
+	    struct unbound_insert_entry *entry = NULL;
+            if (*p_remaining_memsize <= bnc->flow[0]) {
+                // this message is in the current checkpoint's worth of
+                // the end of the fifo
+                flow_deltas[0] = entry_size;
+            } else if (*p_remaining_memsize <= bnc->flow[0] + bnc->flow[1]) {
+                // this message is in the last checkpoint's worth of the
+                // end of the fifo
+                flow_deltas[1] = entry_size;
+            }
+            //SOSP TODO: Bill i'm pretty sure no one else can be
+            // accessing this node ubi list...  so doing this without
+            // a lock seems safe?
+            if (msg->type == FT_UNBOUND_INSERT) {
+                struct toku_list *head = &bnc->unbound_inserts;
+                struct toku_list *lst = toku_list_head(head);
+                while (lst != head) {
+                    entry = toku_list_struct(lst, struct unbound_insert_entry,
+                                             node_list);
+                    if (msg_matches_ubi(msg, entry))
+                        goto found_ubi_entry;
+                    lst = lst->next;
+                }
+                printf("could not find unbound_insert_entry within bnc\n");
+                abort();
+            found_ubi_entry:
+                bnc->unbound_insert_count --;
+		toku_list_remove(&entry->node_list);
+            }
+            toku_ft_node_put_cmd(
+                ft,
+                ft->compare_fun,
+                ft->update_fun,
+                &ft->cmp_descriptor,
+                entry,
+                child,
+                -1,
+                msg,
+                is_fresh,
+                make_gc_info(true), // mvcc_needed
+                flow_deltas,
+                p_stats_delta
+                );
+	    *p_remaining_memsize -= entry_size;
+            return 0;
+}
+
+void toku_bnc_flush_to_child_pacman(
+    FT ft,
+    NONLEAF_CHILDINFO bnc,
+    struct pacman_opt_mgmt * pacman_manager,
+    FTNODE child,
+    TXNID oldest_referenced_xid_known
+    )
+{
+
+    paranoid_invariant(bnc);
+    STAT64INFO_S stats_delta = {0,0};
+
+    size_t remaining_memsize = toku_fifo_buffer_size_in_use(bnc->buffer);
+    struct iterate_fn_bnc_flush_args args = {
+                &remaining_memsize,
+                bnc,
+                ft,
+                child,
+                &stats_delta
+    };
+    default_pacman_opt_iterate(pacman_manager, iterate_fn_bnc_flush, &args);
+    remaining_memsize -= pacman_manager->dismissed_size;
+    pacman_opt_mgmt_destroy(pacman_manager);
+    child->oldest_referenced_xid_known = oldest_referenced_xid_known;
+
+    invariant(remaining_memsize == 0);
+    if (stats_delta.numbytes || stats_delta.numrows) {
+        toku_ft_update_stats(&ft->in_memory_stats, stats_delta);
+    }
+    if (child->height == 0) {
+        ft_leaf_run_gc(child, ft);
+        size_t buffsize = toku_fifo_buffer_size_in_use(bnc->buffer);
+        STATUS_INC(FT_MSG_BYTES_OUT, buffsize);
+        // may be misleading if there's a broadcast message in there
+        STATUS_INC(FT_MSG_BYTES_CURR, -buffsize);
+    }
+}
 
 void toku_bnc_flush_to_child(
     FT ft,
@@ -2459,24 +3351,39 @@ void toku_bnc_flush_to_child(
 {
     paranoid_invariant(bnc);
     STAT64INFO_S stats_delta = {0,0};
+
     size_t remaining_memsize = toku_fifo_buffer_size_in_use(bnc->buffer);
+    struct iterate_fn_bnc_flush_args args = {
+                &remaining_memsize,
+                bnc,
+                ft,
+                child,
+                &stats_delta
+    };
+    toku_fifo_iterate(bnc->buffer, iterate_fn_bnc_flush, &args);
+#if 0
     FIFO_ITERATE(
         bnc->buffer, key, keylen, val, vallen, type, msn, xids, is_fresh,
         ({
             DBT hk,hv;
-            FT_MSG_S ftcmd = { type, msn, xids, .u = { .id = { toku_fill_dbt(&hk, key, keylen),
-                                                               toku_fill_dbt(&hv, val, vallen) } } };
+            FT_MSG_S ftcmd;
+            ft_msg_init(&ftcmd,  type, msn, xids,  toku_fill_dbt(&hk, key, keylen),
+                                                               toku_fill_dbt(&hv, val, vallen));
             size_t flow_deltas[] = { 0, 0 };
+            size_t entry_size = FIFO_CURRENT_ENTRY_MEMSIZE;
+
             if (remaining_memsize <= bnc->flow[0]) {
                 // this message is in the current checkpoint's worth of
                 // the end of the fifo
-                flow_deltas[0] = FIFO_CURRENT_ENTRY_MEMSIZE;
+                flow_deltas[0] = entry_size;
             } else if (remaining_memsize <= bnc->flow[0] + bnc->flow[1]) {
                 // this message is in the last checkpoint's worth of the
                 // end of the fifo
-                flow_deltas[1] = FIFO_CURRENT_ENTRY_MEMSIZE;
+                flow_deltas[1] = entry_size;
             }
+
             toku_ft_node_put_cmd(
+                ft,
                 ft->compare_fun,
                 ft->update_fun,
                 &ft->cmp_descriptor,
@@ -2488,8 +3395,9 @@ void toku_bnc_flush_to_child(
                 flow_deltas,
                 &stats_delta
                 );
-            remaining_memsize -= FIFO_CURRENT_ENTRY_MEMSIZE;
+            remaining_memsize -= entry_size;
         }));
+#endif
     child->oldest_referenced_xid_known = oldest_referenced_xid_known;
 
     invariant(remaining_memsize == 0);
@@ -2506,16 +3414,24 @@ void toku_bnc_flush_to_child(
 }
 
 bool toku_bnc_should_promote(FT ft, NONLEAF_CHILDINFO bnc) {
+#ifdef TOKU_LINUX_MODULE
+    // We cannot perform floating point calculations in the kernel.
+    // This might cause truncation, but it's better than nothing.
+    const uint64_t flow_threshold = ft->h->nodesize >> 3;
+#else
     static const double factor = 0.125;
     const uint64_t flow_threshold = ft->h->nodesize * factor;
+#endif
     return bnc->flow[0] >= flow_threshold || bnc->flow[1] >= flow_threshold;
 }
 
 void
 toku_ft_node_put_cmd (
+    FT ft,
     ft_compare_func compare_fun,
     ft_update_func update_fun,
     DESCRIPTOR desc,
+    struct unbound_insert_entry *ubi_entry,
     FTNODE node,
     int target_childnum,
     FT_MSG cmd,
@@ -2537,11 +3453,16 @@ toku_ft_node_put_cmd (
     // node->max_msn_applied_to_node_on_disk here,
     // and instead defer to these functions
     //
+
+// SOSP TODO: update unbound_msg_count at node level. let lower-levels update their own partition counts
+    
+    
     if (node->height==0) {
-        toku_ft_leaf_apply_cmd(compare_fun, update_fun, desc, node, target_childnum, cmd, gc_info, nullptr, stats_to_update);
+        toku_ft_leaf_apply_cmd(ft, compare_fun, update_fun, desc, ubi_entry, node, target_childnum, cmd, gc_info, nullptr, stats_to_update);
     } else {
-        ft_nonleaf_put_cmd(compare_fun, desc, node, target_childnum, cmd, is_fresh, flow_deltas);
+        ft_nonleaf_put_cmd(ft, compare_fun, desc, ubi_entry, node, target_childnum, cmd, is_fresh, flow_deltas);
     }
+   toku_ft_node_unbound_inserts_validation(node);
 }
 
 static const struct pivot_bounds infinite_bounds = {.lower_bound_exclusive=NULL,
@@ -2552,9 +3473,11 @@ static const struct pivot_bounds infinite_bounds = {.lower_bound_exclusive=NULL,
 //           This function is called during message injection and/or flushing, so the entire
 //           node MUST be in memory.
 void toku_ft_leaf_apply_cmd(
+    FT ft,
     ft_compare_func compare_fun,
     ft_update_func update_fun,
     DESCRIPTOR desc,
+    struct unbound_insert_entry *ubi_entry,
     FTNODE node,
     int target_childnum,  // which child to inject to, or -1 if unknown
     FT_MSG cmd,
@@ -2598,36 +3521,53 @@ void toku_ft_leaf_apply_cmd(
     if (ft_msg_applies_once(cmd)) {
         unsigned int childnum = (target_childnum >= 0
                                  ? target_childnum
-                                 : toku_ftnode_which_child(node, cmd->u.id.key, desc, compare_fun));
+                                 : toku_ftnode_which_child(node, cmd->key, desc, compare_fun));
         BASEMENTNODE bn = BLB(node, childnum);
         if (cmd->msn.msn > bn->max_msn_applied.msn) {
             bn->max_msn_applied = cmd->msn;
-            toku_ft_bn_apply_cmd(compare_fun,
+	    if (cmd->type == FT_UNBOUND_INSERT) {
+		paranoid_invariant(ubi_entry);
+        	node->unbound_insert_count++;
+    	    }
+            toku_ft_bn_apply_cmd(ft,
+                                 compare_fun,
                                  update_fun,
                                  desc,
+                                 ubi_entry,
                                  bn,
                                  cmd,
                                  oldest_referenced_xid_known,
                                  gc_info,
                                  workdone,
                                  stats_to_update);
-        } else {
-            STATUS_INC(FT_MSN_DISCARDS, 1);
+        } else {//if unbound msg is already applied, free its unbound entry
+		if(FT_UNBOUND_INSERT == ft_msg_get_type(cmd)) {
+			assert(ubi_entry != NULL);
+			toku_list_remove(&ubi_entry->in_or_out);
+			destroy_unbound_insert_entry(ubi_entry);	
+		}
+	        STATUS_INC(FT_MSN_DISCARDS, 1);
         }
     }
-    else if (ft_msg_applies_all(cmd)) {
-        for (int childnum=0; childnum<node->n_children; childnum++) {
+    else if (ft_msg_applies_multiple(cmd)) { 
+        int start;
+        int end;
+        paranoid_invariant(cmd->type != FT_UNBOUND_INSERT);
+        get_child_bounds_for_msg_put(compare_fun, desc, node, cmd, &start, &end);
+        for (int childnum = start ; childnum <= end; childnum++) {
             if (cmd->msn.msn > BLB(node, childnum)->max_msn_applied.msn) {
                 BLB(node, childnum)->max_msn_applied = cmd->msn;
-                toku_ft_bn_apply_cmd(compare_fun,
-                                      update_fun,
-                                      desc,
-                                      BLB(node, childnum),
-                                      cmd,
-                                      oldest_referenced_xid_known,
-                                      gc_info,
-                                      workdone,
-                                      stats_to_update);
+                toku_ft_bn_apply_cmd(ft,
+                                     compare_fun,
+                                     update_fun,
+                                     desc,
+                                     nullptr,
+                                     BLB(node, childnum),
+                                     cmd,
+                                     oldest_referenced_xid_known,
+                                     gc_info,
+                                     workdone,
+                                     stats_to_update);
             } else {
                 STATUS_INC(FT_MSN_DISCARDS, 1);
             }
@@ -2643,6 +3583,7 @@ static void inject_message_in_locked_node(
     FT ft,
     FTNODE node,
     int childnum,
+    struct unbound_insert_entry *ubi_entry,
     FT_MSG_S *cmd,
     size_t flow_deltas[],
     TXNID oldest_referenced_xid,
@@ -2667,12 +3608,19 @@ static void inject_message_in_locked_node(
     // node we're injecting into, we know no other thread will get an MSN
     // after us and get that message into our subtree before us.
     cmd->msn.msn = toku_sync_add_and_fetch(&ft->h->max_msn_in_ft.msn, 1);
+    if (ubi_entry) {
+        ubi_entry->msn = cmd->msn;
+        ubi_entry->state = UBI_UNBOUND;
+
+	}
     paranoid_invariant(cmd->msn.msn > node->max_msn_applied_to_node_on_disk.msn);
     STAT64INFO_S stats_delta = {0,0};
     toku_ft_node_put_cmd(
+        ft,
         ft->compare_fun,
         ft->update_fun,
         &ft->cmp_descriptor,
+        ubi_entry,
         node,
         childnum,
         cmd,
@@ -2681,6 +3629,7 @@ static void inject_message_in_locked_node(
         flow_deltas,
         &stats_delta
         );
+    toku_ft_node_unbound_inserts_validation(node);
     if (stats_delta.numbytes || stats_delta.numrows) {
         toku_ft_update_stats(&ft->in_memory_stats, stats_delta);
     }
@@ -2698,7 +3647,7 @@ static void inject_message_in_locked_node(
         STATUS_INC(FT_MSG_BYTES_IN, msgsize);
         STATUS_INC(FT_MSG_BYTES_CURR, msgsize);
         STATUS_INC(FT_MSG_NUM, 1);
-        if (ft_msg_applies_all(cmd)) {
+        if (ft_msg_applies_multiple(cmd)) {
             STATUS_INC(FT_MSG_NUM_BROADCAST, 1);
         }
     }
@@ -2837,7 +3786,7 @@ static bool process_maybe_reactive_child(FT ft, FTNODE parent, FTNODE child, int
     abort();
 }
 
-static void inject_message_at_this_blocknum(FT ft, CACHEKEY cachekey, uint32_t fullhash, FT_MSG_S *cmd, size_t flow_deltas[], TXNID oldest_referenced_xid, GC_INFO gc_info)
+static void inject_message_at_this_blocknum(FT ft, CACHEKEY cachekey, uint32_t fullhash, FT_MSG_S *cmd, struct unbound_insert_entry *ubi_entry, size_t flow_deltas[], TXNID oldest_referenced_xid, GC_INFO gc_info)
 // Effect:
 //  Inject cmd into the node at this blocknum (cachekey).
 //  Gets a write lock on the node for you.
@@ -2849,7 +3798,7 @@ static void inject_message_at_this_blocknum(FT ft, CACHEKEY cachekey, uint32_t f
     toku_assert_entire_node_in_memory(node);
     paranoid_invariant(node->fullhash==fullhash);
     ft_verify_flags(ft, node);
-    inject_message_in_locked_node(ft, node, -1, cmd, flow_deltas, oldest_referenced_xid, gc_info);
+    inject_message_in_locked_node(ft, node, -1, ubi_entry, cmd, flow_deltas, oldest_referenced_xid, gc_info);
 }
 
 __attribute__((const))
@@ -2868,6 +3817,7 @@ helper_inject_message_at_blocknum(
     FTNODE subtree_root,
     int depth,
     FT_MSG_S *cmd,
+    struct unbound_insert_entry *ubi_entry,
     size_t flow_deltas[],
     TXNID oldest_referenced_xid,
     GC_INFO gc_info
@@ -2890,7 +3840,7 @@ helper_inject_message_at_blocknum(
     default:
         STATUS_INC(FT_PRO_NUM_INJECT_DEPTH_GT3, 1); break;
     }
-    inject_message_at_this_blocknum(ft, subtree_root_blocknum, subtree_root_fullhash, cmd, flow_deltas, oldest_referenced_xid, gc_info);
+    inject_message_at_this_blocknum(ft, subtree_root_blocknum, subtree_root_fullhash, cmd, ubi_entry, flow_deltas, oldest_referenced_xid, gc_info);
 }
 
 static void
@@ -2898,6 +3848,7 @@ helper_inject_in_node(
     FT ft,
     FTNODE subtree_root,
     int target_childnum,
+    struct unbound_insert_entry *ubi_entry,
     FT_MSG_S *cmd,
     size_t flow_deltas[],
     TXNID oldest_referenced_xid,
@@ -2917,7 +3868,7 @@ helper_inject_in_node(
     default:
         STATUS_INC(FT_PRO_NUM_INJECT_DEPTH_GT3, 1); break;
     }
-    inject_message_in_locked_node(ft, subtree_root, target_childnum, cmd, flow_deltas, oldest_referenced_xid, gc_info);
+    inject_message_in_locked_node(ft, subtree_root, target_childnum, ubi_entry, cmd, flow_deltas, oldest_referenced_xid, gc_info);
 }
 
 static void push_something_in_subtree(
@@ -2925,6 +3876,7 @@ static void push_something_in_subtree(
     FTNODE subtree_root,
     int target_childnum,
     FT_MSG_S *cmd,
+    struct unbound_insert_entry *ubi_entry,
     size_t flow_deltas[],
     TXNID oldest_referenced_xid,
     GC_INFO gc_info,
@@ -2956,7 +3908,7 @@ static void push_something_in_subtree(
 {
     toku_assert_entire_node_in_memory(subtree_root);
     if (should_inject_in_node(loc, subtree_root->height, depth)) {
-        helper_inject_in_node(ft, subtree_root, target_childnum, cmd, flow_deltas, oldest_referenced_xid, gc_info, depth);
+        helper_inject_in_node(ft, subtree_root, target_childnum, ubi_entry, cmd, flow_deltas, oldest_referenced_xid, gc_info, depth);
     } else {
         int r;
         int childnum;
@@ -2966,7 +3918,7 @@ static void push_something_in_subtree(
         paranoid_invariant(ft_msg_applies_once(cmd));
 
         childnum = (target_childnum >= 0 ? target_childnum
-                    : toku_ftnode_which_child(subtree_root, cmd->u.id.key, &ft->cmp_descriptor, ft->compare_fun));
+                    : toku_ftnode_which_child(subtree_root, cmd->key, &ft->cmp_descriptor, ft->compare_fun));
         bnc = BNC(subtree_root, childnum);
 
         if (toku_bnc_n_entries(bnc) > 0) {
@@ -3045,13 +3997,13 @@ static void push_something_in_subtree(
                     struct ftnode_fetch_extra bfe;
                     fill_bfe_for_full_read(&bfe, ft); // should be fully in memory, we just split it
                     toku_pin_ftnode_off_client_thread_batched(ft, subtree_root_blocknum, subtree_root_fullhash, &bfe, PL_READ, 0, nullptr, &newparent);
-                    push_something_in_subtree(ft, newparent, -1, cmd, flow_deltas, oldest_referenced_xid, gc_info, depth, loc, true);
+                    push_something_in_subtree(ft, newparent, -1, cmd, ubi_entry, flow_deltas, oldest_referenced_xid, gc_info, depth, loc, true);
                     return;
                 }
             }
 
             if (next_loc != NEITHER_EXTREME || child->dirty || toku_bnc_should_promote(ft, bnc)) {
-                push_something_in_subtree(ft, child, -1, cmd, flow_deltas, oldest_referenced_xid, gc_info, depth + 1, next_loc, false);
+                push_something_in_subtree(ft, child, -1, cmd, ubi_entry, flow_deltas, oldest_referenced_xid, gc_info, depth + 1, next_loc, false);
                 toku_sync_fetch_and_add(&bnc->flow[0], flow_deltas[0]);
                 // The recursive call unpinned the child, but
                 // we're responsible for unpinning subtree_root.
@@ -3069,7 +4021,7 @@ static void push_something_in_subtree(
         // Give up on promoting.
         // We have subtree_root read-locked and we don't have a child locked.
         // Drop the read lock, grab a write lock, and inject here.
-        helper_inject_message_at_blocknum(ft, subtree_root, depth, cmd,
+        helper_inject_message_at_blocknum(ft, subtree_root, depth, cmd, ubi_entry,
                                           flow_deltas, oldest_referenced_xid,
                                           gc_info);
     }
@@ -3078,6 +4030,7 @@ static void push_something_in_subtree(
 void toku_ft_root_put_cmd(
     FT ft,
     FT_MSG_S *cmd,
+    struct unbound_insert_entry *ubi_entry,
     TXNID oldest_referenced_xid,
     GC_INFO gc_info
     )
@@ -3180,22 +4133,22 @@ void toku_ft_root_put_cmd(
         // If the root's a leaf or we're injecting a broadcast, drop the read lock and inject here.
         toku_unpin_ftnode_read_only(ft, node);
         STATUS_INC(FT_PRO_NUM_ROOT_H0_INJECT, 1);
-        inject_message_at_this_blocknum(ft, root_key, fullhash, cmd, flow_deltas, oldest_referenced_xid, gc_info);
+        inject_message_at_this_blocknum(ft, root_key, fullhash, cmd, ubi_entry, flow_deltas, oldest_referenced_xid, gc_info);
     } else if (node->height > 1) {
         // If the root's above height 1, we are definitely eligible for promotion.
-        push_something_in_subtree(ft, node, -1, cmd, flow_deltas, oldest_referenced_xid, gc_info, 0, LEFT_EXTREME | RIGHT_EXTREME, false);
+        push_something_in_subtree(ft, node, -1, cmd, ubi_entry, flow_deltas, oldest_referenced_xid, gc_info, 0, LEFT_EXTREME | RIGHT_EXTREME, false);
     } else {
         // The root's height 1.  We may be eligible for promotion here.
         // On the extremes, we want to promote, in the middle, we don't.
-        int childnum = toku_ftnode_which_child(node, cmd->u.id.key, &ft->cmp_descriptor, ft->compare_fun);
+        int childnum = toku_ftnode_which_child(node, cmd->key, &ft->cmp_descriptor, ft->compare_fun);
         if (childnum == 0 || childnum == node->n_children - 1) {
             // On the extremes, promote.  We know which childnum we're going to, so pass that down too.
-            push_something_in_subtree(ft, node, childnum, cmd, flow_deltas, oldest_referenced_xid, gc_info, 0, LEFT_EXTREME | RIGHT_EXTREME, false);
+            push_something_in_subtree(ft, node, childnum, cmd, ubi_entry, flow_deltas, oldest_referenced_xid, gc_info, 0, LEFT_EXTREME | RIGHT_EXTREME, false);
         } else {
             // At height 1 in the middle, don't promote, drop the read lock and inject here.
             toku_unpin_ftnode_read_only(ft, node);
             STATUS_INC(FT_PRO_NUM_ROOT_H1_INJECT, 1);
-            inject_message_at_this_blocknum(ft, root_key, fullhash, cmd, flow_deltas, oldest_referenced_xid, gc_info);
+            inject_message_at_this_blocknum(ft, root_key, fullhash, cmd, ubi_entry, flow_deltas, oldest_referenced_xid, gc_info);
         }
     }
 }
@@ -3203,6 +4156,10 @@ void toku_ft_root_put_cmd(
 // Effect: Insert the key-val pair into brt.
 void toku_ft_insert (FT_HANDLE brt, DBT *key, DBT *val, TOKUTXN txn) {
     toku_ft_maybe_insert(brt, key, val, txn, false, ZERO_LSN, true, FT_INSERT);
+}
+
+void toku_ft_seq_insert (FT_HANDLE brt, DBT *key, DBT *val, TOKUTXN txn) {
+    toku_ft_maybe_insert(brt, key, val, txn, false, ZERO_LSN, true, FT_UNBOUND_INSERT);
 }
 
 void toku_ft_load_recovery(TOKUTXN txn, FILENUM old_filenum, char const * new_iname, int do_fsync, int do_log, LSN *load_lsn) {
@@ -3257,8 +4214,9 @@ void toku_ft_optimize (FT_HANDLE brt) {
         DBT val;
         toku_init_dbt(&key);
         toku_init_dbt(&val);
-        FT_MSG_S ftcmd = { FT_OPTIMIZE, ZERO_MSN, message_xids, .u = { .id = {&key,&val} } };
-        toku_ft_root_put_cmd(brt->ft, &ftcmd, TXNID_NONE, make_gc_info(true));
+        FT_MSG_S ftcmd;
+        ft_msg_init(&ftcmd,  FT_OPTIMIZE, ZERO_MSN, message_xids, &key,&val);
+        toku_ft_root_put_cmd(brt->ft, &ftcmd, nullptr, TXNID_NONE, make_gc_info(true));
         xids_destroy(&message_xids);
     }
 }
@@ -3307,12 +4265,20 @@ toku_ft_log_put_multiple (TOKUTXN txn, FT_HANDLE src_ft, FT_HANDLE *brts, uint32
 }
 
 void toku_ft_maybe_insert (FT_HANDLE ft_h, DBT *key, DBT *val, TOKUTXN txn, bool oplsn_valid, LSN oplsn, bool do_logging, enum ft_msg_type type) {
-    paranoid_invariant(type==FT_INSERT || type==FT_INSERT_NO_OVERWRITE);
+    //SOSP TODO: Bill why not use oplsn? whatever, we need this for our unbound inserts and toku code is dumb.
+    LSN ubi_lsn;
+    paranoid_invariant(type==FT_INSERT || type==FT_INSERT_NO_OVERWRITE || type==FT_UNBOUND_INSERT);
+    struct unbound_insert_entry *entry = NULL;
     XIDS message_xids = xids_get_root_xids(); //By default use committed messages
     TXNID_PAIR xid = toku_txn_get_txnid(txn);
     if (txn) {
         BYTESTRING keybs = {key->size, (char *) key->data};
-        toku_logger_save_rollback_cmdinsert(txn, toku_cachefile_filenum(ft_h->ft->cf), &keybs);
+        if (type != FT_UNBOUND_INSERT) {
+            toku_logger_save_rollback_cmdinsert(txn, toku_cachefile_filenum(ft_h->ft->cf), &keybs);
+        } else {
+            // perhaps don't need to differentiate between seqinsert here
+            toku_logger_save_rollback_cmdseqinsert(txn, toku_cachefile_filenum(ft_h->ft->cf), &keybs);
+        }
         toku_txn_maybe_note_ft(txn, ft_h->ft);
         message_xids = toku_txn_get_xids(txn);
     }
@@ -3322,18 +4288,49 @@ void toku_ft_maybe_insert (FT_HANDLE ft_h, DBT *key, DBT *val, TOKUTXN txn, bool
         BYTESTRING valbs = {.len=val->size, .data=(char *) val->data};
         if (type == FT_INSERT) {
             toku_log_enq_insert(logger, (LSN*)0, 0, txn, toku_cachefile_filenum(ft_h->ft->cf), xid, keybs, valbs);
-        }
-        else {
+        } else if (type == FT_INSERT_NO_OVERWRITE) {
             toku_log_enq_insert_no_overwrite(logger, (LSN*)0, 0, txn, toku_cachefile_filenum(ft_h->ft->cf), xid, keybs, valbs);
+        } else { //FT_UNBOUND_INSERT
+            toku_log_enq_unbound_insert(logger, &ubi_lsn, 0, txn, toku_cachefile_filenum(ft_h->ft->cf), xid, keybs);
         }
     }
+
+    // without some extra work, we cannot use placeholder information
+    // in our unbound_insert log entries. we are better off appending
+    // the location information when we commit our insert
+    // (toku_log_sync_unbound_insert).
+    //Reason:
+    // We cannot update the unbound_insert list with the cmd's node info
+    // until the cmd is actually in the node.
+    // But suppose another process tries to flush the log before the
+    // insert operation returns. that process must write out all of
+    // the unbound_insert values (i.e. the nodes containing those
+    // values) before it can flush the log, but that is impossible
+    // because the message is not yet in any node...
 
     LSN treelsn;
     if (oplsn_valid && oplsn.lsn <= (treelsn = toku_ft_checkpoint_lsn(ft_h->ft)).lsn) {
         // do nothing
+        // wkj: we could have unbound_insert log messages. we need to update them.
+        paranoid_invariant(!do_logging);
     } else {
+        if (type==FT_UNBOUND_INSERT && do_logging && logger) {
+            //BYTESTRING keybs = {.len=key->size, .data=(char *) key->data};
+            //SOSP TODO: fix lsn...
+            //paranoid_invariant(oplsn_valid); this is stupid code.
+            entry = toku_alloc_unbound_insert_entry(UBI_INSERTING, ubi_lsn,//ft_h,
+                                                    ZERO_MSN, key);
+        
+	}
+
         TXNID oldest_referenced_xid = (txn) ? txn->oldest_referenced_xid : TXNID_NONE;
-        toku_ft_send_insert(ft_h, key, val, message_xids, type, oldest_referenced_xid, make_gc_info(txn ? !txn->for_recovery : false));
+        toku_ft_send_insert(ft_h, key, val, message_xids, type, entry, oldest_referenced_xid, make_gc_info(txn ? !txn->for_recovery : false));
+        if (type==FT_UNBOUND_INSERT && do_logging && logger) { 
+   	    toku_logger_append_unbound_insert_entry(logger,entry); 
+	    if(global_logger==nullptr) {
+		global_logger = logger;
+		}
+	}
     }
 }
 
@@ -3344,7 +4341,7 @@ ft_send_update_msg(FT_HANDLE brt, FT_MSG_S *msg, TOKUTXN txn) {
                  : xids_get_root_xids());
 
     TXNID oldest_referenced_xid = (txn) ? txn->oldest_referenced_xid : TXNID_NONE;
-    toku_ft_root_put_cmd(brt->ft, msg, oldest_referenced_xid, make_gc_info(txn ? !txn->for_recovery : false));
+    toku_ft_root_put_cmd(brt->ft, msg, nullptr, oldest_referenced_xid, make_gc_info(txn ? !txn->for_recovery : false));
 }
 
 void toku_ft_maybe_update(FT_HANDLE ft_h, const DBT *key, const DBT *update_function_extra,
@@ -3373,8 +4370,9 @@ void toku_ft_maybe_update(FT_HANDLE ft_h, const DBT *key, const DBT *update_func
     if (oplsn_valid && oplsn.lsn <= (treelsn = toku_ft_checkpoint_lsn(ft_h->ft)).lsn) {
         // do nothing
     } else {
-        FT_MSG_S msg = { FT_UPDATE, ZERO_MSN, NULL,
-                         .u = { .id = { key, update_function_extra } } };
+        FT_MSG_S msg;
+        ft_msg_init(&msg, FT_UPDATE, ZERO_MSN, NULL,
+                         key, update_function_extra);
         ft_send_update_msg(ft_h, &msg, txn);
     }
 }
@@ -3407,27 +4405,33 @@ void toku_ft_maybe_update_broadcast(FT_HANDLE ft_h, const DBT *update_function_e
     } else {
         DBT nullkey;
         const DBT *nullkeyp = toku_init_dbt(&nullkey);
-        FT_MSG_S msg = { FT_UPDATE_BROADCAST_ALL, ZERO_MSN, NULL,
-                         .u = { .id = { nullkeyp, update_function_extra } } };
+        FT_MSG_S msg;
+        ft_msg_init(&msg,  FT_UPDATE_BROADCAST_ALL, ZERO_MSN, NULL,
+                          nullkeyp, update_function_extra);
         ft_send_update_msg(ft_h, &msg, txn);
     }
 }
 
-void toku_ft_send_insert(FT_HANDLE brt, DBT *key, DBT *val, XIDS xids, enum ft_msg_type type, TXNID oldest_referenced_xid, GC_INFO gc_info) {
-    FT_MSG_S ftcmd = { type, ZERO_MSN, xids, .u = { .id = { key, val } } };
-    toku_ft_root_put_cmd(brt->ft, &ftcmd, oldest_referenced_xid, gc_info);
+void toku_ft_send_insert(FT_HANDLE brt, DBT *key, DBT *val, XIDS xids, enum ft_msg_type type, struct unbound_insert_entry *entry, TXNID oldest_referenced_xid, GC_INFO gc_info) {
+    FT_MSG_S ftcmd;
+    ft_msg_init(&ftcmd, type, ZERO_MSN, xids, key, val);
+    toku_ft_root_put_cmd(brt->ft, &ftcmd, entry, oldest_referenced_xid, gc_info);
 }
 
 void toku_ft_send_commit_any(FT_HANDLE brt, DBT *key, XIDS xids, TXNID oldest_referenced_xid, GC_INFO gc_info) {
     DBT val;
-    FT_MSG_S ftcmd = { FT_COMMIT_ANY, ZERO_MSN, xids, .u = { .id = { key, toku_init_dbt(&val) } } };
-    toku_ft_root_put_cmd(brt->ft, &ftcmd, oldest_referenced_xid, gc_info);
+    FT_MSG_S ftcmd;
+   ft_msg_init(&ftcmd, FT_COMMIT_ANY, ZERO_MSN, xids, key, toku_init_dbt(&val));
+   toku_ft_root_put_cmd(brt->ft, &ftcmd, nullptr, oldest_referenced_xid, gc_info);
 }
 
 void toku_ft_delete(FT_HANDLE brt, DBT *key, TOKUTXN txn) {
     toku_ft_maybe_delete(brt, key, txn, false, ZERO_LSN, true);
 }
 
+void toku_ft_delete_multicast(FT_HANDLE brt, DBT * min_key, DBT * max_key, bool is_right_excl, enum pacman_status pm_status, TOKUTXN txn) {
+    toku_ft_maybe_delete_multicast(brt, min_key, max_key, is_right_excl, pm_status, txn, false, ZERO_LSN, false, true);
+}
 void
 toku_ft_log_del(TOKUTXN txn, FT_HANDLE brt, const DBT *key) {
     TOKULOGGER logger = toku_txn_logger(txn);
@@ -3482,10 +4486,54 @@ void toku_ft_maybe_delete(FT_HANDLE ft_h, DBT *key, TOKUTXN txn, bool oplsn_vali
     }
 }
 
+void toku_ft_maybe_delete_multicast(
+    FT_HANDLE ft_h,
+    DBT *min_key,
+    DBT *max_key,
+    bool is_right_excl,
+    enum pacman_status pm_status,
+    TOKUTXN txn,
+    bool oplsn_valid,
+    LSN oplsn,
+    bool is_resetting_op,
+    bool do_logging
+    )
+{
+    uint8_t resetting = is_resetting_op?1:0;
+    XIDS message_xids = xids_get_root_xids(); //By default use committed messages
+    TXNID_PAIR xid = toku_txn_get_txnid(txn);
+    if (txn) {
+        BYTESTRING minkeybs = {min_key->size, (char *) min_key->data};
+        BYTESTRING maxkeybs = {max_key->size, (char *) max_key->data};
+        toku_logger_save_rollback_cmddeletemulti(txn, toku_cachefile_filenum(ft_h->ft->cf), &minkeybs, &maxkeybs, is_right_excl, pm_status, resetting);
+        toku_txn_maybe_note_ft(txn, ft_h->ft);
+        message_xids = toku_txn_get_xids(txn);
+    }
+    TOKULOGGER logger = toku_txn_logger(txn);
+    if (do_logging && logger) {
+        BYTESTRING min_keybs = {.len=min_key->size, .data=(char *) min_key->data};
+        BYTESTRING max_keybs = {.len=max_key->size, .data=(char *) max_key->data};
+        toku_log_enq_delete_multi(logger, (LSN*)0, 0, txn, toku_cachefile_filenum(ft_h->ft->cf), xid, min_keybs, max_keybs, is_right_excl, pm_status, resetting);
+    }
+
+    LSN treelsn;
+    if (oplsn_valid && oplsn.lsn <= (treelsn = toku_ft_checkpoint_lsn(ft_h->ft)).lsn) {
+        // do nothing
+    } else {
+        TXNID oldest_referenced_xid = (txn) ? txn->oldest_referenced_xid : TXNID_NONE;
+        
+        DBT val;
+        toku_init_dbt(&val);
+        FT_MSG_S msg;
+        ft_msg_multicast_init(&msg, FT_DELETE_MULTICAST, ZERO_MSN, message_xids, min_key, max_key, &val, is_right_excl, pm_status);
+        toku_ft_root_put_cmd(ft_h->ft, &msg, nullptr, oldest_referenced_xid, make_gc_info(txn ? !txn->for_recovery : false));
+    }
+}
 void toku_ft_send_delete(FT_HANDLE brt, DBT *key, XIDS xids, TXNID oldest_referenced_xid, GC_INFO gc_info) {
     DBT val; toku_init_dbt(&val);
-    FT_MSG_S ftcmd = { FT_DELETE_ANY, ZERO_MSN, xids, .u = { .id = { key, &val } } };
-    toku_ft_root_put_cmd(brt->ft, &ftcmd, oldest_referenced_xid, gc_info);
+    FT_MSG_S ftcmd;
+    ft_msg_init(&ftcmd,  FT_DELETE_ANY, ZERO_MSN, xids,  key, &val );
+    toku_ft_root_put_cmd(brt->ft, &ftcmd, nullptr, oldest_referenced_xid, gc_info);
 }
 
 /* ******************** open,close and create  ********************** */
@@ -3534,16 +4582,12 @@ static int ft_create_file(FT_HANDLE UU(brt), const char *fname, int *fdp) {
     mode_t mode = S_IRWXU|S_IRWXG|S_IRWXO;
     int r;
     int fd;
-    int er;
+    //int er;
     fd = ft_open_maybe_direct(fname, O_RDWR | O_BINARY, mode);
-    assert(fd==-1);
-    if ((er = get_maybe_error_errno()) != ENOENT) {
-
-        return er;
-    }
+    assert(fd < 0);
     fd = ft_open_maybe_direct(fname, O_RDWR | O_CREAT | O_BINARY, mode);
-    if (fd==-1) {
-        r = get_error_errno(fd);
+    if (fd < 0) {
+        r = -fd;
         return r;
     }
     r = toku_fsync_directory(fname);
@@ -3561,8 +4605,8 @@ static int ft_open_file(const char *fname, int *fdp) {
     mode_t mode = S_IRWXU|S_IRWXG|S_IRWXO;
     int fd;
     fd = ft_open_maybe_direct(fname, O_RDWR | O_BINARY, mode);
-    if (fd==-1) {
-        return get_error_errno(fd);
+    if (fd < 0){
+        return -fd;
     }
     *fdp = fd;
     return 0;
@@ -4265,37 +5309,38 @@ int fifo_offset_msn_cmp(FIFO &fifo, const int32_t &ao, const int32_t &bo)
  * basement node.
  */
 static void
-do_bn_apply_cmd(FT_HANDLE t, BASEMENTNODE bn, struct fifo_entry *entry, TXNID oldest_referenced_xid, uint64_t *workdone, STAT64INFO stats_to_update)
+do_bn_apply_cmd(FT_HANDLE t, BASEMENTNODE bn, struct fifo_entry *entry, struct unbound_insert_entry *ubi_entry, TXNID oldest_referenced_xid, uint64_t *workdone, STAT64INFO stats_to_update, FTNODE UU(basement_node))
 {
     // The messages are being iterated over in (key,msn) order or just in
     // msn order, so all the messages for one key, from one buffer, are in
     // ascending msn order.  So it's ok that we don't update the basement
     // node's msn until the end.
     if (entry->msn.msn > bn->max_msn_applied.msn) {
-        ITEMLEN keylen = entry->keylen;
-        ITEMLEN vallen = entry->vallen;
-        enum ft_msg_type type = fifo_entry_get_msg_type(entry);
-        MSN msn = entry->msn;
-        const XIDS xids = (XIDS) &entry->xids_s;
-        bytevec key = xids_get_end_of_array(xids);
-        bytevec val = (uint8_t*)key + entry->keylen;
-
-        DBT hk;
-        toku_fill_dbt(&hk, key, keylen);
-        DBT hv;
-        FT_MSG_S ftcmd = { type, msn, xids, .u = { .id = { &hk, toku_fill_dbt(&hv, val, vallen) } } };
-        toku_ft_bn_apply_cmd(
-            t->ft->compare_fun,
-            t->ft->update_fun,
-            &t->ft->cmp_descriptor,
-            bn,
-            &ftcmd,
-            oldest_referenced_xid,
-            make_gc_info(true), //mvcc is needed
-            workdone,
-            stats_to_update
+        FT_MSG_S ftcmd;
+        DBT k,v,m;
+        fifo_entry_get_msg(&ftcmd, entry,&k, &v, &m);
+        toku_ft_bn_apply_cmd(t->ft,
+                             t->ft->compare_fun,
+                             t->ft->update_fun,
+                             &t->ft->cmp_descriptor,
+                             ubi_entry,
+                             bn,
+                             &ftcmd,
+                             oldest_referenced_xid,
+                             make_gc_info(true), //mvcc is needed
+                             workdone,
+                             stats_to_update
             );
+#if 1
+	if(fifo_entry_get_msg_type(entry) == FT_UNBOUND_INSERT) {
+		//fifo_entry_set_msg_type(entry, FT_INSERT);    
+		basement_node->unbound_insert_count++;
+		if(!basement_node->dirty)
+			basement_node->dirty = true;
+	}
+#endif
     } else {
+     //   paranoid_invariant(fifo_entry_get_msg_type(entry) != FT_UNBOUND_INSERT);
         STATUS_INC(FT_MSN_DISCARDS, 1);
     }
     // We must always mark entry as stale since it has been marked
@@ -4312,13 +5357,53 @@ struct iterate_do_bn_apply_cmd_extra {
     TXNID oldest_referenced_xid;
     uint64_t *workdone;
     STAT64INFO stats_to_update;
+    FTNODE ancestor;
+    FTNODE basement_node;
 };
+#if 1
 
+static struct unbound_insert_entry *
+ubi_extract_fifo_entry_from_bnc(struct fifo_entry *fifo_entry, NONLEAF_CHILDINFO bnc, FTNODE UU(node)) {
+    struct unbound_insert_entry *ubi_entry = NULL;
+
+    if (fifo_entry_get_msg_type(fifo_entry) == FT_UNBOUND_INSERT) {
+        // we need to find this message from our bnc's
+        // unbound_insert_list so that we can remove it and
+        // pass it down. luckily, we are iterating in ascending
+        // MSN order, so this should be easy...
+        struct toku_list *head = &bnc->unbound_inserts;
+        struct toku_list *lst = toku_list_head(head);
+        while (lst != head) {
+            ubi_entry = toku_list_struct(lst, struct unbound_insert_entry,
+                                         node_list);
+            if (fifo_entry_matches_ubi(fifo_entry, ubi_entry))
+                goto found_ubi_entry;
+            lst = lst->next;
+        }
+        printf("could not find unbound_insert_entry within bnc\n");
+        abort();
+    found_ubi_entry:
+	#if 0
+        toku_list_remove(&ubi_entry->node_list);
+        bnc->unbound_insert_count--;
+	node->unbound_insert_count --;
+	return ubi_entry;
+	#endif
+	struct unbound_insert_entry * dup_entry = toku_alloc_unbound_insert_entry(UBI_UNBOUND, ubi_entry->lsn, ubi_entry->msn, ubi_entry->key);	
+     	toku_logger_append_unbound_insert_entry(global_logger,dup_entry);
+	return dup_entry; 
+	}
+
+    return ubi_entry;
+}
+#endif
 int iterate_do_bn_apply_cmd(const int32_t &offset, const uint32_t UU(idx), struct iterate_do_bn_apply_cmd_extra *const e) __attribute__((nonnull(3)));
 int iterate_do_bn_apply_cmd(const int32_t &offset, const uint32_t UU(idx), struct iterate_do_bn_apply_cmd_extra *const e)
 {
     struct fifo_entry *entry = toku_fifo_get_entry(e->bnc->buffer, offset);
-    do_bn_apply_cmd(e->t, e->bn, entry, e->oldest_referenced_xid, e->workdone, e->stats_to_update);
+    struct unbound_insert_entry *ubi_entry = ubi_extract_fifo_entry_from_bnc(entry, e->bnc, e->ancestor);
+
+    do_bn_apply_cmd(e->t, e->bn, entry, ubi_entry, e->oldest_referenced_xid, e->workdone, e->stats_to_update, e->basement_node);
     return 0;
 }
 
@@ -4437,6 +5522,7 @@ static void
 bnc_apply_messages_to_basement_node(
     FT_HANDLE t,             // used for comparison function
     BASEMENTNODE bn,   // where to apply messages
+    FTNODE node,
     FTNODE ancestor,  // the ancestor node where we can find messages to apply
     int childnum,      // which child buffer of ancestor contains messages we want
     struct pivot_bounds const * const bounds,  // contains pivot key bounds of this basement node
@@ -4446,6 +5532,17 @@ bnc_apply_messages_to_basement_node(
 {
     int r;
     NONLEAF_CHILDINFO bnc = BNC(ancestor, childnum);
+
+    // SOSP TODO: Bill i think we are guaranteed to empty the bnc of
+    // unbound inserts. do node accounting now.
+    // No we are not, as we are not detaching the bn here, we use
+    //max_msn to check if the msgs are already applied. -JYM 
+   if (bnc->unbound_insert_count) {
+        paranoid_invariant(ancestor->unbound_insert_count >=
+                           bnc->unbound_insert_count);
+        //ancestor->unbound_insert_count -= bnc->unbound_insert_count;
+    }
+            
 
     // Determine the offsets in the message trees between which we need to
     // apply messages from this buffer
@@ -4499,13 +5596,14 @@ bnc_apply_messages_to_basement_node(
         for (int i = 0; i < buffer_size; ++i) {
             *msgs_applied = true;
             struct fifo_entry *entry = toku_fifo_get_entry(bnc->buffer, offsets[i]);
-            do_bn_apply_cmd(t, bn, entry, oldest_referenced_xid, &workdone_this_ancestor, &stats_delta);
+            struct unbound_insert_entry *ubi_entry = ubi_extract_fifo_entry_from_bnc(entry, bnc, ancestor);
+            do_bn_apply_cmd(t, bn, entry, ubi_entry, oldest_referenced_xid, &workdone_this_ancestor, &stats_delta, node);
         }
 
         toku_free(offsets);
     } else if (stale_lbi == stale_ube) {
         // No stale messages to apply, we just apply fresh messages, and mark them to be moved to stale later.
-        struct iterate_do_bn_apply_cmd_extra iter_extra = { .t = t, .bn = bn, .bnc = bnc, .oldest_referenced_xid = oldest_referenced_xid, .workdone = &workdone_this_ancestor, .stats_to_update = &stats_delta };
+        struct iterate_do_bn_apply_cmd_extra iter_extra = { .t = t, .bn = bn, .bnc = bnc, .oldest_referenced_xid = oldest_referenced_xid, .workdone = &workdone_this_ancestor, .stats_to_update = &stats_delta, .ancestor = ancestor, .basement_node = node};
         if (fresh_ube - fresh_lbi > 0) *msgs_applied = true;
         r = bnc->fresh_message_tree.iterate_and_mark_range<struct iterate_do_bn_apply_cmd_extra, iterate_do_bn_apply_cmd>(fresh_lbi, fresh_ube, &iter_extra);
         assert_zero(r);
@@ -4514,7 +5612,7 @@ bnc_apply_messages_to_basement_node(
         // No fresh messages to apply, we just apply stale messages.
 
         if (stale_ube - stale_lbi > 0) *msgs_applied = true;
-        struct iterate_do_bn_apply_cmd_extra iter_extra = { .t = t, .bn = bn, .bnc = bnc, .oldest_referenced_xid = oldest_referenced_xid, .workdone = &workdone_this_ancestor, .stats_to_update = &stats_delta };
+        struct iterate_do_bn_apply_cmd_extra iter_extra = { .t = t, .bn = bn, .bnc = bnc, .oldest_referenced_xid = oldest_referenced_xid, .workdone = &workdone_this_ancestor, .stats_to_update = &stats_delta, .ancestor = ancestor, .basement_node = node };
 
         r = bnc->stale_message_tree.iterate_on_range<struct iterate_do_bn_apply_cmd_extra, iterate_do_bn_apply_cmd>(stale_lbi, stale_ube, &iter_extra);
         assert_zero(r);
@@ -4549,6 +5647,7 @@ apply_ancestors_messages_to_bn(
             bnc_apply_messages_to_basement_node(
                 t,
                 curr_bn,
+		node,
                 curr_ancestors->node,
                 curr_ancestors->childnum,
                 &curr_bounds,
@@ -4558,7 +5657,9 @@ apply_ancestors_messages_to_bn(
             // We don't want to check this ancestor node again if the
             // next time we query it, the msn hasn't changed.
             curr_bn->max_msn_applied = curr_ancestors->node->max_msn_applied_to_node_on_disk;
-        }
+            //toku_ft_node_unbound_inserts_validation(node);
+	    //toku_ft_node_unbound_inserts_validation(curr_ancestors->node);
+	}
     }
     // At this point, we know all the stale messages above this
     // basement node have been applied, and any new messages will be
@@ -6252,6 +7353,22 @@ int toku_ft_handle_iterate_fractal_tree_block_map(FT_HANDLE ft_h, int (*iter)(ui
 }
 
 /* ********************* debugging dump ************************ */
+static int iterate_dump_ftnode (FT_MSG msg, bool UU(is_fresh), void * args) {
+        //data=data; datalen=datalen; keylen=keylen;
+    int depth = * (int *) args;
+    enum ft_msg_type type = (enum ft_msg_type) ft_msg_get_type(msg);
+    void * key = ft_msg_get_key(msg);
+ //   uint32_t keylen = ft_msg_get_keylen(msg);
+//    void * data = ft_msg_get_val(msg);
+//    uint32_t datalen = ft_msg_get_vallen(msg);
+    MSN msn  = ft_msg_get_msn(msg);
+    XIDS xids = ft_msg_get_xids(msg);
+    printf("%*s xid=%" PRIu64 " %u (type=%d) msn=0x%" PRIu64 "\n", depth+2, "", xids_get_innermost_xid(xids), (unsigned)toku_dtoh32(*(int*)key), type, msn.msn);
+                                 //assert(strlen((char*)key)+1==keylen);
+                                 //assert(strlen((char*)data)+1==datalen);
+            return 0;                   
+
+}
 static int
 toku_dump_ftnode (FILE *file, FT_HANDLE brt, BLOCKNUM blocknum, int depth, const DBT *lorange, const DBT *hirange) {
     int result=0;
@@ -6287,17 +7404,12 @@ toku_dump_ftnode (FILE *file, FT_HANDLE brt, BLOCKNUM blocknum, int depth, const
             if (node->height > 0) {
                 NONLEAF_CHILDINFO bnc = BNC(node, i);
                 fprintf(file, "%*schild %d buffered (%d entries):", depth+1, "", i, toku_bnc_n_entries(bnc));
-                FIFO_ITERATE(bnc->buffer, key, keylen, data, datalen, type, msn, xids, UU(is_fresh),
-                             {
-                                 data=data; datalen=datalen; keylen=keylen;
-                                 fprintf(file, "%*s xid=%" PRIu64 " %u (type=%d) msn=0x%" PRIu64 "\n", depth+2, "", xids_get_innermost_xid(xids), (unsigned)toku_dtoh32(*(int*)key), type, msn.msn);
-                                 //assert(strlen((char*)key)+1==keylen);
-                                 //assert(strlen((char*)data)+1==datalen);
-                             });
+                //FIFO_ITERATE(bnc->buffer, key, keylen, data, datalen, type, msn, xids, UU(is_fresh),
+                toku_fifo_iterate(bnc->buffer, iterate_dump_ftnode, &depth);                 
             }
             else {
                 int size = BLB_DATA(node, i)->omt_size();
-                if (0)
+                if (1)
                     for (int j=0; j<size; j++) {
                         LEAFENTRY le;
                         void* keyp = NULL;

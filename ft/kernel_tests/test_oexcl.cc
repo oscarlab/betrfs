@@ -100,8 +100,7 @@ test_oexcl (void) {
     int fd0 = open (TOKU_TEST_FILENAME, O_RDWR|O_CREAT|O_EXCL, S_IRWXU|S_IRWXG|S_IRWXO);
     assert(fd0>=0);
     int fd1 = open (TOKU_TEST_FILENAME, O_RDWR|O_CREAT|O_EXCL, S_IRWXU|S_IRWXG|S_IRWXO);
-    assert(fd1==-1);
-    assert(ftfs_get_errno()==EEXIST);
+    assert(fd1==-EEXIST);
     toku_ft_layer_destroy();
     return 0;
 }

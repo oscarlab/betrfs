@@ -112,21 +112,23 @@ static void fifo_init(struct fifo *fifo) {
 
 __attribute__((const,nonnull))
 static int fifo_entry_size(struct fifo_entry *entry) {
-    return sizeof (struct fifo_entry) + entry->keylen + entry->vallen
-                  + xids_get_size(&entry->xids_s)
-                  - sizeof(XIDS_S); //Prevent double counting from fifo_entry+xids_get_size
+   
+        DBT key, val, max_key;    
+        FT_MSG_S msg; 
+        fifo_entry_get_msg(&msg, entry, &key, &val, &max_key); 
+        return toku_ft_msg_memsize_in_fifo(&msg);
 }
-
+/*  
 __attribute__((const,nonnull))
 size_t toku_ft_msg_memsize_in_fifo(FT_MSG cmd) {
     // This must stay in sync with fifo_entry_size because that's what we
     // really trust.  But sometimes we only have an in-memory FT_MSG, not
     // a serialized fifo_entry so we have to fake it.
-    return sizeof (struct fifo_entry) + cmd->u.id.key->size + cmd->u.id.val->size
+    return sizeof (struct fifo_entry) + cmd->key->size + cmd->val->size
         + xids_get_size(cmd->xids)
         - sizeof(XIDS_S);
 }
-
+*/
 int toku_fifo_create(FIFO *ptr) {
     struct fifo *XMALLOC(fifo);
     if (fifo == 0) return ENOMEM;
@@ -156,11 +158,26 @@ static int next_power_of_two (int n) {
     return r;
 }
 
-int toku_fifo_enq(FIFO fifo, const void *key, unsigned int keylen, const void *data, unsigned int datalen, enum ft_msg_type type, MSN msn, XIDS xids, bool is_fresh, int32_t *dest) {
-    int need_space_here = sizeof(struct fifo_entry)
-                          + keylen + datalen
-                          + xids_get_size(xids)
-                          - sizeof(XIDS_S); //Prevent double counting
+__attribute__((const,nonnull))
+size_t toku_ft_msg_memsize_in_fifo(FT_MSG msg) {
+    const uint32_t  keylen = ft_msg_get_keylen(msg);
+    const uint32_t  datalen = ft_msg_get_vallen(msg);  
+    const size_t xidslen = xids_get_size(ft_msg_get_xids(msg));
+    size_t ret = sizeof(struct fifo_entry) + keylen + datalen + xidslen - sizeof(XIDS_S);
+    if(ft_msg_type_is_multicast((enum ft_msg_type)(unsigned char)ft_msg_get_type(msg))) 
+    {
+        uint32_t max_keylen = ft_msg_get_max_keylen(msg);
+        ret += sizeof(max_keylen) + max_keylen;
+   
+	if(FT_DELETE_MULTICAST == (enum ft_msg_type)(unsigned char)ft_msg_get_type(msg)) { 
+		ret+=sizeof(bool)+sizeof(enum pacman_status);
+    	}
+    }
+    return ret;
+}
+
+int toku_fifo_enq(FIFO fifo, FT_MSG msg, bool is_fresh, int32_t *dest) {
+    int need_space_here = toku_ft_msg_memsize_in_fifo(msg);
     int need_space_total = fifo->memory_used+need_space_here;
     if (fifo->memory == NULL) {
         fifo->memory_size = next_power_of_two(need_space_total);
@@ -173,6 +190,13 @@ int toku_fifo_enq(FIFO fifo, const void *key, unsigned int keylen, const void *d
         XREALLOC_N(next_2, fifo->memory);
         fifo->memory_size = next_2;
     }
+    void * key = ft_msg_get_key(msg);
+    void * data = ft_msg_get_val(msg);
+    uint32_t keylen = ft_msg_get_keylen(msg);
+    uint32_t datalen = ft_msg_get_vallen(msg);
+    enum ft_msg_type type = ft_msg_get_type(msg);
+    MSN msn = ft_msg_get_msn(msg);
+    XIDS xids = ft_msg_get_xids(msg);
     struct fifo_entry *entry = (struct fifo_entry *)(fifo->memory + fifo->memory_used);
     fifo_entry_set_msg_type(entry, type);
     entry->msn = msn;
@@ -183,19 +207,40 @@ int toku_fifo_enq(FIFO fifo, const void *key, unsigned int keylen, const void *d
     memcpy(e_key, key, keylen);
     entry->vallen = datalen;
     memcpy(e_key + keylen, data, datalen);
+    char * pos = (char *) (e_key + keylen) + datalen;
+    if(ft_msg_type_is_multicast((enum ft_msg_type)entry->type))
+        {
+            uint32_t max_keylen = ft_msg_get_max_keylen(msg);
+    	    paranoid_invariant(max_keylen>0);
+	    memcpy(pos, &max_keylen, sizeof(max_keylen));
+            pos += sizeof(max_keylen);
+            memcpy(pos, ft_msg_get_max_key(msg), max_keylen);
+            pos += max_keylen;
+        
+	    if(FT_DELETE_MULTICAST == (enum ft_msg_type) entry->type) {
+	    	bool is_right_excl = ft_msg_is_multicast_rightexcl(msg);
+            	memcpy(pos, &is_right_excl, sizeof(is_right_excl));
+            	pos += sizeof(is_right_excl);
+
+		enum pacman_status pm_status = ft_msg_multicast_pm_status(msg);
+		memcpy(pos, &pm_status, sizeof(pm_status));
+		pos += sizeof(pm_status);
+		}
+	
+        }
     if (dest) {
         *dest = fifo->memory_used;
     }
+    paranoid_invariant(fifo->memory_used + need_space_here == (int) (pos - fifo->memory));
     fifo->n_items_in_fifo++;
     fifo->memory_used += need_space_here;
     return 0;
 }
 
-int toku_fifo_iterate_internal_start(FIFO UU(fifo)) { return 0; }
-int toku_fifo_iterate_internal_has_more(FIFO fifo, int off) { return off < fifo->memory_used; }
-int toku_fifo_iterate_internal_next(FIFO fifo, int off) {
-    struct fifo_entry *e = (struct fifo_entry *)(fifo->memory + off);
-    return off + fifo_entry_size(e);
+static int toku_fifo_iterate_internal_start(FIFO UU(fifo)) { return 0; }
+static int toku_fifo_iterate_internal_has_more(FIFO fifo, int off) { return off < fifo->memory_used; }
+static int toku_fifo_iterate_internal_next(FT_MSG msg, int off) {
+    return off + toku_ft_msg_memsize_in_fifo(msg); 
 }
 struct fifo_entry * toku_fifo_iterate_internal_get_entry(FIFO fifo, int off) {
     return (struct fifo_entry *)(fifo->memory + off);
@@ -204,12 +249,96 @@ size_t toku_fifo_internal_entry_memsize(struct fifo_entry *e) {
     return fifo_entry_size(e);
 }
 
-void toku_fifo_iterate (FIFO fifo, void(*f)(bytevec key,ITEMLEN keylen,bytevec data,ITEMLEN datalen, enum ft_msg_type type, MSN msn, XIDS xids, bool is_fresh, void*), void *arg) {
-    FIFO_ITERATE(fifo,
-                 key, keylen, data, datalen, type, msn, xids, is_fresh,
-                 f(key,keylen,data,datalen,type,msn,xids,is_fresh, arg));
+void fifo_entry_get_msg(FT_MSG ft_msg, struct fifo_entry * entry, DBT *k, DBT* v, DBT * m) {
+    uint32_t keylen  = entry->keylen;
+    uint32_t vallen = entry->vallen;
+    enum ft_msg_type type = (enum ft_msg_type) entry->type;
+    MSN msn = entry->msn;
+    const XIDS xids = (XIDS) &entry->xids_s;
+    const void * key = xids_get_end_of_array(xids);
+    const void * val = (uint8_t *) key + entry->keylen;
+    if(ft_msg_type_is_multicast(type)) {
+        char * pos = (char *) val + vallen;
+        uint32_t max_keylen = * (uint32_t *) pos;
+        pos += sizeof(max_keylen);
+        const void *max_key = pos;
+        pos = (char *)max_key + max_keylen;
+     	bool is_right_excl = false;
+	enum pacman_status pm_status = PM_UNCOMMITTED;
+
+       if(FT_DELETE_MULTICAST == type) {
+        	is_right_excl = *(bool *) pos;
+	     	pos += sizeof(bool);
+       		pm_status = *(enum pacman_status *) pos;
+		pos += sizeof(enum pacman_status);
+	 }
+
+       ft_msg_multicast_init(
+            ft_msg,
+            type,
+            msn,
+            xids,
+            toku_fill_dbt(k, key, keylen),
+            toku_fill_dbt(m, max_key, max_keylen),
+            toku_fill_dbt(v, val, vallen),
+            is_right_excl,
+	    pm_status
+            );
+        return;
+    }
+    memset(m, 0, sizeof(*m));
+    ft_msg_init(ft_msg, type, msn, xids,    
+                toku_fill_dbt(k, key, keylen),
+                toku_fill_dbt(v, val, vallen)
+               ); 
+}
+//this iterate exposes the fifo entry to the caller 
+int toku_fifo_iterate_pacman (FIFO fifo, int(*f)(struct fifo_entry *e, void*, FT_MSG &), void *arg) { 
+    int fifo_iterate_off;
+    int r = 0;
+    for (fifo_iterate_off = toku_fifo_iterate_internal_start(fifo);                                     
+       toku_fifo_iterate_internal_has_more(fifo, fifo_iterate_off);                                       
+       ) {                      
+        struct fifo_entry *e = toku_fifo_iterate_internal_get_entry(fifo, fifo_iterate_off);                
+        FT_MSG msg;     
+	r = f(e, arg, msg);
+        if(r) break;
+        fifo_iterate_off = toku_fifo_iterate_internal_next(msg, fifo_iterate_off);
+    }
+    return r;
+}
+int toku_fifo_iterate (FIFO fifo, int(*f)(FT_MSG msg, bool is_fresh, void*), void *arg) { 
+    int fifo_iterate_off;
+    int r = 0;
+    for (fifo_iterate_off = toku_fifo_iterate_internal_start(fifo);                                     
+       toku_fifo_iterate_internal_has_more(fifo, fifo_iterate_off);                                       
+       ) {                      
+        struct fifo_entry *e = toku_fifo_iterate_internal_get_entry(fifo, fifo_iterate_off);                
+        DBT key,  val,  max_key;    
+        FT_MSG_S msg; 
+        fifo_entry_get_msg(&msg, e, &key, &val, &max_key); 
+        fifo_iterate_off = toku_fifo_iterate_internal_next(&msg, fifo_iterate_off);
+        bool is_fresh = e->is_fresh;        
+        r = f(&msg,is_fresh, arg);
+        if(r) break;
+    }
+    return r;
 }
 
+void toku_fifo_iterate_flip_msg_type (FIFO fifo, enum ft_msg_type from_type, enum ft_msg_type to_type) { 
+    int fifo_iterate_off;
+    for (fifo_iterate_off = toku_fifo_iterate_internal_start(fifo);                                     
+       toku_fifo_iterate_internal_has_more(fifo, fifo_iterate_off);                                       
+       ) {                      
+        struct fifo_entry *e = toku_fifo_iterate_internal_get_entry(fifo, fifo_iterate_off);                
+        DBT key,  val,  max_key;    
+        FT_MSG_S msg; 
+        fifo_entry_get_msg(&msg, e, &key, &val, &max_key); 
+	if(from_type == e->type)
+		e->type = to_type;
+        fifo_iterate_off = toku_fifo_iterate_internal_next(&msg, fifo_iterate_off);
+    }
+}
 unsigned int toku_fifo_buffer_size_in_use (FIFO fifo) {
     return fifo->memory_used;
 }

@@ -132,7 +132,8 @@ static void *run_end_checkpoint(void *arg) {
         cp, 
         NULL, 
         NULL,
-        NULL
+        NULL,
+	false
         );
     return arg;
 }
@@ -162,7 +163,7 @@ cachetable_test (void) {
     r = toku_test_cachetable_unpin(f1, make_blocknum(1), 1, CACHETABLE_DIRTY, make_pair_attr(8));
     assert_zero(r);
     CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
-    toku_cachetable_begin_checkpoint(cp, NULL);
+    toku_cachetable_begin_checkpoint(cp, NULL, false);
 
 
     clone_flush_started = false;

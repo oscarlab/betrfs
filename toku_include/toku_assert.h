@@ -116,6 +116,13 @@ static inline int get_error_errno(int rv);
 
 extern "C" int ftfs_get_errno(void);
 extern "C" void ftfs_set_errno(int);
+extern "C" int __trace_printk(unsigned long ip, const char *fmt, ...);
+
+#define toku_trace_printk(fmt, ...)                          \
+do {                                                    \
+                 __trace_printk(0, fmt, ##__VA_ARGS__);    \
+} while (0)
+
 
 static inline int
 get_maybe_error_errno(void)

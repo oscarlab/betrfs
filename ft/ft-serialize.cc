@@ -139,6 +139,7 @@ toku_serialize_descriptor_contents_to_fd(int fd, const DESCRIPTOR desc, DISKOFF 
     {
         //Actual Write translation table
         toku_os_full_pwrite(fd, w.buf, size_aligned, offset);
+	toku_ft_status_update_io_reason(FT_DISK_IO_DESCRIPTOR,size_aligned);
     }
     toku_free(w.buf);
 }
@@ -547,7 +548,7 @@ int deserialize_ft_from_fd_into_rbuf(int fd,
         if (n==0) {
             r = TOKUDB_DICTIONARY_NO_HEADER;
         } else if (n<0) {
-            r = get_error_errno(n);
+            r = 1;
         } else {
             r = EINVAL;
         }
@@ -609,7 +610,7 @@ int deserialize_ft_from_fd_into_rbuf(int fd,
         n = toku_os_pread(fd, rb->buf, size_to_read, offset_of_header);
         if (n != size_to_read) {
             if (n < 0) {
-                r = get_error_errno(n);
+                r = 1;
             } else {
                 r = EINVAL; //Header might be useless (wrong size) or could be a disk read error.
             }
@@ -666,11 +667,11 @@ toku_deserialize_ft_from(int fd,
 {
     struct rbuf rb_0;
     struct rbuf rb_1;
-    uint64_t checkpoint_count_0;
+    uint64_t checkpoint_count_0 = 0;
     uint64_t checkpoint_count_1;
-    LSN checkpoint_lsn_0;
+    LSN checkpoint_lsn_0 = {};
     LSN checkpoint_lsn_1;
-    uint32_t version_0, version_1, version = 0;
+    uint32_t version_0 = 0, version_1 = 0, version = 0;
     bool h0_acceptable = false;
     bool h1_acceptable = false;
     struct rbuf *rb = NULL;
@@ -834,7 +835,7 @@ void toku_serialize_ft_to (int fd, FT_HEADER h, BLOCK_TABLE blocktable, CACHEFIL
     // This write is guaranteed to read good data at the end of the buffer, since the
     // w_translation.buf is padded with zeros to a 4096-byte boundary.
     toku_os_full_pwrite(fd, w_translation.buf, roundup_to_multiple(BLOCK_ALIGNMENT, size_translation), address_translation);
-
+    toku_ft_status_update_io_reason(FT_DISK_IO_TT,roundup_to_multiple(BLOCK_ALIGNMENT, size_translation));
     //Everything but the header MUST be on disk before header starts.
     //Otherwise we will think the header is good and some blocks might not
     //yet be on disk.
@@ -853,6 +854,7 @@ void toku_serialize_ft_to (int fd, FT_HEADER h, BLOCK_TABLE blocktable, CACHEFIL
     toku_off_t main_offset;
     main_offset = (h->checkpoint_count & 0x1) ? 0 : BLOCK_ALLOCATOR_HEADER_RESERVE;
     toku_os_full_pwrite(fd, w_main.buf, size_main_aligned, main_offset);
+    toku_ft_status_update_io_reason(FT_DISK_IO_HEADER, size_main_aligned);
     toku_free(w_main.buf);
     toku_free(w_translation.buf);
 }

@@ -151,7 +151,7 @@ doit (int ksize __attribute__((__unused__))) {
 	int keylen = 1+snprintf(key, KSIZE, "%08d%0*d", i*10000+1, KSIZE-9, 0);
 	char val[1];
 	char vallen=0;
-	r=toku_testsetup_insert_to_leaf(t, cnodes[i], key, keylen, val, vallen);
+	r=toku_testsetup_insert_to_leaf(t, cnodes[i], key, keylen, val, vallen, FT_INSERT);
 	assert(r==0);
         toku_free(key);
     }

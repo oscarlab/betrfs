@@ -157,7 +157,6 @@ test_abort_create (void) {
         char fullfile[TOKU_PATH_MAX+1];
 	r = toku_stat(toku_path_join(fullfile, 2, TOKU_TEST_FILENAME, "test.db"), &statbuf);
         assert(r!=0);
-        assert(ftfs_get_errno()==ENOENT);
     }
 
     r = env->close(env, 0); assert(r == 0);

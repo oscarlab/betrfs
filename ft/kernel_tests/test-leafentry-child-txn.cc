@@ -110,15 +110,15 @@ static void add_committed_entry(ULE ule, DBT *val, TXNID xid) {
     ule->uxrs[index].valp   = val->data;
     ule->uxrs[index].xid    = xid;
 }
-
+//THIS needs rewritten, suspicious stack var
 static FT_MSG_S
 msg_init(enum ft_msg_type type, XIDS xids,
          DBT *key, DBT *val) {
     FT_MSG_S msg;
     msg.type = type;
     msg.xids = xids;
-    msg.u.id.key = key;
-    msg.u.id.val = val;
+    msg.key = key;
+    msg.val = val;
     return msg;
 }
 

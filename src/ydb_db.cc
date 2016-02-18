@@ -502,9 +502,7 @@ toku_db_open_iname(DB * db, DB_TXN * txn, const char *iname_in_env, uint32_t fla
                 toku_ft_get_bt_compare(db->i->ft_handle),
                 &on_create_extra);
         if (db->i->lt == nullptr) {
-            r = ftfs_get_errno();
-            if (r == 0)
-                r = EINVAL;
+            r = 1;
             goto error_cleanup;
         }
     }
@@ -1057,7 +1055,9 @@ toku_db_create(DB ** db, DB_ENV * env, uint32_t flags) {
 #undef USDB
     result->get_indexer = db_get_indexer;
     result->del = autotxn_db_del;
+    result->del_multi = autotxn_db_del_multi;
     result->put = autotxn_db_put;
+    result->seq_put = autotxn_db_seq_put;
     result->update = autotxn_db_update;
     result->update_broadcast = autotxn_db_update_broadcast;
     result->change_descriptor = autotxn_db_change_descriptor;

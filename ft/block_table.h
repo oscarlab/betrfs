@@ -92,10 +92,9 @@ PATENT RIGHTS GRANT:
 #ident "The technology is licensed by the Massachusetts Institute of Technology, Rutgers State University of New Jersey, and the Research Foundation of State University of New York at Stony Brook under United States of America Serial No. 11/760379 and to the patents and/or patent applications resulting from it."
 
 #include "fttypes.h"
-
-
+#include <util/growable_array.h>
+typedef toku::GrowableArray<uint64_t> LBL;
 typedef struct block_table *BLOCK_TABLE;
-
 //Needed by tests, ftdump
 struct block_translation_pair {
     union { // If in the freelist, use next_free_blocknum, otherwise diskoff.
@@ -164,6 +163,10 @@ void toku_blocktable_get_info64(BLOCK_TABLE, struct ftinfo64 *);
 
 int toku_blocktable_iterate_translation_tables(BLOCK_TABLE, uint64_t, int (*)(uint64_t, int64_t, int64_t, int64_t, int64_t, void *), void *);
 
+void block_table_log_get_block(BLOCK_TABLE bt, uint64_t offset);
+
+
+void block_table_log_block_log_put_blocks(struct block_allocator *, LBL) ;
 //Unmovable reserved first, then reallocable.
 // We reserve one blocknum for the translation table itself.
 enum {RESERVED_BLOCKNUM_NULL       =0,
@@ -172,5 +175,6 @@ enum {RESERVED_BLOCKNUM_NULL       =0,
       RESERVED_BLOCKNUMS};
 
 
+void get_diskoff_n_size_from_blocknum(BLOCK_TABLE bt, BLOCKNUM b, DISKOFF * off, DISKOFF*  size) ;
 #endif
 

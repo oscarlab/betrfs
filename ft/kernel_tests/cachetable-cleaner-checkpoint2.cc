@@ -169,7 +169,7 @@ cachetable_test (void) {
 
   cleaner_called = false;
   CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
-  toku_cachetable_begin_checkpoint(cp, NULL);
+  toku_cachetable_begin_checkpoint(cp, NULL, false);
   assert_zero(r);
   toku_cleaner_thread_for_test(ct);
   assert(!cleaner_called);
@@ -177,7 +177,8 @@ cachetable_test (void) {
       cp, 
       NULL, 
       NULL,
-      NULL
+      NULL,
+      false
       );
   assert(r==0);
 
@@ -194,7 +195,10 @@ int
 test_cachetable_cleaner_checkpoint2() {
 
   initialize_dummymsn();
+  int rinit = toku_ft_layer_init();
+  CKERR(rinit);
   cachetable_test();
   flush_called = 0;
+  toku_ft_layer_destroy();
   return 0;
 }

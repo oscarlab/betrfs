@@ -313,7 +313,7 @@ void txn_child_manager_unit_test::run_test() {
     // now test that iterator properly stops
     found_txn = child_txn;
     r = cm->iterate(txn_child_manager_test_cb2, found_txn);
-    assert(r == -1);
+    assert(r < 0);
 
     r = toku_txn_commit_txn(recovery_txn, true, NULL, NULL);
     CKERR(r);

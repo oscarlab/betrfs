@@ -365,7 +365,7 @@ env_fs_init(DB_ENV *env) {
 // Initialize the minicron that polls file system space
 static int
 env_fs_init_minicron(DB_ENV *env) {
-    int r = toku_minicron_setup(&env->i->fs_poller, env->i->fs_poll_time*1000, env_fs_poller, env); 
+    int r = toku_minicron_setup_debug(&env->i->fs_poller, env->i->fs_poll_time*1000, env_fs_poller, env, "poll_fs_space"); 
     assert(r == 0);
     env->i->fs_poller_is_init = true;
     return r;
@@ -405,7 +405,7 @@ env_change_fsync_log_period(DB_ENV* env, uint32_t period_ms) {
 
 static void
 env_fsync_log_cron_init(DB_ENV *env) {
-    int r = toku_minicron_setup(&env->i->fsync_log_cron, env->i->fsync_log_period_ms, env_fsync_log_on_minicron, env);
+    int r = toku_minicron_setup_debug(&env->i->fsync_log_cron, env->i->fsync_log_period_ms, env_fsync_log_on_minicron, env, "log_fsync");
     assert(r == 0);
     env->i->fsync_log_cron_is_init = true;
 }
@@ -726,7 +726,7 @@ validate_env(DB_ENV * env, bool * valid_newenv, bool need_rollback_cachefile) {
         expect_newenv = false;  // persistent info exists
     }
     else {
-        int stat_errno = get_error_errno(r);
+        int stat_errno = ENOENT;
         if (stat_errno == ENOENT) {
             expect_newenv = true;
             r = 0;
@@ -748,7 +748,7 @@ validate_env(DB_ENV * env, bool * valid_newenv, bool need_rollback_cachefile) {
                 r = toku_ydb_do_error(env, ENOENT, "Persistent environment is missing\n");
         }
         else {
-            int stat_errno = get_error_errno(r);
+            int stat_errno = ENOENT;
             if (stat_errno == ENOENT) {
                 if (!expect_newenv)  // rollback cachefile is missing but persistent env exists
                     r = toku_ydb_do_error(env, ENOENT, "rollback cachefile directory is missing\n");
@@ -773,7 +773,7 @@ validate_env(DB_ENV * env, bool * valid_newenv, bool need_rollback_cachefile) {
                 r = toku_ydb_do_error(env, ENOENT, "Persistent environment is missing\n");
         }
         else {
-            int stat_errno = get_error_errno(r);
+            int stat_errno = ENOENT;
             if (stat_errno == ENOENT) {
                 if (!expect_newenv)  // fileops directory is missing but persistent env exists
                     r = toku_ydb_do_error(env, ENOENT, "Fileops directory is missing\n");
@@ -882,7 +882,7 @@ env_open(DB_ENV * env, const char *home, uint32_t flags, int mode) {
     toku_struct_stat buf;
     r = toku_stat(home, &buf);
     if (r != 0) {
-        int e = get_error_errno(r);
+        int e = r;
         r = toku_ydb_do_error(env, e, "Error from toku_stat(\"%s\",...)\n", home);
         goto cleanup;
     }
@@ -933,16 +933,12 @@ env_open(DB_ENV * env, const char *home, uint32_t flags, int mode) {
         char* rollback_filename = toku_construct_full_name(2, env->i->dir, toku_product_name_strings.rollback_cachefile);
         assert(rollback_filename);
         r = unlink(rollback_filename);
-        if (r != 0) {
-            assert(get_error_errno(r) == ENOENT);
-        }
         toku_free(rollback_filename);
         need_rollback_cachefile = false;  // we're not expecting it to exist now
     }
     
     r = validate_env(env, &newenv, need_rollback_cachefile);  // make sure that environment is either new or complete
     if (r != 0) goto cleanup;
-
     unused_flags &= ~DB_INIT_TXN & ~DB_INIT_LOG;
 
     // do recovery only if there exists a log and recovery is requested
@@ -1021,7 +1017,6 @@ env_open(DB_ENV * env, const char *home, uint32_t flags, int mode) {
         r = toku_txn_begin(env, 0, &txn, 0);
         assert_zero(r);
     }
-
     {
         r = toku_db_create(&env->i->persistent_environment, env, 0);
         assert_zero(r);
@@ -1076,7 +1071,7 @@ env_open(DB_ENV * env, const char *home, uint32_t flags, int mode) {
         assert_zero(r);
     }
     cp = toku_cachetable_get_checkpointer(env->i->cachetable);
-    r = toku_checkpoint(cp, env->i->logger, NULL, NULL, NULL, NULL, STARTUP_CHECKPOINT);
+    r = toku_checkpoint(cp, env->i->logger, NULL, NULL, NULL, NULL, STARTUP_CHECKPOINT, false);
     assert_zero(r);
     env_fs_poller(env);          // get the file system state at startup
     env_fs_init_minicron(env);
@@ -1144,7 +1139,7 @@ env_close(DB_ENV * env, uint32_t flags) {
         toku_cachetable_minicron_shutdown(env->i->cachetable);
         if (env->i->logger) {
             CHECKPOINTER cp = toku_cachetable_get_checkpointer(env->i->cachetable);
-            r = toku_checkpoint(cp, env->i->logger, NULL, NULL, NULL, NULL, SHUTDOWN_CHECKPOINT);
+            r = toku_checkpoint(cp, env->i->logger, NULL, NULL, NULL, NULL, SHUTDOWN_CHECKPOINT, false);
             if (r) {
                 err_msg = "Cannot close environment (error during checkpoint)\n";
                 toku_ydb_do_error(env, r, "%s", err_msg);
@@ -1152,7 +1147,7 @@ env_close(DB_ENV * env, uint32_t flags) {
             }
             toku_logger_close_rollback(env->i->logger);
             //Do a second checkpoint now that the rollback cachefile is closed.
-            r = toku_checkpoint(cp, env->i->logger, NULL, NULL, NULL, NULL, SHUTDOWN_CHECKPOINT);
+            r = toku_checkpoint(cp, env->i->logger, NULL, NULL, NULL, NULL, SHUTDOWN_CHECKPOINT, false);
             if (r) {
                 err_msg = "Cannot close environment (error during checkpoint)\n";
                 toku_ydb_do_error(env, r, "%s", err_msg);
@@ -1355,7 +1350,6 @@ env_set_data_dir(DB_ENV * env, const char *dir) {
         if (env->i->data_dir==NULL) {
 #ifdef TOKU_LINUX_MODULE
             /* wkj: passing -1 gets us the errno... otherwise returns 0 */
-            assert(get_error_errno(-1) == ENOMEM);
 #else
             assert(get_error_errno() == ENOMEM);
 #endif
@@ -1491,7 +1485,7 @@ toku_env_txn_checkpoint(DB_ENV * env, uint32_t kbyte __attribute__((__unused__))
     int r = toku_checkpoint(cp, env->i->logger,
                             checkpoint_callback_f,  checkpoint_callback_extra,
                             checkpoint_callback2_f, checkpoint_callback2_extra,
-                            CLIENT_CHECKPOINT);
+                            CLIENT_CHECKPOINT, false);
     if (r) {
         // Panicking the whole environment may be overkill, but I'm not sure what else to do.
         env_panic(env, r, "checkpoint error\n");

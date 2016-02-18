@@ -127,7 +127,7 @@ test_setup(const char *envdir, TOKULOGGER *loggerp, CACHETABLE *ctp) {
     CKERR(r);
 
     CHECKPOINTER cp = toku_cachetable_get_checkpointer(*ctp);
-    r = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, STARTUP_CHECKPOINT);
+    r = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, STARTUP_CHECKPOINT, false);
     CKERR(r);
 }
 
@@ -166,12 +166,12 @@ static inline void test_setup_and_recover(const char *envdir, TOKULOGGER *logger
 static inline void clean_shutdown(TOKULOGGER *loggerp, CACHETABLE *ctp) {
     int r;
     CHECKPOINTER cp = toku_cachetable_get_checkpointer(*ctp);
-    r = toku_checkpoint(cp, *loggerp, NULL, NULL, NULL, NULL, SHUTDOWN_CHECKPOINT);
+    r = toku_checkpoint(cp, *loggerp, NULL, NULL, NULL, NULL, SHUTDOWN_CHECKPOINT, false);
     CKERR(r);
 
     toku_logger_close_rollback(*loggerp);
 
-    r = toku_checkpoint(cp, *loggerp, NULL, NULL, NULL, NULL, SHUTDOWN_CHECKPOINT);
+    r = toku_checkpoint(cp, *loggerp, NULL, NULL, NULL, NULL, SHUTDOWN_CHECKPOINT, false);
     CKERR(r);
 
     toku_logger_shutdown(*loggerp);

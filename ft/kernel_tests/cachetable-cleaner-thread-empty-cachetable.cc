@@ -110,13 +110,14 @@ cachetable_test (void) {
     
     usleep(4000000);
     CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
-    toku_cachetable_begin_checkpoint(cp, NULL);
+    toku_cachetable_begin_checkpoint(cp, NULL, false);
     toku_cachetable_end_checkpoint(
         cp,
         NULL,
         NULL,
-        NULL
-        );
+        NULL,
+        false
+	);
     assert(r==0);
 
     toku_cachetable_verify(ct);
@@ -128,6 +129,10 @@ extern "C" int test_cachetable_threadempty(void);
 
 int test_cachetable_threadempty(void) {
   //default_parse_args(argc, argv);
-  cachetable_test();
-  return 0;
+  
+    int rinit = toku_ft_layer_init();
+    CKERR(rinit);
+    cachetable_test();
+    toku_ft_layer_destroy();
+    return 0;
 }

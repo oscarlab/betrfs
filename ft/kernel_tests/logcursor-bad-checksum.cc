@@ -94,7 +94,7 @@ PATENT RIGHTS GRANT:
 // log a couple of timestamp entries and verify the log by walking 
 // a cursor through the log entries
 
-static int verbose = 1;
+//static int verbose = 1;
 
 static void corrupt_the_checksum(void) {
     // change the LSN in the first log entry of log 0.  this will cause an checksum error.
@@ -136,7 +136,7 @@ test_logcursor_bad_checksum(void) {
 
     // change the LSN and corrupt the checksum
     corrupt_the_checksum();
-
+#if 0
     if (!verbose) {
         // redirect stderr
         int devnul = open(DEV_NULL_FILE, O_WRONLY);
@@ -144,7 +144,7 @@ test_logcursor_bad_checksum(void) {
         r = toku_dup2(devnul, fileno(stderr)); assert(r == fileno(stderr));
         r = close(devnul); assert(r == 0);
     }
-
+#endif
     // walk forwards
     TOKULOGCURSOR lc = NULL;
     struct log_entry *le;

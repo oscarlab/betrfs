@@ -215,10 +215,10 @@ test_subblock_test_checksum (void) {
     for (int total_size = 256*1024; total_size <= 4*1024*1024; total_size *= 2) {
         for (int size = total_size - e; size <= total_size + e; size++) {
             run_test(size, n_cores, pool, TOKU_NO_COMPRESSION);
-            run_test(size, n_cores, pool, TOKU_ZLIB_METHOD);
-            run_test(size, n_cores, pool, TOKU_ZLIB_WITHOUT_CHECKSUM_METHOD);
+            //run_test(size, n_cores, pool, TOKU_ZLIB_METHOD);
+            //run_test(size, n_cores, pool, TOKU_ZLIB_WITHOUT_CHECKSUM_METHOD);
             run_test(size, n_cores, pool, TOKU_QUICKLZ_METHOD);
-            run_test(size, n_cores, pool, TOKU_LZMA_METHOD);
+            //run_test(size, n_cores, pool, TOKU_LZMA_METHOD);
         }
     }
 

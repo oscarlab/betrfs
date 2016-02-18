@@ -510,7 +510,7 @@ int toku_loader_cleanup_temp_files(DB_ENV *env) {
     DIR *d = opendir(dir);
     if (d==0) {
 #ifdef TOKU_LINUX_MODULE
-        result = get_error_errno(-1); goto exit;
+        result = 1; goto exit;
 #else
         result = get_error_errno(); goto exit;
 #endif
@@ -526,15 +526,15 @@ int toku_loader_cleanup_temp_files(DB_ENV *env) {
             assert(l+1 == fnamelen);
             r = unlink(fname);
             if (r!=0) {
-                result = get_error_errno(r);
+                result = 1;
                 perror("Trying to delete a rolltmp file");
             }
         }
     }
     {
         int r = closedir(d);
-        if (r == -1) 
-            result = get_error_errno(r);
+        if (r < 0)
+            result = 1;
     }
 
 exit:

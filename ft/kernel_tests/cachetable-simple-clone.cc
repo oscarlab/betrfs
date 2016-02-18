@@ -172,7 +172,7 @@ test_clean (enum cachetable_dirty dirty, bool cloneable) {
     // begin checkpoint, since pair is clean, we should not 
     // have the clone called
     CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
-    toku_cachetable_begin_checkpoint(cp, NULL);
+    toku_cachetable_begin_checkpoint(cp, NULL, false);
     assert_zero(r);
     struct timeval tstart;
     struct timeval tend; 
@@ -220,7 +220,8 @@ test_clean (enum cachetable_dirty dirty, bool cloneable) {
         cp, 
         NULL, 
         NULL,
-        NULL
+        NULL,
+false
         );
     
     check_flush = false;

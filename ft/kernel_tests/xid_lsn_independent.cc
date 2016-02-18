@@ -170,7 +170,7 @@ static void test_xid_lsn_independent(int N) {
         toku_txn_close_txn(txn3);
     }
     CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
-    r = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT);
+    r = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, false);
     CKERR(r);
     r = toku_close_ft_handle_nolsn(brt, NULL);
     CKERR(r);

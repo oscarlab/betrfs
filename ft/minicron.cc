@@ -200,6 +200,19 @@ toku_minicron_setup(struct minicron *p, uint32_t period_in_ms, int(*f)(void *), 
     toku_cond_init (&p->condvar, 0);
     return toku_pthread_create(&p->thread, 0, minicron_do, p);
 }
+int
+toku_minicron_setup_debug(struct minicron *p, uint32_t period_in_ms, int(*f)(void *), void *arg, const char * minicron_debug_str)
+{
+    p->f = f;
+    p->arg = arg;
+    toku_gettime(&p->time_of_last_call_to_f);
+    //printf("now=%.6f", p->time_of_last_call_to_f.tv_sec + p->time_of_last_call_to_f.tv_nsec*1e-9);
+    p->period_in_ms = period_in_ms; 
+    p->do_shutdown = false;
+    toku_mutex_init(&p->mutex, 0);
+    toku_cond_init (&p->condvar, 0);
+    return toku_pthread_create_debug(&p->thread, 0, minicron_do, p, minicron_debug_str);
+}
     
 void
 toku_minicron_change_period(struct minicron *p, uint32_t new_period)

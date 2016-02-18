@@ -253,15 +253,17 @@ static int do_insertion (enum ft_msg_type type, FILENUM filenum, BYTESTRING key,
     XIDS xids;
     xids = toku_txn_get_xids(txn);
     {
-        FT_MSG_S ftcmd = { type, ZERO_MSN, xids,
-                           .u = { .id = { (key.len > 0)
-                                          ? toku_fill_dbt(&key_dbt,  key.data,  key.len)
-                                          : toku_init_dbt(&key_dbt),
-                                          data
-                                          ? toku_fill_dbt(&data_dbt, data->data, data->len)
-                                          : toku_init_dbt(&data_dbt) } } };
+        FT_MSG_S ftcmd;
+       ft_msg_init(&ftcmd, type, ZERO_MSN, xids,
+                            (key.len > 0)
+                            ? toku_fill_dbt(&key_dbt,  key.data,  key.len)
+                            : toku_init_dbt(&key_dbt),
+                            data
+                            ? toku_fill_dbt(&data_dbt, data->data, data->len)
+                            : toku_init_dbt(&data_dbt));
 
-        toku_ft_root_put_cmd(h, &ftcmd, txn->oldest_referenced_xid, make_gc_info(!txn->for_recovery));
+       paranoid_invariant(type != FT_UNBOUND_INSERT);
+       toku_ft_root_put_cmd(h, &ftcmd, nullptr, txn->oldest_referenced_xid, make_gc_info(!txn->for_recovery));
         if (reset_root_xid_that_created) {
             TXNID new_root_xid_that_created = xids_get_outermost_xid(xids);
             toku_reset_root_xid_that_created(h, new_root_xid_that_created);
@@ -272,6 +274,56 @@ done:
 }
 
 
+static int do_multicast_insertion (enum ft_msg_type type, FILENUM filenum, BYTESTRING key, BYTESTRING max_key, bool is_right_excl, enum pacman_status pm_status, BYTESTRING *data, TOKUTXN txn, LSN oplsn,
+                         bool reset_root_xid_that_created) {
+    int r = 0;
+    //printf("%s:%d committing insert %s %s\n", __FILE__, __LINE__, key.data, data.data);
+    FT h;
+    h = NULL;
+    r = txn->open_fts.find_zero<FILENUM, find_ft_from_filenum>(filenum, &h, NULL);
+    if (r == DB_NOTFOUND) {
+        assert(txn->for_recovery);
+        r = 0;
+        goto done;
+    }
+    assert(r==0);
+
+    if (oplsn.lsn != 0) {  // if we are executing the recovery algorithm
+        LSN treelsn = toku_ft_checkpoint_lsn(h);  
+        if (oplsn.lsn <= treelsn.lsn) {  // if operation was already applied to tree ...
+            r = 0;                       // ... do not apply it again.
+            goto done;
+        }
+    }
+
+    DBT key_dbt,data_dbt, maxkey_dbt;
+    XIDS xids;
+    xids = toku_txn_get_xids(txn);
+    {
+        FT_MSG_S ftcmd;
+       ft_msg_multicast_init(&ftcmd, type, ZERO_MSN, xids,
+                            (key.len > 0)
+                            ? toku_fill_dbt(&key_dbt,  key.data,  key.len)
+                            : toku_init_dbt(&key_dbt),
+
+                            (max_key.len > 0)
+                            ? toku_fill_dbt(&maxkey_dbt,  max_key.data,  max_key.len)
+                            : toku_init_dbt(&maxkey_dbt),
+                            data
+                            ? toku_fill_dbt(&data_dbt, data->data, data->len)
+                            : toku_init_dbt(&data_dbt),
+                            is_right_excl,
+			    pm_status);
+
+       toku_ft_root_put_cmd(h, &ftcmd, nullptr, txn->oldest_referenced_xid, make_gc_info(!txn->for_recovery));
+        if (reset_root_xid_that_created) {
+            TXNID new_root_xid_that_created = xids_get_outermost_xid(xids);
+            toku_reset_root_xid_that_created(h, new_root_xid_that_created);
+        }
+    }
+done:
+    return r;
+}
 static int do_nothing_with_filenum(TOKUTXN UU(txn), FILENUM UU(filenum)) {
     return 0;
 }
@@ -293,6 +345,25 @@ toku_rollback_cmdinsert (FILENUM    filenum,
 {
     return do_insertion (FT_ABORT_ANY, filenum, key, 0, txn, oplsn, false);
 }
+
+int
+toku_commit_cmdseqinsert (FILENUM UU(filenum), BYTESTRING UU(key), TOKUTXN UU(txn), LSN UU(oplsn)) {
+#if TOKU_DO_COMMIT_CMD_INSERT
+    return do_insertion (FT_COMMIT_ANY, filenum, key, 0, txn, oplsn, false);
+#else
+    return do_nothing_with_filenum(txn, filenum);
+#endif
+}
+
+int
+toku_rollback_cmdseqinsert (FILENUM    filenum,
+                            BYTESTRING key,
+                            TOKUTXN    txn,
+                            LSN        oplsn)
+{
+    return do_insertion (FT_ABORT_ANY, filenum, key, 0, txn, oplsn, false);
+}
+
 
 int
 toku_commit_cmdupdate(FILENUM    filenum,
@@ -361,6 +432,32 @@ toku_rollback_cmddelete (FILENUM    filenum,
     return do_insertion (FT_ABORT_ANY, filenum, key, 0, txn, oplsn, false);
 }
 
+int
+toku_commit_cmddeletemulti(FILENUM filenum,
+                           BYTESTRING min_key,
+                           BYTESTRING max_key,
+                           bool is_right_excl,
+			   uint32_t pm_status,
+                           bool is_resetting_op,
+                           TOKUTXN    txn,
+                           LSN oplsn)
+{
+    bool reset_root_xid_that_created = (is_resetting_op ? true : false);
+    const enum ft_msg_type type = is_resetting_op ? FT_COMMIT_MULTICAST_ALL : FT_COMMIT_MULTICAST_TXN;
+    return do_multicast_insertion(type, filenum, min_key, max_key, is_right_excl, (enum pacman_status) pm_status, NULL, txn, oplsn, reset_root_xid_that_created);
+}
+int
+toku_rollback_cmddeletemulti(FILENUM filenum,
+                             BYTESTRING min_key,
+                             BYTESTRING max_key,
+                             bool is_right_excl,
+			     uint32_t pm_status,
+                             bool is_resetting_op UU(),
+                             TOKUTXN    txn,
+                             LSN oplsn)
+{
+    return do_multicast_insertion(FT_ABORT_MULTICAST_TXN, filenum, min_key, max_key,is_right_excl, (enum pacman_status) pm_status, NULL, txn, oplsn, false);
+}
 static int
 toku_apply_rollinclude (TXNID_PAIR      xid,
                         uint64_t   num_nodes,
@@ -507,7 +604,6 @@ toku_rollback_load (FILENUM    UU(old_filenum),
         // unlink it if it's there and ignore the error if it's not.
         char *fname_in_cwd = toku_cachetable_get_fname_in_cwd(ct, fname_in_env);
         r = unlink(fname_in_cwd);
-        assert(r == 0 || get_error_errno(-r) == ENOENT);
         toku_free(fname_in_cwd);
         r = 0;
     } else {

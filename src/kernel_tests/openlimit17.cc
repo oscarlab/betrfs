@@ -104,9 +104,6 @@ int test_openlimit17(void) {
     struct rlimit nofile_limit = { N, N };
     r = setrlimit(RLIMIT_NOFILE, &nofile_limit);
     //assert(r == 0); // valgrind does not like this
-    if (r != 0) {
-        printf("warning: set nofile limit to %d failed %d %s\n", N, ftfs_get_errno(), strerror(ftfs_get_errno()));
-    }
 
     toku_os_recursive_delete(TOKU_TEST_FILENAME);
     r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);

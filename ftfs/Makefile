@@ -27,6 +27,7 @@ ftfs-objs := \
 	toku_test_southbound.o \
 	toku_misc.o \
 	strerror.o \
+	toku_zlib.o \
 	libftindex.o
 
 KBUILD_CFLAGS += -DSOUTHBOUND_TESTING
@@ -80,8 +81,8 @@ libsrc/ydb_write.cc.o \
 libsrc/errors.cc.o \
 libsrc/indexer.cc.o \
 libsrc/indexer-undo-do.cc.o \
+libsrc/test/seq-io.cc.o \
 libsrc/test/get_key_after_bytes_unit.cc.o \
-libsrc/test/test3529.cc.o \
 libsrc/test/test_db_dbt_mem_behavior.cc.o \
 libsrc/test/test_update_broadcast_stress.cc.o \
 libsrc/test/test_db_txn_locks_nonheaviside.cc.o \
@@ -640,7 +641,12 @@ libft/test/le-cursor-right.cc.o \
 libft/test/cachetable-clone-partial-fetch-pinned-node.cc.o \
 libft/test/quicklz-test.cc.o \
 libft/test/test-pick-child-to-flush.cc.o \
-libft/test/test-ft-overflow.cc.o
+libft/test/test-ft-overflow.cc.o \
+libft/test/test-range-del.cc.o \
+libft/test/test-range-del2.cc.o \
+libft/test/recovery-range-delete.cc.o \
+libft/test/test-ubi-root-chkpt.cc.o
+#libft/test/test_unbound_insert_lists.cc.o
 
 #libft/compress.cc.o \
 # Not needed in kernel, according to Leif
@@ -738,10 +744,71 @@ liblocktree/test/lock_request_wait_time_callback.cc.o \
 liblocktree/test/manager_status.cc.o \
 liblocktree/test/manager_locktree_map.cc.o
 
+LIBLZMA-OBJS = \
+	liblzma/liblzma_la-common.o \
+	liblzma/liblzma_la-easy_buffer_encoder.o \
+	liblzma/liblzma_la-easy_decoder_memusage.o \
+	liblzma/liblzma_la-stream_buffer_encoder.o \
+	liblzma/liblzma_la-stream_buffer_decoder.o \
+	liblzma/liblzma_la-stream_flags_encoder.o \
+	liblzma/liblzma_la-stream_flags_decoder.o \
+	liblzma/liblzma_la-stream_flags_common.o \
+	liblzma/liblzma_la-stream_decoder.o \
+	liblzma/liblzma_la-block_buffer_encoder.o \
+	liblzma/liblzma_la-block_buffer_decoder.o \
+	liblzma/liblzma_la-easy_preset.o \
+	liblzma/liblzma_la-block_header_encoder.o \
+	liblzma/liblzma_la-block_header_decoder.o \
+	liblzma/liblzma_la-block_decoder.o \
+	liblzma/liblzma_la-check.o \
+	liblzma/liblzma_la-index.o \
+	liblzma/liblzma_la-vli_size.o \
+	liblzma/liblzma_la-crc32_fast.o \
+	liblzma/liblzma_la-crc32_table.o \
+	liblzma/liblzma_la-crc64_fast.o \
+	liblzma/liblzma_la-crc64_table.o \
+	liblzma/liblzma_la-filter_flags_encoder.o \
+	liblzma/liblzma_la-filter_flags_decoder.o \
+	liblzma/liblzma_la-filter_encoder.o \
+	liblzma/liblzma_la-filter_decoder.o \
+	liblzma/liblzma_la-arm.o \
+	liblzma/liblzma_la-armthumb.o \
+	liblzma/liblzma_la-lzma_encoder.o \
+	liblzma/liblzma_la-lzma_decoder.o \
+	liblzma/liblzma_la-lzma_encoder_presets.o \
+	liblzma/liblzma_la-lzma2_encoder.o \
+	liblzma/liblzma_la-lzma2_decoder.o \
+	liblzma/liblzma_la-x86.o \
+	liblzma/liblzma_la-filter_common.o \
+	liblzma/liblzma_la-fastpos_table.o \
+	liblzma/liblzma_la-delta_encoder.o \
+	liblzma/liblzma_la-delta_decoder.o \
+	liblzma/liblzma_la-delta_common.o \
+	liblzma/liblzma_la-simple_coder.o \
+	liblzma/liblzma_la-simple_encoder.o \
+	liblzma/liblzma_la-simple_decoder.o \
+	liblzma/liblzma_la-lzma_encoder_optimum_fast.o \
+	liblzma/liblzma_la-lzma_encoder_optimum_normal.o \
+	liblzma/liblzma_la-powerpc.o \
+	liblzma/liblzma_la-price_table.o \
+	liblzma/liblzma_la-sha256.o \
+	liblzma/liblzma_la-sparc.o \
+	liblzma/liblzma_la-vli_encoder.o \
+	liblzma/liblzma_la-vli_decoder.o \
+	liblzma/liblzma_la-index_encoder.o \
+	liblzma/liblzma_la-index_decoder.o \
+	liblzma/liblzma_la-index_hash.o \
+	liblzma/liblzma_la-ia64.o \
+	liblzma/liblzma_la-lz_encoder.o \
+	liblzma/liblzma_la-lz_decoder.o \
+	liblzma/liblzma_la-lz_encoder_mf.o \
+	liblzma/liblzma_la-block_util.o \
+
+
 all: libftindex.o
 	make -C  /lib/modules/$(KDIR)/build M=$(PWD) modules
 
-libftindex.o: $(LIBPORTABILITY-OBJS) $(LIBFT-OBJS) $(LIBUTIL-OBJS) $(LIBLOCKTREE-OBJS) $(LIBSRC-OBJS)
+libftindex.o: $(LIBPORTABILITY-OBJS) $(LIBFT-OBJS) $(LIBUTIL-OBJS) $(LIBLOCKTREE-OBJS) $(LIBSRC-OBJS) $(LIBLZMA-OBJS)
 	ld -r $^ -o $@
 
 
@@ -785,6 +852,9 @@ rmmod:
 	git diff-index --exit-code --quiet HEAD || git commit -a -m "doing rmmod"
 	git push imola
 	sudo rmmod ftfs
+
+liblzma/%.o: ../build/xz/lib/liblzma.a
+	(cd liblzma; ar x ../$< $*.o)
 
 clean:
 	make -C /lib/modules/$(KDIR)/build M=$(PWD) clean

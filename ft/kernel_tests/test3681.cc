@@ -137,7 +137,7 @@ static void *startb (void *n) {
     int count=0;
     while (!done1) {
         CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
-        int r = toku_checkpoint(cp, NULL, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT); assert(r==0);
+        int r = toku_checkpoint(cp, NULL, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, false); assert(r==0);
         count++;
     }
     printf("count=%d\n", count);
