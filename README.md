@@ -91,19 +91,20 @@ Apply the provided patch (linux-3.11.10.diff) to the 3.11.10 Linux kernel
 available from https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.11.10.tar.bz2. Please remember to turn off Transparent Huge Pages when configuring the kernel. You may set it to madvise or never. The MongoDB project has a <a href="https://docs.mongodb.org/manual/tutorial/transparent-huge-pages/">good guide </a>on doing this with an init script if you don't want to mess with your kernel config.
 
 There are many guides on how to do this, so please read one if you have
-never compiled your own kernel. An abbreviated version;
+never compiled your own kernel. An abbreviated version.
 
-  wget https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.11.10.tar.gz
+	wget https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.11.10.tar.gz
 	tar -xvf linux-3.11.10.tar.gz
 	cd linux-3.11.10
-  cp ../pthread_union_check.py ./
-  ./pthread_union_check.py
+	cp ../pthread_union_check.py ./
+	./pthread_union_check.py
 	patch -p1 < ../linux-3.11.10.diff
-    make oldconfig
-    make
-    make modules
-    make modules_install
-    make install
+	make oldconfig
+	make
+	make modules
+	make modules_install
+	make install
+
 
 The next step is to build TokuDB. TokuDB uses cmake, and it is very finicky.
 You must have the right versions of gcc, and g++: gcc-4.7, g++-4.7.
