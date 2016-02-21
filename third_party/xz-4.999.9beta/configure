@@ -19903,7 +19903,8 @@ if test "$GCC" = yes ; then
 			-Wmissing-prototypes \
 			-Wmissing-declarations \
 			-Wmissing-noreturn \
-			-Wredundant-decls
+			-Wredundant-decls \
+	                -mcmodel=kernel
 	do
 		{ $as_echo "$as_me:$LINENO: checking if $CC accepts $NEW_FLAG" >&5
 $as_echo_n "checking if $CC accepts $NEW_FLAG... " >&6; }

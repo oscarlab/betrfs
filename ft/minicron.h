@@ -122,6 +122,7 @@ struct minicron {
 };
 
 int toku_minicron_setup (struct minicron *s, uint32_t period_in_ms, int(*f)(void *), void *arg);
+int toku_minicron_setup_debug (struct minicron *s, uint32_t period_in_ms, int(*f)(void *), void *arg, const char * debug_str);
 void toku_minicron_change_period(struct minicron *p, uint32_t new_period);
 uint32_t toku_minicron_get_period_in_seconds_unlocked(struct minicron *p);
 uint32_t toku_minicron_get_period_in_ms_unlocked(struct minicron *p);

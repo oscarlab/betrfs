@@ -116,11 +116,12 @@ run_test(void) {
     r = toku_logger_close(&logger); assert(r == 0);
 
     // redirect stderr
+    #if 0
     int devnul = open(DEV_NULL_FILE, O_WRONLY);
     assert(devnul>=0);
     r = toku_dup2(devnul, fileno(stderr)); 	    assert(r==fileno(stderr));
     r = close(devnul);                      assert(r==0);
-
+    #endif
     // run recovery
     r = tokudb_recover(NULL,
 		       NULL_prepared_txn_callback,

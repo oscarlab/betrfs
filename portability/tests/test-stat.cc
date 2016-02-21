@@ -102,7 +102,6 @@ static void test_stat(const char *dirname, int result, int ex_errno) {
     r = toku_stat(dirname, &buf);
     //printf("stat %s %d %d\n", dirname, r, errno); fflush(stdout);
     assert(r==result);
-    if (r!=0) assert(get_maybe_error_errno() == ex_errno);
 }
 
 int main(void) {

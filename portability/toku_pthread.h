@@ -97,6 +97,7 @@ PATENT RIGHTS GRANT:
 #include <stdint.h>
 
 #include "toku_assert.h"
+extern "C" int pthread_create_debug(pthread_t *thread, const pthread_attr_t *attr,void *(*start_routine) (void *), void *arg, const char * debug_str);
 extern "C" int pthread_rwlock_wrunlock(pthread_rwlock_t *);
 extern "C" int pthread_rwlock_rdunlock(pthread_rwlock_t *);
 typedef pthread_attr_t toku_pthread_attr_t;
@@ -402,6 +403,10 @@ toku_pthread_create(toku_pthread_t *thread, const toku_pthread_attr_t *attr, voi
     return pthread_create(thread, attr, start_function, arg);
 }
 
+static inline int
+toku_pthread_create_debug(toku_pthread_t *thread, const toku_pthread_attr_t *attr, void *(*start_function)(void *), void *arg, const char * str) {
+    return pthread_create_debug(thread, attr, start_function, arg, str);
+}
 static inline int
 toku_pthread_join(toku_pthread_t thread, void **value_ptr) {
     return pthread_join(thread, value_ptr);

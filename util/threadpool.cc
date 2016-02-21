@@ -133,7 +133,7 @@ toku_thread_create(struct toku_thread_pool *pool, struct toku_thread **toku_thre
     int r = 0;
     struct toku_thread *MALLOC(thread);
     if (thread == NULL) {
-        r = get_error_errno(r);
+        r = 1;
     } else {
         memset(thread, 0, sizeof *thread);
         thread->pool = pool;
@@ -203,7 +203,7 @@ toku_thread_pool_create(struct toku_thread_pool **pool_return, int max_threads) 
     int r = 0;
     struct toku_thread_pool *CALLOC(pool);
     if (pool == NULL) {
-        r = get_error_errno(r);
+        r = 1;
     } else {
         toku_mutex_init(&pool->lock, NULL);
         toku_list_init(&pool->free_threads);

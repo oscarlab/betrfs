@@ -225,7 +225,7 @@ sdbt_realloc(struct simple_dbt *sdbt) {
     void *new_data = toku_realloc(sdbt->data, sdbt->len);
     int r;
     if (new_data == NULL) {
-        r = get_error_errno(-ENOMEM);
+        r = ENOMEM;
     } else {
         sdbt->data = new_data;
         r = 0;
@@ -238,7 +238,7 @@ dbt_realloc(DBT *dbt) {
     void *new_data = toku_realloc(dbt->data, dbt->ulen);
     int r;
     if (new_data == NULL) {
-        r = get_error_errno(-ENOMEM);
+        r = ENOMEM;
     } else {
         dbt->data = new_data;
         r = 0;

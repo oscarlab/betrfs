@@ -136,6 +136,23 @@ KIBBUTZ toku_kibbutz_create (int n_workers) {
     return k;
 }
 
+KIBBUTZ toku_kibbutz_create_debug (int n_workers, const char * dbg_str) {
+    KIBBUTZ XCALLOC(k);
+    toku_mutex_init(&k->mutex, NULL);
+    toku_cond_init(&k->cond, NULL);
+    k->please_shutdown = false;
+    k->head = NULL;
+    k->tail = NULL;
+    k->n_workers = n_workers;
+    XMALLOC_N(n_workers, k->workers);
+    XMALLOC_N(n_workers, k->ids);
+    for (int i=0; i<n_workers; i++) {
+        k->ids[i].k = k;
+        int r = toku_pthread_create_debug(&k->workers[i], NULL, work_on_kibbutz, &k->ids[i], dbg_str);
+        assert(r==0);
+    }
+    return k;
+}
 static void klock (KIBBUTZ k) {
     toku_mutex_lock(&k->mutex);
 }

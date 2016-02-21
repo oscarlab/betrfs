@@ -89,8 +89,55 @@ PATENT RIGHTS GRANT:
 #ident "Copyright (c) 2007-2013 Tokutek Inc.  All rights reserved."
 #ident "The technology is licensed by the Massachusetts Institute of Technology, Rutgers State University of New Jersey, and the Research Foundation of State University of New York at Stony Brook under United States of America Serial No. 11/760379 and to the patents and/or patent applications resulting from it."
 
-#include"test.h"
-#define VERBOSE 0
+static int verbose = 0;
+#include "test.h"
+struct iter_fn_args {
+    int * p_i;
+    MSN * p_startmsn;
+    int * p_thekeylen;
+    int * p_thevallen;
+    char ** p_thekey;
+    char ** p_theval;
+};
+static int iter_fn(FT_MSG msg, bool UU(is_fresh), void *args) {
+    enum ft_msg_type type = ft_msg_get_type(msg);
+    void* key = ft_msg_get_key(msg);
+    void* val = ft_msg_get_val(msg);
+    uint32_t keylen = ft_msg_get_keylen(msg);
+    uint32_t vallen = ft_msg_get_vallen(msg);
+    MSN msn = ft_msg_get_msn(msg);
+    XIDS xids = ft_msg_get_xids(msg);
+    struct iter_fn_args * fn_args = (struct iter_fn_args *) args;
+    int * p_i = fn_args -> p_i;
+    MSN * p_startmsn = fn_args -> p_startmsn;
+    int* p_thekeylen = fn_args->p_thekeylen;
+    int* p_thevallen = fn_args->p_thevallen;
+    char** p_thekey = fn_args->p_thekey;
+    char** p_theval = fn_args->p_theval;
+
+    if (verbose) printf("checkit %d %d %" PRIu64 "\n", *p_i, type, msn.msn);
+    assert(msn.msn == p_startmsn->msn + *p_i);
+#define buildkey(len) { \
+        *p_thekeylen = len+1; \
+        XREALLOC_N(*p_thekeylen, *p_thekey); \
+        memset(*p_thekey, len, *p_thekeylen); \
+    }
+
+#define buildval(len) { \
+        *p_thevallen = len+2; \
+        XREALLOC_N(*p_thevallen, *p_theval); \
+        memset(*p_theval, ~len, *p_thevallen); \
+    }
+
+    buildkey(*p_i);
+    buildval(*p_i);
+    assert((int) keylen == *p_thekeylen); assert(memcmp(key, *p_thekey, keylen) == 0);
+    assert((int) vallen == *p_thevallen); assert(memcmp(val, *p_theval, vallen) == 0);
+    assert(cast_to_msg_type(*p_i) == type);
+    assert((TXNID)*p_i==xids_get_innermost_xid(xids));
+    *p_i = *p_i+1;
+    return 0;
+}
 
 static void
 test_fifo_create (void) {
@@ -115,25 +162,33 @@ test_fifo_enq (int n) {
     assert(r == 0); assert(f != 0);
 
     char *thekey = 0; int thekeylen;
+    char *maxkey = 0; int maxkeylen;
     char *theval = 0; int thevallen;
 
     // this was a function but icc cant handle it    
-#define buildkey(len) { \
-        thekeylen = len+1; \
+#define buildkey2(len) { \
+       thekeylen = len+1; \
         XREALLOC_N(thekeylen, thekey); \
         memset(thekey, len, thekeylen); \
     }
 
-#define buildval(len) { \
-        thevallen = len+2; \
+#define buildmaxkey2(len) { \
+       maxkeylen = len+1; \
+        XREALLOC_N(maxkeylen, maxkey); \
+        memset(maxkey, len+1, maxkeylen); \
+    }
+
+#define buildval2(len) { \
+       thevallen = len+2; \
         XREALLOC_N(thevallen, theval); \
         memset(theval, ~len, thevallen); \
     }
 
     for (int i=0; i<n; i++) {
-        buildkey(i);
-        buildval(i);
-        XIDS xids;
+        buildkey2(i);
+        buildmaxkey2(i);
+        buildval2(i);
+       XIDS xids;
         if (i==0)
             xids = xids_get_root_xids();
         else {
@@ -143,15 +198,35 @@ test_fifo_enq (int n) {
         MSN msn = next_dummymsn();
         if (startmsn.msn == ZERO_MSN.msn)
             startmsn = msn;
-        enum ft_msg_type type = (enum ft_msg_type) i;
-        r = toku_fifo_enq(f, thekey, thekeylen, theval, thevallen, type, msn, xids, true, NULL); assert(r == 0);
-        xids_destroy(&xids);
+        enum ft_msg_type type = cast_to_msg_type(i);
+        FT_MSG_S msg;
+        DBT kdbt, vdbt, mdbt;
+        toku_fill_dbt(&kdbt,thekey,thekeylen);
+        toku_fill_dbt(&mdbt,maxkey,maxkeylen);
+        toku_fill_dbt(&vdbt,theval, thevallen);
+        if (ft_msg_type_is_multicast(type))
+            ft_msg_multicast_init(&msg, type, msn, xids, &kdbt, &mdbt, &vdbt, true, PM_UNCOMMITTED);
+        else
+            ft_msg_init(&msg, type, msn, xids, &kdbt, &vdbt);
+
+        r = toku_fifo_enq(f, &msg, true, NULL); assert(r == 0);
+       xids_destroy(&xids);
     }
 
     int i = 0;
+    struct iter_fn_args args = {
+    &i,
+    &startmsn,
+    &thekeylen,
+    &thevallen,
+    &thekey,
+    &theval
+    };
+    toku_fifo_iterate(f, iter_fn, &args);
+#if 0
     FIFO_ITERATE(f, key, keylen, val, vallen, type, msn, xids, UU(is_fresh), {
-        if (VERBOSE) printf("checkit %d %d %" PRIu64 "\n", i, type, msn.msn);
-        assert(msn.msn == startmsn.msn + i);
+        if (verbose) printf("checkit %d %d %" PRIu64 "\n", i, type, msn.msn);
+       assert(msn.msn == startmsn.msn + i);
         buildkey(i);
         buildval(i);
         assert((int) keylen == thekeylen); assert(memcmp(key, thekey, keylen) == 0);
@@ -160,10 +235,12 @@ test_fifo_enq (int n) {
 	assert((TXNID)i==xids_get_innermost_xid(xids));
         i += 1;
     });
+#endif
     assert(i == n);
 
     if (thekey) toku_free(thekey);
     if (theval) toku_free(theval);
+    if (maxkey) toku_free(maxkey);
 
     toku_fifo_free(&f);
     assert(f == 0);

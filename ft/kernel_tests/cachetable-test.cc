@@ -264,13 +264,11 @@ static void test_multi_filehandles (void)
     int r;
 
     toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = get_error_errno(-1);
-    printf(KERN_ALERT "del ret %d\n", r);	
+    r = 1;
     if(r == ENOTDIR) 
 	unlink(TOKU_TEST_FILENAME);
 
     r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU);
-    printf(KERN_ALERT "mkdir ret %d\n", r);	
     if(r != 0) return;
 
     char *fname1 = (char *)toku_xmalloc(TOKU_PATH_MAX);

@@ -91,24 +91,26 @@ PATENT RIGHTS GRANT:
 
 #include "test.h"
 
+
 static void ba_alloc_at (BLOCK_ALLOCATOR ba, uint64_t size, uint64_t offset) {
     block_allocator_validate(ba);
-    block_allocator_alloc_block_at(ba, size*512, offset*512);
+    block_allocator_alloc_block_at(ba, size*BLOCK_ALIGNMENT, offset*BLOCK_ALIGNMENT);
+    block_allocator_get_block(ba, offset*BLOCK_ALIGNMENT);
     block_allocator_validate(ba);
 }
 
 static void ba_alloc (BLOCK_ALLOCATOR ba, uint64_t size, uint64_t *answer) {
     block_allocator_validate(ba);
     uint64_t actual_answer;
-    block_allocator_alloc_block(ba, 512*size, &actual_answer);
+    block_allocator_alloc_and_get_block(ba, BLOCK_ALIGNMENT*size, &actual_answer);
     block_allocator_validate(ba);
-    assert(actual_answer%512==0);
-    *answer = actual_answer/512;
+    assert(actual_answer%BLOCK_ALIGNMENT==0);
+    *answer = actual_answer/BLOCK_ALIGNMENT;
 }
 
 static void ba_free (BLOCK_ALLOCATOR ba, uint64_t offset) {
     block_allocator_validate(ba);
-    block_allocator_free_block(ba, offset*512);
+    block_allocator_put_block(ba, offset*BLOCK_ALIGNMENT);
     block_allocator_validate(ba);
 }
 
@@ -118,8 +120,8 @@ ba_check_l (BLOCK_ALLOCATOR ba, uint64_t blocknum_in_layout_order, uint64_t expe
     uint64_t actual_offset, actual_size;
     int r = block_allocator_get_nth_block_in_layout_order(ba, blocknum_in_layout_order, &actual_offset, &actual_size);
     assert(r==0);
-    assert(expected_offset*512 == actual_offset);
-    assert(expected_size  *512 == actual_size);
+    assert(expected_offset*BLOCK_ALIGNMENT == actual_offset);
+    assert(expected_size  *BLOCK_ALIGNMENT == actual_size);
 }
 
 static void
@@ -136,10 +138,10 @@ static void
 test_ba0 (void) {
     BLOCK_ALLOCATOR ba;
     uint64_t b0, b1;
-    create_block_allocator(&ba, 100*512, 1*512);
-    assert(block_allocator_allocated_limit(ba)==100*512);
+    create_block_allocator(&ba, 100*BLOCK_ALIGNMENT, 1*BLOCK_ALIGNMENT);
+    assert(block_allocator_allocated_limit(ba)==100*BLOCK_ALIGNMENT);
     ba_alloc_at(ba, 50, 100);
-    assert(block_allocator_allocated_limit(ba)==150*512);
+    assert(block_allocator_allocated_limit(ba)==150*BLOCK_ALIGNMENT);
     ba_alloc_at(ba, 25, 150);
     ba_alloc   (ba, 10, &b0);
     ba_check_l (ba, 0, 0,   100);
@@ -154,9 +156,9 @@ test_ba0 (void) {
     assert(b0==160);
     ba_alloc(ba, 10, &b0);
     ba_alloc(ba, 113, &b1);
-    assert(113*512==block_allocator_block_size(ba, b1 *512));
-    assert(10 *512==block_allocator_block_size(ba, b0 *512));
-    assert(50 *512==block_allocator_block_size(ba, 100*512));
+    assert(113*BLOCK_ALIGNMENT==block_allocator_block_size(ba, b1 *BLOCK_ALIGNMENT));
+    assert(10 *BLOCK_ALIGNMENT==block_allocator_block_size(ba, b0 *BLOCK_ALIGNMENT));
+    assert(50 *BLOCK_ALIGNMENT==block_allocator_block_size(ba, 100*BLOCK_ALIGNMENT));
 
     uint64_t b2, b3, b4, b5, b6, b7;
     ba_alloc(ba, 100, &b2);     
@@ -191,7 +193,7 @@ test_ba0 (void) {
 static void
 test_ba1 (int n_initial) {
     BLOCK_ALLOCATOR ba;
-    create_block_allocator(&ba, 0*512, 1*512);
+    create_block_allocator(&ba, 0*BLOCK_ALIGNMENT, 1*BLOCK_ALIGNMENT);
     int i;
     int n_blocks=0;
     uint64_t *blocks = (uint64_t *) toku_xmalloc( sizeof(uint64_t) * 1000 );
@@ -224,8 +226,8 @@ test_ba2 (void)
     BLOCK_ALLOCATOR ba;
     uint64_t b[6];
     enum { BSIZE = 1024 };
-    create_block_allocator(&ba, 100*512, BSIZE*512);
-    assert(block_allocator_allocated_limit(ba)==100*512);
+    create_block_allocator(&ba, 100*BLOCK_ALIGNMENT, BSIZE*BLOCK_ALIGNMENT);
+    assert(block_allocator_allocated_limit(ba)==100*BLOCK_ALIGNMENT);
     ba_check_l    (ba, 0, 0, 100);
     ba_check_none (ba, 1);
 

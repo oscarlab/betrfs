@@ -108,7 +108,7 @@ create_files(int N, int fds[/*N*/]) {
         snprintf(name, sizeof(name), "%d", i);
         fds[i] = open(name, O_CREAT|O_WRONLY, 0644);
         if (fds[i] < 0) {
-            r = get_error_errno();
+            r = 1;
             CKERR(r);
         }
     }

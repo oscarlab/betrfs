@@ -144,7 +144,7 @@ cachetable_test (enum cachetable_dirty dirty, bool cloneable) {
 
     // test that having a pin that passes false for may_modify_value does not stall behind checkpoint
     CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
-    toku_cachetable_begin_checkpoint(cp, NULL);
+    toku_cachetable_begin_checkpoint(cp, NULL, false);
     r = toku_cachetable_get_and_pin_nonblocking(f1, make_blocknum(1), 1, &v1, &s1, wc, def_fetch, def_pf_req_callback, def_pf_callback, PL_READ, NULL, NULL);
     assert(r == 0);
     r = toku_test_cachetable_unpin(f1, make_blocknum(1), 1, CACHETABLE_CLEAN, make_pair_attr(8));
@@ -158,7 +158,8 @@ cachetable_test (enum cachetable_dirty dirty, bool cloneable) {
         cp, 
         NULL, 
         NULL,
-        NULL
+        NULL,
+	false
         );
 
     toku_cachetable_verify(ct);
@@ -171,9 +172,12 @@ extern "C" int test_cachetable_clone_pin_nonblocking(void);
 int
 test_cachetable_clone_pin_nonblocking() {
     initialize_dummymsn();
+     int rinit = toku_ft_layer_init();
+    CKERR(rinit);
   cachetable_test(CACHETABLE_DIRTY, true);
   cachetable_test(CACHETABLE_DIRTY, false);
   cachetable_test(CACHETABLE_CLEAN, true);
   cachetable_test(CACHETABLE_CLEAN, false);
-  return 0;
+  toku_ft_layer_destroy(); 
+ return 0;
 }

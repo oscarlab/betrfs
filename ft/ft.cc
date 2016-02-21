@@ -1157,7 +1157,7 @@ toku_single_process_lock(const char *lock_dir, const char *which, int *lockfd) {
     assert(l+1 == (signed)(sizeof(lockfname)));
     *lockfd = toku_os_lock_file(lockfname);
     if (*lockfd < 0) {
-        int e = get_error_errno(*lockfd);
+        int e = -(*lockfd);
         fprintf(stderr, "Couldn't start tokudb because some other tokudb process is using the same directory [%s] for [%s]\n", lock_dir, which);
         return e;
     }
@@ -1171,7 +1171,7 @@ toku_single_process_unlock(int *lockfd) {
     if (fd>=0) {
         int r = toku_os_unlock_file(fd);
         if (r != 0)
-            return get_error_errno(r);
+            return 1;
     }
     return 0;
 }

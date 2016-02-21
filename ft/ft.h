@@ -100,6 +100,7 @@ PATENT RIGHTS GRANT:
 #include "ft-ops.h"
 #include "compress.h"
 
+//#define DEBUG_SEQ_IO 1
 #define BLOCK_ALIGNMENT 4096
 // unlink a ft from the filesystem with or without a txn.
 // if with a txn, then the unlink happens on commit.

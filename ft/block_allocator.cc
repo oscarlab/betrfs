@@ -108,7 +108,6 @@ struct block_allocator {
     struct block_allocator_blockpair *blocks_array; // These blocks are sorted by address.
     uint64_t n_bytes_in_use; // including the reserve_at_beginning
 };
-
 void
 block_allocator_validate (BLOCK_ALLOCATOR ba) {
     uint64_t i;
@@ -248,12 +247,21 @@ block_allocator_alloc_blocks_at (BLOCK_ALLOCATOR ba, uint64_t n_blocks, struct b
 
 void
 block_allocator_alloc_block_at (BLOCK_ALLOCATOR ba, uint64_t size, uint64_t offset) {
-    struct block_allocator_blockpair p = {.offset = offset, .size=size};
+    struct block_allocator_blockpair p = {.offset = offset, .size=size, .nref=0};
     // Just do a linear search for the block.
     // This data structure is a sorted array (no gaps or anything), so the search isn't really making this any slower than the insertion.
     // To speed up the insertion when opening a file, we provide the block_allocator_alloc_blocks_at function.
     block_allocator_alloc_blocks_at(ba, 1, &p);
 }
+void
+block_allocator_alloc_and_get_block_at (BLOCK_ALLOCATOR ba, uint64_t size, uint64_t offset) {
+    struct block_allocator_blockpair p = {.offset = offset, .size=size, .nref=1};
+    // Just do a linear search for the block.
+    // This data structure is a sorted array (no gaps or anything), so the search isn't really making this any slower than the insertion.
+    // To speed up the insertion when opening a file, we provide the block_allocator_alloc_blocks_at function.
+    block_allocator_alloc_blocks_at(ba, 1, &p);
+}
+
 
 static inline uint64_t
 align (uint64_t value, BLOCK_ALLOCATOR ba)
@@ -272,6 +280,7 @@ void block_allocator_alloc_block(BLOCK_ALLOCATOR ba, uint64_t size, uint64_t *of
         assert(ba->n_bytes_in_use == ba->reserve_at_beginning + size); // we know exactly how many are in use
         ba->blocks_array[0].offset = align(ba->reserve_at_beginning, ba);
         ba->blocks_array[0].size  = size;
+        ba->blocks_array[0].nref = 0;
         *offset = ba->blocks_array[0].offset;
         ba->n_blocks++;
         return;
@@ -285,6 +294,7 @@ void block_allocator_alloc_block(BLOCK_ALLOCATOR ba, uint64_t size, uint64_t *of
             memmove(bp+1, bp, (ba->n_blocks)*sizeof(*bp));
             bp[0].offset = end_of_reserve;
             bp[0].size   = size;
+            bp[0].nref = 0;
             ba->n_blocks++;
             *offset = end_of_reserve;
             VALIDATE(ba);
@@ -302,6 +312,7 @@ void block_allocator_alloc_block(BLOCK_ALLOCATOR ba, uint64_t size, uint64_t *of
         memmove(bp+2, bp+1, (ba->n_blocks - blocknum -1)*sizeof(*bp));
         bp[1].offset = answer_offset;
         bp[1].size   = size;
+        bp[1].nref = 0;
         ba->n_blocks++;
         *offset = answer_offset;
         VALIDATE(ba);
@@ -313,6 +324,7 @@ void block_allocator_alloc_block(BLOCK_ALLOCATOR ba, uint64_t size, uint64_t *of
     uint64_t answer_offset = align(bp[-1].offset+bp[-1].size, ba);
     bp->offset = answer_offset;
     bp->size   = size;
+    bp->nref = 0;
     ba->n_blocks++;
     *offset = answer_offset;
     VALIDATE(ba);
@@ -350,7 +362,8 @@ find_block (BLOCK_ALLOCATOR ba, uint64_t offset)
 // a 0-sized block can share offset with a non-zero sized block.
 // The non-zero sized block is not exchangable with a zero sized block (or vice versa),
 // so inserting 0-sized blocks can cause corruption here.
-void
+#if 0
+static void
 block_allocator_free_block (BLOCK_ALLOCATOR ba, uint64_t offset) {
     VALIDATE(ba);
     int64_t bn = find_block(ba, offset);
@@ -360,7 +373,7 @@ block_allocator_free_block (BLOCK_ALLOCATOR ba, uint64_t offset) {
     ba->n_blocks--;
     VALIDATE(ba);
 }
-
+#endif
 uint64_t
 block_allocator_block_size (BLOCK_ALLOCATOR ba, uint64_t offset) {
     int64_t bn = find_block(ba, offset);
@@ -471,3 +484,95 @@ block_allocator_get_unused_statistics(BLOCK_ALLOCATOR ba, TOKU_DB_FRAGMENTATION 
         }
     }
 }
+
+
+//if offset does not exist, abort
+//if offset exists, ref ++
+void 
+block_allocator_get_block(BLOCK_ALLOCATOR ba, uint64_t offset) {
+    VALIDATE(ba);
+    int64_t bn = find_block(ba, offset);
+    assert(bn>=0); // we require that there is a block with that offset.  Might as well abort if no such block exists.
+    ba->blocks_array[bn].nref ++;
+    VALIDATE(ba);
+}
+
+//if offset does not exist, allocate; ref ++
+void 
+block_allocator_alloc_and_get_block(BLOCK_ALLOCATOR ba, uint64_t size, uint64_t * offset) {
+
+    invariant(size > 0); //Allocator does not support size 0 blocks. See block_allocator_free_block.
+    grow_blocks_array(ba);
+    ba->n_bytes_in_use += size;
+    if (ba->n_blocks==0) {
+        assert(ba->n_bytes_in_use == ba->reserve_at_beginning + size); // we know exactly how many are in use
+        ba->blocks_array[0].offset = align(ba->reserve_at_beginning, ba);
+        ba->blocks_array[0].size  = size;
+        ba->blocks_array[0].nref = 1;
+        *offset = ba->blocks_array[0].offset;
+        ba->n_blocks++;
+        return;
+    }
+    // Implement first fit.
+    {
+        uint64_t end_of_reserve = align(ba->reserve_at_beginning, ba);
+        if (end_of_reserve + size <= ba->blocks_array[0].offset ) {
+            // Check to see if the space immediately after the reserve is big enough to hold the new block.
+            struct block_allocator_blockpair *bp = &ba->blocks_array[0];
+            memmove(bp+1, bp, (ba->n_blocks)*sizeof(*bp));
+            bp[0].offset = end_of_reserve;
+            bp[0].size   = size;
+            bp[0].nref = 1;
+            ba->n_blocks++;
+            *offset = end_of_reserve;
+            VALIDATE(ba);
+            return;
+        }
+    }
+    for (uint64_t blocknum = 0; blocknum +1 < ba->n_blocks; blocknum ++) {
+        // Consider the space after blocknum
+        struct block_allocator_blockpair *bp = &ba->blocks_array[blocknum];
+        uint64_t this_offset = bp[0].offset;
+        uint64_t this_size   = bp[0].size;
+        uint64_t answer_offset = align(this_offset + this_size, ba);
+        if (answer_offset + size > bp[1].offset) continue; // The block we want doesn't fit after this block.
+        // It fits, so allocate it here.
+        memmove(bp+2, bp+1, (ba->n_blocks - blocknum -1)*sizeof(*bp));
+        bp[1].offset = answer_offset;
+        bp[1].size   = size;
+        bp[1].nref = 1;
+        ba->n_blocks++;
+        *offset = answer_offset;
+        VALIDATE(ba);
+        return;
+    }
+    // It didn't fit anywhere, so fit it on the end.
+    assert(ba->n_blocks < ba->blocks_array_size);
+    struct block_allocator_blockpair *bp = &ba->blocks_array[ba->n_blocks];
+    uint64_t answer_offset = align(bp[-1].offset+bp[-1].size, ba);
+    bp->offset = answer_offset;
+    bp->size   = size;
+    bp->nref = 1;
+    ba->n_blocks++;
+    *offset = answer_offset;
+    VALIDATE(ba);
+}
+//if offset does not exist, abort
+//if offset does exist,  ref --
+//if ref == 0, free the block
+void
+block_allocator_put_block(BLOCK_ALLOCATOR ba, uint64_t offset) {
+    VALIDATE(ba);
+    int64_t bn = find_block(ba, offset);
+    assert(bn>=0); // we require that there is a block with that offset.  Might as well abort if no such block exists.
+    assert(ba->blocks_array[bn].nref > 0);
+    ba->blocks_array[bn].nref --;
+    if(ba->blocks_array[bn].nref == 0) {
+        ba->n_bytes_in_use -= ba->blocks_array[bn].size;
+        memmove(&ba->blocks_array[bn], &ba->blocks_array[bn+1], (ba->n_blocks-bn-1) * sizeof(struct block_allocator_blockpair));
+        ba->n_blocks--;
+    }
+    VALIDATE(ba);
+}
+
+

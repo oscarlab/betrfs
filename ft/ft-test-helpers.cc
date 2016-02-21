@@ -99,8 +99,9 @@ PATENT RIGHTS GRANT:
 // dummymsn needed to simulate msn because messages are injected at a lower level than toku_ft_root_put_cmd()
 #define MIN_DUMMYMSN ((MSN) {(uint64_t)1 << 62})
 static MSN dummymsn;      
+static LSN dummylsn;
 static int testsetup_initialized = 0;
-
+static TOKULOGGER test_logger;
 
 // Must be called before any other test_setup_xxx() functions are called.
 void
@@ -108,15 +109,24 @@ toku_testsetup_initialize(void) {
     if (testsetup_initialized == 0) {
         testsetup_initialized = 1;
         dummymsn = MIN_DUMMYMSN;
+	dummylsn = {0};
     }
 }
 
+void toku_testsetup_set_logger(TOKULOGGER * logger) {
+	test_logger = * logger;
+}
 static MSN
 next_dummymsn(void) {
     ++(dummymsn.msn);
     return dummymsn;
 }
 
+static LSN
+next_dummylsn(void) {
+    ++(dummylsn.lsn);
+    return dummylsn;
+}
 
 bool ignore_if_was_already_open;
 int toku_testsetup_leaf(FT_HANDLE brt, BLOCKNUM *blocknum, int n_children, char **keys, int *keylens) {
@@ -189,7 +199,7 @@ int toku_testsetup_get_sersize(FT_HANDLE brt, BLOCKNUM diskoff) // Return the si
     return size;
 }
 
-int toku_testsetup_insert_to_leaf (FT_HANDLE brt, BLOCKNUM blocknum, const char *key, int keylen, const char *val, int vallen) {
+int toku_testsetup_insert_to_leaf (FT_HANDLE brt, BLOCKNUM blocknum, const char *key, int keylen, const char *val, int vallen, enum ft_msg_type type) {
     void *node_v;
     int r;
 
@@ -217,15 +227,24 @@ int toku_testsetup_insert_to_leaf (FT_HANDLE brt, BLOCKNUM blocknum, const char 
 
     DBT keydbt,valdbt;
     MSN msn = next_dummymsn();
-    FT_MSG_S cmd = { FT_INSERT, msn, xids_get_root_xids(),
-                     .u = { .id = { toku_fill_dbt(&keydbt, key, keylen),
-                                    toku_fill_dbt(&valdbt, val, vallen) } } };
+    FT_MSG_S cmd;
+    ft_msg_init(&cmd, type, msn, xids_get_root_xids(),
+                     toku_fill_dbt(&keydbt, key, keylen),
+                    toku_fill_dbt(&valdbt, val, vallen) );
 
+    struct unbound_insert_entry * entry = NULL;
+    if(FT_UNBOUND_INSERT == type) {
+	entry = toku_alloc_unbound_insert_entry(UBI_UNBOUND, next_dummylsn(),//ft_h,
+                                                    cmd.msn, &keydbt);
+    	toku_logger_append_unbound_insert_entry(test_logger,entry); 
+ }
     static size_t zero_flow_deltas[] = { 0, 0 };
     toku_ft_node_put_cmd (
+        brt->ft,
         brt->ft->compare_fun,
         brt->ft->update_fun,
         &brt->ft->cmp_descriptor,
+        entry,
         node,
         -1,
         &cmd,
@@ -266,6 +285,61 @@ toku_pin_node_with_min_bfe(FTNODE* node, BLOCKNUM b, FT_HANDLE t)
         );
 }
 
+#if 0
+int toku_testsetup_insert_to_nonleaf_with_txn (FT_HANDLE brt, BLOCKNUM blocknum, enum ft_msg_type cmdtype, const char *key, int keylen, const char *val, int vallen, TOKUTXN txn) {
+
+
+    void *node_v;
+    int r;
+
+    XIDS xids = toku_txn_get_xids(txn);   
+    assert(testsetup_initialized);
+
+    struct ftnode_fetch_extra bfe;
+    fill_bfe_for_full_read(&bfe, brt->ft);
+    r = toku_cachetable_get_and_pin(
+        brt->ft->cf,
+        blocknum,
+        toku_cachetable_hash(brt->ft->cf, blocknum),
+        &node_v,
+        NULL,
+        get_write_callbacks_for_node(brt->ft),
+	toku_ftnode_fetch_callback,
+        toku_ftnode_pf_req_callback,
+        toku_ftnode_pf_callback,
+        true,
+	&bfe
+        );
+    if (r!=0) return r;
+    FTNODE CAST_FROM_VOIDP(node, node_v);
+    assert(node->height>0);
+
+    DBT k;
+    int childnum = toku_ftnode_which_child(node,
+                                            toku_fill_dbt(&k, key, keylen),
+                                            &brt->ft->cmp_descriptor, brt->ft->compare_fun);
+
+
+    MSN msn = next_dummymsn();
+    
+    FT_MSG_S msg;
+    DBT kdbt, vdbt;
+    toku_fill_dbt(&kdbt, key, keylen);
+    toku_fill_dbt(&vdbt, val, vallen); 
+    ft_msg_init(&msg, cmdtype, msn, xids, &kdbt, &vdbt);
+    toku_bnc_insert_msg(BNC(node, childnum), &msg, true, NULL, testhelper_string_key_cmp);
+    // Hack to get the test working. The problem is that this test
+    // is directly queueing something in a FIFO instead of 
+    // using brt APIs.
+    node->max_msn_applied_to_node_on_disk = msn;
+    node->dirty = 1;
+    // Also hack max_msn_in_ft
+    brt->ft->h->max_msn_in_ft = msn;
+
+    toku_unpin_ftnode(brt->ft, node);
+    return 0;
+}
+#endif
 int toku_testsetup_insert_to_nonleaf (FT_HANDLE brt, BLOCKNUM blocknum, enum ft_msg_type cmdtype, const char *key, int keylen, const char *val, int vallen) {
     void *node_v;
     int r;
@@ -298,15 +372,90 @@ int toku_testsetup_insert_to_nonleaf (FT_HANDLE brt, BLOCKNUM blocknum, enum ft_
 
     XIDS xids_0 = xids_get_root_xids();
     MSN msn = next_dummymsn();
-    toku_bnc_insert_msg(BNC(node, childnum), key, keylen, val, vallen, cmdtype, msn, xids_0, true, NULL, testhelper_string_key_cmp);
+    
+    FT_MSG_S msg;
+    DBT kdbt, vdbt;
+    toku_fill_dbt(&kdbt, key, keylen);
+    toku_fill_dbt(&vdbt, val, vallen); 
+    ft_msg_init(&msg, cmdtype, msn, xids_0, &kdbt, &vdbt);
+    struct unbound_insert_entry * entry = NULL;
+    if(FT_UNBOUND_INSERT == cmdtype) {
+	entry = toku_alloc_unbound_insert_entry(UBI_UNBOUND, next_dummylsn(),//ft_h,
+                                                    msg.msn, &kdbt);
+    	toku_logger_append_unbound_insert_entry(test_logger,entry); 
+ }
+    toku_bnc_insert_msg(BNC(node, childnum), entry, &msg, true, NULL, testhelper_string_key_cmp);
     // Hack to get the test working. The problem is that this test
     // is directly queueing something in a FIFO instead of 
     // using brt APIs.
     node->max_msn_applied_to_node_on_disk = msn;
     node->dirty = 1;
+    if(FT_UNBOUND_INSERT == cmdtype) {
+	node->unbound_insert_count++;
+}
     // Also hack max_msn_in_ft
     brt->ft->h->max_msn_in_ft = msn;
 
     toku_unpin_ftnode(brt->ft, node);
+    return 0;
+}
+
+// adding this function to support multi-cast delete messages
+// We can also change the signature of the above function to support all kinds of messages 
+// but that will require a lot of change in existing test cases
+// for multicast messages, we need a key range (e.g. key and key_max)
+int toku_testsetup_insert_to_nonleaf (FT_HANDLE ft_handle, BLOCKNUM blocknum, enum ft_msg_type cmdtype, const char *key, int keylen, const char *max_key, int max_keylen, bool is_right_excl, enum pacman_status pm_status, const char *val, int vallen) {
+    void *node_v;
+    int r;
+
+    assert(testsetup_initialized);
+
+    ftnode_fetch_extra bfe;
+    fill_bfe_for_full_read(&bfe, ft_handle->ft);
+    r = toku_cachetable_get_and_pin(
+        ft_handle->ft->cf,
+        blocknum,
+        toku_cachetable_hash(ft_handle->ft->cf, blocknum),
+        &node_v,
+        NULL,
+        get_write_callbacks_for_node(ft_handle->ft),
+	toku_ftnode_fetch_callback,
+        toku_ftnode_pf_req_callback,
+        toku_ftnode_pf_callback,
+        true,
+	&bfe
+        );
+    if (r!=0) return r;
+    FTNODE CAST_FROM_VOIDP(node, node_v);
+    assert(node->height>0);
+
+    //ok,we are just literally repeating the logic of get_child_bounds_for_msg_put -JYM
+    DBT k;
+    int start_idx = toku_ftnode_which_child(node, toku_fill_dbt(&k, key, keylen), &ft_handle->ft->cmp_descriptor, ft_handle->ft->compare_fun);
+    int end_idx = toku_ftnode_which_child(node, toku_fill_dbt(&k, max_key, max_keylen), &ft_handle->ft->cmp_descriptor, ft_handle->ft->compare_fun);
+     
+    XIDS xids_0 = xids_get_root_xids();
+    MSN msn = next_dummymsn();
+   
+    for (int childnum = start_idx; childnum <= end_idx; childnum++)
+   {  
+      
+        FT_MSG_S msg;
+        DBT kdbt, vdbt,mdbt;
+        toku_fill_dbt(&kdbt, key, keylen);
+        toku_fill_dbt(&vdbt, val, vallen); 
+        toku_fill_dbt(&mdbt, max_key, max_keylen);
+        ft_msg_multicast_init(&msg, cmdtype, msn, xids_0, &kdbt, &mdbt, &vdbt, is_right_excl, pm_status);
+        toku_bnc_insert_msg(BNC(node, childnum), nullptr, &msg, true, NULL, testhelper_string_key_cmp);
+         }
+    // Hack to get the test working. The problem is that this test
+    // is directly queueing something in a FIFO instead of 
+    // using ft APIs.
+    node->max_msn_applied_to_node_on_disk = msn;
+    node->dirty = 1;
+    // Also hack max_msn_in_ft
+    ft_handle->ft->h->max_msn_in_ft = msn;
+
+    toku_unpin_ftnode(ft_handle->ft, node);
     return 0;
 }

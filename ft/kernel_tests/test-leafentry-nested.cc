@@ -502,14 +502,15 @@ static const ULE_S ule_committed_delete = {
     .uxrs = (UXR_S *)ule_committed_delete.uxrs_static
 };
 
+//NOTE THIS NEEDS to be rewritten. susipicious stack var
 static FT_MSG_S
 msg_init(enum ft_msg_type type, XIDS xids,
          DBT *key, DBT *val) {
     FT_MSG_S msg;
     msg.type = type;
     msg.xids = xids;
-    msg.u.id.key = key;
-    msg.u.id.val = val;
+    msg.key = key;
+    msg.val = val;
     return msg;
 }
 
@@ -558,8 +559,8 @@ generate_provpair_for(ULE ule, FT_MSG msg) {
         ule->uxrs[level].xid    = xids_get_xid(xids, level-1);
     }
     ule->uxrs[num_uxrs - 1].type   = XR_INSERT;
-    ule->uxrs[num_uxrs - 1].vallen = msg->u.id.val->size;
-    ule->uxrs[num_uxrs - 1].valp   = msg->u.id.val->data;
+    ule->uxrs[num_uxrs - 1].vallen = msg->val->size;
+    ule->uxrs[num_uxrs - 1].valp   = msg->val->data;
     ule->uxrs[num_uxrs - 1].xid    = xids_get_innermost_xid(xids);
 }
 
@@ -654,8 +655,8 @@ generate_provdel_for(ULE ule, FT_MSG msg) {
     ule->num_puxrs = xids_get_num_xids(xids);
     uint32_t num_uxrs = ule->num_cuxrs + ule->num_puxrs;
     ule->uxrs[0].type   = XR_INSERT;
-    ule->uxrs[0].vallen = msg->u.id.val->size;
-    ule->uxrs[0].valp   = msg->u.id.val->data;
+    ule->uxrs[0].vallen = msg->val->size;
+    ule->uxrs[0].valp   = msg->val->data;
     ule->uxrs[0].xid    = TXNID_NONE;
     for (level = ule->num_cuxrs; level < ule->num_cuxrs + ule->num_puxrs - 1; level++) {
         ule->uxrs[level].type   = XR_PLACEHOLDER;
@@ -688,8 +689,8 @@ generate_both_for(ULE ule, DBT *oldval, FT_MSG msg) {
         ule->uxrs[level].xid    = xids_get_xid(xids, level-1);
     }
     ule->uxrs[num_uxrs - 1].type   = XR_INSERT;
-    ule->uxrs[num_uxrs - 1].vallen = msg->u.id.val->size;
-    ule->uxrs[num_uxrs - 1].valp   = msg->u.id.val->data;
+    ule->uxrs[num_uxrs - 1].vallen = msg->val->size;
+    ule->uxrs[num_uxrs - 1].valp   = msg->val->data;
     ule->uxrs[num_uxrs - 1].xid    = xids_get_innermost_xid(xids);
 }
 

@@ -161,7 +161,7 @@ test_logmax (int logmax) {
 
     r=env->txn_begin(env, 0, &tid, 0); CKERR(r);
     char *there = (char *)toku_xmalloc(1000 * sizeof *there);
-    memset(there, 'a',sizeof(there));
+    memset(there, 'a', 1000 * sizeof(*there));
     there[999]=0;
     for (i=0; sum<(effective_max*3)/2; i++) {
 	DBT key,data;

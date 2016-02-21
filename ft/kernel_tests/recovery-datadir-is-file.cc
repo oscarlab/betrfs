@@ -102,19 +102,16 @@ run_test(void) {
     toku_os_recursive_delete(TOKU_TEST_FILENAME);
     r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU);
     assert_zero(r);
-
     char testdir[TOKU_PATH_MAX+1];
     char testfile[TOKU_PATH_MAX+1];
     toku_path_join(testdir, 2, TOKU_TEST_FILENAME, "dir");
     toku_path_join(testfile, 2, TOKU_TEST_FILENAME, "file");
 
-    DBG;
     // setup the test dir
     toku_os_recursive_delete(TOKU_TEST_FILENAME);
     r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU); assert(r == 0);
     r = toku_os_mkdir(testdir, S_IRWXU); assert(r == 0);
 
-    DBG;
     // create the log
     TOKULOGGER logger;
     r = toku_logger_create(&logger); assert(r == 0);
@@ -123,15 +120,13 @@ run_test(void) {
     toku_log_comment(logger, NULL, true, 0, hello);
     r = toku_logger_close(&logger); assert(r == 0);
 
-    DBG;
-    STR(DEV_NULL_FILE);
     // redirect stderr
+   #if 0
     int devnul = open(DEV_NULL_FILE, O_WRONLY);
     assert(devnul>=0);
     r = toku_dup2(devnul, fileno(stderr)); 	    assert(r==fileno(stderr));
     r = close(devnul);                      assert(r==0);
-
-    DBG;
+#endif
     // run recovery
 /*    {
         char buf[TOKU_PATH_MAX+sizeof("touch ")];
@@ -141,10 +136,9 @@ run_test(void) {
     }
 */
 
-    DBG;
+//well this is good enough to simulate the "touch". we do not need utime for this test
     int fd = open64(testfile, O_WRONLY | O_CREAT | O_NOCTTY | O_NONBLOCK, 0666);
     if (fd >= 0) {
-	utimensat(fd, testfile, NULL, 0);
 	close(fd);
    
     } else {

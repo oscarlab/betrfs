@@ -190,7 +190,7 @@ struct cachefile {
     uint32_t num_pairs; // count on number of pairs in the cachetable belong to this cachefile
 
     bool for_checkpoint; //True if part of the in-progress checkpoint
-
+    bool for_partial_checkpoint;
     // If set and the cachefile closes, the file will be removed.
     // Clients must not operate on the cachefile after setting this,
     // nor attempt to open any cachefile with the same fname (dname)
@@ -466,17 +466,21 @@ public:
     int shutdown();
     bool has_been_shutdown();
     void begin_checkpoint();
+    void begin_partial_checkpoint();
     void add_background_job();
     void remove_background_job();
     void end_checkpoint(void (*testcallback_f)(void*),  void* testextra);
+    void end_partial_checkpoint(void (*testcallback_f)(void*),  void* testextra);
     TOKULOGGER get_logger();
     // used during begin_checkpoint
     void increment_num_txns();
 private:
+    KIBBUTZ m_chkpt_kibbutz;
     uint32_t m_checkpoint_num_txns;   // how many transactions are in the checkpoint
     TOKULOGGER m_logger;
     LSN m_lsn_of_checkpoint_in_progress;
     uint32_t m_checkpoint_num_files; // how many cachefiles are in the checkpoint
+    uint32_t m_partial_checkpoint_num_files; // how many cachefiles are in the checkpoint
     struct minicron m_checkpointer_cron; // the periodic checkpointing thread
     cachefile_list *m_cf_list;
     pair_list *m_list;
@@ -489,13 +493,18 @@ private:
     void update_cachefiles();
     void log_begin_checkpoint();
     void turn_on_pending_bits();
+    void turn_on_pending_bits_partial();
     // private methods for end_checkpoint    
     void fill_checkpoint_cfs(CACHEFILE* checkpoint_cfs);
+    void fill_checkpoint_cfs_partial(CACHEFILE* checkpoint_cfs);
     void checkpoint_pending_pairs();
+    void checkpoint_pending_pairs_partial();
     void checkpoint_userdata(CACHEFILE* checkpoint_cfs);
+    void checkpoint_userdata_partial(CACHEFILE* checkpoint_cfs);
     void log_end_checkpoint();
     void end_checkpoint_userdata(CACHEFILE* checkpoint_cfs);
     void remove_cachefiles(CACHEFILE* checkpoint_cfs);
+    void remove_cachefiles_partial(CACHEFILE* checkpoint_cfs);
     
     // Unit test struct needs access to private members.
     friend struct checkpointer_test;
@@ -643,7 +652,7 @@ struct cachetable {
     KIBBUTZ client_kibbutz; // pool of worker threads and jobs to do asynchronously for the client.
     KIBBUTZ ct_kibbutz; // pool of worker threads and jobs to do asynchronously for the cachetable
     KIBBUTZ checkpointing_kibbutz; // small pool for checkpointing cloned pairs
-
+    
     char *env_dir;
 };
 

@@ -146,9 +146,21 @@ const struct logtype rollbacks[] = {
                           {"FILENUM", "filenum", 0},
                           {"BYTESTRING", "key", 0},
                           NULLFIELD}, LOG_BEGIN_ACTION_NA},
+    {"cmdseqinsert", 'g', FA{
+                            {"FILENUM", "filenum", 0},
+                            {"BYTESTRING", "key", 0},
+                            NULLFIELD}, LOG_BEGIN_ACTION_NA},
     {"cmddelete", 'd', FA{
                           {"FILENUM", "filenum", 0},
                           {"BYTESTRING", "key", 0},
+                          NULLFIELD}, LOG_BEGIN_ACTION_NA},
+    {"cmddeletemulti", 'Z', FA{
+                          {"FILENUM", "filenum", 0},
+                          {"BYTESTRING", "min_key", 0},
+                          {"BYTESTRING", "max_key", 0},
+                          {"bool", "is_right_excl", 0},
+			  {"uint32_t", "pm_status", 0},
+                          {"bool", "is_resetting_op", 0},
                           NULLFIELD}, LOG_BEGIN_ACTION_NA},
     {"rollinclude", 'r', FA{{"TXNID_PAIR",     "xid", 0},
                             {"uint64_t", "num_nodes", 0},
@@ -275,6 +287,24 @@ const struct logtype logtypes[] = {
     {"comment", 'T', FA{{"uint64_t", "timestamp", 0},
                         {"BYTESTRING", "comment", 0},
                         NULLFIELD}, IGNORE_LOG_BEGIN},
+    {"enq_delete_multi", 'Z', FA{{"FILENUM",    "filenum", 0},
+                                    {"TXNID_PAIR",      "xid", 0},
+                                    {"BYTESTRING", "min_key", 0},
+                                    {"BYTESTRING", "max_key", 0},
+                                    {"bool","is_right_excl",0},
+				    {"uint32_t","pm_status",0},
+                                    {"bool","is_resetting_op",0},
+                                    NULLFIELD}, SHOULD_LOG_BEGIN},
+    {"enq_unbound_insert", 'G', FA{{"FILENUM",    "filenum", 0},
+                                   {"TXNID_PAIR",     "xid", 0},
+                                   {"BYTESTRING", "key", 0},
+                                   NULLFIELD}, SHOULD_LOG_BEGIN},
+    {"sync_unbound_insert", 'S', FA{{"MSN",     "msn_in_tree", 0},
+                                    //{"BYTESTRING", "key", 0}, /* msn good enough */
+                                    {"LSN", "lsn_of_enq", 0},
+                                    {"DISKOFF", "offset", 0},
+                                    {"DISKOFF", "size", 0},
+                                    NULLFIELD}, IGNORE_LOG_BEGIN},
     // Note: shutdown_up_to_19 log entry is NOT ALLOWED TO BE CHANGED.
     // Do not change the letter ('Q'), do not add fields,
     // do not remove fields.
@@ -602,18 +632,18 @@ generate_log_reader (void) {
     fprintf(cf, "  long pos = ftell(infile);\n");
     fprintf(cf, "  if (pos<=12) return -1;\n");
     fprintf(cf, "  int r = fseek(infile, -4, SEEK_CUR); \n");//              assert(r==0);\n");
-    fprintf(cf, "  if (r!=0) return get_error_errno(r);\n");
+    fprintf(cf, "  if (r!=0) return 1;\n");
     fprintf(cf, "  uint32_t len;\n");
     fprintf(cf, "  r = toku_fread_uint32_t_nocrclen(infile, &len); \n");//  assert(r==0);\n");
     fprintf(cf, "  if (r!=0) return 1;\n");
     fprintf(cf, "  r = fseek(infile, -(int)len, SEEK_CUR) ;  \n");//         assert(r==0);\n");
-    fprintf(cf, "  if (r!=0) return get_error_errno(r);\n");
+    fprintf(cf, "  if (r!=0) return 1;\n");
     fprintf(cf, "  r = toku_log_fread(infile, le); \n");//                   assert(r==0);\n");
     fprintf(cf, "  if (r!=0) return 1;\n");
     fprintf(cf, "  long afterpos = ftell(infile);\n");
     fprintf(cf, "  if (afterpos != pos) return 1;\n");
     fprintf(cf, "  r = fseek(infile, -(int)len, SEEK_CUR); \n");//           assert(r==0);\n");
-    fprintf(cf, "  if (r!=0) return get_error_errno(r);\n");
+    fprintf(cf, "  if (r!=0) return 1;\n");
     fprintf(cf, "  return 0;\n");
     fprintf(cf, "}\n\n");
 

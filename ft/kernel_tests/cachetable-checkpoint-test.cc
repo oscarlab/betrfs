@@ -181,7 +181,7 @@ static void cachetable_checkpoint_test(int n, enum cachetable_dirty dirty) {
     // all items should be kept in the cachetable
     n_flush = n_write_me = n_keep_me = n_fetch = 0;
     CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
-    r = toku_checkpoint(cp, NULL, checkpoint_callback, &callback_was_called, checkpoint_callback2, &callback2_was_called, CLIENT_CHECKPOINT);
+    r = toku_checkpoint(cp, NULL, checkpoint_callback, &callback_was_called, checkpoint_callback2, &callback2_was_called, CLIENT_CHECKPOINT, false);
     assert(r == 0);
     assert(callback_was_called  != 0);
     assert(callback2_was_called != 0);
@@ -213,7 +213,7 @@ static void cachetable_checkpoint_test(int n, enum cachetable_dirty dirty) {
     n_flush = n_write_me = n_keep_me = n_fetch = 0;
 
 
-    r = toku_checkpoint(cp, NULL, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT);
+    r = toku_checkpoint(cp, NULL, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, false);
     assert(r == 0);
     assert(n_flush == 0 && n_write_me == 0 && n_keep_me == 0);
 

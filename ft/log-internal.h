@@ -105,6 +105,9 @@ PATENT RIGHTS GRANT:
 #include "txn_manager.h"
 #include <portability/toku_pthread.h>
 #include <util/omt.h>
+#include "util/list.h"
+#include "util/kibbutz.h"
+#include "background_job_manager.h"
 #include "rollback_log_node_cache.h"
 #include "txn_child_manager.h"
 
@@ -114,9 +117,7 @@ using namespace toku;
 // To log: grab the buf lock
 //  If the buf would overflow, then grab the file lock, swap file&buf, release buf lock, write the file, write the entry, release the file lock
 //  else append to buf & release lock
-
-#define LOGGER_MIN_BUF_SIZE (1<<24)
-
+#define LOGGER_MIN_BUF_SIZE (1<<26)
 struct mylock {
     toku_mutex_t lock;
 };
@@ -141,9 +142,74 @@ struct logbuf {
     LSN  max_lsn_in_buf;
 };
 
+struct unbound_insert_entry {
+    DBT * key; 
+    struct toku_list in_or_out; // either logger->ubi_in or logger->ubi_out
+    struct toku_list node_list; // this is actually in the
+                                // ftnode_nonleaf_childinfo or
+                                // ftnode_leaf_basement_node. only
+                                // valid if state is UBI_UNBOUND or
+                                // UBI_BINDING.
+    LSN lsn; /* lsn of enq_unbound_insert message already in the log */
+    MSN msn; /* msn of message in tree */
+//    FTNODE node;   /* if state is BOUND, this is not valid */
+    //FT_HANDLE fth; // if we need this, pass it to
+                     // toku_logger_append_unbound_insert_entry() in
+                     // toku_ft_maybe_insert()
+    ubi_state_t state;
+    DISKOFF diskoff;
+    DISKOFF size;
+};
+
+static inline void destroy_unbound_insert_entry(struct unbound_insert_entry * entry) {
+	toku_destroy_dbt(entry->key);
+	toku_free(entry->key);
+	toku_free(entry);
+}
+// Compare the keys and TXNIDS to see if the log entry refers to @msg
+//uint32_t entry->key.len
+//char *   entry->key.data
+//DBT *    msg->key
+//uint32_t msg->key->size
+//void *   msg->key->data
+static inline int msg_matches_ubi(FT_MSG msg, struct unbound_insert_entry *entry) {
+
+    return (ft_msg_get_msn(msg).msn == entry->msn.msn);
+}
+
+static inline int fifo_entry_matches_ubi(struct fifo_entry *fifo_entry, struct unbound_insert_entry *ubi_entry) {
+
+    return (fifo_entry->msn.msn == ubi_entry->msn.msn);
+}
+
+static inline
+int unbound_entry_is_bound_or_promised(struct unbound_insert_entry *entry) {
+    // if we have assigned a block_num, we have located it in our node
+    // and are just waiting for writeback to update the diskoff.
+    return (entry->state == UBI_BOUND || entry->state == UBI_BINDING);
+
+    // we could also check the physical DISKOFF values, but that
+    // prevents us from "skipping" unbound_entries in the same
+    // node. this way we can search for a node when we want to bind an
+    // entry E, and then mark all of E's fellow node-resident
+    // unbound_insert entries as a way to promise writeback and skip
+    // future searches.
+}
+
+static inline
+int unbound_entry_is_bound(struct unbound_insert_entry *entry) {
+    return entry->state == UBI_BOUND;
+}
+
+
+// 16MB log buffers, so how many hash entries for unbound inserts?  
+#define UNBOUND_HASH_BUCKETS (2<<12)
+#define UBI_WHICH_BUCKET(actual_msn) ((actual_msn) % (UNBOUND_HASH_BUCKETS))
+
 struct tokulogger {
     struct mylock  input_lock;
 
+    toku_cond_t input_swapped;
     toku_mutex_t output_condition_lock; // if you need both this lock and input_lock, acquire the output_lock first, then input_lock. More typical is to get the output_is_available condition to be false, and then acquire the input_lock.
     toku_cond_t  output_condition;      //
     bool output_is_available;           // this is part of the predicate for the output condition.  It's true if no thread is modifying the output (either doing an fsync or otherwise fiddling with the output).
@@ -160,7 +226,7 @@ struct tokulogger {
     // To access these, you must have the input lock
     LSN lsn; // the next available lsn
     struct logbuf inbuf; // data being accumulated for the write
-
+    
     // To access these, you must have the output condition lock.
     LSN written_lsn; // the last lsn written
     LSN fsynced_lsn; // What is the LSN of the highest fsynced log entry  (accessed only while holding the output lock, and updated only when the output lock and output permission are held)
@@ -168,6 +234,18 @@ struct tokulogger {
     long long next_log_file_number;
     struct logbuf outbuf; // data being written to the file
     int  n_in_file; // The amount of data in the current file
+    toku_mutex_t ubi_lock;
+    uint64_t n_unbound_inserts;
+    LSN unbound_insert_lsn; // when we append sync_unbound_insert
+                            // messages, we must preallocate LSNs
+                            // (part of swap_inbuf_outbuf) and dole
+                            // them out from this.
+    struct toku_list ubi_lists[2];
+    struct toku_list *ubi_in;
+    struct toku_list *ubi_out;
+
+    BACKGROUND_JOB_MANAGER bjm;
+    KIBBUTZ writeback_kibbutz;
 
     // To access the logfilemgr you must have the output condition lock.
     TOKULOGFILEMGR logfilemgr;
@@ -321,6 +399,7 @@ static inline int toku_logsizeof_bool (uint32_t v __attribute__((__unused__))) {
 }
 
 static inline int toku_logsizeof_FILENUM (FILENUM v __attribute__((__unused__))) {
+
     return 4;
 }
 
@@ -341,6 +420,10 @@ static inline int toku_logsizeof_TXNID (TXNID txnid __attribute__((__unused__)))
 
 static inline int toku_logsizeof_TXNID_PAIR (TXNID_PAIR txnid __attribute__((__unused__))) {
     return 16;
+}
+
+static inline int toku_logsizeof_MSN (MSN msn __attribute__((__unused__))) {
+    return 8;
 }
 
 static inline int toku_logsizeof_XIDP (XIDP xid) {
@@ -369,5 +452,6 @@ static inline char *fixup_fname(BYTESTRING *f) {
     fname[f->len]=0;
     return fname;
 }
-
+void set_logger_unbound_test_callback(bool (*)(void*), void*);
+void set_logger_write_ubi_test_callback(bool (*)(TOKULOGGER, void*), void*);
 #endif

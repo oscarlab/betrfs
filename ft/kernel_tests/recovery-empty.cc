@@ -92,7 +92,7 @@ PATENT RIGHTS GRANT:
 
 #include "test.h"
 
-static int verbose = 1;
+//static int verbose = 1;
 
 static int 
 run_test(void) {
@@ -107,7 +107,7 @@ run_test(void) {
     r = toku_logger_create(&logger); assert(r == 0);
     r = toku_logger_open(TOKU_TEST_FILENAME, logger); assert(r == 0);
     r = toku_logger_close(&logger); assert(r == 0);
-
+#if 0
     if (!verbose) {
         // redirect stderr
         int devnul = open(DEV_NULL_FILE, O_WRONLY);
@@ -115,6 +115,7 @@ run_test(void) {
         r = toku_dup2(devnul, fileno(stderr)); assert(r == fileno(stderr));
         r = close(devnul); assert(r == 0);
     }
+#endif
 
     // run recovery
     r = tokudb_recover(NULL,

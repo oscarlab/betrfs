@@ -128,14 +128,15 @@ cachetable_test (void) {
   CACHETABLE_WRITE_CALLBACK wc = def_write_callback(NULL);
   r = toku_cachetable_get_and_pin(f1, make_blocknum(1), toku_cachetable_hash(f1, make_blocknum(1)), &v1, &s1, wc, def_fetch, def_pf_req_callback, def_pf_callback, true, NULL);
   CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
-  toku_cachetable_begin_checkpoint(cp, NULL);
+  toku_cachetable_begin_checkpoint(cp, NULL, false);
   r = toku_test_cachetable_unpin_and_remove(f1, make_blocknum(1), remove_key_expect_checkpoint, NULL);  
   toku_cachetable_end_checkpoint(
       cp, 
       NULL, 
       NULL,
-      NULL
-      );
+      NULL,
+      false
+	);
 
   r = toku_cachetable_get_and_pin(f1, make_blocknum(1), toku_cachetable_hash(f1, make_blocknum(1)), &v1, &s1, wc, def_fetch, def_pf_req_callback, def_pf_callback, true, NULL);
   r = toku_test_cachetable_unpin_and_remove(f1, make_blocknum(1), remove_key_expect_no_checkpoint, NULL);  
@@ -150,8 +151,10 @@ cachetable_test (void) {
 extern "C" int  test_cachetable_simple_unpin_remove_checkpoint(void);
 
 int test_cachetable_simple_unpin_remove_checkpoint() {
-
+  int rinit = toku_ft_layer_init();
+  CKERR(rinit);
   initialize_dummymsn();
   cachetable_test();
+  toku_ft_layer_destroy();
   return 0;
 }

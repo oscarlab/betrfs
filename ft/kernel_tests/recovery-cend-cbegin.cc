@@ -94,7 +94,7 @@ PATENT RIGHTS GRANT:
 #include "helper.h"
 #include "checkpoint.h"
 
-static int verbose = 0;
+//static int verbose = 0;
 
 static int 
 run_test(void) {
@@ -114,7 +114,7 @@ run_test(void) {
     toku_log_end_checkpoint(logger, NULL, false, firstbegin, 0, 0, 0);
     toku_log_begin_checkpoint(logger, NULL, true, 0, 0);
     r = toku_logger_close(&logger); assert(r == 0);
-
+#if 0
     if (!verbose) {
         // redirect stderr
         int devnul = open(DEV_NULL_FILE, O_WRONLY);
@@ -122,7 +122,7 @@ run_test(void) {
         r = toku_dup2(devnul, fileno(stderr)); assert(r == fileno(stderr));
         r = close(devnul); assert(r == 0);
     }
-
+#endif
     // run recovery
     r = tokudb_recover(NULL,
 		       NULL_prepared_txn_callback,

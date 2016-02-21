@@ -111,18 +111,20 @@ static inline int toku_copy_BYTESTRING(BYTESTRING *target, BYTESTRING val) {
     target->len = val.len;
     target->data = (char *) toku_memdup(val.data, (size_t)val.len);
     if (target->data==0) {
-        return get_error_errno(-ENOMEM);
+        return ENOMEM;
     }
     return 0;
 }
 static inline void toku_free_TXNID(TXNID txnid __attribute__((__unused__))) {}
 static inline void toku_free_TXNID_PAIR(TXNID_PAIR txnid __attribute__((__unused__))) {}
 static inline void toku_free_LSN(LSN lsn __attribute__((__unused__))) {}
+static inline void toku_free_MSN(MSN msn __attribute__((__unused__))) {}
 static inline void toku_free_uint64_t(uint64_t u __attribute__((__unused__))) {}
 static inline void toku_free_uint32_t(uint32_t u __attribute__((__unused__))) {}
 static inline void toku_free_uint8_t(uint8_t u __attribute__((__unused__))) {}
 static inline void toku_free_FILENUM(FILENUM u __attribute__((__unused__))) {}
 static inline void toku_free_BLOCKNUM(BLOCKNUM u __attribute__((__unused__))) {}
+static inline void toku_free_DISKOFF(DISKOFF s __attribute__((__unused__))) {}
 static inline void toku_free_bool(bool u __attribute__((__unused__))) {}
 static inline void toku_free_XIDP(XIDP xidp) { toku_free(xidp); }
 static inline void toku_free_BYTESTRING(BYTESTRING val) { toku_free(val.data); }

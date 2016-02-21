@@ -131,7 +131,7 @@ struct queue {
 int queue_create (QUEUE *q, uint64_t weight_limit)
 {
     QUEUE CALLOC(result);
-    if (result==NULL) return get_error_errno(-ENOMEM);
+    if (result==NULL) return ENOMEM;
     result->contents_weight = 0;
     result->weight_limit    = weight_limit;
     result->head            = NULL;
@@ -160,7 +160,7 @@ int queue_enq (QUEUE q, void *item, uint64_t weight, uint64_t *total_weight_afte
     // Go ahead and put it in, even if it's too much.
     struct qitem *MALLOC(qi);
     if (qi==NULL) {
-	int r = get_error_errno(-ENOMEM);
+	int r = ENOMEM;
 	toku_mutex_unlock(&q->mutex);
 	return r;
     }

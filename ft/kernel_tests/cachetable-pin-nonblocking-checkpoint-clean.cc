@@ -122,7 +122,7 @@ run_test (void) {
 
     r = toku_cachetable_get_and_pin(f1, make_blocknum(1), 1, &v2, &s2, def_write_callback(NULL), def_fetch, def_pf_req_callback, def_pf_callback, true, NULL);
     CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
-    toku_cachetable_begin_checkpoint(cp, NULL);
+    toku_cachetable_begin_checkpoint(cp, NULL, false);
     // mark nodes as pending a checkpoint, so that get_and_pin_nonblocking on block 1 will return TOKUDB_TRY_AGAIN
     r = toku_test_cachetable_unpin(f1, make_blocknum(1), 1, CACHETABLE_CLEAN, make_pair_attr(8)); assert(r==0);
 
@@ -147,7 +147,8 @@ run_test (void) {
         cp, 
         NULL, 
         NULL,
-        NULL
+        NULL,
+	false
         );
     assert(r==0);
     
@@ -161,8 +162,11 @@ extern "C" int test_cachetable_pin_nonblocking_checkpoint_clean(void);
 
 int
 test_cachetable_pin_nonblocking_checkpoint_clean() {
-
+  int rinit = toku_ft_layer_init();
+  CKERR(rinit);
   initialize_dummymsn();
   run_test();
+
+  toku_ft_layer_destroy();
   return 0;
 }

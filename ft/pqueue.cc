@@ -103,13 +103,13 @@ int pqueue_init(pqueue_t **result, size_t n, int which_db, DB *db, ft_compare_fu
 {
     pqueue_t *MALLOC(q);
     if (!q) {
-        return get_error_errno(-ENOMEM);
+        return ENOMEM;
     }
 
     /* Need to allocate n+1 elements since element 0 isn't used. */
     MALLOC_N(n + 1, q->d);
     if (!q->d) {
-        int r = get_error_errno(-ENOMEM);
+        int r = ENOMEM;
         toku_free(q);
         return r;
     }

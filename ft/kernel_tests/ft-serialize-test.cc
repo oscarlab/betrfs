@@ -246,18 +246,20 @@ setup_dn(enum ftnode_verify_type bft, int fd, FT brt_h, FTNODE *dn, FTNODE_DISK_
 
 static void write_sn_to_disk(int fd, FT_HANDLE brt, FTNODE sn, FTNODE_DISK_DATA* src_ndd, bool do_clone) {
     int r;
+    DISKOFF offset;
+    DISKOFF size;
     if (do_clone) {
         void* cloned_node_v = NULL;
         PAIR_ATTR attr;
         long clone_size;
         toku_ftnode_clone_callback(sn, &cloned_node_v, &clone_size, &attr, false, brt->ft);
         FTNODE CAST_FROM_VOIDP(cloned_node, cloned_node_v);
-        r = toku_serialize_ftnode_to(fd, make_blocknum(20), cloned_node, src_ndd, false, brt->ft, false);
+        r = toku_serialize_ftnode_to(fd, make_blocknum(20), cloned_node, src_ndd, false, brt->ft, false, &offset, &size);
         assert(r==0);        
         toku_ftnode_free(&cloned_node);
     }
     else {
-        r = toku_serialize_ftnode_to(fd, make_blocknum(20), sn, src_ndd, true, brt->ft, false);
+        r = toku_serialize_ftnode_to(fd, make_blocknum(20), sn, src_ndd, true, brt->ft, false, &offset, &size);
         assert(r==0);
     }
 }
@@ -283,6 +285,7 @@ test_serialize_leaf_check_msn(enum ftnode_verify_type bft, bool do_clone) {
     sn.n_children = 2;
     sn.dirty = 1;
     sn.oldest_referenced_xid_known = TXNID_NONE;
+    sn.unbound_insert_count = 0;
     MALLOC_N(sn.n_children, sn.bp);
     MALLOC_N(1, sn.childkeys);
     toku_memdup_dbt(&sn.childkeys[0], "b", 2);
@@ -420,7 +423,7 @@ test_serialize_leaf_with_large_pivots(enum ftnode_verify_type bft, bool do_clone
     snp->n_children = nrows;
     snp->dirty = 1;
     snp->oldest_referenced_xid_known = TXNID_NONE;
-
+    snp->unbound_insert_count = 0;
     MALLOC_N(snp->n_children, snp->bp);
     MALLOC_N(snp->n_children-1, snp->childkeys);
     snp->totalchildkeylens = (snp->n_children-1)*sizeof(int);
@@ -576,7 +579,7 @@ test_serialize_leaf_with_many_rows(enum ftnode_verify_type bft, bool do_clone) {
     snp->n_children = 1;
     snp->dirty = 1;
     snp->oldest_referenced_xid_known = TXNID_NONE;
-
+    snp->unbound_insert_count = 0;
     MALLOC_N(snp->n_children, snp->bp);
     MALLOC_N(snp->n_children-1, snp->childkeys);
     snp->totalchildkeylens = (snp->n_children-1)*sizeof(int);
@@ -722,6 +725,7 @@ test_serialize_leaf_with_large_rows(enum ftnode_verify_type bft, bool do_clone) 
     snp->n_children = 1;
     snp->dirty = 1;
     snp->oldest_referenced_xid_known = TXNID_NONE;
+    snp->unbound_insert_count = 0;
     
     MALLOC_N(snp->n_children, snp->bp);
     MALLOC_N(snp->n_children-1, snp->childkeys);
@@ -877,6 +881,7 @@ test_serialize_leaf_with_empty_basement_nodes(enum ftnode_verify_type bft, bool 
     sn.n_children = 7;
     sn.dirty = 1;
     sn.oldest_referenced_xid_known = TXNID_NONE;
+    sn.unbound_insert_count = 0;
     MALLOC_N(sn.n_children, sn.bp);
     MALLOC_N(sn.n_children-1, sn.childkeys);
     toku_memdup_dbt(&sn.childkeys[0], "A", 2);
@@ -1013,6 +1018,7 @@ test_serialize_leaf_with_multiple_empty_basement_nodes(enum ftnode_verify_type b
     sn.n_children = 4;
     sn.dirty = 1;
     sn.oldest_referenced_xid_known = TXNID_NONE;
+    sn.unbound_insert_count = 0;
     MALLOC_N(sn.n_children, sn.bp);
     MALLOC_N(sn.n_children-1, sn.childkeys);
     toku_memdup_dbt(&sn.childkeys[0], "A", 2);
@@ -1122,6 +1128,7 @@ test_serialize_nonleaf(enum ftnode_verify_type bft, bool do_clone) {
     sn.n_children = 2;
     sn.dirty = 1;
     sn.oldest_referenced_xid_known = TXNID_NONE;
+    sn.unbound_insert_count = 0;
     MALLOC_N(2, sn.bp);
     MALLOC_N(1, sn.childkeys);
     toku_memdup_dbt(&sn.childkeys[0], "hello", 6);
@@ -1141,11 +1148,24 @@ test_serialize_nonleaf(enum ftnode_verify_type bft, bool do_clone) {
     r = xids_create_child(xids_123, &xids_234, (TXNID)234);
     CKERR(r);
 
-    toku_bnc_insert_msg(BNC(&sn, 0), "a", 2, "aval", 5, FT_NONE, next_dummymsn(), xids_0, true, NULL, string_key_cmp);
-    toku_bnc_insert_msg(BNC(&sn, 0), "b", 2, "bval", 5, FT_NONE, next_dummymsn(), xids_123, false, NULL, string_key_cmp);
-    toku_bnc_insert_msg(BNC(&sn, 1), "x", 2, "xval", 5, FT_NONE, next_dummymsn(), xids_234, true, NULL, string_key_cmp);
+    FT_MSG_S msg1, msg2, msg3;
+    DBT kdbt;
+    DBT vdbt;
+    toku_fill_dbt(&kdbt, "a", 2);
+    toku_fill_dbt(&vdbt, "aval",5);
+    ft_msg_init(&msg1, FT_NONE, next_dummymsn(), xids_0, &kdbt, &vdbt);
+    toku_bnc_insert_msg(BNC(&sn, 0), NULL, &msg1, true, NULL, string_key_cmp);
+    toku_fill_dbt(&kdbt, "b", 2);
+    toku_fill_dbt(&vdbt, "bval",5);
+    ft_msg_init(&msg2, FT_NONE, next_dummymsn(), xids_123, &kdbt, &vdbt);
+    toku_bnc_insert_msg(BNC(&sn, 0), NULL, &msg2, false, NULL, string_key_cmp);
+
+    toku_fill_dbt(&kdbt, "x", 2);
+    toku_fill_dbt(&vdbt, "xval",5);
+    ft_msg_init(&msg3, FT_NONE, next_dummymsn(), xids_234, &kdbt, &vdbt);
+    toku_bnc_insert_msg(BNC(&sn, 1), NULL, &msg3, true, NULL, string_key_cmp);
     //Cleanup:
-    xids_destroy(&xids_0);
+   xids_destroy(&xids_0);
     xids_destroy(&xids_123);
     xids_destroy(&xids_234);
 

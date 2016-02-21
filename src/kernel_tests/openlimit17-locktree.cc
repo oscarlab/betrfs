@@ -136,9 +136,6 @@ int test_openlimit17_locktree(void) {
     struct rlimit nofile_limit = { N/2, N/2 };
     r = setrlimit(RLIMIT_NOFILE, &nofile_limit);
     // assert(r == 0); // valgrind does not like this
-    if (r != 0) {
-        printf("warning: set nofile limit to %d failed %d %s\n", N, ftfs_get_errno(), strerror(ftfs_get_errno()));
-    }
 
     for (int i = 0; i < N; i++) {
         dbs[i] = NULL;

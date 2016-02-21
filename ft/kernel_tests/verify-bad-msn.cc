@@ -127,8 +127,10 @@ append_leaf(FTNODE leafnode, void *key, size_t keylen, void *val, size_t vallen)
     MSN msn = next_dummymsn();
 
     // apply an insert to the leaf node
-    FT_MSG_S cmd = { FT_INSERT, msn, xids_get_root_xids(), .u={.id = { &thekey, &theval }} };
-    toku_ft_bn_apply_cmd_once(BLB(leafnode, 0), &cmd, idx, NULL, TXNID_NONE, make_gc_info(false), NULL, NULL);
+
+    FT_MSG_S cmd;
+    ft_msg_init(&cmd, FT_INSERT, msn, xids_get_root_xids(), &thekey, &theval);
+    toku_ft_bn_apply_cmd_once(BLB(leafnode, 0), NULL, &cmd, idx, NULL, TXNID_NONE, make_gc_info(false), NULL, NULL);
 
     // Create bad tree (don't do following):
     // leafnode->max_msn_applied_to_node = msn;
@@ -155,7 +157,10 @@ insert_into_child_buffer(FT_HANDLE brt, FTNODE node, int childnum, int minkey, i
         unsigned int key = htonl(val);
         DBT thekey; toku_fill_dbt(&thekey, &key, sizeof key);
         DBT theval; toku_fill_dbt(&theval, &val, sizeof val);
-        toku_ft_append_to_child_buffer(brt->ft->compare_fun, NULL, node, childnum, FT_INSERT, msn, xids_get_root_xids(), true, &thekey, &theval);
+        FT_MSG_S msg;
+        ft_msg_init(&msg, FT_INSERT, msn, xids_get_root_xids(), &thekey, &theval);
+        toku_ft_append_to_child_buffer(brt->ft->compare_fun, NULL, NULL, node, childnum, &msg, true);
+
 
 	// Create bad tree (don't do following):
 	// node->max_msn_applied_to_node = msn;
@@ -207,8 +212,6 @@ test_make_tree(int height, int fanout, int nperleaf, int do_verify) {
     // cleanup
     const char *fname = TOKU_TEST_FILENAME;
     r = unlink(fname);
-    assert(r == 0 || (r == -1 && ftfs_get_errno() == ENOENT));
-
     // create a cachetable
     CACHETABLE ct = NULL;
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);

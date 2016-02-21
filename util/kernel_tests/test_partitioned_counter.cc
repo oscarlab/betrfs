@@ -153,18 +153,16 @@ struct test_arguments {
 static void * reader_test_fun (void *ta_v) {
     struct test_arguments *ta = (struct test_arguments *)ta_v;
     uint64_t lastval = 0;
+    int yieldcpu = 0;
     while (ta->unfinished_count>0) {
-        if (ta->unfinished_count%2 == 0) sched_yield();
+        if (++yieldcpu % 2 == 0) sched_yield();
         uint64_t thisval = read_partitioned_counter(ta->pc);
-//	assert(lastval <= thisval);
-        if(lastval > thisval) {
-            printf("lastval > thisval!\n");
-            printf("lastval=%" PRIu64 " thisval=%" PRIu64 "\n",lastval,thisval);
-            return (void*) -1;
-        }
+	assert(lastval <= thisval);
         assert(thisval <= ta->limit+2);
 	lastval = thisval;
-	 printf("ufc=%" PRIu64 " Thisval=%" PRIu64 "\n", ta->unfinished_count,thisval);
+	if (0==(thisval & (thisval-1)))
+            printf("unfinished count=%" PRIu64 " Thisval=%" PRIu64 "\n",
+                   ta->unfinished_count, thisval);
     }
     uint64_t thisval = read_partitioned_counter(ta->pc);
     assert(thisval==ta->limit+2); // we incremented two extra times in the test

@@ -1,0 +1,2 @@
+/usr/bin/ar cr libutil_static.a  CMakeFiles/util_static.dir/frwlock.cc.o CMakeFiles/util_static.dir/kibbutz.cc.o CMakeFiles/util_static.dir/mempool.cc.o CMakeFiles/util_static.dir/partitioned_counter.cc.o CMakeFiles/util_static.dir/threadpool.cc.o
+/usr/bin/ranlib libutil_static.a

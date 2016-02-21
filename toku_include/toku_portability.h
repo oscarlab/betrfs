@@ -412,6 +412,8 @@ void toku_set_func_fclose(int (*)(FILE*));
 void toku_set_func_read(ssize_t (*)(int, void *, size_t));
 void toku_set_func_pread (ssize_t (*)(int, void *, size_t, off_t));
 
+int toku_fallocate(int fd, off_t offset, off_t len);
+
 int toku_portability_init(void);
 void toku_portability_destroy(void);
 

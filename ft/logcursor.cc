@@ -227,12 +227,9 @@ static int lc_create(TOKULOGCURSOR *lc, const char *log_dir) {
          * XXX: WKJ 9/14/14 - southbound cwd probably incorrect.
          * we don't maintain state well, so always '/'
          */
-        char * cwdbuf = (char *) toku_malloc(PATH_MAX);
-        char *cwd = getcwd(cwdbuf, PATH_MAX);
-        assert(cwd);
+        char cwd[2] = "/";
         cursor->logdir = (char *) toku_xmalloc(strlen(cwd)+strlen(log_dir)+2);
         sprintf(cursor->logdir, "%s/%s", cwd, log_dir);
-        toku_free(cwdbuf);
     }
     cursor->logfiles = NULL;
     cursor->n_logfiles = 0;

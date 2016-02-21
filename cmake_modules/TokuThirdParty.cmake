@@ -41,7 +41,12 @@ if (NOT DEFINED BUILD_FOR_LINUX_KERNEL_MODULE)
 endif()
 
 ## add lzma with an external project
+if (BUILD_FOR_LINUX_KERNEL_MODULE)
+set(xz_configure_opts --enable-static --disable-shared)
+else()
 set(xz_configure_opts --with-pic --enable-static)
+endif (BUILD_FOR_LINUX_KERNEL_MODULE)
+
 if (APPLE)
   ## lzma has some assembly that doesn't work on darwin
   list(APPEND xz_configure_opts --disable-assembler)

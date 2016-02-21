@@ -140,6 +140,7 @@ void destroy_block_allocator (BLOCK_ALLOCATOR *ba);
 // Paramaters:
 //  ba (IN/OUT):
 
+void block_allocator_alloc_and_get_block_at (BLOCK_ALLOCATOR ba, uint64_t size, uint64_t offset);
 
 void block_allocator_alloc_block_at (BLOCK_ALLOCATOR ba, uint64_t size, uint64_t offset);
 // Effect: Allocate a block of the specified size at a particular offset.
@@ -157,6 +158,7 @@ void block_allocator_alloc_block_at (BLOCK_ALLOCATOR ba, uint64_t size, uint64_t
 struct block_allocator_blockpair {
     uint64_t offset;
     uint64_t size;
+    int nref;  //reference counter
 };
 void block_allocator_alloc_blocks_at (BLOCK_ALLOCATOR ba, uint64_t n_blocks, struct block_allocator_blockpair *pairs);
 // Effect: Take pairs in any order, and add them all, as if we did block_allocator_alloc_block() on each pair.
@@ -172,7 +174,10 @@ void block_allocator_alloc_block (BLOCK_ALLOCATOR ba, uint64_t size, uint64_t *o
 //  size (IN):    The size of the block.  (The size does not have to be aligned.)
 //  offset (OUT): The location of the block.
 
-void block_allocator_free_block (BLOCK_ALLOCATOR ba, uint64_t offset);
+void block_allocator_alloc_and_get_block (BLOCK_ALLOCATOR ba, uint64_t size, uint64_t *offset);
+void block_allocator_get_block (BLOCK_ALLOCATOR ba, uint64_t offset);
+void block_allocator_put_block (BLOCK_ALLOCATOR ba, uint64_t offset);
+//void block_allocator_free_block (BLOCK_ALLOCATOR ba, uint64_t offset);
 // Effect: Free the block at offset.
 // Requires: There must be a block currently allocated at that offset.
 // Parameters:
@@ -227,4 +232,9 @@ void block_allocator_merge_blockpairs_into (uint64_t d,       struct block_alloc
 // Rationale: This is exposed so it can be tested by a glass box tester.  Otherwise it would be static (file-scope) function inside block_allocator.c
 
 
+void 
+block_allocator_get_block(BLOCK_ALLOCATOR ba, uint64_t offset);
+
+void 
+block_allocator_put_block(BLOCK_ALLOCATOR ba, uint64_t offset);
 #endif

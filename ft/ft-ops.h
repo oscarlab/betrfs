@@ -208,6 +208,7 @@ int toku_ft_lookup (FT_HANDLE brt, DBT *k, FT_GET_CALLBACK_FUNCTION getf, void *
 
 // Effect: Insert a key and data pair into a brt
 void toku_ft_insert (FT_HANDLE brt, DBT *k, DBT *v, TOKUTXN txn);
+void toku_ft_seq_insert (FT_HANDLE brt, DBT *k, DBT *v, TOKUTXN txn);
 
 // Effect: Optimize the ft
 void toku_ft_optimize (FT_HANDLE brt);
@@ -233,13 +234,16 @@ void toku_ft_log_put (TOKUTXN txn, FT_HANDLE brt, const DBT *key, const DBT *val
 void toku_ft_log_del_multiple (TOKUTXN txn, FT_HANDLE src_ft, FT_HANDLE *brts, uint32_t num_fts, const DBT *key, const DBT *val);
 void toku_ft_log_del (TOKUTXN txn, FT_HANDLE brt, const DBT *key);
 
-// Effect: Delete a key from a brt
+ //Effect: delete a key from a brt
 void toku_ft_delete (FT_HANDLE brt, DBT *k, TOKUTXN txn);
-
+ //Effect: range-delete keys from a brt
+void toku_ft_delete_multicast(FT_HANDLE, DBT*, DBT*, bool, enum pacman_status, TOKUTXN);
 // Effect: Delete a key from a brt if the oplsn is newer than the brt lsn.  This function is called during recovery.
 void toku_ft_maybe_delete (FT_HANDLE brt, DBT *k, TOKUTXN txn, bool oplsn_valid, LSN oplsn, bool do_logging);
 
-void toku_ft_send_insert(FT_HANDLE brt, DBT *key, DBT *val, XIDS xids, enum ft_msg_type type, TXNID oldest_referenced_xid, GC_INFO gc_info);
+void toku_ft_maybe_delete_multicast (FT_HANDLE, DBT *, DBT *, bool, enum pacman_status, TOKUTXN, bool, LSN, bool, bool);
+
+void toku_ft_send_insert(FT_HANDLE brt, DBT *key, DBT *val, XIDS xids, enum ft_msg_type type, struct unbound_insert_entry *entry, TXNID oldest_referenced_xid, GC_INFO gc_info);
 void toku_ft_send_delete(FT_HANDLE brt, DBT *key, XIDS xids, TXNID oldest_referenced_xid, GC_INFO gc_info);
 void toku_ft_send_commit_any(FT_HANDLE brt, DBT *key, XIDS xids, TXNID oldest_referenced_xids, GC_INFO gc_info);
 
@@ -323,6 +327,8 @@ int toku_ft_layer_init(void) __attribute__ ((warn_unused_result));
 #ifdef TOKU_LINUX_MODULE
 extern "C" int toku_ft_layer_init_with_panicenv(void) __attribute__ ((warn_unused_result));
 #endif
+
+extern "C" int toku_ft_layer_init_with_panicenv(void) __attribute__ ((warn_unused_result));
 void toku_ft_open_close_lock(void);
 void toku_ft_open_close_unlock(void);
 extern "C" void toku_ft_layer_destroy(void);

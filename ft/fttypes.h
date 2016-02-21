@@ -102,7 +102,6 @@ PATENT RIGHTS GRANT:
 #include <db.h>
 #include <inttypes.h>
 
-
 // Use the C++ bool and constants (true false), rather than BOOL, TRUE, and FALSE.
 
 typedef struct ft_handle *FT_HANDLE;
@@ -253,13 +252,83 @@ enum ft_msg_type {
     FT_OPTIMIZE = 12,             // Broadcast
     FT_OPTIMIZE_FOR_UPGRADE = 13, // same as FT_OPTIMIZE, but record version number in leafnode
     FT_UPDATE = 14,
-    FT_UPDATE_BROADCAST_ALL = 15
+    FT_UPDATE_BROADCAST_ALL = 15,
+    FT_DELETE_MULTICAST = 16, // sending a multicast delete, where we have two inclusive endpoint keys
+    FT_COMMIT_MULTICAST_TXN = 17, // txn commit for multicasts
+    FT_COMMIT_MULTICAST_ALL = 18, // multicast that commits all leafentries (like FT_COMMIT_BROADCAST_ALL)
+    FT_ABORT_MULTICAST_TXN = 19, // multicast that aborts
+    FT_UNBOUND_INSERT = 20 //large sequentail IO (part of a stream of consecutive keys)
 };
+
+static inline ft_msg_type
+cast_to_msg_type(int i)
+{
+    enum ft_msg_type type = FT_NONE;
+    switch (i) {
+    case 0:
+    case 3:
+    case 5:
+    case 7:
+        type = FT_NONE;
+        break;
+    case 1:
+        type = FT_INSERT;
+        break;
+    case 2:
+        type = FT_DELETE_ANY;
+        break;
+    case 4:
+        type = FT_ABORT_ANY;
+        break;
+    case 6:
+        type = FT_COMMIT_ANY;
+        break;
+    case 8:
+        type = FT_COMMIT_BROADCAST_ALL;
+        break;
+    case 9:
+        type = FT_COMMIT_BROADCAST_TXN;
+        break;
+    case 10:
+        type = FT_ABORT_BROADCAST_TXN;
+        break;
+    case 11:
+        type = FT_INSERT_NO_OVERWRITE;
+        break;
+    case 12:
+        type = FT_OPTIMIZE;
+        break;
+    case 13:
+        type = FT_OPTIMIZE_FOR_UPGRADE;
+        break;
+    case 14:
+        type = FT_UPDATE;
+        break;
+    case 15:
+        type = FT_UPDATE_BROADCAST_ALL;
+        break;
+    case 16:
+        type = FT_DELETE_MULTICAST;
+        break;
+    case 17:
+        type = FT_COMMIT_MULTICAST_TXN;
+        break;
+    case 18:
+        type = FT_COMMIT_MULTICAST_ALL;
+        break;
+    case 19:
+        type = FT_ABORT_MULTICAST_TXN;
+        break;
+    default:
+        type = FT_NONE;
+    }
+    return type;
+}
 
 static inline bool
 ft_msg_type_applies_once(enum ft_msg_type type)
 {
-    bool ret_val;
+    bool ret_val = true;
     switch (type) {
     case FT_INSERT_NO_OVERWRITE:
     case FT_INSERT:
@@ -267,6 +336,7 @@ ft_msg_type_applies_once(enum ft_msg_type type)
     case FT_ABORT_ANY:
     case FT_COMMIT_ANY:
     case FT_UPDATE:
+    case FT_UNBOUND_INSERT:
         ret_val = true;
         break;
     case FT_COMMIT_BROADCAST_ALL:
@@ -275,6 +345,10 @@ ft_msg_type_applies_once(enum ft_msg_type type)
     case FT_OPTIMIZE:
     case FT_OPTIMIZE_FOR_UPGRADE:
     case FT_UPDATE_BROADCAST_ALL:
+    case FT_DELETE_MULTICAST:
+    case FT_COMMIT_MULTICAST_TXN:
+    case FT_COMMIT_MULTICAST_ALL:
+    case FT_ABORT_MULTICAST_TXN:
     case FT_NONE:
         ret_val = false;
         break;
@@ -285,9 +359,9 @@ ft_msg_type_applies_once(enum ft_msg_type type)
 }
 
 static inline bool
-ft_msg_type_applies_all(enum ft_msg_type type)
+ft_msg_type_applies_multiple(enum ft_msg_type type)
 {
-    bool ret_val;
+    bool ret_val = false;
     switch (type) {
     case FT_NONE:
     case FT_INSERT_NO_OVERWRITE:
@@ -296,6 +370,7 @@ ft_msg_type_applies_all(enum ft_msg_type type)
     case FT_ABORT_ANY:
     case FT_COMMIT_ANY:
     case FT_UPDATE:
+    case FT_UNBOUND_INSERT:
         ret_val = false;
         break;
     case FT_COMMIT_BROADCAST_ALL:
@@ -304,6 +379,10 @@ ft_msg_type_applies_all(enum ft_msg_type type)
     case FT_OPTIMIZE:
     case FT_OPTIMIZE_FOR_UPGRADE:
     case FT_UPDATE_BROADCAST_ALL:
+    case FT_DELETE_MULTICAST:
+    case FT_COMMIT_MULTICAST_TXN:
+    case FT_COMMIT_MULTICAST_ALL:
+    case FT_ABORT_MULTICAST_TXN:
         ret_val = true;
         break;
     default:
@@ -311,6 +390,40 @@ ft_msg_type_applies_all(enum ft_msg_type type)
     }
     return ret_val;
 }
+
+static inline bool
+ft_msg_type_is_multicast(enum ft_msg_type type)
+{
+    bool ret_val ;
+    switch (type) {
+    case FT_NONE:
+    case FT_INSERT_NO_OVERWRITE:
+    case FT_INSERT:
+    case FT_DELETE_ANY:
+    case FT_ABORT_ANY:
+    case FT_COMMIT_ANY:
+    case FT_UPDATE:
+    case FT_UNBOUND_INSERT:
+    case FT_COMMIT_BROADCAST_ALL:
+    case FT_COMMIT_BROADCAST_TXN:
+    case FT_ABORT_BROADCAST_TXN:
+    case FT_OPTIMIZE:
+    case FT_OPTIMIZE_FOR_UPGRADE:
+    case FT_UPDATE_BROADCAST_ALL:
+        ret_val = false;
+        break;
+    case FT_DELETE_MULTICAST:
+    case FT_COMMIT_MULTICAST_TXN:
+    case FT_COMMIT_MULTICAST_ALL:
+    case FT_ABORT_MULTICAST_TXN:
+        ret_val = true;
+        break;
+    default:
+        ret_val = false;
+    }
+    return ret_val;
+}
+
 
 static inline bool
 ft_msg_type_does_nothing(enum ft_msg_type type)
@@ -321,23 +434,49 @@ ft_msg_type_does_nothing(enum ft_msg_type type)
 typedef struct xids_t *XIDS;
 typedef struct fifo_msg_t *FIFO_MSG;
 /* tree commands */
+
+
+//blindwrite
+enum pacman_status {
+	PM_UNCOMMITTED=0,
+	PM_COMMITTED, //the txn commited, but there are live txns that may see the msgs/basements wrt MVCC rules
+	PM_GRANTED   //the txn committed, and there are no other live txns whatsoever
+};
+
 struct ft_msg {
     enum ft_msg_type type;
     MSN          msn;          // message sequence number
     XIDS         xids;
-    union {
+    const DBT *        key;
+    const DBT *        max_key;
+    const DBT *        val;
+    bool         is_right_excl;
+    enum pacman_status pm_status;
+    #if 0
+      union {
         /* insert or delete */
         struct ft_cmd_insert_delete {
             const DBT *key;   // for insert, delete, upsertdel
             const DBT *val;   // for insert, delete, (and it is the "extra" for upsertdel, upsertdel_broadcast_all)
         } id;
     } u;
+    #endif
 };
 // Message sent into brt to implement command (insert, delete, etc.)
 // This structure supports nested transactions, and obsoletes ft_msg.
 typedef struct ft_msg FT_MSG_S;
 typedef struct ft_msg *FT_MSG;
+static inline bool
+ft_msg_is_multicast_rightexcl(struct ft_msg * msg) {
+    assert(ft_msg_type_is_multicast((enum ft_msg_type)(unsigned char)msg->type));
+    return msg->is_right_excl;
+}
 
+static inline enum pacman_status
+ft_msg_multicast_pm_status(struct ft_msg * msg) {
+    assert(FT_DELETE_MULTICAST == (enum ft_msg_type)(unsigned char)msg->type);
+    return msg->pm_status;
+}
 typedef int (*ft_compare_func)(DB *, const DBT *, const DBT *);
 typedef void (*setval_func)(const DBT *, void *);
 typedef int (*ft_update_func)(DB *, const DBT *, const DBT *, const DBT *, setval_func, void *);
@@ -382,5 +521,5 @@ enum split_mode {
     SPLIT_LEFT_HEAVY,
     SPLIT_RIGHT_HEAVY
 };
-
+#include "ft/ft_msg.h"
 #endif

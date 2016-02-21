@@ -502,6 +502,7 @@ static void print_db_struct (void) {
     STRUCT_SETUP(DB, cursor,         "int (*%s) (DB *, DB_TXN *, DBC **, uint32_t)");
     STRUCT_SETUP(DB, dbenv,          "DB_ENV *%s");
     STRUCT_SETUP(DB, del,            "int (*%s) (DB *, DB_TXN *, DBT *, uint32_t)");
+    STRUCT_SETUP(DB, del_multi,            "int (*%s) (DB *, DB_TXN *, DBT *, DBT *, bool, uint32_t)");
     STRUCT_SETUP(DB, fd,             "int (*%s) (DB *, int *)");
     STRUCT_SETUP(DB, get,            "int (*%s) (DB *, DB_TXN *, DBT *, DBT *, uint32_t)");
 #if DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 3
@@ -544,6 +545,7 @@ static void print_db_struct (void) {
 			 "void (*get_indexer)(DB*, DB_INDEXER**)",
 			 "int (*verify_with_progress)(DB *, int (*progress_callback)(void *progress_extra, float progress), void *progress_extra, int verbose, int keep_going)",
 			 "int (*update)(DB *, DB_TXN*, const DBT *key, const DBT *extra, uint32_t flags)",
+                         "int (*seq_put)(DB *, DB_TXN *, DBT *, DBT *, uint32_t)",
 			 "int (*update_broadcast)(DB *, DB_TXN*, const DBT *extra, uint32_t flags)",
 			 "int (*get_fractal_tree_info64)(DB*,uint64_t*,uint64_t*,uint64_t*,uint64_t*)",
 			 "int (*iterate_fractal_tree_block_map)(DB*,int(*)(uint64_t,int64_t,int64_t,int64_t,int64_t,void*),void*)",
@@ -595,7 +597,7 @@ static void print_db_txn_stat_struct (void) {
 static void print_dbc_struct (void) {
     field_counter=0;
     STRUCT_SETUP(DBC, c_close, "int (*%s) (DBC *)");
-    //STRUCT_SETUP(DBC, c_del,   "int (*%s) (DBC *, uint32_t)");  // c_del was removed.  See #4576.
+    //STRUCT_SETUP(DBC, c_del,   "int (*%s) (DBC *, uint32_t)");  // c_ve name sl was removed.  See #4576.
     STRUCT_SETUP(DBC, c_get,   "int (*%s) (DBC *, DBT *, DBT *, uint32_t)");
     STRUCT_SETUP(DBC, dbp,     "DB *%s");
     const char *extra[]={

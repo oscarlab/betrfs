@@ -165,7 +165,8 @@ typedef enum {SCHEDULED_CHECKPOINT  = 0,   // "normal" checkpoint taken on check
 int toku_checkpoint(CHECKPOINTER cp, TOKULOGGER logger,
                     void (*callback_f)(void*),  void * extra,
                     void (*callback2_f)(void*), void * extra2,
-                    checkpoint_caller_t caller_id);
+                    checkpoint_caller_t caller_id,
+		    bool is_partial);
 
 
 
@@ -201,5 +202,18 @@ typedef struct {
 
 void toku_checkpoint_get_status(CACHETABLE ct, CHECKPOINT_STATUS stat);
 
+bool is_current_checkpoint_real_chkpt(void);
+void set_checkpoint_filter(bool (*filter) (PAIR p));
+void reset_checkpoint_filter(void);
+bool pass_checkpoint_filter(PAIR p);
+void checkpoint_safe_partial_checkpoint_unlock(void);
+void checkpoint_safe_partial_checkpoint_lock(void);
+void toku_checkpoint_safe_partial_checkpoint_client_unlock(void);
+void toku_checkpoint_safe_partial_checkpoint_client_lock(void);
+bool is_checkpoint_goingon(void);
+int toku_partial_checkpoint_locked(CHECKPOINTER cp, TOKULOGGER logger,
+                void (*callback_f)(void*),  void * extra,
+                void (*callback2_f)(void*), void * extra2,
+                checkpoint_caller_t caller_id) ;
 
 #endif

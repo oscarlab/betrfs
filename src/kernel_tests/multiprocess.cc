@@ -331,8 +331,7 @@ int test_multiprocess(void) {
     DBG;
 
     test_env(env0, env0, -EWOULDBLOCK); /* Minus error code */
-    char *wd = (char *)toku_xmalloc((TOKU_PATH_MAX+1) * sizeof *wd);
-    char *cwd = getcwd(wd, sizeof wd);
+    char cwd[2] = "/";
     assert(cwd != nullptr);
     char *data0 = (char *)toku_xmalloc((TOKU_PATH_MAX+1) * sizeof *data0);
     toku_path_join(data0, 3, cwd, TOKU_TEST_FILENAME, "d0");
@@ -350,7 +349,6 @@ int test_multiprocess(void) {
 
     toku_free(env0);
     toku_free(env1);
-    toku_free(wd);
     toku_free(data0);
     toku_free(data1);
 

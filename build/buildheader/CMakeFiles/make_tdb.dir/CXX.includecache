@@ -1,0 +1,38 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/yang/tmp/betrfs/buildheader/db-4.6.19.h
+sys/types.h
+-
+inttypes.h
+-
+stdint.h
+-
+stddef.h
+-
+stdio.h
+-
+unistd.h
+-
+pthread.h
+-
+
+/home/yang/tmp/betrfs/buildheader/make_tdb.cc
+stdio.h
+-
+stdlib.h
+-
+assert.h
+-
+string.h
+-
+sys/types.h
+-
+db-4.6.19.h
+/home/yang/tmp/betrfs/buildheader/db-4.6.19.h
+

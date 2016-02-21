@@ -2,88 +2,89 @@
 // vim: ft=cpp:expandtab:ts=8:sw=4:softtabstop=4:
 #ident "$Id$"
 /*
-   COPYING CONDITIONS NOTICE:
+<<<<<<< file1
+COPYING CONDITIONS NOTICE:
 
-   This program is free software; you can redistribute it and/or modify
-   it under the terms of version 2 of the GNU General Public License as
-   published by the Free Software Foundation, and provided that the
-   following conditions are met:
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of version 2 of the GNU General Public License as
+  published by the Free Software Foundation, and provided that the
+  following conditions are met:
 
- * Redistributions of source code must retain this COPYING
- CONDITIONS NOTICE, the COPYRIGHT NOTICE (below), the
- DISCLAIMER (below), the UNIVERSITY PATENT NOTICE (below), the
- PATENT MARKING NOTICE (below), and the PATENT RIGHTS
- GRANT (below).
+      * Redistributions of source code must retain this COPYING
+        CONDITIONS NOTICE, the COPYRIGHT NOTICE (below), the
+        DISCLAIMER (below), the UNIVERSITY PATENT NOTICE (below), the
+        PATENT MARKING NOTICE (below), and the PATENT RIGHTS
+        GRANT (below).
 
- * Redistributions in binary form must reproduce this COPYING
- CONDITIONS NOTICE, the COPYRIGHT NOTICE (below), the
- DISCLAIMER (below), the UNIVERSITY PATENT NOTICE (below), the
- PATENT MARKING NOTICE (below), and the PATENT RIGHTS
- GRANT (below) in the documentation and/or other materials
- provided with the distribution.
+      * Redistributions in binary form must reproduce this COPYING
+        CONDITIONS NOTICE, the COPYRIGHT NOTICE (below), the
+        DISCLAIMER (below), the UNIVERSITY PATENT NOTICE (below), the
+        PATENT MARKING NOTICE (below), and the PATENT RIGHTS
+        GRANT (below) in the documentation and/or other materials
+        provided with the distribution.
 
- You should have received a copy of the GNU General Public License
- along with this program; if not, write to the Free Software
- Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
- 02110-1301, USA.
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+  02110-1301, USA.
 
- COPYRIGHT NOTICE:
+COPYRIGHT NOTICE:
 
- TokuDB, Tokutek Fractal Tree Indexing Library.
- Copyright (C) 2007-2013 Tokutek, Inc.
+  TokuDB, Tokutek Fractal Tree Indexing Library.
+  Copyright (C) 2007-2013 Tokutek, Inc.
 
 DISCLAIMER:
 
-This program is distributed in the hope that it will be useful, but
-WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-General Public License for more details.
+  This program is distributed in the hope that it will be useful, but
+  WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+  General Public License for more details.
 
 UNIVERSITY PATENT NOTICE:
 
-The technology is licensed by the Massachusetts Institute of
-Technology, Rutgers State University of New Jersey, and the Research
-Foundation of State University of New York at Stony Brook under
-United States of America Serial No. 11/760379 and to the patents
-and/or patent applications resulting from it.
+  The technology is licensed by the Massachusetts Institute of
+  Technology, Rutgers State University of New Jersey, and the Research
+  Foundation of State University of New York at Stony Brook under
+  United States of America Serial No. 11/760379 and to the patents
+  and/or patent applications resulting from it.
 
 PATENT MARKING NOTICE:
 
-This software is covered by US Patent No. 8,185,551.
-This software is covered by US Patent No. 8,489,638.
+  This software is covered by US Patent No. 8,185,551.
+  This software is covered by US Patent No. 8,489,638.
 
 PATENT RIGHTS GRANT:
 
-"THIS IMPLEMENTATION" means the copyrightable works distributed by
-Tokutek as part of the Fractal Tree project.
+  "THIS IMPLEMENTATION" means the copyrightable works distributed by
+  Tokutek as part of the Fractal Tree project.
 
-"PATENT CLAIMS" means the claims of patents that are owned or
-licensable by Tokutek, both currently or in the future; and that in
-the absence of this license would be infringed by THIS
-IMPLEMENTATION or by using or running THIS IMPLEMENTATION.
+  "PATENT CLAIMS" means the claims of patents that are owned or
+  licensable by Tokutek, both currently or in the future; and that in
+  the absence of this license would be infringed by THIS
+  IMPLEMENTATION or by using or running THIS IMPLEMENTATION.
 
-"PATENT CHALLENGE" shall mean a challenge to the validity,
-patentability, enforceability and/or non-infringement of any of the
-PATENT CLAIMS or otherwise opposing any of the PATENT CLAIMS.
+  "PATENT CHALLENGE" shall mean a challenge to the validity,
+  patentability, enforceability and/or non-infringement of any of the
+  PATENT CLAIMS or otherwise opposing any of the PATENT CLAIMS.
 
-Tokutek hereby grants to you, for the term and geographical scope of
-the PATENT CLAIMS, a non-exclusive, no-charge, royalty-free,
-irrevocable (except as stated in this section) patent license to
-make, have made, use, offer to sell, sell, import, transfer, and
-otherwise run, modify, and propagate the contents of THIS
-IMPLEMENTATION, where such license applies only to the PATENT
-CLAIMS.  This grant does not include claims that would be infringed
-only as a consequence of further modifications of THIS
-IMPLEMENTATION.  If you or your agent or licensee institute or order
-or agree to the institution of patent litigation against any entity
-(including a cross-claim or counterclaim in a lawsuit) alleging that
-THIS IMPLEMENTATION constitutes direct or contributory patent
-infringement, or inducement of patent infringement, then any rights
-granted to you under this License shall terminate as of the date
-such litigation is filed.  If you or your agent or exclusive
-licensee institute or order or agree to the institution of a PATENT
-CHALLENGE, then Tokutek may terminate any rights granted to you
-under this License.
+  Tokutek hereby grants to you, for the term and geographical scope of
+  the PATENT CLAIMS, a non-exclusive, no-charge, royalty-free,
+  irrevocable (except as stated in this section) patent license to
+  make, have made, use, offer to sell, sell, import, transfer, and
+  otherwise run, modify, and propagate the contents of THIS
+  IMPLEMENTATION, where such license applies only to the PATENT
+  CLAIMS.  This grant does not include claims that would be infringed
+  only as a consequence of further modifications of THIS
+  IMPLEMENTATION.  If you or your agent or licensee institute or order
+  or agree to the institution of patent litigation against any entity
+  (including a cross-claim or counterclaim in a lawsuit) alleging that
+  THIS IMPLEMENTATION constitutes direct or contributory patent
+  infringement, or inducement of patent infringement, then any rights
+  granted to you under this License shall terminate as of the date
+  such litigation is filed.  If you or your agent or exclusive
+  licensee institute or order or agree to the institution of a PATENT
+  CHALLENGE, then Tokutek may terminate any rights granted to you
+  under this License.
 */
 
 #ident "Copyright (c) 2011-2013 Tokutek Inc.  All rights reserved."
@@ -109,7 +110,7 @@ under this License.
 
 static FTNODE
 make_node(FT_HANDLE brt, int height) {
-	FTNODE node = NULL;
+        FTNODE node = NULL;
 	int n_children = (height == 0) ? 1 : 0;
 	toku_create_new_ftnode(brt, &node, height, n_children);
 	if (n_children) BP_STATE(node,0) = PT_AVAIL;
@@ -118,65 +119,69 @@ make_node(FT_HANDLE brt, int height) {
 
 static void
 append_leaf(FT_HANDLE brt, FTNODE leafnode, void *key, uint32_t keylen, void *val, uint32_t vallen) {
-	assert(leafnode->height == 0);
+    assert(leafnode->height == 0);
 
-	DBT thekey; toku_fill_dbt(&thekey, key, keylen);
-	DBT theval; toku_fill_dbt(&theval, val, vallen);
-	DBT badval; toku_fill_dbt(&badval, (char*)val+1, vallen);
-	DBT val2;   toku_fill_dbt(&val2, (char*)val+2, vallen);
+    DBT thekey; toku_fill_dbt(&thekey, key, keylen);
+    DBT theval; toku_fill_dbt(&theval, val, vallen);
+    DBT badval; toku_fill_dbt(&badval, (char*)val+1, vallen);
+    DBT val2;   toku_fill_dbt(&val2, (char*)val+2, vallen);
 
-	struct check_pair pair  = {keylen, key, vallen, val, 0};
-	struct check_pair pair2 = {keylen, key, vallen, (char*)val+2, 0};
+    struct check_pair pair  = {keylen, key, vallen, val, 0};
+    struct check_pair pair2 = {keylen, key, vallen, (char*)val+2, 0};
 
-	// apply an insert to the leaf node
-	MSN msn = next_dummymsn();
-	brt->ft->h->max_msn_in_ft = msn;
-	FT_MSG_S cmd = { FT_INSERT, msn, xids_get_root_xids(), .u={.id = { &thekey, &theval }} };
+    // apply an insert to the leaf node
+    MSN msn = next_dummymsn();
+    brt->ft->h->max_msn_in_ft = msn;
+    FT_MSG_S cmd;
+    ft_msg_init(&cmd, FT_INSERT, msn, xids_get_root_xids(), &thekey, &theval);
 
-	toku_ft_leaf_apply_cmd(brt->ft->compare_fun, brt->ft->update_fun, &brt->ft->cmp_descriptor, leafnode, -1, &cmd, make_gc_info(false), nullptr, nullptr);
-	{
-		int r = toku_ft_lookup(brt, &thekey, lookup_checkf, &pair);
-		assert(r==0);
-		assert(pair.call_count==1);
-	}
+    toku_ft_leaf_apply_cmd(brt->ft, brt->ft->compare_fun, brt->ft->update_fun, &brt->ft->cmp_descriptor, NULL, leafnode, -1, &cmd, make_gc_info(false), nullptr, nullptr);
+    {
+	int r = toku_ft_lookup(brt, &thekey, lookup_checkf, &pair);
+	assert(r==0);
+	assert(pair.call_count==1);
+    }
 
-	FT_MSG_S badcmd = { FT_INSERT, msn, xids_get_root_xids(), .u={.id = { &thekey, &badval }} };
-	toku_ft_leaf_apply_cmd(brt->ft->compare_fun, brt->ft->update_fun, &brt->ft->cmp_descriptor, leafnode, -1, &badcmd, make_gc_info(false), nullptr, nullptr);
+    FT_MSG_S badcmd;
+    ft_msg_init (&badcmd, FT_INSERT, msn, xids_get_root_xids(), &thekey, &badval);
+    toku_ft_leaf_apply_cmd(brt->ft, brt->ft->compare_fun, brt->ft->update_fun, &brt->ft->cmp_descriptor, NULL, leafnode, -1, &badcmd, make_gc_info(false), nullptr, nullptr);
 
-	// message should be rejected for duplicate msn, row should still have original val
-	{
-		int r = toku_ft_lookup(brt, &thekey, lookup_checkf, &pair);
-		assert(r==0);
-		assert(pair.call_count==2);
-	}
+    // message should be rejected for duplicate msn, row should still have original val
+    {
+	int r = toku_ft_lookup(brt, &thekey, lookup_checkf, &pair);
+	assert(r==0);
+	assert(pair.call_count==2);
+    }
 
-	// now verify that message with proper msn gets through
-	msn = next_dummymsn();
-	brt->ft->h->max_msn_in_ft = msn;
-	FT_MSG_S cmd2 = { FT_INSERT, msn, xids_get_root_xids(), .u={.id = { &thekey, &val2 }} };
-	toku_ft_leaf_apply_cmd(brt->ft->compare_fun, brt->ft->update_fun, &brt->ft->cmp_descriptor, leafnode, -1, &cmd2, make_gc_info(false), nullptr, nullptr);
+    // now verify that message with proper msn gets through
+    msn = next_dummymsn();
+    brt->ft->h->max_msn_in_ft = msn;
+    FT_MSG_S cmd2;
+    ft_msg_init(&cmd2,  FT_INSERT, msn, xids_get_root_xids(), &thekey, &val2 );
+    toku_ft_leaf_apply_cmd(brt->ft, brt->ft->compare_fun, brt->ft->update_fun, &brt->ft->cmp_descriptor, NULL, leafnode, -1, &cmd2, make_gc_info(false), nullptr, nullptr);
 
-	// message should be accepted, val should have new value
-	{
-		int r = toku_ft_lookup(brt, &thekey, lookup_checkf, &pair2);
-		assert(r==0);
-		assert(pair2.call_count==1);
-	}
+    // message should be accepted, val should have new value
+    {
+	int r = toku_ft_lookup(brt, &thekey, lookup_checkf, &pair2);
+	assert(r==0);
+	assert(pair2.call_count==1);
+    }
 
-	// now verify that message with lesser (older) msn is rejected
-	msn.msn = msn.msn - 10;
-	FT_MSG_S cmd3 = { FT_INSERT, msn, xids_get_root_xids(), .u={.id = { &thekey, &badval } }};
-	toku_ft_leaf_apply_cmd(brt->ft->compare_fun, brt->ft->update_fun, &brt->ft->cmp_descriptor, leafnode, -1, &cmd3, make_gc_info(false), nullptr, nullptr);
+    // now verify that message with lesser (older) msn is rejected
+    msn.msn = msn.msn - 10;
+    FT_MSG_S cmd3;
+    ft_msg_init(&cmd3, FT_INSERT, msn, xids_get_root_xids(),  &thekey, &badval);
+    toku_ft_leaf_apply_cmd(brt->ft, brt->ft->compare_fun, brt->ft->update_fun, &brt->ft->cmp_descriptor, NULL, leafnode, -1, &cmd3, make_gc_info(false), nullptr, nullptr);
 
-	// message should be rejected, val should still have value in pair2
-	{
-		int r = toku_ft_lookup(brt, &thekey, lookup_checkf, &pair2);
-		assert(r==0);
-		assert(pair2.call_count==2);
-	}
+    // message should be rejected, val should still have value in pair2
+    {
+	int r = toku_ft_lookup(brt, &thekey, lookup_checkf, &pair2);
+	assert(r==0);
+	assert(pair2.call_count==2);
+    }
 
-	// dont forget to dirty the node
-	leafnode->dirty = 1;
+    // dont forget to dirty the node
+    leafnode->dirty = 1;
 }
 
 static void 
@@ -189,14 +194,13 @@ populate_leaf(FT_HANDLE brt, FTNODE leafnode, int k, int v) {
 
 static void 
 test_msnfilter(int do_verify) {
-	int r;
+        int r;
 
 	// cleanup
 	const char *fname = TOKU_TEST_FILENAME;
 	r = unlink(fname);
 	if (r != 0) {
-		assert(r == -1);
-		assert(ftfs_get_errno() == ENOENT);
+		assert(r == ENOENT);
 	}
 
 	// create a cachetable

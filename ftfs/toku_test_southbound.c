@@ -1122,7 +1122,7 @@ int test_fcopy(void) {
 	r = fcopy("test-fopen","test-fopen-copy");
 	_teardown_f_test();
 	if(r != 0) {
-		ftfs_log(__func__, "test fcopy failed, error no = %d", ftfs_get_errno());
+		 ftfs_log(__func__, "test fcopy failed");
 	}
 	unlink("test-fopen-copy");
 	return r;

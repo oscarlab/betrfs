@@ -97,6 +97,15 @@ PATENT RIGHTS GRANT:
 #include "quicklz.h"
 #include "toku_assert.h"
 
+/* dp 5/15/15: This funciton is inlined in Linux zlib; hard to export */
+#ifdef TOKU_LINUX_MODULE
+unsigned long deflateBound(z_streamp dontcare, unsigned long s)
+{
+        (void) (dontcare);
+	return s + ((s + 7) >> 3) + ((s + 63) >> 6) + 11;
+}
+#endif
+
 static inline enum toku_compression_method
 normalize_compression_method(enum toku_compression_method method)
 // Effect: resolve "friendly" names like "fast" and "small" into their real values.
@@ -120,18 +129,22 @@ size_t toku_compress_bound (enum toku_compression_method a, size_t size)
     switch (a) {
     case TOKU_NO_COMPRESSION:
         return size + 1;
-#ifndef TOKU_LINUX_MODULE
     case TOKU_LZMA_METHOD:
 	return 1+lzma_stream_buffer_bound(size); // We need one extra for the rfc1950-style header byte (bits -03 are TOKU_LZMA_METHOD (1), bits 4-7 are the compression level)
-#endif
     case TOKU_QUICKLZ_METHOD:
         return size+400 + 1;  // quicklz manual says 400 bytes is enough.  We need one more byte for the rfc1950-style header byte.  bits 0-3 are 9, bits 4-7 are the QLZ_COMPRESSION_LEVEL.
 #ifndef TOKU_LINUX_MODULE
     case TOKU_ZLIB_METHOD:
         return compressBound (size);
-    case TOKU_ZLIB_WITHOUT_CHECKSUM_METHOD:
-        return 2+deflateBound(nullptr, size); // We need one extra for the rfc1950-style header byte, and one extra to store windowBits (a bit over cautious about future upgrades maybe).
+#else
+        /* dep 5/15/15: Kernel zlib doesn't include a bound
+         * estimation.  Just use no compression size */
+    case TOKU_ZLIB_METHOD:
+        //return size + 1;
+        return compressBound(size);
 #endif
+    case TOKU_ZLIB_WITHOUT_CHECKSUM_METHOD:
+        return 2+deflateBound(nullptr, size); // We need one extra for the rfc1950-style header byte, and one extra to  store windowBits (a bit over cautious about future upgrades maybe).
     default:
         break;
     }
@@ -150,10 +163,8 @@ void toku_compress (enum toku_compression_method a,
                     const Bytef *source, uLong   sourceLen)
 // See compress.h for the specification of this function.
 {
-#ifndef TOKU_LINUX_MODULE
     static const int zlib_compression_level = 5;
     static const int zlib_without_checksum_windowbits = -15;
-#endif
 
     a = normalize_compression_method(a);
     assert(sourceLen < (1LL << 32));
@@ -163,14 +174,12 @@ void toku_compress (enum toku_compression_method a,
         memcpy(dest + 1, source, sourceLen);
         *destLen = sourceLen + 1;
         return;
-#ifndef TOKU_LINUX_MODULE
     case TOKU_ZLIB_METHOD: {
         int r = compress2(dest, destLen, source, sourceLen, zlib_compression_level);
         assert(r == Z_OK);
         assert((dest[0]&0xF) == TOKU_ZLIB_METHOD);
         return;
     }
-#endif
     case  TOKU_QUICKLZ_METHOD: {
         if (sourceLen==0) {
             // quicklz requires at least one byte, so we handle this ourselves
@@ -187,7 +196,6 @@ void toku_compress (enum toku_compression_method a,
         dest[0] = TOKU_QUICKLZ_METHOD + (QLZ_COMPRESSION_LEVEL << 4);
         return;
     }
-#ifndef TOKU_LINUX_MODULE
     case TOKU_LZMA_METHOD: {
 	const int lzma_compression_level = 2;
 	if (sourceLen==0) {
@@ -217,8 +225,9 @@ void toku_compress (enum toku_compression_method a,
         strm.opaque = Z_NULL;
         strm.next_in = const_cast<Bytef *>(source);
         strm.avail_in = sourceLen;
-        int r = deflateInit2(&strm, zlib_compression_level, Z_DEFLATED,
-                             zlib_without_checksum_windowbits, 8, Z_DEFAULT_STRATEGY);
+        int r = deflateInit2_(&strm, zlib_compression_level, Z_DEFLATED,
+		  zlib_without_checksum_windowbits, 8, Z_DEFAULT_STRATEGY,
+          ZLIB_VERSION, (int)sizeof(z_stream));
         lazy_assert(r == Z_OK);
         strm.next_out = dest + 2;
         strm.avail_out = *destLen - 2;
@@ -231,7 +240,6 @@ void toku_compress (enum toku_compression_method a,
         dest[1] = zlib_without_checksum_windowbits;
         return;
     }
-#endif
     default:
         break;
     }
@@ -252,7 +260,6 @@ void toku_decompress (Bytef       *dest,   uLongf destLen,
     case TOKU_NO_COMPRESSION:
         memcpy(dest, source + 1, sourceLen - 1);
         return;
-#ifndef TOKU_LINUX_MODULE
     case TOKU_ZLIB_METHOD: {
         uLongf actual_destlen = destLen;
         int r = uncompress(dest, &actual_destlen, source, sourceLen);
@@ -260,7 +267,6 @@ void toku_decompress (Bytef       *dest,   uLongf destLen,
         assert(actual_destlen == destLen);
         return;
     }
-#endif
     case TOKU_QUICKLZ_METHOD:
         if (sourceLen>1) {
             qlz_state_decompress *XCALLOC(qsd);
@@ -272,7 +278,6 @@ void toku_decompress (Bytef       *dest,   uLongf destLen,
             assert(destLen==0);
         }
         return;
-#ifndef TOKU_LINUX_MODULE
     case TOKU_LZMA_METHOD: {
 	if (sourceLen>1) {
 	    uint64_t memlimit = UINT64_MAX;
@@ -292,6 +297,7 @@ void toku_decompress (Bytef       *dest,   uLongf destLen,
 	return;
     }
     case TOKU_ZLIB_WITHOUT_CHECKSUM_METHOD: {
+        int r = 0;
         z_stream strm;
         strm.next_in = const_cast<Bytef *>(source + 2);
         strm.avail_in = sourceLen - 2;
@@ -299,7 +305,7 @@ void toku_decompress (Bytef       *dest,   uLongf destLen,
         strm.zfree = Z_NULL;
         strm.opaque = Z_NULL;
         char windowBits = source[1];
-        int r = inflateInit2(&strm, windowBits);
+        r = inflateInit2(&strm, windowBits);
         lazy_assert(r == Z_OK);
         strm.next_out = dest;
         strm.avail_out = destLen;
@@ -309,7 +315,6 @@ void toku_decompress (Bytef       *dest,   uLongf destLen,
         lazy_assert(r == Z_OK);
         return;
     }
-#endif
     }
     // default fall through to error.
 #ifndef TOKU_LINUX_MODULE

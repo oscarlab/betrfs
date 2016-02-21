@@ -103,8 +103,7 @@ static void * child_func(void * arg) {
     if(arg == NULL) {
         //printf("TOKU_TEST_FILENAME = %s", "flock-test");
         int fd2 = toku_os_lock_file("flock-test");
-        printf("fd2 = %d, errno = %d\n", fd2, ftfs_get_errno()); 
-        assert(fd2 == -1);
+        assert(fd2 < 0);
         return (void*) 0;
     } else {
         return (void *)-1;

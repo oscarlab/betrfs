@@ -101,6 +101,7 @@ typedef struct kibbutz *KIBBUTZ;
 // create a kibbutz where n_workers is the number of threads in the threadpool
 //
 KIBBUTZ toku_kibbutz_create (int n_workers);
+KIBBUTZ toku_kibbutz_create_debug (int n_workers, const char * str);
 //
 // enqueue a workitem in the kibbutz. When the kibbutz is to work on this workitem,
 // it calls f(extra). 

@@ -1,0 +1,661 @@
+Determining if the pthread_create exist failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec4160547532/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec4160547532.dir/build.make CMakeFiles/cmTryCompileExec4160547532.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building C object CMakeFiles/cmTryCompileExec4160547532.dir/CheckSymbolExists.c.o
+/usr/bin/gcc    -o CMakeFiles/cmTryCompileExec4160547532.dir/CheckSymbolExists.c.o   -c /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckSymbolExists.c
+Linking C executable cmTryCompileExec4160547532
+/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTryCompileExec4160547532.dir/link.txt --verbose=1
+/usr/bin/gcc       CMakeFiles/cmTryCompileExec4160547532.dir/CheckSymbolExists.c.o  -o cmTryCompileExec4160547532 -rdynamic 
+CMakeFiles/cmTryCompileExec4160547532.dir/CheckSymbolExists.c.o: In function `main':
+CheckSymbolExists.c:(.text+0x16): undefined reference to `pthread_create'
+collect2: error: ld returned 1 exit status
+make[1]: *** [cmTryCompileExec4160547532] Error 1
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+make: *** [cmTryCompileExec4160547532/fast] Error 2
+
+File /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckSymbolExists.c:
+/* */
+#include <pthread.h>
+
+int main(int argc, char** argv)
+{
+  (void)argv;
+#ifndef pthread_create
+  return ((int*)(&pthread_create))[argc];
+#else
+  (void)argc;
+  return 0;
+#endif
+}
+
+Determining if the function pthread_create exists in the pthreads failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec3965511121/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec3965511121.dir/build.make CMakeFiles/cmTryCompileExec3965511121.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building C object CMakeFiles/cmTryCompileExec3965511121.dir/CheckFunctionExists.c.o
+/usr/bin/gcc   -DCHECK_FUNCTION_EXISTS=pthread_create   -o CMakeFiles/cmTryCompileExec3965511121.dir/CheckFunctionExists.c.o   -c /usr/share/cmake-2.8/Modules/CheckFunctionExists.c
+Linking C executable cmTryCompileExec3965511121
+/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTryCompileExec3965511121.dir/link.txt --verbose=1
+/usr/bin/gcc   -DCHECK_FUNCTION_EXISTS=pthread_create    CMakeFiles/cmTryCompileExec3965511121.dir/CheckFunctionExists.c.o  -o cmTryCompileExec3965511121 -rdynamic -lpthreads 
+/usr/bin/ld: cannot find -lpthreads
+collect2: error: ld returned 1 exit status
+make[1]: *** [cmTryCompileExec3965511121] Error 1
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+make: *** [cmTryCompileExec3965511121/fast] Error 2
+
+
+Determining if files libkern/OSAtomic.h exist failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec2353163036/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec2353163036.dir/build.make CMakeFiles/cmTryCompileExec2353163036.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building C object CMakeFiles/cmTryCompileExec2353163036.dir/CheckIncludeFiles.c.o
+/usr/bin/gcc    -o CMakeFiles/cmTryCompileExec2353163036.dir/CheckIncludeFiles.c.o   -c /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckIncludeFiles.c
+/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckIncludeFiles.c:2:30: fatal error: libkern/OSAtomic.h: No such file or directory
+ #include <libkern/OSAtomic.h>
+                              ^
+compilation terminated.
+make[1]: *** [CMakeFiles/cmTryCompileExec2353163036.dir/CheckIncludeFiles.c.o] Error 1
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+make: *** [cmTryCompileExec2353163036/fast] Error 2
+
+Source:
+/* */
+#include <libkern/OSAtomic.h>
+
+
+int main(){return 0;}
+
+Determining if files libkern/OSByteOrder.h exist failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec179245914/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec179245914.dir/build.make CMakeFiles/cmTryCompileExec179245914.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building C object CMakeFiles/cmTryCompileExec179245914.dir/CheckIncludeFiles.c.o
+/usr/bin/gcc    -o CMakeFiles/cmTryCompileExec179245914.dir/CheckIncludeFiles.c.o   -c /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckIncludeFiles.c
+/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckIncludeFiles.c:2:33: fatal error: libkern/OSByteOrder.h: No such file or directory
+ #include <libkern/OSByteOrder.h>
+                                 ^
+compilation terminated.
+make[1]: *** [CMakeFiles/cmTryCompileExec179245914.dir/CheckIncludeFiles.c.o] Error 1
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+make: *** [cmTryCompileExec179245914/fast] Error 2
+
+Source:
+/* */
+#include <libkern/OSByteOrder.h>
+
+
+int main(){return 0;}
+
+Determining if files machine/endian.h exist failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec4266633364/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec4266633364.dir/build.make CMakeFiles/cmTryCompileExec4266633364.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building C object CMakeFiles/cmTryCompileExec4266633364.dir/CheckIncludeFiles.c.o
+/usr/bin/gcc    -o CMakeFiles/cmTryCompileExec4266633364.dir/CheckIncludeFiles.c.o   -c /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckIncludeFiles.c
+/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckIncludeFiles.c:2:28: fatal error: machine/endian.h: No such file or directory
+ #include <machine/endian.h>
+                            ^
+compilation terminated.
+make[1]: *** [CMakeFiles/cmTryCompileExec4266633364.dir/CheckIncludeFiles.c.o] Error 1
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+make: *** [cmTryCompileExec4266633364/fast] Error 2
+
+Source:
+/* */
+#include <machine/endian.h>
+
+
+int main(){return 0;}
+
+Determining if files malloc/malloc.h exist failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec3429779605/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec3429779605.dir/build.make CMakeFiles/cmTryCompileExec3429779605.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building C object CMakeFiles/cmTryCompileExec3429779605.dir/CheckIncludeFiles.c.o
+/usr/bin/gcc    -o CMakeFiles/cmTryCompileExec3429779605.dir/CheckIncludeFiles.c.o   -c /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckIncludeFiles.c
+/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckIncludeFiles.c:2:27: fatal error: malloc/malloc.h: No such file or directory
+ #include <malloc/malloc.h>
+                           ^
+compilation terminated.
+make[1]: *** [CMakeFiles/cmTryCompileExec3429779605.dir/CheckIncludeFiles.c.o] Error 1
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+make: *** [cmTryCompileExec3429779605/fast] Error 2
+
+Source:
+/* */
+#include <malloc/malloc.h>
+
+
+int main(){return 0;}
+
+Determining if files malloc_np.h exist failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec4005673876/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec4005673876.dir/build.make CMakeFiles/cmTryCompileExec4005673876.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building C object CMakeFiles/cmTryCompileExec4005673876.dir/CheckIncludeFiles.c.o
+/usr/bin/gcc    -o CMakeFiles/cmTryCompileExec4005673876.dir/CheckIncludeFiles.c.o   -c /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckIncludeFiles.c
+/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckIncludeFiles.c:2:23: fatal error: malloc_np.h: No such file or directory
+ #include <malloc_np.h>
+                       ^
+compilation terminated.
+make[1]: *** [CMakeFiles/cmTryCompileExec4005673876.dir/CheckIncludeFiles.c.o] Error 1
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+make: *** [cmTryCompileExec4005673876/fast] Error 2
+
+Source:
+/* */
+#include <malloc_np.h>
+
+
+int main(){return 0;}
+
+Determining if files pthread_np.h exist failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec1221824190/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec1221824190.dir/build.make CMakeFiles/cmTryCompileExec1221824190.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building C object CMakeFiles/cmTryCompileExec1221824190.dir/CheckIncludeFiles.c.o
+/usr/bin/gcc    -o CMakeFiles/cmTryCompileExec1221824190.dir/CheckIncludeFiles.c.o   -c /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckIncludeFiles.c
+/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckIncludeFiles.c:2:24: fatal error: pthread_np.h: No such file or directory
+ #include <pthread_np.h>
+                        ^
+compilation terminated.
+make[1]: *** [CMakeFiles/cmTryCompileExec1221824190.dir/CheckIncludeFiles.c.o] Error 1
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+make: *** [cmTryCompileExec1221824190/fast] Error 2
+
+Source:
+/* */
+#include <pthread_np.h>
+
+
+int main(){return 0;}
+
+Determining if files sys/endian.h exist failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec2397876891/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec2397876891.dir/build.make CMakeFiles/cmTryCompileExec2397876891.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building C object CMakeFiles/cmTryCompileExec2397876891.dir/CheckIncludeFiles.c.o
+/usr/bin/gcc    -o CMakeFiles/cmTryCompileExec2397876891.dir/CheckIncludeFiles.c.o   -c /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckIncludeFiles.c
+/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckIncludeFiles.c:2:24: fatal error: sys/endian.h: No such file or directory
+ #include <sys/endian.h>
+                        ^
+compilation terminated.
+make[1]: *** [CMakeFiles/cmTryCompileExec2397876891.dir/CheckIncludeFiles.c.o] Error 1
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+make: *** [cmTryCompileExec2397876891/fast] Error 2
+
+Source:
+/* */
+#include <sys/endian.h>
+
+
+int main(){return 0;}
+
+Determining if files sys/malloc.h exist failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec1979378270/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec1979378270.dir/build.make CMakeFiles/cmTryCompileExec1979378270.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building C object CMakeFiles/cmTryCompileExec1979378270.dir/CheckIncludeFiles.c.o
+/usr/bin/gcc    -o CMakeFiles/cmTryCompileExec1979378270.dir/CheckIncludeFiles.c.o   -c /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckIncludeFiles.c
+/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckIncludeFiles.c:2:24: fatal error: sys/malloc.h: No such file or directory
+ #include <sys/malloc.h>
+                        ^
+compilation terminated.
+make[1]: *** [CMakeFiles/cmTryCompileExec1979378270.dir/CheckIncludeFiles.c.o] Error 1
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+make: *** [cmTryCompileExec1979378270/fast] Error 2
+
+Source:
+/* */
+#include <sys/malloc.h>
+
+
+int main(){return 0;}
+
+Determining if files sys/syslimits.h exist failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec165222427/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec165222427.dir/build.make CMakeFiles/cmTryCompileExec165222427.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building C object CMakeFiles/cmTryCompileExec165222427.dir/CheckIncludeFiles.c.o
+/usr/bin/gcc    -o CMakeFiles/cmTryCompileExec165222427.dir/CheckIncludeFiles.c.o   -c /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckIncludeFiles.c
+/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckIncludeFiles.c:2:27: fatal error: sys/syslimits.h: No such file or directory
+ #include <sys/syslimits.h>
+                           ^
+compilation terminated.
+make[1]: *** [CMakeFiles/cmTryCompileExec165222427.dir/CheckIncludeFiles.c.o] Error 1
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+make: *** [cmTryCompileExec165222427/fast] Error 2
+
+Source:
+/* */
+#include <sys/syslimits.h>
+
+
+int main(){return 0;}
+
+Determining if the F_NOCACHE exist failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec3191925589/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec3191925589.dir/build.make CMakeFiles/cmTryCompileExec3191925589.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building C object CMakeFiles/cmTryCompileExec3191925589.dir/CheckSymbolExists.c.o
+/usr/bin/gcc  -D_GNU_SOURCE  -o CMakeFiles/cmTryCompileExec3191925589.dir/CheckSymbolExists.c.o   -c /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckSymbolExists.c
+/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckSymbolExists.c: In function ‘main’:
+/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckSymbolExists.c:8:19: error: ‘F_NOCACHE’ undeclared (first use in this function)
+   return ((int*)(&F_NOCACHE))[argc];
+                   ^
+/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckSymbolExists.c:8:19: note: each undeclared identifier is reported only once for each function it appears in
+make[1]: *** [CMakeFiles/cmTryCompileExec3191925589.dir/CheckSymbolExists.c.o] Error 1
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+make: *** [cmTryCompileExec3191925589/fast] Error 2
+
+File /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckSymbolExists.c:
+/* */
+#include <fcntl.h>
+
+int main(int argc, char** argv)
+{
+  (void)argv;
+#ifndef F_NOCACHE
+  return ((int*)(&F_NOCACHE))[argc];
+#else
+  (void)argc;
+  return 0;
+#endif
+}
+
+Determining if the function malloc_size exists failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec221026348/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec221026348.dir/build.make CMakeFiles/cmTryCompileExec221026348.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building C object CMakeFiles/cmTryCompileExec221026348.dir/CheckFunctionExists.c.o
+/usr/bin/gcc  -D_GNU_SOURCE -DCHECK_FUNCTION_EXISTS=malloc_size   -o CMakeFiles/cmTryCompileExec221026348.dir/CheckFunctionExists.c.o   -c /usr/share/cmake-2.8/Modules/CheckFunctionExists.c
+Linking C executable cmTryCompileExec221026348
+/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTryCompileExec221026348.dir/link.txt --verbose=1
+/usr/bin/gcc   -DCHECK_FUNCTION_EXISTS=malloc_size    CMakeFiles/cmTryCompileExec221026348.dir/CheckFunctionExists.c.o  -o cmTryCompileExec221026348 -rdynamic 
+CMakeFiles/cmTryCompileExec221026348.dir/CheckFunctionExists.c.o: In function `main':
+CheckFunctionExists.c:(.text+0x15): undefined reference to `malloc_size'
+collect2: error: ld returned 1 exit status
+make[1]: *** [cmTryCompileExec221026348] Error 1
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+make: *** [cmTryCompileExec221026348/fast] Error 2
+
+
+Determining if the function dlsym exists failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec1223859394/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec1223859394.dir/build.make CMakeFiles/cmTryCompileExec1223859394.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building C object CMakeFiles/cmTryCompileExec1223859394.dir/CheckFunctionExists.c.o
+/usr/bin/gcc  -D_GNU_SOURCE -DCHECK_FUNCTION_EXISTS=dlsym   -o CMakeFiles/cmTryCompileExec1223859394.dir/CheckFunctionExists.c.o   -c /usr/share/cmake-2.8/Modules/CheckFunctionExists.c
+Linking C executable cmTryCompileExec1223859394
+/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTryCompileExec1223859394.dir/link.txt --verbose=1
+/usr/bin/gcc   -DCHECK_FUNCTION_EXISTS=dlsym    CMakeFiles/cmTryCompileExec1223859394.dir/CheckFunctionExists.c.o  -o cmTryCompileExec1223859394 -rdynamic 
+CMakeFiles/cmTryCompileExec1223859394.dir/CheckFunctionExists.c.o: In function `main':
+CheckFunctionExists.c:(.text+0x15): undefined reference to `dlsym'
+collect2: error: ld returned 1 exit status
+make[1]: *** [cmTryCompileExec1223859394] Error 1
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+make: *** [cmTryCompileExec1223859394/fast] Error 2
+
+
+Determining if the function pthread_yield_np exists failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec4232079655/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec4232079655.dir/build.make CMakeFiles/cmTryCompileExec4232079655.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building C object CMakeFiles/cmTryCompileExec4232079655.dir/CheckFunctionExists.c.o
+/usr/bin/gcc  -D_GNU_SOURCE -DCHECK_FUNCTION_EXISTS=pthread_yield_np   -o CMakeFiles/cmTryCompileExec4232079655.dir/CheckFunctionExists.c.o   -c /usr/share/cmake-2.8/Modules/CheckFunctionExists.c
+Linking C executable cmTryCompileExec4232079655
+/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTryCompileExec4232079655.dir/link.txt --verbose=1
+/usr/bin/gcc   -DCHECK_FUNCTION_EXISTS=pthread_yield_np    CMakeFiles/cmTryCompileExec4232079655.dir/CheckFunctionExists.c.o  -o cmTryCompileExec4232079655 -rdynamic -lpthread 
+CMakeFiles/cmTryCompileExec4232079655.dir/CheckFunctionExists.c.o: In function `main':
+CheckFunctionExists.c:(.text+0x15): undefined reference to `pthread_yield_np'
+collect2: error: ld returned 1 exit status
+make[1]: *** [cmTryCompileExec4232079655] Error 1
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+make: *** [cmTryCompileExec4232079655/fast] Error 2
+
+
+Determining if the function pthread_getthreadid_np exists failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec620024116/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec620024116.dir/build.make CMakeFiles/cmTryCompileExec620024116.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building C object CMakeFiles/cmTryCompileExec620024116.dir/CheckFunctionExists.c.o
+/usr/bin/gcc  -D_GNU_SOURCE -DCHECK_FUNCTION_EXISTS=pthread_getthreadid_np   -o CMakeFiles/cmTryCompileExec620024116.dir/CheckFunctionExists.c.o   -c /usr/share/cmake-2.8/Modules/CheckFunctionExists.c
+Linking C executable cmTryCompileExec620024116
+/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTryCompileExec620024116.dir/link.txt --verbose=1
+/usr/bin/gcc   -DCHECK_FUNCTION_EXISTS=pthread_getthreadid_np    CMakeFiles/cmTryCompileExec620024116.dir/CheckFunctionExists.c.o  -o cmTryCompileExec620024116 -rdynamic -lpthread 
+CMakeFiles/cmTryCompileExec620024116.dir/CheckFunctionExists.c.o: In function `main':
+CheckFunctionExists.c:(.text+0x15): undefined reference to `pthread_getthreadid_np'
+collect2: error: ld returned 1 exit status
+make[1]: *** [cmTryCompileExec620024116] Error 1
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+make: *** [cmTryCompileExec620024116/fast] Error 2
+
+
+Determining if the prototype pthread_yield exists for PTHREAD_YIELD_RETURNS_VOID failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec293156457/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec293156457.dir/build.make CMakeFiles/cmTryCompileExec293156457.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building C object CMakeFiles/cmTryCompileExec293156457.dir/CheckPrototypeDefinition.c.o
+/usr/bin/gcc  -D_GNU_SOURCE  -o CMakeFiles/cmTryCompileExec293156457.dir/CheckPrototypeDefinition.c.o   -c /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckPrototypeDefinition.c
+/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckPrototypeDefinition.c:14:6: error: conflicting types for ‘pthread_yield’
+ void pthread_yield(void) {
+      ^
+In file included from /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckPrototypeDefinition.c:1:0:
+/usr/include/pthread.h:480:12: note: previous declaration of ‘pthread_yield’ was here
+ extern int pthread_yield (void) __THROW;
+            ^
+/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckPrototypeDefinition.c: In function ‘pthread_yield’:
+/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CheckPrototypeDefinition.c:15:3: warning: ‘return’ with a value, in function returning void [enabled by default]
+   return 0;
+   ^
+make[1]: *** [CMakeFiles/cmTryCompileExec293156457.dir/CheckPrototypeDefinition.c.o] Error 1
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+make: *** [cmTryCompileExec293156457/fast] Error 2
+
+
+#include <pthread.h>
+
+
+static void cmakeRequireSymbol(int dummy, ...) {
+  (void) dummy;
+}
+
+static void checkSymbol(void) {
+#ifndef pthread_yield
+  cmakeRequireSymbol(0, &pthread_yield);
+#endif
+}
+
+void pthread_yield(void) {
+  return 0;
+}
+
+#ifdef __CLASSIC_C__
+int main() {
+  int ac;
+  char*av[];
+#else
+int main(int ac, char *av[]) {
+#endif
+  checkSymbol();
+  if (ac > 1000) {
+    return *av[0];
+  }
+  return 0;
+}
+
+
+Performing C SOURCE FILE Test HAVE_C_-Wstrict-null-sentinel failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec2592968730/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec2592968730.dir/build.make CMakeFiles/cmTryCompileExec2592968730.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building C object CMakeFiles/cmTryCompileExec2592968730.dir/src.c.o
+/usr/bin/gcc   -Wno-missing-field-initializers  -DHAVE_C_-Wstrict-null-sentinel   -Wstrict-null-sentinel -o CMakeFiles/cmTryCompileExec2592968730.dir/src.c.o   -c /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/src.c
+cc1: warning: command line option '-Wstrict-null-sentinel' is valid for C++/ObjC++ but not for C [enabled by default]
+<command-line>:0:8: warning: missing whitespace after the macro name [enabled by default]
+Linking C executable cmTryCompileExec2592968730
+/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTryCompileExec2592968730.dir/link.txt --verbose=1
+/usr/bin/gcc  -Wno-missing-field-initializers  -DHAVE_C_-Wstrict-null-sentinel    CMakeFiles/cmTryCompileExec2592968730.dir/src.c.o  -o cmTryCompileExec2592968730 -rdynamic -lpthread 
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+
+Source file was:
+int main(void) { return 0; }
+Performing C SOURCE FILE Test HAVE_C_-Wno-error=address-of-array-temporary failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec3484884887/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec3484884887.dir/build.make CMakeFiles/cmTryCompileExec3484884887.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building C object CMakeFiles/cmTryCompileExec3484884887.dir/src.c.o
+/usr/bin/gcc   -Wno-error=missing-format-attribute -Wmissing-format-attribute -Wlogical-op -Wtrampolines -Wswitch -Winit-self -Wno-missing-field-initializers  -DHAVE_C_-Wno-error=address-of-array-temporary   -Wno-error=address-of-array-temporary -o CMakeFiles/cmTryCompileExec3484884887.dir/src.c.o   -c /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/src.c
+cc1: error: -Werror=address-of-array-temporary: no option -Waddress-of-array-temporary
+make[1]: *** [CMakeFiles/cmTryCompileExec3484884887.dir/src.c.o] Error 1
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+make: *** [cmTryCompileExec3484884887/fast] Error 2
+
+Source file was:
+int main(void) { return 0; }
+Performing C++ SOURCE FILE Test HAVE_CXX_-Wno-error=address-of-array-temporary failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec3098169/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec3098169.dir/build.make CMakeFiles/cmTryCompileExec3098169.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building CXX object CMakeFiles/cmTryCompileExec3098169.dir/src.cxx.o
+/usr/bin/g++    -Wno-error=missing-format-attribute -Wmissing-format-attribute -Wlogical-op -Wtrampolines -Wswitch -Winit-self -Wstrict-null-sentinel -Wno-missing-field-initializers  -DHAVE_CXX_-Wno-error=address-of-array-temporary   -Wno-error=address-of-array-temporary -o CMakeFiles/cmTryCompileExec3098169.dir/src.cxx.o -c /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/src.cxx
+cc1plus: error: -Werror=address-of-array-temporary: no option -Waddress-of-array-temporary
+make[1]: *** [CMakeFiles/cmTryCompileExec3098169.dir/src.cxx.o] Error 1
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+make: *** [cmTryCompileExec3098169/fast] Error 2
+
+Source file was:
+int main() { return 0;}
+Performing C SOURCE FILE Test HAVE_C_-Wno-error=tautological-constant-out-of-range-compare failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec1051726387/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec1051726387.dir/build.make CMakeFiles/cmTryCompileExec1051726387.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building C object CMakeFiles/cmTryCompileExec1051726387.dir/src.c.o
+/usr/bin/gcc   -Wno-error=missing-format-attribute -Wmissing-format-attribute -Wlogical-op -Wtrampolines -Wswitch -Winit-self -Wno-missing-field-initializers  -DHAVE_C_-Wno-error=tautological-constant-out-of-range-compare   -Wno-error=tautological-constant-out-of-range-compare -o CMakeFiles/cmTryCompileExec1051726387.dir/src.c.o   -c /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/src.c
+cc1: error: -Werror=tautological-constant-out-of-range-compare: no option -Wtautological-constant-out-of-range-compare
+make[1]: *** [CMakeFiles/cmTryCompileExec1051726387.dir/src.c.o] Error 1
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+make: *** [cmTryCompileExec1051726387/fast] Error 2
+
+Source file was:
+int main(void) { return 0; }
+Performing C++ SOURCE FILE Test HAVE_CXX_-Wno-error=tautological-constant-out-of-range-compare failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec1374483690/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec1374483690.dir/build.make CMakeFiles/cmTryCompileExec1374483690.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building CXX object CMakeFiles/cmTryCompileExec1374483690.dir/src.cxx.o
+/usr/bin/g++    -Wno-error=missing-format-attribute -Wmissing-format-attribute -Wlogical-op -Wtrampolines -Wswitch -Winit-self -Wstrict-null-sentinel -Wno-missing-field-initializers  -DHAVE_CXX_-Wno-error=tautological-constant-out-of-range-compare   -Wno-error=tautological-constant-out-of-range-compare -o CMakeFiles/cmTryCompileExec1374483690.dir/src.cxx.o -c /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/src.cxx
+cc1plus: error: -Werror=tautological-constant-out-of-range-compare: no option -Wtautological-constant-out-of-range-compare
+make[1]: *** [CMakeFiles/cmTryCompileExec1374483690.dir/src.cxx.o] Error 1
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+make: *** [cmTryCompileExec1374483690/fast] Error 2
+
+Source file was:
+int main() { return 0;}
+Performing C SOURCE FILE Test HAVE_C_-fno-rtti failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec101683608/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec101683608.dir/build.make CMakeFiles/cmTryCompileExec101683608.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building C object CMakeFiles/cmTryCompileExec101683608.dir/src.c.o
+/usr/bin/gcc   -Wno-error=missing-format-attribute -Wmissing-format-attribute -Wlogical-op -Wtrampolines -Wswitch -Winit-self -Wno-missing-field-initializers  -DHAVE_C_-fno-rtti   -fno-rtti -o CMakeFiles/cmTryCompileExec101683608.dir/src.c.o   -c /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/src.c
+cc1: warning: command line option '-fno-rtti' is valid for C++/ObjC++ but not for C [enabled by default]
+<command-line>:0:8: warning: missing whitespace after the macro name [enabled by default]
+Linking C executable cmTryCompileExec101683608
+/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTryCompileExec101683608.dir/link.txt --verbose=1
+/usr/bin/gcc  -Wno-error=missing-format-attribute -Wmissing-format-attribute -Wlogical-op -Wtrampolines -Wswitch -Winit-self -Wno-missing-field-initializers  -DHAVE_C_-fno-rtti    CMakeFiles/cmTryCompileExec101683608.dir/src.c.o  -o cmTryCompileExec101683608 -rdynamic -lpthread 
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+
+Source file was:
+int main(void) { return 0; }
+Performing C++ SOURCE FILE Test HAVE_CXX_-Wbad-function-cast failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec2076004531/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec2076004531.dir/build.make CMakeFiles/cmTryCompileExec2076004531.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building CXX object CMakeFiles/cmTryCompileExec2076004531.dir/src.cxx.o
+/usr/bin/g++    -Wextra -Wno-error=strict-overflow -Wpacked -fno-exceptions -fno-rtti -Wno-error=missing-format-attribute -Wmissing-format-attribute -Wlogical-op -Wtrampolines -Wswitch -Winit-self -Wstrict-null-sentinel -Wno-missing-field-initializers  -DHAVE_CXX_-Wbad-function-cast   -Wbad-function-cast -o CMakeFiles/cmTryCompileExec2076004531.dir/src.cxx.o -c /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/src.cxx
+cc1plus: warning: command line option '-Wbad-function-cast' is valid for C/ObjC but not for C++ [enabled by default]
+<command-line>:0:10: warning: missing whitespace after the macro name [enabled by default]
+Linking CXX executable cmTryCompileExec2076004531
+/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTryCompileExec2076004531.dir/link.txt --verbose=1
+/usr/bin/g++   -Wextra -Wno-error=strict-overflow -Wpacked -fno-exceptions -fno-rtti -Wno-error=missing-format-attribute -Wmissing-format-attribute -Wlogical-op -Wtrampolines -Wswitch -Winit-self -Wstrict-null-sentinel -Wno-missing-field-initializers  -DHAVE_CXX_-Wbad-function-cast    CMakeFiles/cmTryCompileExec2076004531.dir/src.cxx.o  -o cmTryCompileExec2076004531 -rdynamic -lpthread 
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+
+Source file was:
+int main() { return 0;}
+Performing C++ SOURCE FILE Test HAVE_CXX_-Wstrict-prototypes failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec2948949344/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec2948949344.dir/build.make CMakeFiles/cmTryCompileExec2948949344.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building CXX object CMakeFiles/cmTryCompileExec2948949344.dir/src.cxx.o
+/usr/bin/g++    -Wno-missing-noreturn -Wextra -Wno-error=strict-overflow -Wpacked -fno-exceptions -fno-rtti -Wno-error=missing-format-attribute -Wmissing-format-attribute -Wlogical-op -Wtrampolines -Wswitch -Winit-self -Wstrict-null-sentinel -Wno-missing-field-initializers  -DHAVE_CXX_-Wstrict-prototypes   -Wstrict-prototypes -o CMakeFiles/cmTryCompileExec2948949344.dir/src.cxx.o -c /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/src.cxx
+cc1plus: warning: command line option '-Wstrict-prototypes' is valid for C/ObjC but not for C++ [enabled by default]
+<command-line>:0:10: warning: missing whitespace after the macro name [enabled by default]
+Linking CXX executable cmTryCompileExec2948949344
+/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTryCompileExec2948949344.dir/link.txt --verbose=1
+/usr/bin/g++   -Wno-missing-noreturn -Wextra -Wno-error=strict-overflow -Wpacked -fno-exceptions -fno-rtti -Wno-error=missing-format-attribute -Wmissing-format-attribute -Wlogical-op -Wtrampolines -Wswitch -Winit-self -Wstrict-null-sentinel -Wno-missing-field-initializers  -DHAVE_CXX_-Wstrict-prototypes    CMakeFiles/cmTryCompileExec2948949344.dir/src.cxx.o  -o cmTryCompileExec2948949344 -rdynamic -lpthread 
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+
+Source file was:
+int main() { return 0;}
+Performing C++ SOURCE FILE Test HAVE_CXX_-Wmissing-prototypes failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec4128311504/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec4128311504.dir/build.make CMakeFiles/cmTryCompileExec4128311504.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building CXX object CMakeFiles/cmTryCompileExec4128311504.dir/src.cxx.o
+/usr/bin/g++    -Wno-missing-noreturn -Wextra -Wno-error=strict-overflow -Wpacked -fno-exceptions -fno-rtti -Wno-error=missing-format-attribute -Wmissing-format-attribute -Wlogical-op -Wtrampolines -Wswitch -Winit-self -Wstrict-null-sentinel -Wno-missing-field-initializers  -DHAVE_CXX_-Wmissing-prototypes   -Wmissing-prototypes -o CMakeFiles/cmTryCompileExec4128311504.dir/src.cxx.o -c /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/src.cxx
+cc1plus: warning: command line option '-Wmissing-prototypes' is valid for C/ObjC but not for C++ [enabled by default]
+<command-line>:0:10: warning: missing whitespace after the macro name [enabled by default]
+Linking CXX executable cmTryCompileExec4128311504
+/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTryCompileExec4128311504.dir/link.txt --verbose=1
+/usr/bin/g++   -Wno-missing-noreturn -Wextra -Wno-error=strict-overflow -Wpacked -fno-exceptions -fno-rtti -Wno-error=missing-format-attribute -Wmissing-format-attribute -Wlogical-op -Wtrampolines -Wswitch -Winit-self -Wstrict-null-sentinel -Wno-missing-field-initializers  -DHAVE_CXX_-Wmissing-prototypes    CMakeFiles/cmTryCompileExec4128311504.dir/src.cxx.o  -o cmTryCompileExec4128311504 -rdynamic -lpthread 
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+
+Source file was:
+int main() { return 0;}
+Performing C++ SOURCE FILE Test HAVE_CXX_-Wdeclaration-after-statement failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec2491088917/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec2491088917.dir/build.make CMakeFiles/cmTryCompileExec2491088917.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building CXX object CMakeFiles/cmTryCompileExec2491088917.dir/src.cxx.o
+/usr/bin/g++    -Wno-unused-but-set-variable -Wframe-larger-than=1100 -Wno-format-security -Werror-implicit-function-declaration -Wno-trigraphs -Wundef -std=c++11 -Wcast-align -Wshadow -Wmissing-format-attribute -Wpointer-arith -Wmissing-declarations -Wno-missing-noreturn -Wextra -Wno-error=strict-overflow -Wpacked -fno-exceptions -fno-rtti -Wno-error=missing-format-attribute -Wmissing-format-attribute -Wlogical-op -Wtrampolines -Wswitch -Winit-self -Wstrict-null-sentinel -Wno-missing-field-initializers  -DHAVE_CXX_-Wdeclaration-after-statement   -Wdeclaration-after-statement -o CMakeFiles/cmTryCompileExec2491088917.dir/src.cxx.o -c /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/src.cxx
+cc1plus: warning: command line option '-Wdeclaration-after-statement' is valid for C/ObjC but not for C++ [enabled by default]
+<command-line>:0:10: warning: ISO C99 requires whitespace after the macro name [enabled by default]
+Linking CXX executable cmTryCompileExec2491088917
+/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTryCompileExec2491088917.dir/link.txt --verbose=1
+/usr/bin/g++   -Wno-unused-but-set-variable -Wframe-larger-than=1100 -Wno-format-security -Werror-implicit-function-declaration -Wno-trigraphs -Wundef -std=c++11 -Wcast-align -Wshadow -Wmissing-format-attribute -Wpointer-arith -Wmissing-declarations -Wno-missing-noreturn -Wextra -Wno-error=strict-overflow -Wpacked -fno-exceptions -fno-rtti -Wno-error=missing-format-attribute -Wmissing-format-attribute -Wlogical-op -Wtrampolines -Wswitch -Winit-self -Wstrict-null-sentinel -Wno-missing-field-initializers  -DHAVE_CXX_-Wdeclaration-after-statement    CMakeFiles/cmTryCompileExec2491088917.dir/src.cxx.o  -o cmTryCompileExec2491088917 -rdynamic -lpthread 
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+
+Source file was:
+int main() { return 0;}
+Performing C++ SOURCE FILE Test HAVE_CXX_-Wno-pointer-sign failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec3727602275/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec3727602275.dir/build.make CMakeFiles/cmTryCompileExec3727602275.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building CXX object CMakeFiles/cmTryCompileExec3727602275.dir/src.cxx.o
+/usr/bin/g++    -Wno-unused-but-set-variable -Wframe-larger-than=1100 -Wno-format-security -Werror-implicit-function-declaration -Wno-trigraphs -Wundef -std=c++11 -Wcast-align -Wshadow -Wmissing-format-attribute -Wpointer-arith -Wmissing-declarations -Wno-missing-noreturn -Wextra -Wno-error=strict-overflow -Wpacked -fno-exceptions -fno-rtti -Wno-error=missing-format-attribute -Wmissing-format-attribute -Wlogical-op -Wtrampolines -Wswitch -Winit-self -Wstrict-null-sentinel -Wno-missing-field-initializers  -DHAVE_CXX_-Wno-pointer-sign   -Wno-pointer-sign -o CMakeFiles/cmTryCompileExec3727602275.dir/src.cxx.o -c /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/src.cxx
+cc1plus: warning: command line option '-Wno-pointer-sign' is valid for C/ObjC but not for C++ [enabled by default]
+<command-line>:0:10: warning: ISO C99 requires whitespace after the macro name [enabled by default]
+Linking CXX executable cmTryCompileExec3727602275
+/usr/bin/cmake -E cmake_link_script CMakeFiles/cmTryCompileExec3727602275.dir/link.txt --verbose=1
+/usr/bin/g++   -Wno-unused-but-set-variable -Wframe-larger-than=1100 -Wno-format-security -Werror-implicit-function-declaration -Wno-trigraphs -Wundef -std=c++11 -Wcast-align -Wshadow -Wmissing-format-attribute -Wpointer-arith -Wmissing-declarations -Wno-missing-noreturn -Wextra -Wno-error=strict-overflow -Wpacked -fno-exceptions -fno-rtti -Wno-error=missing-format-attribute -Wmissing-format-attribute -Wlogical-op -Wtrampolines -Wswitch -Winit-self -Wstrict-null-sentinel -Wno-missing-field-initializers  -DHAVE_CXX_-Wno-pointer-sign    CMakeFiles/cmTryCompileExec3727602275.dir/src.cxx.o  -o cmTryCompileExec3727602275 -rdynamic -lpthread 
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+
+Source file was:
+int main() { return 0;}
+Performing C SOURCE FILE Test HAVE_C_-fnostack-protector failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec552486724/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec552486724.dir/build.make CMakeFiles/cmTryCompileExec552486724.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building C object CMakeFiles/cmTryCompileExec552486724.dir/src.c.o
+/usr/bin/gcc   -funit-at-a-time -fno-delete-null-pointer-checks -fno-common -fno-strict-aliasing -Wno-sign-compare -Wno-pointer-sign -Wdeclaration-after-statement -Wno-unused-but-set-variable -Wframe-larger-than=1100 -Wno-format-security -Werror-implicit-function-declaration -Wno-trigraphs -Wstrict-prototypes -Wundef -std=c99 -Wcast-align -Wshadow -Wmissing-format-attribute -Wpointer-arith -Wmissing-declarations -Wmissing-prototypes -Wstrict-prototypes -Wno-missing-noreturn -Wbad-function-cast -Wextra -Wno-error=strict-overflow -Wpacked -fno-exceptions -Wno-error=missing-format-attribute -Wmissing-format-attribute -Wlogical-op -Wtrampolines -Wswitch -Winit-self -Wno-missing-field-initializers  -DHAVE_C_-fnostack-protector   -fnostack-protector -o CMakeFiles/cmTryCompileExec552486724.dir/src.c.o   -c /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/src.c
+gcc: error: unrecognized command line option '-fnostack-protector'
+make[1]: *** [CMakeFiles/cmTryCompileExec552486724.dir/src.c.o] Error 1
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+make: *** [cmTryCompileExec552486724/fast] Error 2
+
+Source file was:
+int main(void) { return 0; }
+Performing C++ SOURCE FILE Test HAVE_CXX_-fnostack-protector failed with the following output:
+Change Dir: /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp
+
+Run Build Command:/usr/bin/make "cmTryCompileExec3211445121/fast"
+/usr/bin/make -f CMakeFiles/cmTryCompileExec3211445121.dir/build.make CMakeFiles/cmTryCompileExec3211445121.dir/build
+make[1]: Entering directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+/usr/bin/cmake -E cmake_progress_report /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/CMakeFiles 1
+Building CXX object CMakeFiles/cmTryCompileExec3211445121.dir/src.cxx.o
+/usr/bin/g++    -funit-at-a-time -fno-delete-null-pointer-checks -fno-common -fno-strict-aliasing -Wno-sign-compare -Wno-unused-but-set-variable -Wframe-larger-than=1100 -Wno-format-security -Werror-implicit-function-declaration -Wno-trigraphs -Wundef -std=c++11 -Wcast-align -Wshadow -Wmissing-format-attribute -Wpointer-arith -Wmissing-declarations -Wno-missing-noreturn -Wextra -Wno-error=strict-overflow -Wpacked -fno-exceptions -fno-rtti -Wno-error=missing-format-attribute -Wmissing-format-attribute -Wlogical-op -Wtrampolines -Wswitch -Winit-self -Wstrict-null-sentinel -Wno-missing-field-initializers  -DHAVE_CXX_-fnostack-protector   -fnostack-protector -o CMakeFiles/cmTryCompileExec3211445121.dir/src.cxx.o -c /home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp/src.cxx
+g++: error: unrecognized command line option '-fnostack-protector'
+make[1]: *** [CMakeFiles/cmTryCompileExec3211445121.dir/src.cxx.o] Error 1
+make[1]: Leaving directory `/home/yang/tmp/betrfs/build/CMakeFiles/CMakeTmp'
+make: *** [cmTryCompileExec3211445121/fast] Error 2
+
+Source file was:
+int main() { return 0;}

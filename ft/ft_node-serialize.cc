@@ -197,10 +197,6 @@ toku_maybe_preallocate_in_file (int fd, int64_t size, int64_t expected_size, int
     const uint64_t stripe_width = 4096;
     {
         int r = toku_os_get_file_size(fd, &file_size);
-        if (r != 0) { // debug #2463
-            int the_errno = get_maybe_error_errno();
-            fprintf(stderr, "%s:%d fd=%d size=%" PRIu64 " r=%d errno=%d\n", __FUNCTION__, __LINE__, fd, size, r, the_errno); fflush(stderr);
-        }
         lazy_assert_zero(r);
     }
     invariant(file_size >= 0);
@@ -217,13 +213,21 @@ toku_maybe_preallocate_in_file (int fd, int64_t size, int64_t expected_size, int
     }
     if (to_write > 0) {
         assert(to_write%BLOCK_ALIGNMENT==0);
-        char *XMALLOC_N_ALIGNED(BLOCK_ALIGNMENT, to_write, wbuf);
+        /*
+	char *XMALLOC_N_ALIGNED(BLOCK_ALIGNMENT, to_write, wbuf);
         memset(wbuf, 0, to_write);
         toku_off_t start_write = alignup64(file_size, stripe_width);
         invariant(start_write >= file_size);
         toku_os_full_pwrite(fd, wbuf, to_write, start_write);
+	toku_ft_status_update_io_reason(FT_DISK_IO_PREALLOC,to_write);
         toku_free(wbuf);
-        *new_size = start_write + to_write;
+        */
+	
+        toku_off_t start_write = alignup64(file_size, stripe_width);
+        invariant(start_write >= file_size);
+        int r = fallocate(fd,0,start_write, to_write);
+        lazy_assert_zero(r);
+	*new_size = start_write + to_write;
     }
     else {
         *new_size = file_size;
@@ -328,7 +332,11 @@ serialize_ftnode_partition_size (FTNODE node, int i)
 
 #define FTNODE_PARTITION_OMT_LEAVES 0xaa
 #define FTNODE_PARTITION_FIFO_MSG 0xbb
-
+static int serialize_msg_fn(FT_MSG msg, bool is_fresh, void* args){
+    struct wbuf *wb = (struct wbuf *) args;
+    ft_msg_write_to_wbuf(msg, wb, is_fresh);
+    return 0;
+}
 static void
 serialize_nonleaf_childinfo(NONLEAF_CHILDINFO bnc, struct wbuf *wb)
 {
@@ -336,7 +344,8 @@ serialize_nonleaf_childinfo(NONLEAF_CHILDINFO bnc, struct wbuf *wb)
     wbuf_nocrc_char(wb, ch);
     // serialize the FIFO, first the number of entries, then the elements
     wbuf_nocrc_int(wb, toku_bnc_n_entries(bnc));
-    FIFO_ITERATE(
+    toku_fifo_iterate(bnc->buffer, serialize_msg_fn, wb);
+  /*    FIFO_ITERATE(
         bnc->buffer, key, keylen, data, datalen, type, msn, xids, is_fresh,
         {
             paranoid_invariant((int)type>=0 && type<256);
@@ -346,7 +355,7 @@ serialize_nonleaf_childinfo(NONLEAF_CHILDINFO bnc, struct wbuf *wb)
             wbuf_nocrc_xids(wb, xids);
             wbuf_nocrc_bytes(wb, key, keylen);
             wbuf_nocrc_bytes(wb, data, datalen);
-        });
+        });*/
 }
 
 //
@@ -538,6 +547,14 @@ rebalance_ftnode_leaf(FTNODE node, unsigned int basementnodesize)
     assert(node->height == 0);
     assert(node->dirty);
 
+    
+//SOSP: Jun -- undo all the force on-the-boundary effect.
+#if 0
+    if (node->unbound_insert_count > 0) {
+        printf("rebalancing leaf with unbound inserts. making it a noop\n");
+        return;
+    }
+#endif
     uint32_t num_orig_basements = node->n_children;
     // Count number of leaf entries in this leaf (num_le).
     uint32_t num_le = 0;
@@ -618,7 +635,7 @@ rebalance_ftnode_leaf(FTNODE node, unsigned int basementnodesize)
     // I am not happy with how this is being
     // handled with basement nodes
     uint32_t tmp_seqinsert = BLB_SEQINSERT(node, num_orig_basements - 1);
-
+    uint64_t n_unbound_entry = node->unbound_insert_count;
     // choose the max msn applied to any basement as the max msn applied to all new basements
     MSN max_msn = ZERO_MSN;
     for (uint32_t i = 0; i < num_orig_basements; i++) {
@@ -635,7 +652,7 @@ rebalance_ftnode_leaf(FTNODE node, unsigned int basementnodesize)
     // Now destroy the old basements, but do not destroy leaves
     toku_destroy_ftnode_internals(node);
 
-    // now reallocate pieces and start filling them in
+// now reallocate pieces and start filling them in
     invariant(num_children > 0);
     node->totalchildkeylens = 0;
 
@@ -692,10 +709,37 @@ rebalance_ftnode_leaf(FTNODE node, unsigned int basementnodesize)
     }
     node->max_msn_applied_to_node_on_disk = max_msn;
 
-    // destroy buffers of old mempools
+    //SOSP: Jun : hack on rebalance, since rebalancing only happens before checkpoint or serialization
+    //either case is right before writing back.
+     //there is no chance for split or merge to mess up with unbound entries then we can solely use the bn
+    // to do node-level accouting for unbound entries.
+
+   //node->unbound_insert_count = n_unbound_entry;  // destroy buffers of old mempools
+    if(n_unbound_entry > 0) {
+    	toku_list *newhead = &BLB(node, 0)->unbound_inserts;
+	paranoid_invariant(toku_list_empty(newhead));
+ 	for (uint32_t i = 0; i < num_orig_basements; i++) {
+	  toku_list * head = &old_bns[i]->unbound_inserts;	
+	  if(toku_list_empty(head)) continue;
+	  
+	  toku_list * first = head->next;
+	  toku_list * last = head->prev;		
+          toku_list_insert_m_between(newhead->prev, first, last, newhead);
+	  toku_list_init(head);	 
+	 
+    	  old_bns[i]->unbound_insert_count = 0;
+	}
+	BLB(node,0)->unbound_insert_count = n_unbound_entry;
+	}      
+    node->unbound_insert_count = n_unbound_entry;  // destroy buffers of old mempools    
+    toku_ft_node_empty_unbound_inserts_validation(node);    
+    toku_ft_node_unbound_inserts_validation(node);
+
+
     for (uint32_t i = 0; i < num_orig_basements; i++) {
         destroy_basement_node(old_bns[i]);
     }
+   
     toku_free(key_pointers);
     toku_free(key_sizes);
     toku_free(leafpointers);
@@ -875,7 +919,7 @@ int toku_serialize_ftnode_to_memory(FTNODE node,
     toku_assert_entire_node_in_memory(node);
 
     if (do_rebalancing && node->height == 0) {
-        rebalance_ftnode_leaf(node, basementnodesize);
+	rebalance_ftnode_leaf(node, basementnodesize);
     }
     const int npartitions = node->n_children;
 
@@ -988,7 +1032,7 @@ int toku_serialize_ftnode_to_memory(FTNODE node,
 }
 
 int
-toku_serialize_ftnode_to (int fd, BLOCKNUM blocknum, FTNODE node, FTNODE_DISK_DATA* ndd, bool do_rebalancing, FT h, bool for_checkpoint) {
+toku_serialize_ftnode_to (int fd, BLOCKNUM blocknum, FTNODE node, FTNODE_DISK_DATA* ndd, bool do_rebalancing, FT h, bool for_checkpoint, DISKOFF * p_size, DISKOFF * p_offset) {
 
     size_t n_to_write;
     size_t n_uncompressed_bytes;
@@ -1038,7 +1082,11 @@ toku_serialize_ftnode_to (int fd, BLOCKNUM blocknum, FTNODE node, FTNODE_DISK_DA
 
     toku_free(compressed_buf);
     node->dirty = 0;  // See #1957.   Must set the node to be clean after serializing it so that it doesn't get written again on the next checkpoint or eviction.
-    return 0;
+    if(p_size && p_offset && has_unbound_msgs(node)) {
+    	 *p_size = n_to_write;
+     	 *p_offset = offset;
+     }
+     return 0;
 }
 
 static void
@@ -1056,9 +1104,16 @@ deserialize_child_buffer(NONLEAF_CHILDINFO bnc, struct rbuf *rbuf,
         XMALLOC_N(n_in_this_buffer, broadcast_offsets);
     }
     for (int i = 0; i < n_in_this_buffer; i++) {
+        FT_MSG_S msg;
+        XIDS xids;
+        bool is_fresh;
+        DBT k, v, m;
+        ft_msg_read_from_rbuf(&msg, &k, &v, &m, rbuf, &xids, &is_fresh);
+#if 0
         bytevec key; ITEMLEN keylen;
         bytevec val; ITEMLEN vallen;
         // this is weird but it's necessary to pass icc and gcc together
+
         unsigned char ctype = rbuf_char(rbuf);
         enum ft_msg_type type = (enum ft_msg_type) ctype;
         bool is_fresh = rbuf_char(rbuf);
@@ -1067,7 +1122,9 @@ deserialize_child_buffer(NONLEAF_CHILDINFO bnc, struct rbuf *rbuf,
         xids_create_from_buffer(rbuf, &xids);
         rbuf_bytes(rbuf, &key, &keylen); /* Returns a pointer into the rbuf. */
         rbuf_bytes(rbuf, &val, &vallen);
+#endif     
         int32_t *dest;
+        enum ft_msg_type type = ft_msg_get_type(&msg);
         if (cmp) {
             if (ft_msg_type_applies_once(type)) {
                 if (is_fresh) {
@@ -1077,7 +1134,7 @@ deserialize_child_buffer(NONLEAF_CHILDINFO bnc, struct rbuf *rbuf,
                     dest = &stale_offsets[nstale];
                     nstale++;
                 }
-            } else if (ft_msg_type_applies_all(type) || ft_msg_type_does_nothing(type)) {
+            } else if (ft_msg_type_applies_multiple(type) || ft_msg_type_does_nothing(type)) {
                 dest = &broadcast_offsets[nbroadcast_offsets];
                 nbroadcast_offsets++;
             } else {
@@ -1086,7 +1143,7 @@ deserialize_child_buffer(NONLEAF_CHILDINFO bnc, struct rbuf *rbuf,
         } else {
             dest = NULL;
         }
-        r = toku_fifo_enq(bnc->buffer, key, keylen, val, vallen, type, msn, xids, is_fresh, dest); /* Copies the data into the fifo */
+        r = toku_fifo_enq(bnc->buffer, &msg, is_fresh, dest); /* Copies the data into the fifo */
         lazy_assert_zero(r);
         xids_destroy(&xids);
     }
@@ -1147,7 +1204,7 @@ BASEMENTNODE toku_create_empty_bn(void) {
     bn->data_buffer.initialize_empty();
     return bn;
 }
-
+//FIXME: both clones should also set the unbound_insert entry's node list to the clone -- not really -- even though the unbound msgs locate the old pair
 BASEMENTNODE toku_clone_bn(BASEMENTNODE orig_bn) {
     BASEMENTNODE bn = toku_create_empty_bn_no_buffer();
     bn->max_msn_applied = orig_bn->max_msn_applied;
@@ -1155,6 +1212,21 @@ BASEMENTNODE toku_clone_bn(BASEMENTNODE orig_bn) {
     bn->stale_ancestor_messages_applied = orig_bn->stale_ancestor_messages_applied;
     bn->stat64_delta = orig_bn->stat64_delta;
     bn->data_buffer.clone(&orig_bn->data_buffer);
+
+    bn->unbound_insert_count = orig_bn->unbound_insert_count;
+    //SOSP TODO: Bill not sure what to do here. should we copy the
+    //list? only put it in one of the two clones? initiate a writeback
+    //for safety? ugh.
+    //lets do the list move clone is only used at the checkpoint COW. plus you already updated count_unbound .... -Jun
+    if(!toku_list_empty(&orig_bn->unbound_inserts)) {
+        paranoid_invariant(orig_bn->unbound_insert_count > 0);
+        toku_list_move(&bn->unbound_inserts, &orig_bn->unbound_inserts);
+        orig_bn->unbound_insert_count = 0;
+    } else {
+        paranoid_invariant(orig_bn->unbound_insert_count == 0);
+        toku_list_init(&bn->unbound_inserts);
+    }
+
     return bn;
 }
 
@@ -1165,6 +1237,8 @@ BASEMENTNODE toku_create_empty_bn_no_buffer(void) {
     bn->stale_ancestor_messages_applied = false;
     bn->stat64_delta = ZEROSTATS;
     bn->data_buffer.init_zero();
+    bn->unbound_insert_count = 0;
+    toku_list_init(&bn->unbound_inserts);
     return bn;
 }
 
@@ -1174,6 +1248,8 @@ NONLEAF_CHILDINFO toku_create_empty_nl(void) {
     cn->fresh_message_tree.create();
     cn->stale_message_tree.create();
     cn->broadcast_list.create();
+    cn->unbound_insert_count = 0;
+    toku_list_init(&cn->unbound_inserts);
     memset(cn->flow, 0, sizeof cn->flow);
     return cn;
 }
@@ -1185,13 +1261,32 @@ NONLEAF_CHILDINFO toku_clone_nl(NONLEAF_CHILDINFO orig_childinfo) {
     cn->fresh_message_tree.create_no_array();
     cn->stale_message_tree.create_no_array();
     cn->broadcast_list.create_no_array();
+
+    cn->unbound_insert_count = orig_childinfo->unbound_insert_count;
+    if(!toku_list_empty(&orig_childinfo->unbound_inserts)) {
+	paranoid_invariant(orig_childinfo->unbound_insert_count > 0);
+        toku_list_move(&cn->unbound_inserts, &orig_childinfo->unbound_inserts);
+	orig_childinfo->unbound_insert_count = 0;
+    } else {
+	paranoid_invariant(orig_childinfo->unbound_insert_count == 0);
+        toku_list_init(&cn->unbound_inserts);
+    }
+
     memset(cn->flow, 0, sizeof cn->flow);
     return cn;
 }
 
+static void toku_jun_debug(void) {
+	printf("oh nooo\n");
+}
 void destroy_basement_node (BASEMENTNODE bn)
 {
     bn->data_buffer.destroy();
+    paranoid_invariant(bn->unbound_insert_count == 0);
+	if(!toku_list_empty(&bn->unbound_inserts)) {
+	 	toku_jun_debug() ;
+	}
+    paranoid_invariant(toku_list_empty(&bn->unbound_inserts));
     toku_free(bn);
 }
 
@@ -1201,6 +1296,8 @@ void destroy_nonleaf_childinfo (NONLEAF_CHILDINFO nl)
     nl->fresh_message_tree.destroy();
     nl->stale_message_tree.destroy();
     nl->broadcast_list.destroy();
+    paranoid_invariant(nl->unbound_insert_count == 0);
+    paranoid_invariant(toku_list_empty(&nl->unbound_inserts));
     toku_free(nl);
 }
 
@@ -1591,6 +1688,7 @@ static FTNODE alloc_ftnode_for_deserialize(uint32_t fullhash, BLOCKNUM blocknum)
     node->fullhash = fullhash;
     node->thisnodename = blocknum;
     node->dirty = 0;
+    node->unbound_insert_count = 0;
     node->bp = nullptr;
     node->oldest_referenced_xid_known = TXNID_NONE;
     return node; 
@@ -1905,6 +2003,12 @@ deserialize_and_upgrade_internal_node(FTNODE node,
 
         // Create the FIFO entires from the deserialized buffer.
         for (int j = 0; j < n_in_this_buffer; ++j) {
+            FT_MSG_S msg;
+            XIDS xids;
+            bool is_fresh;
+            DBT k, v, m;
+            ft_msg_read_from_rbuf(&msg, &k, &v, &m, rb, &xids, &is_fresh);
+#if 0
             bytevec key; ITEMLEN keylen;
             bytevec val; ITEMLEN vallen;
             unsigned char ctype = rbuf_char(rb);       // 23. message type
@@ -1913,14 +2017,15 @@ deserialize_and_upgrade_internal_node(FTNODE node,
             xids_create_from_buffer(rb, &xids);        // 24. XID
             rbuf_bytes(rb, &key, &keylen);             // 25. key
             rbuf_bytes(rb, &val, &vallen);             // 26. value
-
+#endif
             // <CER> can we factor this out?
             int32_t *dest;
+            enum ft_msg_type type = ft_msg_get_type(&msg);
             if (bfe->h->compare_fun) {
                 if (ft_msg_type_applies_once(type)) {
                     dest = &fresh_offsets[nfresh];
                     nfresh++;
-                } else if (ft_msg_type_applies_all(type) || ft_msg_type_does_nothing(type)) {
+                } else if (ft_msg_type_applies_multiple(type) || ft_msg_type_does_nothing(type)) {
                     dest = &broadcast_offsets[nbroadcast_offsets];
                     nbroadcast_offsets++;
                 } else {
@@ -1932,15 +2037,10 @@ deserialize_and_upgrade_internal_node(FTNODE node,
 
             // Increment our MSN, the last message should have the
             // newest/highest MSN.  See above for a full explanation.
-            lowest.msn++;
+           // lowest.msn++;
+            msg.msn.msn ++;
             r = toku_fifo_enq(bnc->buffer,
-                              key,
-                              keylen,
-                              val,
-                              vallen,
-                              type,
-                              lowest,
-                              xids,
+                              &msg,
                               true,
                               dest);
             lazy_assert_zero(r);
@@ -2753,6 +2853,7 @@ toku_serialize_rollback_log_to (int fd, ROLLBACK_LOG_NODE log, SERIALIZED_ROLLBA
         toku_blocknum_realloc_on_disk(h->blocktable, blocknum, n_to_write, &offset,
                                       h, fd, for_checkpoint); //dirties h
         toku_os_full_pwrite(fd, compressed_buf, n_to_write, offset);
+	toku_ft_status_update_io_reason(FT_DISK_IO_ROLLBACK, n_to_write);
     }
     toku_free(compressed_buf);
     if (!is_serialized) {
@@ -2767,7 +2868,7 @@ deserialize_rollback_log_from_rbuf (BLOCKNUM blocknum, ROLLBACK_LOG_NODE *log_p,
     ROLLBACK_LOG_NODE MALLOC(result);
     int r;
     if (result==NULL) {
-	r=get_error_errno(-ENOMEM);
+        r=ENOMEM;
 	if (0) { died0: toku_free(result); }
 	return r;
     }

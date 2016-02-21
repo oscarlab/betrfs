@@ -117,7 +117,7 @@ static bool is_txnid_live(TXN_MANAGER txn_manager, TXNID txnid) {
 //Heaviside function to search through an OMT by a TXNID
 int find_by_xid (const TOKUTXN &txn, const TXNID &txnidfind);
 
-static bool is_txnid_live(TXN_MANAGER txn_manager, TXNID txnid) {
+ bool is_txnid_live(TXN_MANAGER txn_manager, TXNID txnid) {
     TOKUTXN result = NULL;
     TXNID_PAIR id = { .parent_id64 = txnid, .child_id64 = TXNID_NONE };
     toku_txn_manager_id2txn_unlocked(txn_manager, id, &result);
@@ -459,7 +459,50 @@ find_tuple_by_xid (const struct referenced_xid_tuple &tuple, const TXNID &xidfin
     if (tuple.begin_id > xidfind) return +1;
     return 0;
 }
+//blindwrite
+//I do not want to do this with snapshot ids but the livelist
+//simply does not keep read-only txns. not what we want.
+//converting the snapshot list to omt will likely ease the search 
+//but our search is just the youngest snapshot id that is older than
+//range delete, it is highly likely (1)does not exist, which we will be
+//happy, or(2)short list from the head. So we just search from the head.
 
+TXNID toku_txn_manager_youngest_snapshot_older_than_xid(
+    TXN_MANAGER txn_manager,
+    TXNID xid   
+ )
+{
+    
+    TOKUTXN cur_txn = txn_manager->snapshot_head;
+    TXNID ret_xid = TXNID_NONE;	
+    while (cur_txn != NULL) {
+        TXNID cur_xid = cur_txn->snapshot_txnid64;
+	if(cur_xid < xid) {
+              ret_xid = cur_xid;
+	}
+	else {
+	      break;
+	} 	
+        cur_txn = cur_txn->snapshot_next;
+    }
+    return ret_xid;
+}
+
+bool toku_txn_manager_is_referenced(
+	TXN_MANAGER txn_manager,
+	TXNID xid
+	)
+{
+
+    struct referenced_xid_tuple *tuple;
+    int r;
+    r = txn_manager->referenced_xids.find_zero<TXNID, find_tuple_by_xid>(xid, &tuple, nullptr);
+    if (r == DB_NOTFOUND) {
+        return false;
+    } 
+	return true;
+
+}
 // template-only function, but must be extern
 int referenced_xids_note_snapshot_txn_end_iter(const TXNID &live_xid, const uint32_t UU(index), rx_omt_t *const referenced_xids)
     __attribute__((nonnull(3)));

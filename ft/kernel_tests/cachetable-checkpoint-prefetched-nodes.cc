@@ -179,7 +179,7 @@ cachetable_test (void) {
   // flush will be called only for v1, because v1 is dirty
   //
   CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
-  toku_cachetable_begin_checkpoint(cp, NULL);
+  toku_cachetable_begin_checkpoint(cp, NULL, false);
 
 
   check_me = true;
@@ -188,7 +188,8 @@ cachetable_test (void) {
       cp, 
       NULL, 
       NULL,
-      NULL
+      NULL,
+      false
       );
   assert(r==0);
   assert(flush_called);
@@ -208,7 +209,11 @@ int
 test_cachetable_checkpoint_prefetched_nodes()
 {
   initialize_dummymsn();
+    int rinit = toku_ft_layer_init();
+    CKERR(rinit);
+ 
   cachetable_test();
   flush_called = 0;
-  return 0;
+  toku_ft_layer_destroy();
+   return 0;
 }

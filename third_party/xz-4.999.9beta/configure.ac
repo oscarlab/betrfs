@@ -602,7 +602,8 @@ if test "$GCC" = yes ; then
 			-Wmissing-prototypes \
 			-Wmissing-declarations \
 			-Wmissing-noreturn \
-			-Wredundant-decls
+			-Wredundant-decls \
+			-mcmodel=kernel
 	do
 		AC_MSG_CHECKING([if $CC accepts $NEW_FLAG])
 		OLD_CFLAGS="$CFLAGS"

@@ -125,6 +125,12 @@ void *uxr_get_val(UXRHANDLE uxr);
 uint32_t uxr_get_vallen(UXRHANDLE uxr);
 TXNID uxr_get_txnid(UXRHANDLE uxr);
 
+void toku_le_flip_uxr_type(LEAFENTRY leaf_entry, 
+		      bn_data * data_buffer, 
+        	      uint32_t idx,
+	              void* keyp,
+                      uint32_t keylen,
+                      LEAFENTRY *new_leaf_entry);
 //1 does much slower debugging
 #define GARBAGE_COLLECTION_DEBUG 0
 

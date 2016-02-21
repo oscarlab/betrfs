@@ -174,7 +174,7 @@ void partitioned_counters_destroy(void) {}
 
 using namespace toku;
 
-static pthread_mutex_t partitioned_counter_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t partitioned_counter_mutex;
 
 static void pc_lock (void)
 // Effect: Lock the mutex.
@@ -434,6 +434,7 @@ uint64_t read_partitioned_counter(PARTITIONED_COUNTER pc)
 void partitioned_counters_init(void)
 // Effect: Initialize any partitioned counters data structures that must be set up before any partitioned counters run.
 {
+    pthread_mutex_init(&partitioned_counter_mutex, NULL);
     pk_create(&thread_destructor_key, destroy_thread_local_part_of_partitioned_counters);
     all_thread_local_arrays.init();
 }

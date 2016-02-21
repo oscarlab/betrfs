@@ -824,7 +824,7 @@ static int toku_recover_fcreate (struct logtype_fcreate *l, RECOVER_ENV renv) {
     char *iname_in_cwd = toku_cachetable_get_fname_in_cwd(renv->ct, iname);
     r = unlink(iname_in_cwd);
     if (r != 0) {
-        int er = get_error_errno(r);
+        int er = 1;
         if (er != ENOENT) {
             fprintf(stderr, "Tokudb recovery %s:%d unlink %s %d\n", __FUNCTION__, __LINE__, iname, er);
             toku_free(iname);
@@ -971,6 +971,38 @@ static int toku_recover_enq_insert (struct logtype_enq_insert *l, RECOVER_ENV re
     return 0;
 }
 
+static int toku_recover_enq_unbound_insert (struct logtype_enq_unbound_insert *l, RECOVER_ENV renv) {
+    // this just notes a sequential I/O began.
+    // we need the sync to update the physical block location
+    assert(l);
+    assert(renv);
+    assert_zero(1);
+    return 0;
+}
+
+static int toku_recover_sync_unbound_insert (struct logtype_sync_unbound_insert *l, RECOVER_ENV renv) {
+    // not sure what to do here.
+    assert(l);
+    assert(renv);
+    assert_zero(1);
+    return 0;
+}
+
+static int toku_recover_backward_enq_unbound_insert (struct logtype_enq_unbound_insert *UU(l), RECOVER_ENV UU(renv)) {
+    // TODO: ???
+    fprintf(stderr, "no recovery code written for large I/Os!!!");
+    assert(0);
+    return 0;
+}
+
+static int toku_recover_backward_sync_unbound_insert (struct logtype_sync_unbound_insert *UU(l), RECOVER_ENV UU(renv)) {
+    // TODO: ???
+    fprintf(stderr, "no recovery code written for large I/Os!!!");
+    assert(0);
+    return 0;
+}
+
+
 static int toku_recover_backward_enq_insert (struct logtype_enq_insert *UU(l), RECOVER_ENV UU(renv)) {
     // nothing
     return 0;
@@ -1019,6 +1051,42 @@ static int toku_recover_backward_enq_delete_any (struct logtype_enq_delete_any *
     return 0;
 }
 
+static int toku_recover_enq_delete_multi (struct logtype_enq_delete_multi *l, RECOVER_ENV UU(renv)) {
+    int r;
+    TOKUTXN txn = NULL;
+    bool is_right_excl = false;
+    enum pacman_status pm_status;
+    toku_txnid2txn(renv->logger, l->xid, &txn);
+    assert(txn!=NULL);
+    struct file_map_tuple *tuple = NULL;
+    r = file_map_find(&renv->fmap, l->filenum, &tuple);
+    if (r==0) {
+        //Maybe do the deletion if we found the cachefile.
+        DBT minkeydbt;
+        toku_fill_dbt(&minkeydbt, l->min_key.data, l->min_key.len);
+        DBT maxkeydbt;
+        toku_fill_dbt(&maxkeydbt, l->max_key.data, l->max_key.len);
+        is_right_excl = l->is_right_excl;
+	pm_status = (enum pacman_status) l->pm_status;
+        toku_ft_maybe_delete_multicast(
+            tuple->ft_handle,
+            &minkeydbt,
+            &maxkeydbt,
+            is_right_excl,
+	    pm_status,
+            txn,
+            true,
+            l->lsn,
+            false,
+            l->is_resetting_op);
+    }    
+    return 0;
+}
+
+static int toku_recover_backward_enq_delete_multi (struct logtype_enq_delete_multi *UU(l), RECOVER_ENV UU(renv)) {
+    // nothing
+    return 0;
+}
 static int toku_recover_enq_insert_multiple (struct logtype_enq_insert_multiple *l, RECOVER_ENV renv) {
     int r;
     TOKUTXN txn = NULL;
@@ -1301,7 +1369,7 @@ static int find_an_unprepared_txn (RECOVER_ENV renv, TOKUTXN *txnp) {
         is_txn_unprepared,
         &txn
         );
-    assert(r == 0 || r == -1);
+    assert(r <= 0);
     if (txn != nullptr) {
         *txnp = txn;
         return 0;
@@ -1416,7 +1484,7 @@ static int do_recovery(RECOVER_ENV renv, const char *env_dir, const char *log_di
         toku_struct_stat buf;
         int rrx;
         if ((rrx = toku_stat(env_dir, &buf))!=0) {
-            rr = get_error_errno(rrx);
+            rr = 1;
             fprintf(stderr, "%.24s Tokudb recovery error: directory does not exist: %s\n", ctime(&tnow), env_dir);
             goto errorexit;
         } else if (!S_ISDIR(buf.st_mode)) {
@@ -1566,7 +1634,7 @@ static int do_recovery(RECOVER_ENV renv, const char *env_dir, const char *log_di
     // checkpoint 
     tnow = time(NULL);
     fprintf(stderr, "%.24s Tokudb recovery making a checkpoint\n", ctime(&tnow));
-    r = toku_checkpoint(renv->cp, renv->logger, NULL, NULL, NULL, NULL, RECOVERY_CHECKPOINT);
+    r = toku_checkpoint(renv->cp, renv->logger, NULL, NULL, NULL, NULL, RECOVERY_CHECKPOINT, false);
     assert(r == 0);
     tnow = time(NULL);
     fprintf(stderr, "%.24s Tokudb recovery done\n", ctime(&tnow));

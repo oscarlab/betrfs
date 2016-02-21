@@ -134,7 +134,7 @@ doit (void) {
     int r;
 
     toku_cachetable_create(&ct, 500*1024*1024, ZERO_LSN, NULL_LOGGER);
-    unlink(fname);
+    toku_os_recursive_delete(fname);
     r = toku_open_ft_handle(fname, 1, &brt, NODESIZE, NODESIZE/2, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
     assert(r==0);
 
@@ -171,7 +171,8 @@ doit (void) {
         "a", // key
         2, // keylen
         "aa",
-        3
+        3,
+	FT_INSERT
         );
     assert(r==0);
     r = toku_testsetup_insert_to_leaf (
@@ -180,7 +181,8 @@ doit (void) {
         "z", // key
         2, // keylen
         "zz",
-        3
+        3,
+	FT_INSERT
         );
     assert(r==0);
     char filler[400];
@@ -193,7 +195,8 @@ doit (void) {
         "b", // key
         2, // keylen
         filler,
-        sizeof(filler)
+        sizeof(filler),
+	FT_INSERT
         );
     assert(r==0);
     r = toku_testsetup_insert_to_leaf (
@@ -202,7 +205,8 @@ doit (void) {
         "y", // key
         2, // keylen
         filler,
-        sizeof(filler)
+        sizeof(filler),
+	FT_INSERT
         );
     assert(r==0);
 
@@ -333,7 +337,7 @@ doit (void) {
     // and to get the rebalancing to happen
     //
     CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
-    r = toku_checkpoint(cp, NULL, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT);
+    r = toku_checkpoint(cp, NULL, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, false);
     assert_zero(r);
 
     // check that lookups on the two keys is still good

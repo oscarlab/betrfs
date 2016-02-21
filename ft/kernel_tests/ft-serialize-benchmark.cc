@@ -200,9 +200,9 @@ test_serialize_leaf(int valsize, int nelts, double entropy) {
     }
     assert(b.b == 20);
 
+    DISKOFF offset;
+    DISKOFF size;
     {
-        DISKOFF offset;
-        DISKOFF size;
         toku_blocknum_realloc_on_disk(brt_h->blocktable, b, 100, &offset, brt_h, fd, false);
         assert(offset==BLOCK_ALLOCATOR_TOTAL_HEADER_RESERVE);
 
@@ -214,7 +214,7 @@ test_serialize_leaf(int valsize, int nelts, double entropy) {
     struct timeval t[2];
     gettimeofday(&t[0], NULL);
     FTNODE_DISK_DATA ndd = NULL;
-    r = toku_serialize_ftnode_to(fd, make_blocknum(20), sn, &ndd, true, brt->ft, false);
+    r = toku_serialize_ftnode_to(fd, make_blocknum(20), sn, &ndd, true, brt->ft, false, &offset, &size);
     assert(r==0);
     gettimeofday(&t[1], NULL);
     double dt;
@@ -297,7 +297,12 @@ test_serialize_nonleaf(int valsize, int nelts, double entropy) {
             }
             memset(&buf[c], 0, valsize - c);
 
-            toku_bnc_insert_msg(bnc, &k, sizeof k, buf, valsize, FT_NONE, next_dummymsn(), xids_123, true, NULL, long_key_cmp);
+            FT_MSG_S msg;
+            DBT kdbt, vdbt;
+            toku_fill_dbt(&kdbt, &k, sizeof k);
+            toku_fill_dbt(&vdbt, buf, valsize);
+            ft_msg_init(&msg, FT_NONE, next_dummymsn(), xids_123, &kdbt, &vdbt);
+            toku_bnc_insert_msg(bnc, NULL, &msg, true, NULL, long_key_cmp);
         }
         if (ck < 7) {
             toku_memdup_dbt(&sn.childkeys[ck], &k, sizeof k);
@@ -330,9 +335,9 @@ test_serialize_nonleaf(int valsize, int nelts, double entropy) {
     }
     assert(b.b == 20);
 
+    DISKOFF offset;
+    DISKOFF size;
     {
-        DISKOFF offset;
-        DISKOFF size;
         toku_blocknum_realloc_on_disk(brt_h->blocktable, b, 100, &offset, brt_h, fd, false);
         assert(offset==BLOCK_ALLOCATOR_TOTAL_HEADER_RESERVE);
 
@@ -344,7 +349,7 @@ test_serialize_nonleaf(int valsize, int nelts, double entropy) {
     struct timeval t[2];
     gettimeofday(&t[0], NULL);
     FTNODE_DISK_DATA ndd = NULL;
-    r = toku_serialize_ftnode_to(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false);
+    r = toku_serialize_ftnode_to(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false, &offset, &size);
     assert(r==0);
     gettimeofday(&t[1], NULL);
     double dt;

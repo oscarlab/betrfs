@@ -209,7 +209,44 @@ db_put_check_overwrite_constraint(DB *db, DB_TXN *txn, DBT *key,
     return r;
 }
 
+int 
+toku_db_del_multicast(DB *db, DB_TXN * txn, DBT * min_key, DBT * max_key, bool is_right_excl, uint32_t flags, bool holds_mo_lock) {
+    HANDLE_PANICKED_DB(db);
+    HANDLE_DB_ILLEGAL_WORKING_PARENT_TXN(db, txn);
+    HANDLE_READ_ONLY_TXN(txn);
 
+    uint32_t unchecked_flags = flags;
+    //DB_DELETE_ANY means delete regardless of whether it exists in the db.
+    unchecked_flags &= ~DB_DELETE_ANY;
+    uint32_t lock_flags = get_prelocked_flags(flags);
+    unchecked_flags &= ~lock_flags;
+    bool do_locking = (bool)(db->i->lt && !(lock_flags&DB_PRELOCKED_WRITE));
+
+    int r = 0;
+    if (unchecked_flags!=0) {
+        r = EINVAL;
+    }
+    
+    if (r == 0 && do_locking) {
+        //Do locking if necessary.
+        r = toku_db_get_range_lock(db, txn, min_key, max_key, toku::lock_request::type::WRITE);
+    }
+    if (r == 0) {
+        //Do the actual deleting.
+        if (!holds_mo_lock) toku_multi_operation_client_lock();
+        toku_ft_delete_multicast(db->i->ft_handle, min_key, max_key, is_right_excl, PM_UNCOMMITTED, txn ? db_txn_struct_i(txn)->tokutxn : 0);
+        if (!holds_mo_lock) toku_multi_operation_client_unlock();
+    }
+
+    if (r == 0) {
+        STATUS_VALUE(YDB_LAYER_NUM_DELETES)++;  // accountability 
+    }
+    else {
+        STATUS_VALUE(YDB_LAYER_NUM_DELETES_FAIL)++;  // accountability 
+    }
+    return r;
+}
+            
 int
 toku_db_del(DB *db, DB_TXN *txn, DBT *key, uint32_t flags, bool holds_mo_lock) {
     HANDLE_PANICKED_DB(db);
@@ -253,9 +290,7 @@ toku_db_del(DB *db, DB_TXN *txn, DBT *key, uint32_t flags, bool holds_mo_lock) {
     return r;
 }
 
-
-int
-toku_db_put(DB *db, DB_TXN *txn, DBT *key, DBT *val, uint32_t flags, bool holds_mo_lock) {
+static int toku_db_do_put(DB *db, DB_TXN *txn, DBT *key, DBT *val, uint32_t flags, bool holds_mo_lock, bool is_seq) {
     HANDLE_PANICKED_DB(db);
     HANDLE_DB_ILLEGAL_WORKING_PARENT_TXN(db, txn);
     HANDLE_READ_ONLY_TXN(txn);
@@ -278,7 +313,7 @@ toku_db_put(DB *db, DB_TXN *txn, DBT *key, DBT *val, uint32_t flags, bool holds_
     if (r == 0) {
         //Insert into the brt.
         TOKUTXN ttxn = txn ? db_txn_struct_i(txn)->tokutxn : NULL;
-        enum ft_msg_type type = FT_INSERT;
+        enum ft_msg_type type = is_seq ? FT_UNBOUND_INSERT : FT_INSERT;
         if (flags==DB_NOOVERWRITE_NO_ERROR) {
             type = FT_INSERT_NO_OVERWRITE;
         }
@@ -298,6 +333,17 @@ toku_db_put(DB *db, DB_TXN *txn, DBT *key, DBT *val, uint32_t flags, bool holds_
 
     return r;
 }
+
+int
+toku_db_put(DB *db, DB_TXN *txn, DBT *key, DBT *val, uint32_t flags, bool holds_mo_lock) {
+    return toku_db_do_put(db, txn, key, val, flags, holds_mo_lock, false);
+}
+
+int
+toku_db_seq_put(DB *db, DB_TXN *txn, DBT *key, DBT *val, uint32_t flags, bool holds_mo_lock) {
+    return toku_db_do_put(db, txn, key, val, flags, holds_mo_lock, true);
+}
+
 
 static int
 toku_db_update(DB *db, DB_TXN *txn,
@@ -1101,8 +1147,17 @@ autotxn_db_del(DB* db, DB_TXN* txn, DBT* key, uint32_t flags) {
 }
 
 int 
-autotxn_db_put(DB* db, DB_TXN* txn, DBT* key, DBT* data, uint32_t flags) {
-    //{ unsigned i; printf("put %p keylen=%d key={", db, key->size); for(i=0; i<key->size; i++) printf("%d,", ((char*)key->data)[i]); printf("} datalen=%d data={", data->size); for(i=0; i<data->size; i++) printf("%d,", ((char*)data->data)[i]); printf("}\n"); }
+autotxn_db_del_multi(DB* db, DB_TXN* txn, DBT* min_key, DBT* max_key, bool is_right_excl, uint32_t flags) {
+    bool changed; int r;
+    r = toku_db_construct_autotxn(db, &txn, &changed, false);
+    if (r!=0) return r;
+    r = toku_db_del_multicast(db, txn, min_key, max_key, is_right_excl, flags, false);
+    return toku_db_destruct_autotxn(txn, r, changed);
+}
+
+static int 
+do_autotxn_db_put(DB* db, DB_TXN* txn, DBT* key, DBT* data, uint32_t flags, bool is_seq) {
+   //{ unsigned i; printf("put %p keylen=%d key={", db, key->size); for(i=0; i<key->size; i++) printf("%d,", ((char*)key->data)[i]); printf("} datalen=%d data={", data->size); for(i=0; i<data->size; i++) printf("%d,", ((char*)data->data)[i]); printf("}\n"); }
     bool changed; int r;
     r = env_check_avail_fs_space(db->dbenv);
     if (r != 0) { goto cleanup; }
@@ -1110,10 +1165,24 @@ autotxn_db_put(DB* db, DB_TXN* txn, DBT* key, DBT* data, uint32_t flags) {
     if (r!=0) {
         goto cleanup;
     }
-    r = toku_db_put(db, txn, key, data, flags, false);
+    if (!is_seq) {
+        r = toku_db_put(db, txn, key, data, flags, false);
+    } else {
+        r = toku_db_seq_put(db, txn, key, data, flags, false);
+    }
     r = toku_db_destruct_autotxn(txn, r, changed);
 cleanup:
     return r;
+}
+
+int
+autotxn_db_put(DB* db, DB_TXN* txn, DBT* key, DBT* data, uint32_t flags) {
+    return do_autotxn_db_put(db, txn, key, data, flags, false);
+}
+
+int
+autotxn_db_seq_put(DB* db, DB_TXN* txn, DBT* key, DBT* data, uint32_t flags) {
+    return do_autotxn_db_put(db, txn, key, data, flags, true);
 }
 
 int

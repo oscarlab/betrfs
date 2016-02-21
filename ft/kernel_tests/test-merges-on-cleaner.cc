@@ -171,7 +171,8 @@ doit (void) {
         "a", // key
         2, // keylen
         "aa",
-        3
+        3,
+	FT_INSERT
         );
     assert(r==0);
     r = toku_testsetup_insert_to_leaf (
@@ -180,7 +181,8 @@ doit (void) {
         "z", // key
         2, // keylen
         "zz",
-        3
+        3,
+	FT_INSERT
         );
     assert(r==0);
 
@@ -276,7 +278,7 @@ doit (void) {
     // and to get the rebalancing to happen
     //
     CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
-    r = toku_checkpoint(cp, NULL, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT);
+    r = toku_checkpoint(cp, NULL, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, false);
     assert_zero(r);
 
     // check that lookups on the two keys is still good

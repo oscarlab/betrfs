@@ -114,7 +114,7 @@ toku_le_cursor_create(LE_CURSOR *le_cursor_result, FT_HANDLE ft_handle, TOKUTXN 
     int result = 0;
     LE_CURSOR MALLOC(le_cursor);
     if (le_cursor == NULL) {
-        result = get_error_errno(-ENOMEM);
+        result = ENOMEM;
     }
     else {
         result = toku_ft_cursor(ft_handle, &le_cursor->ft_cursor, txn, false, false);

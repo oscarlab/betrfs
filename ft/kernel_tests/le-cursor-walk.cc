@@ -131,6 +131,7 @@ create_populate_tree(const char *logdir, const char *fname, int n) {
     assert(error == 0);
     CACHETABLE ct = NULL;
     toku_cachetable_create(&ct, 0, ZERO_LSN, logger);
+    toku_cachetable_set_env_dir(ct, logdir);
     toku_logger_set_cachetable(logger, ct);
     error = toku_logger_open_rollback(logger, ct, true);
     assert(error == 0);
@@ -170,11 +171,11 @@ create_populate_tree(const char *logdir, const char *fname, int n) {
     assert(error == 0);
 
     CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
-    error = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT);
+    error = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, false);
     assert(error == 0);
     toku_logger_close_rollback(logger);
     assert(error == 0);
-    error = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT);
+    error = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, false);
     assert(error == 0);
 
     toku_logger_shutdown(logger);
@@ -187,13 +188,13 @@ create_populate_tree(const char *logdir, const char *fname, int n) {
 // retrieve all of the leaf entries in the the tree and verify the key associated with each one.
 // there should be n leaf entires in the tree.
 static void
-walk_tree(const char *fname, int n) {
+walk_tree(const char * logdir, const char *fname, int n) {
     if (verbose) fprintf(stderr, "%s %s %d\n", __FUNCTION__, fname, n);
     int error;
 
     CACHETABLE ct = NULL;
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
-
+    toku_cachetable_set_env_dir(ct, logdir);
     FT_HANDLE brt = NULL;
     error = toku_open_ft_handle(fname, 1, &brt, 1<<12, 1<<9, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, test_ft_cursor_keycompare);
     assert(error == 0);
@@ -239,18 +240,11 @@ init_logdir(const char *logdir) {
 
 static void
 run_test(const char *logdir, const char *ftfile, int n) {
-    char lastdir[TOKU_PATH_MAX+1];
-    char *last = getcwd(lastdir, TOKU_PATH_MAX);
-    assert(last != nullptr);
     init_logdir(logdir);
-    int error = chdir(logdir);
-    assert(error == 0);
 
-    create_populate_tree(".", ftfile, n);
-    walk_tree(ftfile, n);
+    create_populate_tree(logdir, ftfile, n);
+    walk_tree(logdir, ftfile, n);
 
-    error = chdir(last);
-    assert(error == 0);
 }
 
 extern "C" int test_le_cursor_walk(void);

@@ -124,7 +124,7 @@ static void test_multiple_files_of_size (int size) {
     toku_os_recursive_delete(TOKU_TEST_FILENAME);
 
     r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU);
-    if(r !=0 ) printf("\ntoku_os_mkdir failed:%d\n", ftfs_get_errno());
+    if(r !=0 ) printf("\ntoku_os_mkdir failed:\n");
     assert(r == 0);
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);

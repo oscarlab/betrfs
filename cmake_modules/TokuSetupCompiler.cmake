@@ -23,8 +23,8 @@ if (NOT CMAKE_SYSTEM_NAME STREQUAL FreeBSD)
 endif ()
 
 ## add TOKU_PTHREAD_DEBUG for debug builds
-set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS_DEBUG TOKU_PTHREAD_DEBUG=1)
-set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS_DRD TOKU_PTHREAD_DEBUG=1)
+set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS_DEBUG TOKU_PTHREAD_DEBUG=0)
+set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS_DRD TOKU_PTHREAD_DEBUG=0)
 
 #DP: ftfs.ko needs fortify to be off
 #set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS_DRD _FORTIFY_SOURCE=2)
@@ -255,7 +255,7 @@ if (BUILD_FOR_LINUX_KERNEL_MODULE)
     -Wno-trigraphs
     -Werror-implicit-function-declaration
     -Wno-format-security
-    -Wframe-larger-than=1024
+    -Wframe-larger-than=1100 ## hack wkj 11/1/15
     -Wno-unused-but-set-variable
     -Wdeclaration-after-statement
     -Wno-pointer-sign
@@ -265,7 +265,8 @@ if (BUILD_FOR_LINUX_KERNEL_MODULE)
     -fno-common
     -fno-delete-null-pointer-checks
     -funit-at-a-time
-    -fstack-protector
+    ##    -fstack-protector causing problems when linking with module
+    -fnostack-protector
     -fno-asynchronous-unwind-tables
     -fno-omit-frame-pointer
     -fno-optimize-sibling-calls

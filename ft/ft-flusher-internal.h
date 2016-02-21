@@ -104,6 +104,16 @@ PATENT RIGHTS GRANT:
 #define flt_flush_before_unpin_remove 9
 #define flt_flush_before_pin_second_node_for_merge 10
 
+//blindwrite
+//
+#define flt_flush_enter_blind_write 11
+#define flt_flush_delete_on_disk_basement 12
+#define flt_flush_delete_compressed_basement 13
+#define flt_flush_delete_in_mem_basement 14
+#define flt_flush_completely_delete_leaf 15
+#define flt_flush_completely_delete_basement 16
+
+#define DEAD_LEAF 1
 typedef struct flusher_advice FLUSHER_ADVICE;
 
 /**

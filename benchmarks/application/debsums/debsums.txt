@@ -1,5 +1,0 @@
-Running debsums on Ext4: 1
-Running debsums on Ext4: 2
-Running debsums on Ext4: 3
-Running debsums on Ext4: 4
-Running debsums on Ext4: 5

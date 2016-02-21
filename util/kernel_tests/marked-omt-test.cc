@@ -385,7 +385,7 @@ static inline uint32_t count_true(const bool *const bools, uint32_t n) {
 static void stress_deleter(struct reader_extra *const readers, int num_marker_threads, stress_omt *omt) {
     // Verify (iterate_over_marked) agrees exactly with iterate_and_mark_range (multithreaded)
     stress_shared &shared = *readers[0].shared;
-    bool *should_be_marked = (bool *) toku_xmalloc(omt->size());
+    bool *should_be_marked = (bool *) toku_xmalloc(omt->size() * sizeof(*should_be_marked));
     if (!should_be_marked) {
         fprintf(stderr, "ERROR! xmalloc failed\n");
         return;
@@ -396,7 +396,8 @@ static void stress_deleter(struct reader_extra *const readers, int num_marker_th
         simulate_reader_marks_on_array(&readers[i], shared, should_be_marked);
     }
 
-    bool *is_marked_according_to_iterate = (bool *) toku_xmalloc(omt->size());
+    bool *is_marked_according_to_iterate = (bool *) toku_xmalloc(omt->size() *
+                                                                 sizeof(*should_be_marked));
     if (!is_marked_according_to_iterate) {
         fprintf(stderr, "ERROR! xmalloc failed\n");
         toku_free(should_be_marked);
@@ -409,7 +410,7 @@ static void stress_deleter(struct reader_extra *const readers, int num_marker_th
     omt->iterate_over_marked<bool, copy_marks>(&is_marked_according_to_iterate[0]);
     omt->verify_marks_consistent();
 
-    invariant(!memcmp(should_be_marked, is_marked_according_to_iterate, sizeof(should_be_marked)));
+    invariant(!memcmp(should_be_marked, is_marked_according_to_iterate, omt->size() * sizeof(*should_be_marked)));
 
   //  if (verbose) {
         double frac_marked = count_true(should_be_marked, omt->size());

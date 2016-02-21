@@ -127,7 +127,7 @@ try_again_after_handling_write_error(int fd, size_t len, ssize_t r_write) {
     int try_again = 0;
 
     assert(r_write < 0);
-    int errno_write = get_error_errno(r_write);
+    int errno_write = EINTR;
     switch (errno_write) {
     case EINTR: { //The call was interrupted by a signal before any data was written; see signal(7).
 	char err_msg[sizeof("Write of [] bytes to fd=[] interrupted.  Retrying.") + 20+10]; //64 bit is 20 chars, 32 bit is 10 chars
@@ -278,7 +278,7 @@ toku_os_write (int fd, const void *buf, size_t len) {
             r = write(fd, bp, len);
         }
         if (r < 0) {
-            result = get_error_errno(r);
+            result = 1;
             break;
         }
         len           -= r;
@@ -326,7 +326,7 @@ toku_os_pwrite (int fd, const void *buf, size_t len, toku_off_t off) {
             r = pwrite(fd, bp, len, off);
         }
         if (r < 0) {
-            result = get_error_errno(r);
+            result = 1;
             break;
         }
         len           -= r;
@@ -377,19 +377,19 @@ toku_os_open_direct(const char *path, int oflag, int mode) {
      * decent read-ahead behavior on streaming reads.  The fix for
      * double-caching is deeper than this flag.
      */
-//    rval = toku_os_open(path, oflag, mode);
+    rval = toku_os_open(path, oflag, mode);
     /* WKJ 10/15: implemented readpages, so northbound file system
      * should be doing readahead now. also implemented sequential
      * reads using the prelocking api and cursor operations return
      * TOKUDB_CURSOR_CONTINUE so we cache basement nodes. turning
      * O_DIRECT back on to test.
      */
-    rval = toku_os_open(path, oflag | O_DIRECT, mode);
+//    rval = toku_os_open(path, oflag | O_DIRECT, mode);
 #elif defined(HAVE_F_NOCACHE)
     rval = toku_os_open(path, oflag, mode);
     if (rval >= 0) {
         int r = fcntl(rval, F_NOCACHE, 1);
-        if (r == -1) {
+        if (r < 0) {
             perror("setting F_NOCACHE");
         }
     }
@@ -407,7 +407,7 @@ toku_os_fclose(FILE * stream) {
     else {                      // if EINTR, retry until success
 	while (rval != 0) {
 	    rval = fclose(stream);
-	    if (rval && (get_error_errno(rval) != EINTR))
+	    if(rval)
 		break;
 	}
     }
@@ -420,9 +420,8 @@ toku_os_close(int fd) {  // if EINTR, retry until success
     while (r != 0) {
 	r = close(fd);
 	if (r) {
-	    int rr = get_error_errno(r);
-	    if (rr!=EINTR) printf("rr=%d (%s)\n", rr, strerror(rr));
-	    assert(rr==EINTR);
+	    //if (rr!=EINTR) printf("rr=%d (%s)\n", rr, strerror(rr));
+	    //assert(rr==EINTR);
 	}
     }
     return r;
@@ -456,7 +455,7 @@ extern "C" int recursive_delete(const char *);
 void toku_os_recursive_delete(const char *path) {
 #ifdef TOKU_LINUX_MODULE
     int r = recursive_delete(path);
-    if(r!=0) printf("\nrecursive deletion failed:%d\n", ftfs_get_errno());
+    if(r!=0) printf("\nrecursive deletion failed\n");
     //assert_zero(r);
 #else
     /* DP: Just malloc for now.  We almost certainly won't use this in the kernel */
@@ -483,23 +482,67 @@ void toku_set_func_fsync(int (*fsync_function)(int)) {
     t_fsync = fsync_function;
 }
 
-// keep trying if fsync fails because of EINTR
-static void file_fsync_internal (int fd) {
+void toku_logger_maybe_sync_internal_no_flags_no_callbacks (int fd) {
     uint64_t tstart = toku_current_time_microsec();
     int r = -1;
     uint64_t eintr_count = 0;
     while (r != 0) {
-	if (t_fsync) {
-	    r = t_fsync(fd);
-        } else {
-	    r = fsync(fd);
-        }
+	// if (t_fsync) {
+	//    r = t_fsync(fd);
+        //} else {
+	    r = fdatasync(fd);
+        //}
 	if (r) {
             #ifndef TOKU_KERNEL_MODULE
             assert(get_error_errno(r) == EINTR);
             #else
             assert(r == EINTR);
             #endif
+            eintr_count++;
+	}
+    }
+    toku_sync_fetch_and_add(&toku_fsync_count, 1);
+    uint64_t duration = toku_current_time_microsec() - tstart;
+    toku_sync_fetch_and_add(&toku_fsync_time, duration);
+    if (duration >= toku_long_fsync_threshold) {
+        toku_sync_fetch_and_add(&toku_long_fsync_count, 1);
+        toku_sync_fetch_and_add(&toku_long_fsync_time, duration);
+        toku_sync_fetch_and_add(&toku_long_fsync_eintr_count, eintr_count);
+
+        if (toku_fsync_debug) {
+            const int tstr_length = 26;
+            char tstr[tstr_length];
+            time_t t = time(0);
+#if __linux__ || defined(TOKU_LINUX_MODULE)
+            char fdname[256];
+            snprintf(fdname, sizeof fdname, "/proc/%d/fd/%d", getpid(), fd);
+            char lname[256];
+            ssize_t s = readlink(fdname, lname, sizeof lname);
+            if (0 < s && s < (ssize_t) sizeof lname)
+                lname[s] = 0;
+            fprintf(stderr, "%.24s toku_file_fsync %s fd=%d %s duration=%" PRIu64 " usec eintr=%" PRIu64 "\n", 
+                    ctime_r(&t, tstr), __FUNCTION__, fd, s > 0 ? lname : "?", duration, eintr_count);
+#else
+            fprintf(stderr, "%.24s toku_file_fsync  %s fd=%d duration=%" PRIu64 " usec eintr=%" PRIu64 "\n", 
+                    ctime_r(&t, tstr), __FUNCTION__, fd, duration, eintr_count);
+#endif
+            fflush(stderr);
+        }
+    }
+}
+
+// keep trying if fsync fails because of EINTR
+static void file_fsync_internal (int fd) {
+    uint64_t tstart = toku_current_time_microsec();
+    int r = -1;
+    uint64_t eintr_count = 0;
+    while (r != 0) {
+	//if (t_fsync) {
+	    //r = t_fsync(fd);
+        //} else {
+	    r = fdatasync(fd);
+        //}
+	if (r) {
             eintr_count++;
 	}
     }
@@ -546,12 +589,12 @@ int toku_fsync_dir_by_name_without_accounting(const char *dir_name) {
     int r = 0;
     DIR * dir = opendir(dir_name);
     if (!dir) {
-        r = get_error_errno(-1);
+        r = 1;
     } else {
         toku_fsync_dirfd_without_accounting(dir);
         r = closedir(dir);
         if (r != 0) {
-            r = get_error_errno(r);
+            r = 1;
         }
     }
     return r;
@@ -608,4 +651,8 @@ int toku_fsync_directory(const char *fname) {
     }
     toku_free(dirname);
     return result;
+}
+
+int toku_fallocate(int fd, off_t offset, off_t len) {
+	return fallocate(fd, 0, offset, len);
 }

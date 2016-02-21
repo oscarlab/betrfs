@@ -483,13 +483,14 @@ static void *checkpoints(void *arg) {
         // now run a checkpoint
         //
         CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
-        toku_cachetable_begin_checkpoint(cp, NULL);    
+        toku_cachetable_begin_checkpoint(cp, NULL, false);    
         toku_cachetable_end_checkpoint(
             cp, 
             NULL, 
             NULL,
-            NULL
-            );
+            NULL,
+        	 false   
+	);
         assert (sum==0);
         for (int i = 0; i < NUM_ELEMENTS; i++) {
             if (checkpointed_data[i] != INT64_MAX) {

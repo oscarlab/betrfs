@@ -373,7 +373,7 @@ static void* io_thread (void *v)
 		//printf("%s:%d readcode=%ld\n", __FILE__, __LINE__, readcode);
 		if (readcode < 0) {
 		    // a real error.  Save the real error.
-                    int the_errno = get_error_errno(readcode);
+                    int the_errno = 1;
                     fprintf(stderr, "%s:%d dbf=%p fd=%d errno=%d\n", __FILE__, __LINE__, dbf, dbf->fd, the_errno);
 		    dbf->error_code[1] = the_errno;
 		    dbf->n_in_buf[1] = 0;
@@ -414,14 +414,14 @@ int create_dbufio_fileset (DBUFIO_FILESET *bfsp, int N, int fds[/*N*/], size_t b
     //printf("%s:%d here\n", __FILE__, __LINE__);
     int result = 0;
     DBUFIO_FILESET CALLOC(bfs);
-    if (bfs==0) { result = get_error_errno(-ENOMEM); }
+    if (bfs==0) { result = ENOMEM; }
 
     bfs->compressed = compressed;
 
     bool mutex_inited = false, cond_inited = false;
     if (result==0) {
 	CALLOC_N(N, bfs->files);
-	if (bfs->files==NULL) { result = get_error_errno(-ENOMEM); }
+       if (bfs->files==NULL) { result = ENOMEM; }
 	else {
 	    for (int i=0; i<N; i++) {
 		bfs->files[i].buf[0] = bfs->files[i].buf[1] = NULL;
@@ -450,7 +450,7 @@ int create_dbufio_fileset (DBUFIO_FILESET *bfsp, int N, int fds[/*N*/], size_t b
 	    for (int j=0; j<2; j++) {
 		if (result==0) {
 		    MALLOC_N(bufsize, bfs->files[i].buf[j]);
-		    if (bfs->files[i].buf[j]==NULL) { result=get_error_errno(-ENOMEM); }
+		    if (bfs->files[i].buf[j]==NULL) { result = ENOMEM; }
 		}
 		bfs->files[i].n_in_buf[j] = 0;
 		bfs->files[i].error_code[j] = 0;
@@ -464,7 +464,7 @@ int create_dbufio_fileset (DBUFIO_FILESET *bfsp, int N, int fds[/*N*/], size_t b
             }
             {
 		if (r<0) {
-		    result=get_error_errno(r);
+                   result = 1;
 		    break;
                 } else if (r==0) {
 		    // it's EOF

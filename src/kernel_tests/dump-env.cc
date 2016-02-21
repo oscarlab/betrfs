@@ -99,11 +99,10 @@ static const int num_insert = 25000;
 
 static void
 setup (void) {
+    toku_os_recursive_delete(TOKU_TEST_FILENAME);
     int r;
+    toku_os_recursive_delete(TOKU_TEST_FILENAME);
     r=toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
-    if (r != 0) {
-        CKERR2(ftfs_get_errno(), EEXIST);
-    }
 
     r=db_env_create(&env, 0); CKERR(r);
 #ifdef TOKUDB

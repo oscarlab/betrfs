@@ -89,7 +89,7 @@ PATENT RIGHTS GRANT:
 #ident "Copyright (c) 2007-2013 Tokutek Inc.  All rights reserved."
 #ident "The technology is licensed by the Massachusetts Institute of Technology, Rutgers State University of New Jersey, and the Research Foundation of State University of New York at Stony Brook under United States of America Serial No. 11/760379 and to the patents and/or patent applications resulting from it."
 
-#include <ft.h>
+
 #include <toku_portability.h>
 #include "ft-internal.h"        // ugly but pragmatic, need access to dirty bits while holding translation lock
 #include "fttypes.h"
@@ -101,6 +101,7 @@ PATENT RIGHTS GRANT:
 #include "rbuf.h"
 #include "wbuf.h"
 #include <util/nb_mutex.h>
+#include <util/growable_array.h>
 
 //When the translation (btt) is stored on disk:
 //  In Header:
@@ -117,7 +118,7 @@ struct translation { //This is the BTT (block translation table)
     BLOCKNUM smallest_never_used_blocknum;
     BLOCKNUM blocknum_freelist_head;                     // next (previously used) unused blocknum (free list)
     struct block_translation_pair *block_translation;
-
+    toku::GrowableArray<uint64_t> log_block_log;    
     // Where and how big is the block translation vector stored on disk.
     // size_on_disk is stored in block_translation[RESERVED_BLOCKNUM_TRANSLATION].size
     // location_on is stored in block_translation[RESERVED_BLOCKNUM_TRANSLATION].u.diskoff
@@ -232,6 +233,16 @@ copy_translation(struct translation * dst, struct translation * src, enum transl
     memcpy(dst->block_translation,
            src->block_translation,
            dst->length_of_array * sizeof(*dst->block_translation));
+    if(src->type == TRANSLATION_CHECKPOINTED)
+        dst->log_block_log.init();
+    else {
+        //copy log_block_log
+        size_t s = src->log_block_log.get_size();
+        dst->log_block_log.init();
+        for(uint32_t i =0; i<s; i++) {
+            dst->log_block_log.push(src->log_block_log.fetch_unchecked(i));
+        }
+    }
     //New version of btt is not yet stored on disk.
     dst->block_translation[RESERVED_BLOCKNUM_TRANSLATION].size      = 0;
     dst->block_translation[RESERVED_BLOCKNUM_TRANSLATION].u.diskoff = diskoff_unused;
@@ -318,7 +329,48 @@ void toku_block_translation_note_skipped_checkpoint (BLOCK_TABLE bt) {
     unlock_for_blocktable(bt);
 }
 
+void block_table_log_get_block(BLOCK_TABLE bt, uint64_t offset) {
+    block_allocator_get_block(bt->block_allocator, offset);
+    bt->current.log_block_log.push(offset);
+    //does not matter for *get* multiple times -- put will just do as many times.
+}
+
+void block_table_log_block_log_put_blocks(BLOCK_ALLOCATOR ba, LBL lbl) {
+    
+    size_t size = lbl.get_size();
+    for(uint32_t i =0 ;i < size; i++) {
+        block_allocator_put_block(ba, lbl.fetch_unchecked(i));
+    }
+}
+
+static void dealias_log_block_log(LBL * thaw, LBL * frozen) {
+    size_t thaw_size = thaw->get_size();
+    size_t frozen_size =frozen->get_size();
+    if (thaw_size == frozen_size) {
+	thaw->deinit();
+	thaw->init();
+	return;
+	}
+    else {
+        paranoid_invariant(thaw_size > frozen_size);
+        LBL temp;
+	temp.init();
+	for(uint32_t i =0; i < thaw_size ; i++) {
+		temp.push(thaw->fetch_unchecked(i));
+	}
+ 	thaw->deinit();
+        thaw->init();
+	       
+	for(uint32_t i = frozen_size; i < thaw_size; i++) {
+            thaw->push(temp.fetch_unchecked(i));
+        }
+	temp.deinit();
+        return;
+    }
+}
 // Purpose: free any disk space used by previous checkpoint that isn't in use by either
+//
+//
 //           - current state
 //           - in-progress checkpoint
 //          capture inprogress as new checkpointed.
@@ -341,6 +393,7 @@ toku_block_translation_note_end_checkpoint (BLOCK_TABLE bt, int fd) {
     }
 
     //Make certain inprogress was allocated space on disk
+    //
     assert(bt->inprogress.block_translation[RESERVED_BLOCKNUM_TRANSLATION].size > 0);
     assert(bt->inprogress.block_translation[RESERVED_BLOCKNUM_TRANSLATION].u.diskoff > 0);
 
@@ -353,7 +406,8 @@ toku_block_translation_note_end_checkpoint (BLOCK_TABLE bt, int fd) {
             if (pair->size > 0 && !translation_prevents_freeing(&bt->inprogress, make_blocknum(i), pair)) {
                 assert(!translation_prevents_freeing(&bt->current, make_blocknum(i), pair));
                 PRNTF("free", i, pair->size, pair->u.diskoff, bt);
-                block_allocator_free_block(bt->block_allocator, pair->u.diskoff);
+                //block_allocator_free_block(bt->block_allocator, pair->u.diskoff);
+                block_allocator_put_block(bt->block_allocator, pair->u.diskoff);
             }
         }
         toku_free(bt->checkpointed.block_translation);
@@ -361,6 +415,17 @@ toku_block_translation_note_end_checkpoint (BLOCK_TABLE bt, int fd) {
         bt->checkpointed.type = TRANSLATION_CHECKPOINTED;
         memset(&bt->inprogress, 0, sizeof(bt->inprogress));
         maybe_truncate_file(bt, fd, allocated_limit_at_start);
+    
+    //be noted the bt->checkpointed.log_block_log is the old inprogress lbl, aka, the frozen blb.
+    //
+        block_table_log_block_log_put_blocks(bt->block_allocator, bt->checkpointed.log_block_log);
+        //dealias the current lbl
+    
+        dealias_log_block_log(&bt->current.log_block_log, &bt->checkpointed.log_block_log);
+
+        bt->checkpointed.log_block_log.deinit();
+        
+
     }
 end:
     unlock_for_blocktable(bt);
@@ -433,7 +498,8 @@ void
 toku_block_free(BLOCK_TABLE bt, uint64_t offset) {
     lock_for_blocktable(bt);
 PRNTF("freeSOMETHINGunknown", 0L, 0L, offset, bt);
-    block_allocator_free_block(bt->block_allocator, offset);
+    block_allocator_put_block(bt->block_allocator, offset);
+    //block_allocator_free_block(bt->block_allocator, offset);
     unlock_for_blocktable(bt);
 }
 
@@ -468,7 +534,9 @@ PRNTF("old", b.b, old_pair.size, old_pair.u.diskoff, bt);
          translation_prevents_freeing(&bt->checkpointed, b, &old_pair));
     if (!cannot_free && old_pair.u.diskoff!=diskoff_unused) {
 PRNTF("Freed", b.b, old_pair.size, old_pair.u.diskoff, bt);
-        block_allocator_free_block(bt->block_allocator, old_pair.u.diskoff);
+//        block_allocator_free_block(bt->block_allocator, old_pair.u.diskoff);
+  
+        block_allocator_put_block(bt->block_allocator, old_pair.u.diskoff);
     }
 
     uint64_t allocator_offset = diskoff_unused;
@@ -476,7 +544,8 @@ PRNTF("Freed", b.b, old_pair.size, old_pair.u.diskoff, bt);
     if (size > 0) {
         // Allocate a new block if the size is greater than 0,
         // if the size is just 0, offset will be set to diskoff_unused
-        block_allocator_alloc_block(bt->block_allocator, size, &allocator_offset);
+        block_allocator_alloc_and_get_block(bt->block_allocator, size, &allocator_offset);
+        
     }
     t->block_translation[b.b].u.diskoff = allocator_offset;
     *offset = allocator_offset;
@@ -542,8 +611,8 @@ static void blocknum_alloc_translation_on_disk_unlocked(BLOCK_TABLE bt)
     //Allocate a new block
     int64_t size = calculate_size_on_disk(t);
     uint64_t offset;
-    block_allocator_alloc_block(bt->block_allocator, size, &offset);
-PRNTF("blokAllokator", 1L, size, offset, bt);
+    block_allocator_alloc_and_get_block(bt->block_allocator, size, &offset);
+    PRNTF("blokAllokator", 1L, size, offset, bt);
     t->block_translation[b.b].u.diskoff = offset;
     t->block_translation[b.b].size      = size;
 }
@@ -695,8 +764,9 @@ free_blocknum_unlocked(BLOCK_TABLE bt, BLOCKNUM *bp, FT ft, bool for_checkpoint)
             (translation_prevents_freeing(&bt->inprogress,   b, &old_pair) ||
              translation_prevents_freeing(&bt->checkpointed, b, &old_pair));
         if (!cannot_free) {
-PRNTF("free_blocknum_free", b.b, old_pair.size, old_pair.u.diskoff, bt);
-            block_allocator_free_block(bt->block_allocator, old_pair.u.diskoff);
+            PRNTF("free_blocknum_free", b.b, old_pair.size, old_pair.u.diskoff, bt);
+           // block_allocator_free_block(bt->block_allocator, old_pair.u.diskoff);
+            block_allocator_put_block(bt->block_allocator, old_pair.u.diskoff);
         }
     }
     else {
@@ -853,8 +923,16 @@ void
 toku_blocktable_destroy(BLOCK_TABLE *btp) {
     BLOCK_TABLE bt = *btp;
     *btp = NULL;
-    if (bt->current.block_translation)      toku_free(bt->current.block_translation);
-    if (bt->inprogress.block_translation)   toku_free(bt->inprogress.block_translation);
+    if (bt->current.block_translation)      
+    {
+        bt->current.log_block_log.deinit();
+        toku_free(bt->current.block_translation);
+    }
+    if (bt->inprogress.block_translation)   
+    {
+        bt->current.log_block_log.deinit();
+        toku_free(bt->inprogress.block_translation);
+    }
     if (bt->checkpointed.block_translation) toku_free(bt->checkpointed.block_translation);
 
     destroy_block_allocator(&bt->block_allocator);
@@ -903,6 +981,7 @@ translation_default(struct translation *t) {  // destination into which to creat
         t->block_translation[i].size      = 0;
         t->block_translation[i].u.diskoff = diskoff_unused;
     }
+    t->log_block_log.init();
 }
 
 
@@ -964,7 +1043,8 @@ blocktable_note_translation (BLOCK_ALLOCATOR allocator, struct translation *t) {
             paranoid_invariant(pair.u.diskoff != diskoff_unused);
             int cur_pair = n_pairs++;
             pairs[cur_pair] = (struct block_allocator_blockpair) { .offset = (uint64_t) pair.u.diskoff,
-                                                                   .size = (uint64_t) pair.size };
+                                                                   .size = (uint64_t) pair.size,
+                                                                   .nref = 1 };
         }
     }
     block_allocator_alloc_blocks_at(allocator, n_pairs, pairs);
@@ -1198,3 +1278,12 @@ toku_blocktable_iterate_translation_tables(BLOCK_TABLE bt, uint64_t checkpoint_c
     unlock_for_blocktable(bt);
     return error;
 }
+
+
+void get_diskoff_n_size_from_blocknum(BLOCK_TABLE bt, BLOCKNUM b, DISKOFF * off, DISKOFF*  size) {
+	struct translation * tran = &bt->current; 
+	struct block_translation_pair pair = tran->block_translation[b.b];
+	*off = pair.u.diskoff;
+	*size = pair.size; 
+}
+

@@ -233,5 +233,5 @@ int
 toku_ft_hot_optimize(FT_HANDLE brt, DBT* left, DBT* right,
                       int (*progress_callback)(void *extra, float progress),
                       void *progress_extra, uint64_t* loops_run);
-
+extern "C" void printf_count_blindwrite(void);
 #endif // End of header guardian.

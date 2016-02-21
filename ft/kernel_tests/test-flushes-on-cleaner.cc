@@ -171,7 +171,8 @@ doit (bool keep_other_bn_in_memory) {
         "a", // key
         2, // keylen
         "aa",
-        3
+        3,
+	FT_INSERT
         );
     assert(r==0);
     r = toku_testsetup_insert_to_leaf (
@@ -180,7 +181,8 @@ doit (bool keep_other_bn_in_memory) {
         "z", // key
         2, // keylen
         "zz",
-        3
+        3,
+	FT_INSERT
         );
     assert(r==0);
     char filler[400];
@@ -193,7 +195,8 @@ doit (bool keep_other_bn_in_memory) {
         "b", // key
         2, // keylen
         filler,
-        sizeof(filler)
+        sizeof(filler),
+	FT_INSERT
         );
     assert(r==0);
     r = toku_testsetup_insert_to_leaf (
@@ -202,7 +205,8 @@ doit (bool keep_other_bn_in_memory) {
         "y", // key
         2, // keylen
         filler,
-        sizeof(filler)
+        sizeof(filler),
+	FT_INSERT
         );
     assert(r==0);
 
@@ -241,7 +245,7 @@ doit (bool keep_other_bn_in_memory) {
     // now run a checkpoint to get everything clean
     //
     CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
-    r = toku_checkpoint(cp, NULL, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT);
+    r = toku_checkpoint(cp, NULL, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, false);
     assert_zero(r);
     // now lock and release the leaf node to make sure it is what we expect it to be.
     FTNODE node = NULL;
@@ -362,7 +366,7 @@ doit (bool keep_other_bn_in_memory) {
     // now run a checkpoint to get everything clean,
     // and to get the rebalancing to happen
     //
-    r = toku_checkpoint(cp, NULL, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT);
+    r = toku_checkpoint(cp, NULL, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, false);
     assert_zero(r);
 
     // check that lookups on the two keys is still good

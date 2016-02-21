@@ -110,7 +110,7 @@ PAIR data_pair[NUM_ELEMENTS];
 uint32_t time_of_test;
 static bool run_test1;
 
-static int verbose = 0;
+static int verbose = 1;
 
 static void 
 clone_callback(
@@ -187,6 +187,7 @@ static void *test_time(void *arg) {
     //
     // if num_Seconds is set to 0, run indefinitely
     //
+    printf("test_time\n");
     if (time_of_test != 0) {
         usleep(time_of_test*1000*1000);
         if (verbose) printf("should now end test\n");
@@ -201,6 +202,7 @@ extern CACHEFILE f1;
 
 static void *move_numbers(void *arg) {
     while (run_test1) {
+	printf("move_number is working\n");
         int rand_key1 = 0;
         int rand_key2 = 0;
         int less;
@@ -316,6 +318,7 @@ static void *move_numbers(void *arg) {
 
 static void *read_random_numbers(void *arg) {
     while(run_test1) {
+	printf("the reader is working\n");
         int rand_key1 = random() % NUM_ELEMENTS;
         void* v1;
         long s1;
@@ -346,7 +349,9 @@ static void *read_random_numbers(void *arg) {
 static int num_checkpoints = 0;
 static void *checkpoints(void *arg) {
     // first verify that checkpointed_data is correct;
+    //printf("%s:%d\n",__func__,__LINE__);
     while(run_test1) {
+        printf("checkpoints is working \n");
         int64_t sum = 0;
         for (int i = 0; i < NUM_ELEMENTS; i++) {
             sum += checkpointed_data[i];
@@ -357,12 +362,14 @@ static void *checkpoints(void *arg) {
         // now run a checkpoint
         //
         CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
-        toku_cachetable_begin_checkpoint(cp, NULL);    
+        toku_cachetable_begin_checkpoint(cp, NULL, false);    	
+    	//printf("%s:%d,n_chkpt=%d\n",__func__,__LINE__, num_checkpoints);
         toku_cachetable_end_checkpoint(
             cp, 
             NULL, 
             NULL,
-            NULL
+            NULL,
+	    false
             );
         assert (sum==0);
         for (int i = 0; i < NUM_ELEMENTS; i++) {
@@ -372,6 +379,7 @@ static void *checkpoints(void *arg) {
         usleep(10*1024);
         num_checkpoints++;
     }
+    //printf("%s:%d\n",__func__,__LINE__);
     return arg;
 }
 
@@ -443,10 +451,13 @@ cachetable_test (void) {
         r = toku_pthread_create(&read_random_tid[i], NULL, read_random_numbers, NULL); 
         assert_zero(r);
     }
+    printf("%s:%d\n",__func__,__LINE__);
     for (int i = 0; i < NUM_MOVER_THREADS; i++) {
         r = toku_pthread_create(&move_tid[i], NULL, move_numbers, NULL); 
         assert_zero(r);
     }
+   
+    printf("%s:%d\n",__func__,__LINE__);
     r = toku_pthread_create(&checkpoint_tid, NULL, checkpoints, NULL); 
     assert_zero(r);    
     r = toku_pthread_create(&time_tid, NULL, test_time, NULL); 
@@ -479,8 +490,12 @@ cachetable_test (void) {
 extern "C" int test_cachetable_pin_checkpoint(void);
 
 int test_cachetable_pin_checkpoint() {
-
   initialize_dummymsn();
+  int rinit = toku_ft_layer_init();
+  CKERR(rinit);
+  num_checkpoints = 0;
+  run_test1 = false;
   cachetable_test();
+  toku_ft_layer_destroy();
   return 0;
 }

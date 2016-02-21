@@ -97,13 +97,13 @@ PATENT RIGHTS GRANT:
 
 uint32_t 
 ft_msg_get_keylen(FT_MSG ft_msg) {
-    uint32_t rval = ft_msg->u.id.key->size;
+    uint32_t rval = ft_msg->key->size;
     return rval;
 }
 
 uint32_t 
 ft_msg_get_vallen(FT_MSG ft_msg) {
-    uint32_t rval = ft_msg->u.id.val->size;
+    uint32_t rval = ft_msg->val->size;
     return rval;
 }
 
@@ -115,13 +115,13 @@ ft_msg_get_xids(FT_MSG ft_msg) {
 
 void *
 ft_msg_get_key(FT_MSG ft_msg) {
-    void * rval = ft_msg->u.id.key->data;
+    void * rval = ft_msg->key->data;
     return rval;
 }
 
 void *
 ft_msg_get_val(FT_MSG ft_msg) {
-    void * rval = ft_msg->u.id.val->data;
+    void * rval = ft_msg->val->data;
     return rval;
 }
 
@@ -131,3 +131,122 @@ ft_msg_get_type(FT_MSG ft_msg) {
     return rval;
 }
 
+void *
+ft_msg_get_max_key(FT_MSG ft_msg) {
+    void * rval = ft_msg->max_key->data;
+    return rval;
+}
+
+uint32_t
+ft_msg_get_max_keylen(FT_MSG ft_msg) {
+    uint32_t rval = ft_msg->max_key->size;
+    return rval;
+}
+
+
+enum pacman_status 
+ft_msg_get_pm_status(FT_MSG ft_msg) {
+    assert(FT_DELETE_MULTICAST == ft_msg->type);
+    return ft_msg -> pm_status;
+}
+
+MSN 
+ft_msg_get_msn(FT_MSG ft_msg) {
+    MSN rval = ft_msg -> msn;
+    return rval;
+}
+
+static const DBT empty_dbt = {.data=0, .size=0, .ulen=0, .flags=0};
+const DBT * get_dbt_empty(void) {
+  	return &empty_dbt;
+}
+bool is_dbt_empty(const DBT * dbt) {
+  	return (dbt == &empty_dbt);
+}
+void ft_msg_init(FT_MSG ft_msg, enum ft_msg_type type, MSN msn, XIDS xids, const DBT * key , const DBT * val){
+    ft_msg->type = type;
+    ft_msg->msn = msn;
+    ft_msg->xids = xids;
+    ft_msg->key = key;
+    ft_msg->val = val?val:&empty_dbt;
+    ft_msg->max_key = &empty_dbt;
+    ft_msg->is_right_excl=false;
+}
+
+void ft_msg_multicast_init(FT_MSG ft_msg, enum ft_msg_type type, MSN msn, XIDS xids, const DBT * key, const DBT * max_key, const DBT * val, bool is_re, enum pacman_status pm_status){
+
+    ft_msg->type = type;
+    ft_msg->msn = msn;
+    ft_msg->xids = xids;
+    ft_msg->key = key;
+    ft_msg->val = val?val:&empty_dbt;
+    ft_msg->max_key = max_key;
+    ft_msg->is_right_excl= is_re;
+    ft_msg->pm_status = pm_status;
+}
+
+static void fill_dbt(DBT *dbt, bytevec k, ITEMLEN len) {
+    memset(dbt,0, sizeof(*dbt));
+    dbt->size=len;
+    dbt->data=(char*)k;
+}
+void ft_msg_read_from_rbuf(FT_MSG msg, DBT * k, DBT * v, DBT * m, struct rbuf *rb, XIDS *x, bool * is_fresh) {
+
+    const void *keyp, *valp;
+    uint32_t keylen, vallen;
+    enum ft_msg_type t = (enum ft_msg_type) rbuf_char(rb);
+    *is_fresh = rbuf_char(rb);
+    MSN msn = rbuf_msn(rb);
+    xids_create_from_buffer(rb, x);
+    rbuf_bytes(rb, &keyp, &keylen);
+    rbuf_bytes(rb, &valp, &vallen);
+
+    fill_dbt(k, keyp, keylen);
+    fill_dbt(v, valp, vallen);
+    if (ft_msg_type_is_multicast(t)) {
+        bool is_right_excl = false;
+	enum pacman_status pm_status = PM_UNCOMMITTED;
+        const void* max_keyp;
+        uint32_t max_key_len;        
+        rbuf_bytes(rb, &max_keyp, &max_key_len);
+	paranoid_invariant(max_key_len>0);
+        fill_dbt(m, max_keyp, max_key_len);
+	if(t == FT_DELETE_MULTICAST) {
+        	is_right_excl = rbuf_char(rb);
+	        pm_status  = (enum pacman_status) rbuf_int(rb);	
+	}
+        ft_msg_multicast_init(msg,t, msn, *x ,k,m,v,is_right_excl, pm_status);
+    }
+    else {
+        memset(m,0,sizeof(*m));
+        ft_msg_init(msg, t, msn, *x, k, v);
+    }
+}
+
+void ft_msg_write_to_wbuf(FT_MSG msg, struct wbuf *wb, int is_fresh) {
+    enum ft_msg_type type = ft_msg_get_type(msg);
+    MSN msn = ft_msg_get_msn(msg);
+    XIDS xids = ft_msg_get_xids(msg);
+    void * key = (char *)ft_msg_get_key(msg);
+    int keylen = ft_msg_get_keylen(msg);
+    void * val = ft_msg_get_val(msg);
+    int vallen = ft_msg_get_vallen(msg);
+     wbuf_nocrc_char(wb, (unsigned char)type);
+    wbuf_nocrc_char(wb, (unsigned char) is_fresh);
+    wbuf_MSN(wb, msn);
+    wbuf_nocrc_xids(wb, xids);
+    wbuf_nocrc_bytes(wb, key, keylen);
+    wbuf_nocrc_bytes(wb, val, vallen);
+    if (ft_msg_type_is_multicast(type)) {
+        void * max_key = ft_msg_get_max_key(msg);
+        int max_keylen = ft_msg_get_max_keylen(msg);
+        wbuf_nocrc_bytes(wb, max_key, max_keylen);
+	
+	if(type == FT_DELETE_MULTICAST) {
+        bool is_re = ft_msg_is_multicast_rightexcl(msg);
+	wbuf_nocrc_bool(wb, is_re);
+	enum pacman_status pm_status = ft_msg_multicast_pm_status(msg);
+	wbuf_nocrc_uint(wb, pm_status);	
+    	}
+     }
+}
