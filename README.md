@@ -30,6 +30,7 @@ device and file system type where the B^e-tree index image
 resides. This will be explained in detail in the 'Mounting BetrFS'
 section below.
 
+NOTE: The BetrFS prototype currently only works on the 3.11.10 kernel.
 
 Repository layout
 -----------------
