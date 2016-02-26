@@ -1,2 +1,0 @@
-/usr/bin/ar cr libtokuportability_static.a  CMakeFiles/tokuportability_static.dir/tokuportability_static_depends.cc.o
-/usr/bin/ranlib libtokuportability_static.a
