@@ -97,9 +97,9 @@ never compiled your own kernel. An abbreviated version.
 	tar -xvf linux-3.11.10.tar.gz
 	cd linux-3.11.10
 	cp ../pthread_union_check.py ./
-	./pthread_union_check.py
 	patch -p1 < ../linux-3.11.10.diff
 	make oldconfig
+	./pthread_union_check.py
 	make
 	make modules
 	make modules_install
