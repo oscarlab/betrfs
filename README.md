@@ -96,7 +96,7 @@ never compiled your own kernel. The build scripts assume you will download
 and build the kernel in the top directory of the betrfs repository.
 An abbreviated version:
 
-        cd betrfs
+	cd betrfs
 	wget https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.11.10.tar.gz
 	tar -xvf linux-3.11.10.tar.gz
 	cd linux-3.11.10
