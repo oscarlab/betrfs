@@ -92,8 +92,11 @@ Apply the provided patch (linux-3.11.10.diff) to the 3.11.10 Linux kernel
 available from https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.11.10.tar.bz2. Please remember to turn off Transparent Huge Pages when configuring the kernel. You may set it to madvise or never. The MongoDB project has a <a href="https://docs.mongodb.org/manual/tutorial/transparent-huge-pages/">good guide </a>on doing this with an init script if you don't want to mess with your kernel config.
 
 There are many guides on how to do this, so please read one if you have
-never compiled your own kernel. An abbreviated version.
+never compiled your own kernel. The build scripts assume you will download 
+and build the kernel in the top directory of the betrfs repository.
+An abbreviated version:
 
+        cd betrfs
 	wget https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.11.10.tar.gz
 	tar -xvf linux-3.11.10.tar.gz
 	cd linux-3.11.10
@@ -113,7 +116,7 @@ You must have the right versions of gcc, and g++: gcc-4.7, g++-4.7.
 For those unfamiliar with cmake, I would suggest an out-of-source
 build. The following commands should work:
 
-    mkdir build
+    mkdir build  # in the top-level directory of the betrfs repository
     cd build
     CC=gcc-4.7 CXX=g++-4.7 cmake \
       -D CMAKE_BUILD_TYPE=$TYPE \
