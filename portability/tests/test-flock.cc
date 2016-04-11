@@ -112,7 +112,7 @@ int main(void) {
 	assert(status == 0);
     }
 
-    int r = toku_os_unlock_file(fd);
+    int r = toku_os_unlock_file(fd, TOKU_TEST_FILENAME);
     assert(r == 0);
 
     return 0;

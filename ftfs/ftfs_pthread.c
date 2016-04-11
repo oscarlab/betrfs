@@ -12,7 +12,7 @@
 #include "ftfs_error.h"
 #include "ftfs_southbound.h"
 #include "ftfs_pthread.h"
-
+#include "ftfs_frwlock.h"
 /* dummy phtread_mutexattr */
 int
 pthread_mutexattr_init(pthread_mutexattr_t *attr) {
@@ -183,7 +183,7 @@ pthread_rwlockattr_setkind_np(pthread_rwlockattr_t *attr, int *type) {
 int
 pthread_rwlock_init(pthread_rwlock_t *rwlock,
 		    const pthread_rwlockattr_t *attr) {
-	init_rwsem(&rwlock->lock);
+	ftfs_init_rwsem(&rwlock->lock);
 	rwlock->init = PTHREAD_INIT_MAGIC;
 	debug_init_semaphore_holders(rwlock);
 	return 0;
@@ -195,10 +195,30 @@ pthread_rwlock_destroy(pthread_rwlock_t *rwlock) {
 }
 
 int
+pthread_rwlock_try_rdlock(pthread_rwlock_t *rwlock) {
+	int ret = 0;
+	FTFS_DEBUG_ON(rwlock->init != PTHREAD_INIT_MAGIC);
+	debug_nested_semaphore(rwlock);
+	ret = ftfs_down_read_trylock(&rwlock->lock);
+	debug_add_semaphore_owner(rwlock);
+	return ret;
+}
+
+int
+pthread_rwlock_try_wrlock(pthread_rwlock_t *rwlock) {
+	int ret = 0;
+	FTFS_DEBUG_ON(rwlock->init != PTHREAD_INIT_MAGIC);
+	debug_nested_semaphore(rwlock);
+	ret = ftfs_down_write_trylock(&rwlock->lock);
+	debug_add_semaphore_owner(rwlock);
+	return ret;
+}
+
+int
 pthread_rwlock_rdlock(pthread_rwlock_t *rwlock) {
 	FTFS_DEBUG_ON(rwlock->init != PTHREAD_INIT_MAGIC);
 	debug_nested_semaphore(rwlock);
-	down_read(&rwlock->lock);
+	ftfs_down_read(&rwlock->lock);
 	debug_add_semaphore_owner(rwlock);
 	return 0;
 }
@@ -207,7 +227,7 @@ int
 pthread_rwlock_wrlock(pthread_rwlock_t *rwlock) {
 	FTFS_DEBUG_ON(rwlock->init != PTHREAD_INIT_MAGIC);
 	debug_nested_semaphore(rwlock);
-	down_write(&rwlock->lock);
+	ftfs_down_write(&rwlock->lock);
 	debug_add_semaphore_owner(rwlock);
 	return 0;
 }
@@ -225,7 +245,7 @@ pthread_rwlock_unlock(pthread_rwlock_t *rwlock) {
 int
 pthread_rwlock_rdunlock(pthread_rwlock_t *rwlock) {
 	FTFS_DEBUG_ON(rwlock->init != PTHREAD_INIT_MAGIC);
-	up_read(&rwlock->lock);
+	ftfs_up_read(&rwlock->lock);
 	debug_release_semaphore_owner(rwlock);
 	return 0;
 }
@@ -233,7 +253,7 @@ pthread_rwlock_rdunlock(pthread_rwlock_t *rwlock) {
 int
 pthread_rwlock_wrunlock(pthread_rwlock_t *rwlock) {
 	FTFS_DEBUG_ON(rwlock->init != PTHREAD_INIT_MAGIC);
-	up_write(&rwlock->lock);
+	ftfs_up_write(&rwlock->lock);
 	debug_release_semaphore_owner(rwlock);
 	return 0;
 }

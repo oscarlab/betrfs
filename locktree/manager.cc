@@ -97,6 +97,7 @@ PATENT RIGHTS GRANT:
 #include "lock_request.h"
 
 #include <util/status.h>
+#include <toku_include/toku_err.h>
 
 namespace toku {
 
@@ -218,10 +219,10 @@ locktree *locktree::manager::get_lt(DICTIONARY_ID dict_id, DESCRIPTOR desc,
                 (void) toku_sync_sub_and_fetch(&lt->m_reference_count, 1);
                 lt->destroy();
                 toku_free(lt);
-                lt = nullptr;
+                lt = (locktree *)ERR_PTR(-r);
             }
         }
-        if (lt) {
+        if (!IS_ERR(lt)) {
             locktree_map_put(lt);
         }
     } else {

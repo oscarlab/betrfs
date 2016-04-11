@@ -1847,14 +1847,16 @@ int
 toku_get_version_of_logs_on_disk(const char *log_dir, bool *found_any_logs, uint32_t *version_found) {
     bool found = false;
     uint32_t highest_version = 0;
-    int r = 0;
+    int fd, r = 0;
 
     struct dirent *de;
-    DIR *d=opendir(log_dir);
-    if (d==NULL) {
-        r = 1;
+    fd = open(log_dir, O_DIRECTORY);
+    if (fd < 0) {
+        r = fd;
     }
     else {
+	DIR *d = fdopendir(fd);
+
         // Examine every file in the directory and find highest version
         while ((de=readdir(d))) {
             uint32_t this_log_version;
@@ -1869,8 +1871,7 @@ toku_get_version_of_logs_on_disk(const char *log_dir, bool *found_any_logs, uint
                     highest_version = highest_version > this_log_version ? highest_version : this_log_version;
             }
         }
-        int r2 = closedir(d);
-        if (r==0) r = r2;
+        r = closedir(d);
     }
     if (r==0) {
         *found_any_logs = found;

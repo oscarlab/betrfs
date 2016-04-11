@@ -5,6 +5,7 @@
 #include <linux/parser.h>
 #include <linux/list_sort.h>
 #include <linux/writeback.h>
+#include <linux/path.h>
 
 #include "ftfs_fs.h"
 
@@ -202,6 +203,11 @@ static inline struct ftfs_meta_key *ftfs_get_read_lock(struct ftfs_inode *f_inod
 {
 	down_read(&f_inode->key_lock);
 	return f_inode->key;
+}
+
+static inline int ftfs_get_read_trylock(struct ftfs_inode *f_inode)
+{
+	return down_read_trylock(&f_inode->key_lock);
 }
 
 static inline void ftfs_put_read_lock(struct ftfs_inode *f_inode)
@@ -559,6 +565,30 @@ abort:
 	goto unlock_out;
 }
 
+// change from d_find_alias
+static struct dentry *ftfs_find_dentry(struct inode *inode)
+{
+	struct dentry *de = NULL;
+
+	if (!hlist_empty(&inode->i_dentry)) {
+		spin_lock(&inode->i_lock);
+		hlist_for_each_entry(de, &inode->i_dentry, d_alias) {
+			spin_lock(&de->d_lock);
+			if (!IS_ROOT(de) && !d_unhashed(de)) {
+				//__dget_dlock(de);
+				de->d_lockref.count++;
+				spin_unlock(&de->d_lock);
+				goto out;
+			}
+			spin_unlock(&de->d_lock);
+		}
+out:
+		spin_unlock(&inode->i_lock);
+	}
+
+	return de;
+}
+
 static int inline maybe_merge_circle(struct inode *inode)
 {
 	int ret;
@@ -567,10 +597,11 @@ static int inline maybe_merge_circle(struct inode *inode)
 	struct inode *it_inode;
 	struct ftfs_meta_key *meta_key;
 
-	dentry = d_find_alias(inode);
+	dentry = ftfs_find_dentry(inode);
 	ret = -1;
-	if (dentry == NULL || (it_dentry = dentry->d_parent) == dentry)
+	if (dentry == NULL)
 		goto out;
+	it_dentry = dentry->d_parent;
 	sbi = dentry->d_sb->s_fs_info;
 	do {
 		it_inode = it_dentry->d_inode;
@@ -786,7 +817,12 @@ ftfs_writepage(struct page *page, struct writeback_control *wbc)
 	struct ftfs_sb_info *sbi = inode->i_sb->s_fs_info;
 	DB_TXN *txn;
 
-	meta_key = ftfs_get_read_lock(FTFS_I(inode));
+	ret = ftfs_get_read_trylock(FTFS_I(inode));
+	if (!ret)
+		return AOP_FTFS_WRITEPAGE;
+	else 
+		meta_key = FTFS_I(inode)->key;
+
 	set_page_writeback(page);
 	TXN_GOTO_LABEL(retry);
 	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
@@ -945,9 +981,9 @@ retry:
 	sbi = inode->i_sb->s_fs_info;
 	meta_key = ftfs_get_read_lock(FTFS_I(inode));
 	if (i_size_read(inode) >= sbi->max_file_size &&
-	    meta_key_is_circle_root(meta_key)) {
+	    !meta_key_is_circle_root(meta_key)) {
 		struct dentry *de;
-		de = d_find_alias(inode);
+		de = ftfs_find_dentry(inode);
 		if (de) {
 			ftfs_put_read_lock(FTFS_I(inode));
 			split_circle(de);
@@ -1113,7 +1149,7 @@ out:
 			struct dentry *de;
 			if (!meta_key_is_circle_root(meta_key)) {
 				ftfs_put_read_lock(FTFS_I(inode));
-				de = d_find_alias(inode);
+				de = ftfs_find_dentry(inode);
 				BUG_ON(!de);
 				if (split_circle(de)) {
 					dput(de);
@@ -1130,9 +1166,11 @@ split_fail:
 			     - FTFS_I(inode)->nr_data;
 			// the file doesn't form a circle itself
 			if (dc > 0) {
-				struct dentry *de = d_find_alias(inode);
-				ftfs_update_nr(de->d_parent, 0, dc, FTFS_UPDATE_NR_MAY_SPLIT);
-				dput(de);
+				struct dentry *de = ftfs_find_dentry(inode);
+				if (de) {
+					ftfs_update_nr(de->d_parent, 0, dc, FTFS_UPDATE_NR_MAY_SPLIT);
+					dput(de);
+				}
 			}
 		}
 		FTFS_I(inode)->nr_data = ftfs_get_block_num_by_size(last_pos);
@@ -1717,6 +1755,7 @@ static struct dentry *
 ftfs_lookup(struct inode *dir, struct dentry *dentry, unsigned int flags)
 {
 	int r;
+	struct dentry *ret;
 	struct inode *inode;
 	struct ftfs_sb_info *sbi = dir->i_sb->s_fs_info;
 	struct ftfs_inode *ftfs_inode = FTFS_I(dir);
@@ -1751,8 +1790,10 @@ ftfs_lookup(struct inode *dir, struct dentry *dentry, unsigned int flags)
 	}
 
 out:
+	/* aging bug */
+	ret = d_splice_alias(inode, dentry);
 	ftfs_put_read_lock(ftfs_inode);
-	return d_splice_alias(inode, dentry);
+	return ret;
 }
 
 static int ftfs_setattr(struct dentry *dentry, struct iattr *iattr)
@@ -1904,11 +1945,9 @@ ftfs_write_inode(struct inode *inode, struct writeback_control *wbc)
 	    meta_key->circle_id != 0 &&
 	    FTFS_I(inode)->nr_meta < sbi->max_circle_size &&
 	    FTFS_I(inode)->nr_data < sbi->max_circle_size &&
-	    inode->i_nlink <= 1) {
+	    inode->i_nlink == 1) {
 		ftfs_put_read_lock(FTFS_I(inode));
 		ret = maybe_merge_circle(inode);
-		if (!ret)
-			goto out;
 		meta_key = ftfs_get_read_lock(FTFS_I(inode));
 	}
 
@@ -1927,7 +1966,6 @@ ftfs_write_inode(struct inode *inode, struct writeback_control *wbc)
 
 	ftfs_put_read_lock(FTFS_I(inode));
 
-out:
 	return ret;
 }
 
@@ -2080,7 +2118,12 @@ ftfs_setup_inode(struct super_block *sb, struct ftfs_meta_key *meta_key,
 
 	ftfs_inode = FTFS_I(i);
 	if (!(i->i_state & I_NEW)) {
-		kfree(meta_key);
+		/* In-memory inode not binding to a dentry causes the git
+		   bugs being seen */
+		struct ftfs_meta_key *mkey = ftfs_get_write_lock(FTFS_I(i));
+		FTFS_I(i)->key = meta_key;
+		ftfs_put_write_lock(FTFS_I(i));
+		kfree(mkey);
 		return i;
 	}
 

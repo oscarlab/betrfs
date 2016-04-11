@@ -107,6 +107,7 @@ PATENT RIGHTS GRANT:
 #include "indexer.h"
 #include <portability/toku_atomic.h>
 #include <util/status.h>
+#include <toku_include/toku_err.h>
 
 extern "C" int isalnum(int);
 static YDB_DB_LAYER_STATUS_S ydb_db_layer_status;
@@ -501,9 +502,10 @@ toku_db_open_iname(DB * db, DB_TXN * txn, const char *iname_in_env, uint32_t fla
                 db->cmp_descriptor,
                 toku_ft_get_bt_compare(db->i->ft_handle),
                 &on_create_extra);
-        if (db->i->lt == nullptr) {
-            r = 1;
-            goto error_cleanup;
+	if (IS_ERR(db->i->lt)) {
+	    r = PTR_ERR(db->i->lt);
+	    db->i->lt = nullptr;
+	    goto error_cleanup;
         }
     }
     return 0;

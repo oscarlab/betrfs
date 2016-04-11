@@ -14,6 +14,8 @@ ftfs-objs := \
 	ftfs_malloc.o \
 	ftfs_random.o \
 	ftfs_error.o \
+	ftfs_rwsem.o \
+	ftfs_frwlock.o \
 	ftfs_pthread.o \
 	ftfs_files.o \
 	ftfs_southbound.o \
@@ -28,7 +30,9 @@ ftfs-objs := \
 	toku_misc.o \
 	strerror.o \
 	toku_zlib.o \
-	libftindex.o
+	libftindex.o \
+	ftfs_toku_lock.o
+
 
 KBUILD_CFLAGS += -DSOUTHBOUND_TESTING
 #KBUILD_CFLAGS += -DFTFS_DEBUG

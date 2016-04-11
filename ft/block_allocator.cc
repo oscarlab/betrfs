@@ -330,22 +330,53 @@ void block_allocator_alloc_block(BLOCK_ALLOCATOR ba, uint64_t size, uint64_t *of
     VALIDATE(ba);
 }
 
+static void dump_translation_table_pretty(BLOCK_ALLOCATOR ba) {
+    for (int64_t i = 0; i < ba->n_blocks; ++i) {
+        printf("%" PRId64 "\t%" PRId64 "\n", i, ba->blocks_array[i].offset);
+    }
+}
+
 static int64_t
 find_block (BLOCK_ALLOCATOR ba, uint64_t offset)
 // Find the index in the blocks array that has a particular offset.  Requires that the block exist.
 // Use binary search so it runs fast.
 {
+    uint64_t lo = 0;
+    uint64_t hi = ba->n_blocks;
+    uint64_t hi_old = ba->n_blocks;
+
     VALIDATE(ba);
+    if (ba->blocks_array[0].offset > offset) {
+        printf("offset[0]=%" PRId64 " offset=%" PRId64 " \n", ba->blocks_array[0].offset, offset);
+	abort();
+    }
+
+    if (ba->blocks_array[hi-1].offset < offset) {
+        printf("offset[hi-1]=%" PRId64 " offset=%" PRId64 " \n", ba->blocks_array[hi-1].offset, offset);
+	abort();
+    }
+
     if (ba->n_blocks==1) {
         assert(ba->blocks_array[0].offset == offset);
         return 0;
     }
-    uint64_t lo = 0;
-    uint64_t hi = ba->n_blocks;
+
+    if (hi > 0 && ba->blocks_array[hi-1].offset == offset) {
+        return hi-1;
+    }
+
     while (1) {
-        assert(lo<hi); // otherwise no such block exists.
+	if (lo>hi) {
+            dump_translation_table_pretty(ba);
+            abort(); // otherwise no such block exists.
+        }
         uint64_t mid = (lo+hi)/2;
         uint64_t thisoff = ba->blocks_array[mid].offset;
+
+        if(ba->n_blocks != hi_old) {
+	    printf("This is a big bug\n");
+	    abort();
+        }
         //printf("lo=%" PRId64 " hi=%" PRId64 " mid=%" PRId64 "  thisoff=%" PRId64 " offset=%" PRId64 "\n", lo, hi, mid, thisoff, offset);
         if (thisoff < offset) {
             lo = mid+1;
@@ -574,5 +605,4 @@ block_allocator_put_block(BLOCK_ALLOCATOR ba, uint64_t offset) {
     }
     VALIDATE(ba);
 }
-
 

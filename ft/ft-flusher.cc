@@ -179,10 +179,10 @@ static int
 find_heaviest_child(FTNODE node)
 {
     int max_child = 0;
-    int max_weight = toku_bnc_nbytesinbuf(BNC(node, 0)) + BP_WORKDONE(node, 0);
+    unsigned long max_weight = toku_bnc_nbytesinbuf(BNC(node, 0)) + BP_WORKDONE(node, 0);
     int i;
 
-    if (0) printf("%s:%d weights: %d", __FILE__, __LINE__, max_weight);
+    if (0) printf("%s:%d weights: %lu\n", __FILE__, __LINE__, max_weight);
     paranoid_invariant(node->n_children>0);
     for (i=1; i<node->n_children; i++) {
 #ifdef TOKU_DEBUG_PARANOID
@@ -190,14 +190,17 @@ find_heaviest_child(FTNODE node)
             assert(toku_bnc_nbytesinbuf(BNC(node,i)) > 0);
         }
 #endif
-        int this_weight = toku_bnc_nbytesinbuf(BNC(node,i)) + BP_WORKDONE(node,i);;
-        if (0) printf(" %d", this_weight);
+	unsigned long bytes = toku_bnc_nbytesinbuf(BNC(node,i));
+	unsigned long workdone = BP_WORKDONE(node,i);
+        unsigned long this_weight = bytes + workdone;
+ 
+        if (0) printf("this_weight: %lu + %lu = %lu\n", bytes, workdone, this_weight);
         if (max_weight < this_weight) {
             max_child = i;
             max_weight = this_weight;
         }
     }
-    if (0) printf("\n");
+    //if (0) printf("\n");
     return max_child;
 }
 

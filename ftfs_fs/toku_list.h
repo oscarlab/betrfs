@@ -112,7 +112,7 @@ static inline void toku_list_init(struct toku_list *head) {
     head->next = head->prev = head;
 }
 
-static inline int toku_list_empty(struct toku_list *head) {
+static inline bool toku_list_empty(struct toku_list *head) {
     return head->next == head;
 }
 

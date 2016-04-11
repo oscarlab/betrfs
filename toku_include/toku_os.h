@@ -134,7 +134,7 @@ int toku_os_get_unique_file_id(int fildes, struct fileid *id);
 int toku_os_lock_file(const char *name);
 
 //Unlocks and closes a file locked by toku_os_lock_on_file
-int toku_os_unlock_file(int fildes);
+int toku_os_unlock_file(int fildes, const char *name);
 
 int toku_os_mkdir(const char *pathname, mode_t mode) __attribute__((__visibility__("default")));
 

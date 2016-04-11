@@ -89,6 +89,7 @@ PATENT RIGHTS GRANT:
 #ident "Copyright (c) 2007-2013 Tokutek Inc.  All rights reserved."
 #ident "The technology is licensed by the Massachusetts Institute of Technology, Rutgers State University of New Jersey, and the Research Foundation of State University of New York at Stony Brook under United States of America Serial No. 11/760379 and to the patents and/or patent applications resulting from it."
 
+#include <toku_include/toku_err.h>
 #include "manager_unit_test.h"
 
 namespace toku {
@@ -125,11 +126,12 @@ void manager_unit_test::test_reference_release_lt(void) {
     desc_s.dbt.flags = DB_DBT_USERMEM;
 
     locktree *alt = mgr.get_lt(a, &desc_s, nullptr, &aok);
-    invariant_notnull(alt);
+    assert(!IS_ERR(alt));    
     locktree *blt = mgr.get_lt(b, &desc_s, nullptr, &bok);
-    invariant_notnull(alt);
+    assert(!IS_ERR(blt));    
     locktree *clt = mgr.get_lt(c, &desc_s, nullptr, &cok);
-    invariant_notnull(alt);
+    assert(!IS_ERR(alt));    
+    invariant_notnull(clt);
 
     // three distinct locktrees should have been returned
     invariant(alt != blt && alt != clt && blt != clt);

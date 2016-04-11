@@ -330,8 +330,10 @@ void toku_block_translation_note_skipped_checkpoint (BLOCK_TABLE bt) {
 }
 
 void block_table_log_get_block(BLOCK_TABLE bt, uint64_t offset) {
+    lock_for_blocktable(bt);
     block_allocator_get_block(bt->block_allocator, offset);
     bt->current.log_block_log.push(offset);
+    unlock_for_blocktable(bt);
     //does not matter for *get* multiple times -- put will just do as many times.
 }
 

@@ -203,7 +203,7 @@ void dump_bad_block(unsigned char *vp, uint64_t size);
 
 int toku_single_process_lock(const char *lock_dir, const char *which, int *lockfd);
 
-int toku_single_process_unlock(int *lockfd);
+int toku_single_process_unlock(const char *lock_dir, const char *which, int *lockfd);
 
 void tokudb_update_product_name_strings(void);
 #define TOKU_MAX_PRODUCT_NAME_LENGTH (256)

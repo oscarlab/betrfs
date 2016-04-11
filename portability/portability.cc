@@ -155,6 +155,8 @@ extern "C" void destroy_ftfs_kernel_caches(void) {
     destroy_ule_cache();
 }
 
+extern "C" int ftfs_toku_lock_file(const char *, size_t);
+extern "C" int ftfs_toku_unlock_file(const char *, size_t);
 
 #endif
 
@@ -282,19 +284,28 @@ toku_os_lock_file(const char *name) {
     int r;
     int fd = open(name, O_RDWR|O_CREAT, S_IRUSR | S_IWUSR);
     if (fd>=0) {
-        r = flock(fd, LOCK_EX | LOCK_NB);
-        if (r!=0) {
-            r = 1;
-            close(fd);
-            fd = -1; //Disable fd.
-        }
+	#ifdef TOKU_LINUX_MODULE
+	r = ftfs_toku_lock_file(name, strlen(name));
+	#else
+	r = flock(fd, LOCK_EX | LOCK_NB);
+	#endif
+	if (r!=0) {
+	    close(fd);
+	    fd = -1;
+	    return r;
+	}
     }
     return fd;
 }
 
 int
-toku_os_unlock_file(int fildes) {
-    int r = flock(fildes, LOCK_UN);
+toku_os_unlock_file(int fildes, const char *name) {
+    int r = 0;
+    #ifdef TOKU_LINUX_MODULE
+    r = ftfs_toku_unlock_file(name, strlen(name));
+    #else
+    flock(fildes, LOCK_UN);
+    #endif
     if (r==0) r = close(fildes);
     return r;
 }

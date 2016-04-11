@@ -824,13 +824,13 @@ ydb_maybe_upgrade_env (DB_ENV *env, LSN * last_lsn_of_clean_shutdown_read_from_l
 static void
 unlock_single_process(DB_ENV *env) {
     int r;
-    r = toku_single_process_unlock(&env->i->envdir_lockfd);
+    r = toku_single_process_unlock(env->i->dir, "environment", &env->i->envdir_lockfd);
     lazy_assert_zero(r);
-    r = toku_single_process_unlock(&env->i->datadir_lockfd);
+    r = toku_single_process_unlock(env->i->real_data_dir, "data", &env->i->datadir_lockfd);
     lazy_assert_zero(r);
-    r = toku_single_process_unlock(&env->i->logdir_lockfd);
+    r = toku_single_process_unlock(env->i->real_log_dir, "logs", &env->i->logdir_lockfd);
     lazy_assert_zero(r);
-    r = toku_single_process_unlock(&env->i->tmpdir_lockfd);
+    r = toku_single_process_unlock(env->i->real_tmp_dir, "temp", &env->i->tmpdir_lockfd);
     lazy_assert_zero(r);
 }
 
@@ -1177,6 +1177,8 @@ env_close(DB_ENV * env, uint32_t flags) {
     env_fs_destroy(env);
     env_fsync_log_cron_destroy(env);
     env->i->ltm.destroy();
+    // Before freeing internal environment unlock the directories
+    unlock_single_process(env);
     if (env->i->data_dir)
         toku_free(env->i->data_dir);
     if (env->i->lg_dir)
@@ -1197,8 +1199,6 @@ env_close(DB_ENV * env, uint32_t flags) {
         toku_free(env->i->dir);
     toku_pthread_rwlock_destroy(&env->i->open_dbs_rwlock);
 
-    // Immediately before freeing internal environment unlock the directories
-    unlock_single_process(env);
     toku_free(env->i);
     toku_free(env);
     toku_sync_fetch_and_add(&tokudb_num_envs, -1);

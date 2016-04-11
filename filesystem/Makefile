@@ -9,6 +9,8 @@ ftfs-objs := \
 	ftfs_malloc.o \
 	ftfs_random.o \
 	ftfs_error.o \
+	ftfs_rwsem.o \
+	ftfs_frwlock.o \
 	ftfs_pthread.o \
 	ftfs_files.o \
 	ftfs_southbound.o \
@@ -26,7 +28,8 @@ ftfs-objs := \
 	toku_flusher.o \
 	toku_memleak_detect.o \
 	toku_zlib.o \
-	libftindex.o
+	libftindex.o \
+	ftfs_toku_lock.o
 
 KBUILD_CFLAGS += -DFTFS_SHORT_BLOCK
 #KBUILD_CFLAGS += -DFTFS_DEBUG #-DSOUTHBOUND_DEBUG #-DFTFS_MEM_DEBUG # -DFTFS_DEBUG_PTRS

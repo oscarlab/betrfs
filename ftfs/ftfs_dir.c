@@ -344,6 +344,11 @@ DIR *opendir(const char *name)
 	return dir;
 }
 
+DIR *fdopendir(int fd)
+{
+	return opendir_helper_fd(fd);
+}
+
 struct dirent64 * readdir64(DIR* dirp) {
     int length;
     struct dirent64* dirent;

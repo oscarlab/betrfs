@@ -120,13 +120,14 @@ public:
     bool read_lock_is_expensive(void);
 
     uint32_t users(void) const;
-    uint32_t blocked_users(void) const;
+//    uint32_t blocked_users(void) const;
     uint32_t writers(void) const;
-    uint32_t blocked_writers(void) const;
+//    uint32_t blocked_writers(void) const;
     uint32_t readers(void) const;
-    uint32_t blocked_readers(void) const;
+//    uint32_t blocked_readers(void) const;
 
 private:
+/*
     struct queue_item {
         toku_cond_t *cond;
         struct queue_item *next;
@@ -137,14 +138,16 @@ private:
     toku_cond_t *deq_item(void);
     void maybe_signal_or_broadcast_next(void);
     void maybe_signal_next_writer(void);
-
+*/
+    void fair_lock_init(void);
+    void fair_lock_deinit(void);
     toku_mutex_t *m_mutex;
-
+    toku_pthread_rwlock_t m_fair_lock;
     uint32_t m_num_readers;
     uint32_t m_num_writers;
     uint32_t m_num_want_write;
     uint32_t m_num_want_read;
-    uint32_t m_num_signaled_readers;
+  //  uint32_t m_num_signaled_readers;
     // number of writers waiting that are expensive
     // MUST be < m_num_want_write
     uint32_t m_num_expensive_want_write;
@@ -156,12 +159,13 @@ private:
     // if there are currently no waiting readers, then set to false
     bool m_read_wait_expensive;
     
-    toku_cond_t m_wait_read;
+/*    toku_cond_t m_wait_read;
     queue_item m_queue_item_read;
     bool m_wait_read_is_in_queue;
 
     queue_item *m_wait_head;
     queue_item *m_wait_tail;
+*/
 };
 
 ENSURE_POD(frwlock);

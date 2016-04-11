@@ -336,7 +336,7 @@ cleanup:
     {
         //Clean up
         int rc;
-        rc = toku_recover_unlock(lockfd);
+        rc = toku_recover_unlock(log_dir, lockfd);
         if (r==0) r = rc;
     }
 cleanup_no_lock:

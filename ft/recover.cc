@@ -1663,9 +1663,9 @@ toku_recover_lock(const char *lock_dir, int *lockfd) {
 }
 
 int
-toku_recover_unlock(int lockfd) {
+toku_recover_unlock(const char *lock_dir, int lockfd) {
     int lockfd_copy = lockfd;
-    return toku_single_process_unlock(&lockfd_copy);
+    return toku_single_process_unlock(lock_dir, "recovery", &lockfd_copy);
 }
 
 int tokudb_recover(DB_ENV *env,
@@ -1706,7 +1706,7 @@ int tokudb_recover(DB_ENV *env,
         recover_env_cleanup(&renv);
     }
 
-    r = toku_recover_unlock(lockfd);
+    r = toku_recover_unlock(log_dir, lockfd);
     if (r != 0)
         return r;
 

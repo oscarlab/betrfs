@@ -120,7 +120,7 @@ extern int test_flock(void) {
     pthread_join(child, &status);
     assert(status == 0);
     
-    int r = toku_os_unlock_file(fd);
+    int r = toku_os_unlock_file(fd, "flock-test");
     assert(r == 0);
 
     return 0;

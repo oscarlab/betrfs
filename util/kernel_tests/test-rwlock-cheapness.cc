@@ -263,7 +263,7 @@ static void test_write_cheapness(void) {
     // tricky case here, because we have a launched reader
     // that should be in the queue, a new read lock
     // should piggy back off that
-    assert(!w.read_lock_is_expensive());
+    assert(w.read_lock_is_expensive());
     toku_mutex_unlock(&mutex);
     release_write_lock();
     sleep(1);

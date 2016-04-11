@@ -127,10 +127,12 @@ int test_openlimit17(void) {
         assert(r == 0);
         char dbname[32]; sprintf(dbname, "%d.test", i);
         r = dbs[i]->open(dbs[i], NULL, dbname, NULL, DB_BTREE, DB_AUTO_COMMIT+DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO);
-        if (r == EMFILE) {
+        if (r == -EMFILE) {
             emfile_happened = true;
             break;
         }
+        if (r)
+            printf("openlimit17 dbs[%d]->open(): returning: %d\n", i, r);
         assert(r == 0);
     }
 

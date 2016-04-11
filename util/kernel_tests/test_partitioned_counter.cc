@@ -157,6 +157,9 @@ static void * reader_test_fun (void *ta_v) {
     while (ta->unfinished_count>0) {
         if (++yieldcpu % 2 == 0) sched_yield();
         uint64_t thisval = read_partitioned_counter(ta->pc);
+        if (lastval > thisval)
+            printf("Problematic partitioned counter read: Lastval=%" PRIu64 " Thisval=%" PRIu64 "\n",
+                   lastval, thisval);
 	assert(lastval <= thisval);
         assert(thisval <= ta->limit+2);
 	lastval = thisval;

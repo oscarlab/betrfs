@@ -586,17 +586,16 @@ void toku_fsync_dirfd_without_accounting(DIR *dir) {
 }
 
 int toku_fsync_dir_by_name_without_accounting(const char *dir_name) {
-    int r = 0;
-    DIR * dir = opendir(dir_name);
-    if (!dir) {
-        r = 1;
+    int fd, r;
+
+    fd = open(dir_name, O_DIRECTORY);
+    if (fd < 0) {
+        r = fd;
     } else {
-        toku_fsync_dirfd_without_accounting(dir);
-        r = closedir(dir);
-        if (r != 0) {
-            r = 1;
-        }
+        toku_file_fsync_without_accounting(fd);
+        r = close(fd);
     }
+
     return r;
 }
 

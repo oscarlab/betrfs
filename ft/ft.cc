@@ -1157,23 +1157,29 @@ toku_single_process_lock(const char *lock_dir, const char *which, int *lockfd) {
     assert(l+1 == (signed)(sizeof(lockfname)));
     *lockfd = toku_os_lock_file(lockfname);
     if (*lockfd < 0) {
-        int e = -(*lockfd);
         fprintf(stderr, "Couldn't start tokudb because some other tokudb process is using the same directory [%s] for [%s]\n", lock_dir, which);
-        return e;
+        return *lockfd;
     }
     return 0;
 }
 
 int
-toku_single_process_unlock(int *lockfd) {
+toku_single_process_unlock(const char *lock_dir, const char *which, int *lockfd) {
+    if (*lockfd < 0)
+	return 0;
+    else if (!lock_dir)
+        return ENOENT;
+    
+    int namelen=strlen(lock_dir)+strlen(which);
+    char lockfname[namelen+sizeof("/_") + strlen(toku_product_name_strings.single_process_lock)];
+
+    int l = snprintf(lockfname, sizeof(lockfname), "%s/%s_%s",
+                     lock_dir, toku_product_name_strings.single_process_lock, which);
+    assert(l+1 == (signed)(sizeof(lockfname)));    
     int fd = *lockfd;
     *lockfd = -1;
-    if (fd>=0) {
-        int r = toku_os_unlock_file(fd);
-        if (r != 0)
-            return 1;
-    }
-    return 0;
+    int r = toku_os_unlock_file(fd, lockfname);
+    return r;
 }
 
 int tokudb_num_envs = 0;

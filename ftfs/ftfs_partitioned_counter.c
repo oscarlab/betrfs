@@ -44,7 +44,7 @@ void increment_partitioned_counter(PARTITIONED_COUNTER pc, uint64_t amount)
 }
 
 uint64_t read_partitioned_counter(PARTITIONED_COUNTER pc) {
-	return percpu_counter_sum_positive(&pc->pcpu_counter);
+	return percpu_counter_sum(&pc->pcpu_counter);
 }
 
 void partitioned_counters_destroy(void) {}
