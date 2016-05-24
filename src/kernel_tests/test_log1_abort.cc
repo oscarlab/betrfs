@@ -143,7 +143,7 @@ int test_test_log1_abort(void) {
 	toku_struct_stat statbuf;
         char filename[TOKU_PATH_MAX+1];
         r = toku_stat(toku_path_join(filename, 2, TOKU_TEST_FILENAME, "foo.db"), &statbuf);
-        assert(r==ENOENT);
+        assert(r==-ENOENT);
     }
     post_teardown();
     return 0;

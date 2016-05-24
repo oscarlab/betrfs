@@ -824,7 +824,11 @@ static int toku_recover_fcreate (struct logtype_fcreate *l, RECOVER_ENV renv) {
     char *iname_in_cwd = toku_cachetable_get_fname_in_cwd(renv->ct, iname);
     r = unlink(iname_in_cwd);
     if (r != 0) {
-        int er = 1;
+#ifdef TOKU_LINUX_MODULE
+        int er =get_error_errno(r);
+#else
+        int er = get_error_errno();
+#endif
         if (er != ENOENT) {
             fprintf(stderr, "Tokudb recovery %s:%d unlink %s %d\n", __FUNCTION__, __LINE__, iname, er);
             toku_free(iname);

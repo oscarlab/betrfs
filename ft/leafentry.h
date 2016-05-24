@@ -254,6 +254,8 @@ toku_le_apply_msg(FT_MSG   msg,
 
 bool toku_le_worth_running_garbage_collection(LEAFENTRY le, TXNID oldest_referenced_xid_known);
 
+int toku_le_unbound_count(LEAFENTRY);
+
 void
 toku_le_garbage_collect(LEAFENTRY old_leaf_entry,
                         bn_data* data_buffer,

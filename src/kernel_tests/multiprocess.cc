@@ -330,7 +330,7 @@ int test_multiprocess(void) {
 
     DBG;
 
-    test_env(env0, env0, -EEXIST); /* Minus error code */
+    test_env(env0, env0, EEXIST); /* Minus error code */
     char cwd[2] = "/";
     assert(cwd != nullptr);
     char *data0 = (char *)toku_xmalloc((TOKU_PATH_MAX+1) * sizeof *data0);
@@ -338,9 +338,9 @@ int test_multiprocess(void) {
     char *data1 = (char *)toku_xmalloc((TOKU_PATH_MAX+1) * sizeof *data1);
     toku_path_join(data1, 3, cwd, TOKU_TEST_FILENAME, "d1");
     test_datadir(env0, data0, env1, data1, 0);
-    test_datadir(env0, data0, env1, data0, -EEXIST);
+    test_datadir(env0, data0, env1, data0, EEXIST);
     test_logdir(env0, data0, env1, data1, 0);
-    test_logdir(env0, data0, env1, data0, -EEXIST);
+    test_logdir(env0, data0, env1, data0, EEXIST);
 
     //toku_os_recursive_delete(env0);
     //toku_os_recursive_delete(env1);

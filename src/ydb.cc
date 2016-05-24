@@ -726,7 +726,11 @@ validate_env(DB_ENV * env, bool * valid_newenv, bool need_rollback_cachefile) {
         expect_newenv = false;  // persistent info exists
     }
     else {
-        int stat_errno = ENOENT;
+#ifdef TOKU_LINUX_MODULE
+        int stat_errno = get_error_errno(r);
+#else
+        int stat_errno = get_error_errno();
+#endif
         if (stat_errno == ENOENT) {
             expect_newenv = true;
             r = 0;
@@ -748,7 +752,11 @@ validate_env(DB_ENV * env, bool * valid_newenv, bool need_rollback_cachefile) {
                 r = toku_ydb_do_error(env, ENOENT, "Persistent environment is missing\n");
         }
         else {
-            int stat_errno = ENOENT;
+#ifdef TOKU_LINUX_MODULE
+            int stat_errno = get_error_errno(r);
+#else
+            int stat_errno = get_error_errno();
+#endif
             if (stat_errno == ENOENT) {
                 if (!expect_newenv)  // rollback cachefile is missing but persistent env exists
                     r = toku_ydb_do_error(env, ENOENT, "rollback cachefile directory is missing\n");
@@ -773,7 +781,11 @@ validate_env(DB_ENV * env, bool * valid_newenv, bool need_rollback_cachefile) {
                 r = toku_ydb_do_error(env, ENOENT, "Persistent environment is missing\n");
         }
         else {
-            int stat_errno = ENOENT;
+#ifdef TOKU_LINUX_MODULE
+            int stat_errno = get_error_errno(r);
+#else
+            int stat_errno = get_error_errno();
+#endif
             if (stat_errno == ENOENT) {
                 if (!expect_newenv)  // fileops directory is missing but persistent env exists
                     r = toku_ydb_do_error(env, ENOENT, "Fileops directory is missing\n");
@@ -882,7 +894,11 @@ env_open(DB_ENV * env, const char *home, uint32_t flags, int mode) {
     toku_struct_stat buf;
     r = toku_stat(home, &buf);
     if (r != 0) {
-        int e = r;
+#ifdef TOKU_LINUX_MODULE
+        int e = get_error_errno(r);
+#else
+        int e = get_error_errno();
+#endif
         r = toku_ydb_do_error(env, e, "Error from toku_stat(\"%s\",...)\n", home);
         goto cleanup;
     }
@@ -933,6 +949,13 @@ env_open(DB_ENV * env, const char *home, uint32_t flags, int mode) {
         char* rollback_filename = toku_construct_full_name(2, env->i->dir, toku_product_name_strings.rollback_cachefile);
         assert(rollback_filename);
         r = unlink(rollback_filename);
+        if (r != 0) {
+#ifdef TOKU_LINUX_MODULE
+            assert(get_error_errno(r) == ENOENT);
+#else
+            assert(get_error_errno() == ENOENT);
+#endif
+        }
         toku_free(rollback_filename);
         need_rollback_cachefile = false;  // we're not expecting it to exist now
     }

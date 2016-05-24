@@ -196,9 +196,12 @@ const UXR_S committed_delete = {
 };  // static allocation of uxr with type set to committed delete and xid = 0
 
 #define INSERT_LENGTH(len) ((1U << 31) | len)
+#define UNBOUND_INSERT_LENGTH(len) ((1U << 30) | len)
 #define DELETE_LENGTH(len) (0)
 #define GET_LENGTH(len) (len & ((1U << 31)-1))
+#define GET_UNBOUND_LENGTH(len) (len & ((1U <<30) -1))
 #define IS_INSERT(len)  (len & (1U << 31))
+#define IS_UNBOUND_INSERT(len) (len & (1U << 30))
 #define IS_VALID_LEN(len) (len < (1U<<31))
 
 // Local functions:
@@ -321,6 +324,19 @@ ule_contains_unbound_uxr(ULE ule) {
 		}
 	}
 	return false;
+}
+static int
+ule_num_unbound_uxr(ULE ule) {
+	int ret = 0;
+	for(uint32_t i =0; i < ule->num_cuxrs + ule->num_puxrs; i++) {
+		if(ule->uxrs[i].type == XR_UNBOUND_INSERT) {
+			//printf("\nhit the unbound\n");
+			ret ++;
+		} else {
+	//		printf("\n index =%d, type of the ule is %d\n", i, ule->uxrs[i].type);
+		}
+	}
+	return ret;
 }
 #endif
 static void
@@ -520,6 +536,7 @@ toku_le_apply_msg(FT_MSG   msg,
     }
     msg_modify_ule(ule, msg);          // modify unpacked leafentry
     ule_simple_garbage_collection(ule, oldest_referenced_xid, gc_info);
+    
     int rval = le_pack(
         ule, // create packed leafentry
         data_buffer,
@@ -529,6 +546,11 @@ toku_le_apply_msg(FT_MSG   msg,
         oldmemsize,
         new_leafentry_p
         );
+#ifdef DEBUG_SEQ_IO
+    if(msg->type == FT_UNBOUND_INSERT) {
+	assert(toku_le_unbound_count(*new_leafentry_p) > 0);
+    }
+#endif
     invariant_zero(rval);
     if (new_leafentry_p) {
         newnumbytes = ule_get_innermost_numbytes(ule, keylen);
@@ -628,6 +650,40 @@ toku_le_flip_uxr_type(LEAFENTRY old_leaf_entry,
         toku_free(copied_old_le);
     }
 }
+
+int
+toku_le_unbound_count(LEAFENTRY old_leaf_entry) {
+    int ret = 0;
+    ULE_S *ule;
+    LEAFENTRY copied_old_le = NULL;
+    bool old_le_malloced = false;
+    if (old_leaf_entry) {
+        size_t old_le_size = leafentry_memsize(old_leaf_entry);
+#ifdef TOKU_LINUX_MODULE
+        CAST_FROM_VOIDP(copied_old_le, toku_malloc(old_le_size));
+        old_le_malloced = true;
+#else
+        if (old_le_size > 100*1024) { // completely arbitrary limit
+            CAST_FROM_VOIDP(copied_old_le, toku_malloc(old_le_size));
+            old_le_malloced = true;
+        }
+        else {
+            CAST_FROM_VOIDP(copied_old_le, alloca(old_le_size));
+        }
+#endif
+        memcpy(copied_old_le, old_leaf_entry, old_le_size);
+    }
+    ule = toku_ule_get();
+    le_unpack(ule, copied_old_le);
+    ret += ule_num_unbound_uxr(ule);
+    toku_ule_free(ule);
+    if (old_le_malloced) {
+        toku_free(copied_old_le);
+    }
+    return ret;
+}
+
+
 void
 toku_le_garbage_collect(LEAFENTRY old_leaf_entry,
                         bn_data* data_buffer,
@@ -664,8 +720,9 @@ toku_le_garbage_collect(LEAFENTRY old_leaf_entry,
     ule = toku_ule_get();
     le_unpack(ule, copied_old_le);
 
+    uint32_t old_mem_size = 0;
     oldnumbytes = ule_get_innermost_numbytes(ule, keylen);
-    uint32_t old_mem_size = leafentry_memsize(old_leaf_entry);
+    old_mem_size = leafentry_memsize(old_leaf_entry);
 
     // Before running garbage collection, try to promote the outermost provisional
     // entries to committed if its xid is older than the oldest possible live xid.
@@ -676,7 +733,6 @@ toku_le_garbage_collect(LEAFENTRY old_leaf_entry,
     TXNID oldest_possible_live_xid = oldest_referenced_xid_known;
     ule_try_promote_provisional_outermost(ule, oldest_possible_live_xid);
     ule_garbage_collect(ule, snapshot_xids, referenced_xids, live_root_txns);
-    
     int r = le_pack(
         ule,
         data_buffer,
@@ -827,7 +883,7 @@ le_unpack(ULE ule, LEAFENTRY le) {
             ule->num_puxrs = 0;
             UXR uxr     = ule->uxrs;
             uxr->type   = XR_INSERT;
-            uxr->vallen = toku_dtoh32(le->u.clean.vallen);
+	    uxr->vallen = toku_dtoh32(le->u.clean.vallen);
             uxr->valp   = le->u.clean.val;
             uxr->xid    = TXNID_NONE;
             //Set p to immediately after leafentry
@@ -846,6 +902,16 @@ le_unpack(ULE ule, LEAFENTRY le) {
                 XMALLOC_N(ule->num_cuxrs + 1 + MAX_TRANSACTION_RECORDS, ule->uxrs);
             }
             p = le->u.mvcc.xrs;
+
+	    if(ule->num_cuxrs == 1 && ule->num_puxrs == 0) {
+                p += uxr_unpack_txnid(ule->uxrs, p);
+		assert(ule->uxrs[0].xid == TXNID_NONE);
+                p += uxr_unpack_length_and_bit(ule->uxrs, p);
+		ule->uxrs[0].type = XR_UNBOUND_INSERT;
+		//printf("hit it!! %s, %d\n", __func__, __LINE__);
+                p += uxr_unpack_data(ule->uxrs, p);
+		goto done;
+	    }
 
             //unpack interesting TXNIDs inner to outer.
             if (ule->num_puxrs!=0) {
@@ -901,11 +967,12 @@ le_unpack(ULE ule, LEAFENTRY le) {
         default:
             invariant(false);
     }
-    
+done:    
 #if ULE_DEBUG
     size_t memsize = le_memsize_from_ule(ule);
     assert(p == ((uint8_t*)le) + memsize);
 #endif
+    return;
 }
 
 static inline size_t
@@ -924,12 +991,20 @@ uxr_pack_type_and_length(UXR uxr, uint8_t *p) {
     }
     return rval;
 }
-
+static inline bool
+uxr_type_is_regular_insert(uint8_t type) {
+    bool rval = (bool)(type == XR_INSERT);
+    return rval;
+}
 static inline size_t
 uxr_pack_length_and_bit(UXR uxr, uint8_t *p) {
     uint32_t length_and_bit;
     if (uxr_is_insert(uxr)) {
-        length_and_bit = INSERT_LENGTH(uxr->vallen);
+	//printf("pack the uxr %s:%d, vallen = %u\n", __func__, __LINE__, uxr->vallen);
+	if(uxr_type_is_regular_insert(uxr->type))
+        	length_and_bit = INSERT_LENGTH(uxr->vallen);
+	else 
+        	length_and_bit = UNBOUND_INSERT_LENGTH(uxr->vallen);
     }
     else {
         length_and_bit = DELETE_LENGTH(uxr->vallen);
@@ -967,7 +1042,14 @@ uxr_unpack_type_and_length(UXR uxr, uint8_t *p) {
 static inline size_t
 uxr_unpack_length_and_bit(UXR uxr, uint8_t *p) {
     uint32_t length_and_bit = toku_dtoh32(*(uint32_t*)p);
-    if (IS_INSERT(length_and_bit)) {
+    if (IS_UNBOUND_INSERT(length_and_bit)) {
+        uxr->type = XR_UNBOUND_INSERT;
+        uxr->vallen = GET_UNBOUND_LENGTH(length_and_bit);
+
+	//printf("ahh hit UNBOUND INSERT %s:%d, the unpack len is %u\n", __func__, __LINE__, uxr->vallen);
+    }
+    else if (IS_INSERT(length_and_bit)) {
+	//printf("ahh hit here %s:%d\n", __func__, __LINE__);
         uxr->type = XR_INSERT;
         uxr->vallen = GET_LENGTH(length_and_bit);
     }
@@ -1048,8 +1130,11 @@ found_insert:;
     uint8_t *p;
     invariant(ule->num_cuxrs>0);
     //Type specific data
-    if (ule->num_cuxrs == 1 && ule->num_puxrs == 0) {
+    if (ule->num_cuxrs == 1 && ule->num_puxrs == 0 && !ule_contains_unbound_uxr(ule)) {
+
         //Pack a 'clean leafentry' (no uncommitted transactions, only one committed value)
+	
+	//printf("hit LE_CLEAN!! %s, %d\n", __func__, __LINE__);
         new_leafentry->type = LE_CLEAN;
 
         uint32_t vallen = ule->uxrs[0].vallen;
@@ -1059,7 +1144,7 @@ found_insert:;
         //Store actual val
         memcpy(new_leafentry->u.clean.val, ule->uxrs[0].valp, vallen);
 
-        //Set p to after leafentry
+       //Set p to after leafentry
         p = new_leafentry->u.clean.val + vallen;
     }
     else {
@@ -1076,6 +1161,15 @@ found_insert:;
 
         p = new_leafentry->u.mvcc.xrs;
 
+        //printf("hit MVCC!! %s, %d\n", __func__, __LINE__);
+	if(ule->num_puxrs == 0 && ule->num_cuxrs == 1) {
+		//printf("hit it!! %s, %d\n", __func__, __LINE__);
+		assert(ule_contains_unbound_uxr(ule));
+		p += uxr_pack_txnid(ule->uxrs, p);
+		p += uxr_pack_length_and_bit(ule->uxrs, p);
+            	p += uxr_pack_data(ule->uxrs, p);
+		goto done;		
+	}
         //pack interesting TXNIDs inner to outer.
         if (ule->num_puxrs!=0) {
             UXR outermost = ule->uxrs + ule->num_cuxrs;
@@ -1126,7 +1220,7 @@ found_insert:;
             }
         }
     }
-
+done:
     //p points to first unused byte after packed leafentry
 
     size_t bytes_written;
@@ -1309,7 +1403,7 @@ leafentry_memsize (LEAFENTRY le) {
 
 size_t
 leafentry_disksize (LEAFENTRY le) {
-    return leafentry_memsize(le);
+     return leafentry_memsize(le);
 }
 
 bool
@@ -1560,10 +1654,11 @@ le_outermost_uncommitted_xid (LEAFENTRY le) {
 }
 
 
+
 //Optimization not required.  This is a debug only function.
 //Print a leafentry out in human-readable format
 int
-print_klpair (FILE *outf, const void* keyp, uint32_t keylen, LEAFENTRY le) {
+print_klpair (FILE *UU(outf), const void* keyp, uint32_t UU(keylen), LEAFENTRY le) {
     ULE_S *ule = (ULE_S *)toku_xmalloc(sizeof(ULE_S));
     le_unpack(ule, le);
     uint32_t i;
@@ -1571,25 +1666,40 @@ print_klpair (FILE *outf, const void* keyp, uint32_t keylen, LEAFENTRY le) {
     UXR uxr;
     if (!le) { printf("NULL"); toku_free(ule); return 0; }
     if (keyp) {
-        fprintf(outf, "{key=");
-        toku_print_BYTESTRING(outf, keylen, (char *) keyp);
+        printf("{key=");
+  //      toku_print_BYTESTRING(outf, keylen, (char *) keyp);
     }
     for (i = 0; i < ule->num_cuxrs+ule->num_puxrs; i++) {
         // fprintf(outf, "\n%*s", i+1, " "); //Nested indenting
         uxr = &ule->uxrs[i];
-        char prov = i < ule->num_cuxrs ? 'c' : 'p';
-        fprintf(outf, " ");
+        printf(" ");
         if (uxr_is_placeholder(uxr))
-            fprintf(outf, "P: xid=%016" PRIx64, uxr->xid);
-        else if (uxr_is_delete(uxr))
-            fprintf(outf, "%cD: xid=%016" PRIx64, prov, uxr->xid);
+            printf("P\n");
+        else if (uxr_is_delete(uxr)) {
+            if(i < ule->num_cuxrs) 
+		printf("cD\n");
+	    else 
+		printf("pD\n");
+	}
         else {
             assert(uxr_is_insert(uxr));
-            fprintf(outf, "%cI: xid=%016" PRIx64 " val=", prov, uxr->xid);
-            toku_print_BYTESTRING(outf, uxr->vallen, (char *) uxr->valp);
+            if(uxr_type_is_regular_insert(uxr->type)) {
+		if(i < ule->num_cuxrs)    
+			printf("cI\n");               
+		else 
+
+			printf("pI\n");               
+	    }
+            else {
+		if(i < ule->num_cuxrs)    
+		        printf("cUI\n");
+	    	else 
+		        printf("pUI\n");
+		}
+//            toku_print_BYTESTRING(outf, uxr->vallen, (char *) uxr->valp);
         }
     }
-    fprintf(outf, "}");
+    printf("}");
     ule_cleanup(ule);
     toku_free(ule);
     return 0;
@@ -1854,6 +1964,7 @@ ule_push_insert_uxr(ULE ule, bool is_committed, TXNID xid, uint32_t vallen, void
     uxr->vallen = vallen;
     uxr->valp   = valp;
     uxr->type   = type;
+    
 }
 
 // Purpose is to record a delete for this transaction.  If this transaction
@@ -1905,6 +2016,8 @@ static void
 ule_remove_innermost_uxr(ULE ule) {
     //It is possible to remove the committed delete at first insert.
     invariant(ule->num_cuxrs > 0);
+    struct uxr innermost_uxr = ule->uxrs[ule->num_cuxrs + ule->num_puxrs -1];    
+    assert(innermost_uxr.type != XR_UNBOUND_INSERT) ;
     if (ule->num_puxrs) {
         ule->num_puxrs--;
     }
@@ -2029,6 +2142,7 @@ uxr_type_is_insert(uint8_t type) {
     return rval;
 }
 
+
 bool
 uxr_is_insert(UXR uxr) {
     return uxr_type_is_insert(uxr->type);
@@ -2109,7 +2223,7 @@ ule_verify_xids(ULE ule, uint32_t interesting, TXNID *xids) {
 // Iterates over "possible" TXNIDs in a leafentry's stack, until one is accepted by 'f'. If the value 
 // associated with the accepted TXNID is not an insert, then set *is_emptyp to true, otherwise false
 // The "possible" TXNIDs are:
-//   if provisionals exist, then the first possible TXNID is the outermost provisional.
+//   if provisionals exist, then the first possible TXNID is theoutermost provisional.
 //   The next possible TXNIDs are the committed TXNIDs, from most recently committed to T_0.
 // If provisionals exist, and the outermost provisional is accepted by 'f', 
 // the associated value checked is the innermost provisional's value.
@@ -2166,7 +2280,7 @@ le_iterate_is_del(LEAFENTRY le, LE_ITERATE_CALLBACK f, bool *is_delp, TOKUTXN co
             length_and_bits  = (uint32_t*)p;
             uint32_t my_length_and_bit;
             my_length_and_bit = toku_dtoh32(length_and_bits[index]);
-            is_del = !IS_INSERT(my_length_and_bit);
+            is_del = !(IS_INSERT(my_length_and_bit) || IS_UNBOUND_INSERT(my_length_and_bit));
 #if ULE_DEBUG
             {
                 uint32_t has_p = (ule->num_puxrs != 0);

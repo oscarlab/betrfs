@@ -127,7 +127,12 @@ try_again_after_handling_write_error(int fd, size_t len, ssize_t r_write) {
     int try_again = 0;
 
     assert(r_write < 0);
+#ifdef TOKU_LINUX_MODULE
+    // unable to fetch errno here
     int errno_write = EINTR;
+#else
+    int errno_write = get_error_errno();
+#endif
     switch (errno_write) {
     case EINTR: { //The call was interrupted by a signal before any data was written; see signal(7).
 	char err_msg[sizeof("Write of [] bytes to fd=[] interrupted.  Retrying.") + 20+10]; //64 bit is 20 chars, 32 bit is 10 chars
@@ -278,7 +283,11 @@ toku_os_write (int fd, const void *buf, size_t len) {
             r = write(fd, bp, len);
         }
         if (r < 0) {
-            result = 1;
+#ifdef TOKU_LINUX_MODULE
+            result = get_error_errno(r);
+#else
+            result = errno;
+#endif
             break;
         }
         len           -= r;
@@ -326,7 +335,11 @@ toku_os_pwrite (int fd, const void *buf, size_t len, toku_off_t off) {
             r = pwrite(fd, bp, len, off);
         }
         if (r < 0) {
-            result = 1;
+#ifdef TOKU_LINUX_MODULE
+            result = get_error_errno(r);
+#else
+            result = errno;
+#endif
             break;
         }
         len           -= r;
@@ -407,8 +420,13 @@ toku_os_fclose(FILE * stream) {
     else {                      // if EINTR, retry until success
 	while (rval != 0) {
 	    rval = fclose(stream);
-	    if(rval)
+#ifdef TOKU_LINUX_MODULE
+	    if (rval && get_error_errno(rval) != EINTR)
 		break;
+#else
+	    if (rval && (errno != EINTR))
+		break;
+#endif
 	}
     }
     return rval;
@@ -420,8 +438,13 @@ toku_os_close(int fd) {  // if EINTR, retry until success
     while (r != 0) {
 	r = close(fd);
 	if (r) {
-	    //if (rr!=EINTR) printf("rr=%d (%s)\n", rr, strerror(rr));
-	    //assert(rr==EINTR);
+#ifdef TOKU_LINUX_MODULE
+	    int rr = get_error_errno(r);
+#else
+	    int rr = errno;
+#endif
+	    if (rr!=EINTR) printf("rr=%d (%s)\n", rr, strerror(rr));
+	    assert(rr==EINTR);
 	}
     }
     return r;
@@ -487,17 +510,14 @@ void toku_logger_maybe_sync_internal_no_flags_no_callbacks (int fd) {
     int r = -1;
     uint64_t eintr_count = 0;
     while (r != 0) {
-	// if (t_fsync) {
-	//    r = t_fsync(fd);
-        //} else {
-	    r = fdatasync(fd);
-        //}
+	r = fdatasync(fd);
+
 	if (r) {
-            #ifndef TOKU_KERNEL_MODULE
+#ifndef TOKU_KERNEL_MODULE
             assert(get_error_errno(r) == EINTR);
-            #else
-            assert(r == EINTR);
-            #endif
+#else
+            assert(get_error_errno() == EINTR);
+#endif
             eintr_count++;
 	}
     }
@@ -543,6 +563,11 @@ static void file_fsync_internal (int fd) {
 	    r = fdatasync(fd);
         //}
 	if (r) {
+#ifndef TOKU_KERNEL_MODULE
+            assert(get_error_errno(r) == EINTR);
+#else
+            assert(get_error_errno() == EINTR);
+#endif
             eintr_count++;
 	}
     }
@@ -590,7 +615,11 @@ int toku_fsync_dir_by_name_without_accounting(const char *dir_name) {
 
     fd = open(dir_name, O_DIRECTORY);
     if (fd < 0) {
-        r = fd;
+#ifdef TOKU_LINUX_MODULE
+        r = get_error_errno(fd);
+#else
+        r = get_error_errno();
+#endif
     } else {
         toku_file_fsync_without_accounting(fd);
         r = close(fd);
@@ -626,7 +655,7 @@ int toku_fsync_directory(const char *fname) {
         MALLOC_N(len+1, dirname);
         if (dirname == NULL) {
 #ifdef TOKU_LINUX_MODULE
-            result = -ENOMEM;
+            result = ENOMEM;
 #else
             result = get_error_errno();
 #endif
@@ -638,7 +667,7 @@ int toku_fsync_directory(const char *fname) {
         dirname = toku_strdup(".");
         if (dirname == NULL) {
 #ifdef TOKU_LINUX_MODULE
-            result = -ENOMEM;
+            result = ENOMEM;
 #else
             result = get_error_errno();
 #endif

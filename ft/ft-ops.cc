@@ -236,6 +236,7 @@ static FT_STATUS_S ft_status;
 
 static toku_mutex_t ft_open_close_lock;
 
+extern "C" void toku_dump_stack(void);
 static void
 status_init(void)
 {
@@ -915,7 +916,8 @@ void ftnode_remove_unbound_insert_list(FTNODE node) {
 }
 #endif
 
-static void toku_assert_all_entries_in_node_are_bound(FTNODE node){
+static void toku_assert_all_entries_in_node_are_bound(FTNODE UU(node)){
+#ifdef DEBUG_SEQ_IO
 	for (int i=0; i<node->n_children; i++) {
     		toku_list * unbound_msgs;
     		if (node->height > 0) {
@@ -930,7 +932,7 @@ static void toku_assert_all_entries_in_node_are_bound(FTNODE node){
 		list = list->next;
     	}
    }
-
+#endif
 }
 void ftnode_remove_unbound_insert_list_and_reset_count(FTNODE node) {
     toku_assert_entire_node_in_memory(node);
@@ -996,6 +998,7 @@ void toku_ftnode_clone_callback(
         rebalance_ftnode_leaf(node, ft->h->basementnodesize);
     }
 
+    //toku_ft_node_unbound_inserts_validation(node);
     cloned_node->oldest_referenced_xid_known = node->oldest_referenced_xid_known;
     cloned_node->max_msn_applied_to_node_on_disk = node->max_msn_applied_to_node_on_disk;
     cloned_node->flags = node->flags;
@@ -1038,8 +1041,8 @@ void toku_ftnode_clone_callback(
     *clone_size = ftnode_memory_size(cloned_node);
     *cloned_value_data = cloned_node;
     cloned_node->ct_pair = node->ct_pair; 	
-    toku_ft_node_empty_unbound_inserts_validation(node);
-    toku_ft_node_unbound_inserts_validation(cloned_node);
+    toku_ft_node_unbound_inserts_validation(node);
+    //toku_ft_node_unbound_inserts_validation(cloned_node);
 }
 
 static void ft_leaf_run_gc(FTNODE node, FT ft);
@@ -1121,6 +1124,8 @@ void toku_ftnode_flush_callback(
         	//FIXME remove the unbound msg list from the node??
 		 ftnode_remove_unbound_insert_list_and_reset_count(ftnode);		
 //FIXME Bill, who would free unbound_msg_entry that were just bound from the in/out list in logger? will you do it upon log flush?		
+
+
 		toku_mutex_unlock(&logger->ubi_lock);
 	}
         //debugging code
@@ -1908,7 +1913,6 @@ init_childkey(FTNODE node, int childnum, const DBT *pivotkey) {
     toku_clone_dbt(&node->childkeys[childnum], *pivotkey);
     node->totalchildkeylens += pivotkey->size;
 }
-
 //if it is not empty, return;
 //else check 
 //this is a fast version of validation that only checks on empty unbound inserts.
@@ -1947,27 +1951,117 @@ static void verify_unbound_list_count(toku_list * head, int count, FTNODE UU(nod
 	paranoid_invariant(count == i);
 	
 }
+
+static void
+basement_node_gc_all_les(BASEMENTNODE bn,
+                         const xid_omt_t &snapshot_xids,
+                         const rx_omt_t &referenced_xids,
+                         const xid_omt_t &live_root_txns,
+                         TXNID oldest_referenced_xid_known,
+                         STAT64INFO_S * delta);
+static int
+//count the unbound ule in a basement nodes
+ft_basement_node_count_unbound_ules(BASEMENTNODE bn) ;
+#if 0
+static void
+toku_print_bn(BASEMENTNODE bn) {
+    int size = bn->data_buffer.omt_size();
+    if (1)
+       for (int j=0; j<size; j++) {
+       LEAFENTRY le;
+       void* keyp = NULL;
+       uint32_t keylen = 0;
+       int r = bn->data_buffer.fetch_klpair(j, &le, &keylen, &keyp);
+       assert_zero(r);
+       printf(" [%d]=", j);
+       print_klpair(stderr, keyp, keylen, le);
+       printf("\n");
+       }
+    printf("\n");
+}
 #endif
-void toku_ft_node_unbound_inserts_validation(FTNODE UU(node)) {
+#endif
+void toku_ft_node_unbound_inserts_validation(FTNODE UU(node), FT_MSG UU(msg), int UU(line)) {
 #ifdef DEBUG_SEQ_IO
 //	printf("\n%s:%d, going to validate node:%p\n", __func__, __LINE__, node);
 	int childnum = node->n_children;
 	int n_unbound_insert_node = node->unbound_insert_count;
 	int sum_child_ubi = 0;
+
+        xid_omt_t snapshot_txnids;
+        rx_omt_t referenced_xids;
+        xid_omt_t live_root_txns;
+	if(global_logger) {
+        	toku_txn_manager_clone_state_for_gc(
+            		global_logger->txn_manager,
+            		&snapshot_txnids,
+            		&referenced_xids,
+            		&live_root_txns
+            		);
+	}
+
 	for(int i = 0; i < childnum; i++) {
 		toku_list * head;
+		if(BP_STATE(node,i) != PT_AVAIL) 
+			continue;	
+
 		if(node->height>0) {
 			head = &BNC(node, i) -> unbound_inserts;
 			int n_unbound_insert_count_bnc = BNC(node, i)->unbound_insert_count;
 			verify_unbound_list_count(head, n_unbound_insert_count_bnc, node);
 			sum_child_ubi += n_unbound_insert_count_bnc;
 		} else {
+						
+			BASEMENTNODE bn = BLB(node, i);
+			int ule_unbound_count = ft_basement_node_count_unbound_ules(bn);
+ 			if(ule_unbound_count != bn->unbound_insert_count){
+				 printf("\n unmatch num of unbound in the bn!!%d ules unbound but bn count is %d\n", ule_unbound_count, bn->unbound_insert_count);
+				//printf("\n dumping the buggy bn:\n");
+				//toku_print_bn(bn);
+				if(msg) 
+					printf("the fatal msg type is %d\n", ft_msg_get_type(msg));
+				if(line)
+					printf("invalidation called from line %d\n", line);
+			}
+			assert(ule_unbound_count == bn->unbound_insert_count);
+			# if 0
+			if(bn->data_buffer.omt_size() < bn->unbound_insert_count){
+				printf("before the gc, omt_size = %d, unbound count = %d", bn->data_buffer.omt_size(), bn->unbound_insert_count);	
+				if(msg) 
+					printf("the fatal msg type is %d\n", ft_msg_get_type(msg));
+				if(line)
+					printf("invalidation called from line %d\n", line);
+				toku_dump_stack();	
+			}
+		
+			assert(bn->data_buffer.omt_size() >= bn->unbound_insert_count);
+			#endif
+        		#if 0	
+			STAT64INFO_S delta;
+        		delta.numrows = 0;
+        		delta.numbytes = 0;
+			#endif
 			head = &BLB(node, i) -> unbound_inserts;
+			#if 0
+			if(global_logger)
+				basement_node_gc_all_les(bn, snapshot_txnids, referenced_xids, live_root_txns, node->oldest_referenced_xid_known, &delta);
+			if(bn->data_buffer.omt_size() < bn->unbound_insert_count){
+				printf("omt_size = %d, unbound count = %d\n", bn->data_buffer.omt_size(), bn->unbound_insert_count);
+				if(msg) 
+					printf("the fatal msg type is %d\n", ft_msg_get_type(msg));
+
+				if(line)
+					printf("invalidation called from line %d\n", line);
+				toku_dump_stack();	
+			}
+			assert(bn->data_buffer.omt_size() >= bn->unbound_insert_count);
+			#endif
 			int n_unbound_insert_count_blb = BLB(node, i)->unbound_insert_count;
 			verify_unbound_list_count(head, n_unbound_insert_count_blb, node);
 			sum_child_ubi += n_unbound_insert_count_blb;
 		}
 	}
+
 	if(n_unbound_insert_node != sum_child_ubi) {
 		printf("%s:%d, n_unbound_insert_node=%d, sum_child_ubi=%d\n", __func__, __LINE__,n_unbound_insert_node, sum_child_ubi);
 	}
@@ -2797,7 +2891,26 @@ ft_nonleaf_put_cmd (FT UU(ft), ft_compare_func compare_fun, DESCRIPTOR desc, str
         paranoid_invariant(ft_msg_does_nothing(cmd));
     }
 }
+#ifdef DEBUG_SEQ_IO
+static int
+//count the unbound ule in a basement nodes
+ft_basement_node_count_unbound_ules(BASEMENTNODE bn) {
+	int index = 0;
+	int sum = 0;
+	while (index <  bn->data_buffer.omt_size()) {
+        	void* keyp = NULL;
+        	uint32_t keylen = 0;
+        	LEAFENTRY leaf_entry;
+        	int r = bn->data_buffer.fetch_klpair(index, &leaf_entry, &keylen, &keyp);
+        	assert_zero(r);
+        	sum += toku_le_unbound_count(leaf_entry);
+        	// Check if the leaf entry was deleted or not.
+		++index;
 
+    	}
+	return sum;
+}
+#endif
 // Garbage collect one leaf entry.
 static void
 ft_basement_node_gc_once(BASEMENTNODE bn,
@@ -2926,7 +3039,21 @@ ft_leaf_gc_all_les(FTNODE node,
         STAT64INFO_S delta;
         delta.numrows = 0;
         delta.numbytes = 0;
-        basement_node_gc_all_les(bn, snapshot_xids, referenced_xids, live_root_txns, oldest_referenced_xid_known, &delta);
+#if 0
+	if(bn->unbound_insert_count > 0) {
+		assert(bn->data_buffer.omt_size() > 0);
+		printf("\n %p passed, omt size=%u, unbound count=%d\n", bn, bn->data_buffer.omt_size(), bn->unbound_insert_count);
+	}
+#endif
+        basement_node_gc_all_les(bn, snapshot_xids, referenced_xids, live_root_txns, oldest_referenced_xid_known, &delta); 
+#if 0
+	if(bn->unbound_insert_count > 0) {
+		if(bn->data_buffer.omt_size() == 0) {
+		printf("%p failed the node has %d children and i = %d, unbound count=%d\n", bn, node->n_children, i, bn->unbound_insert_count);
+		assert(0);
+		}
+	}
+#endif
         toku_ft_update_stats(&ft->in_memory_stats, delta);
     }
 }
@@ -3248,6 +3375,8 @@ struct iterate_fn_bnc_flush_args {
     FTNODE arg3;// child
     STAT64INFO_S * arg4;//status_delta
 };
+
+
 static int iterate_fn_bnc_flush(FT_MSG msg, bool is_fresh, void * args) {
         struct iterate_fn_bnc_flush_args * bf_args = (struct iterate_fn_bnc_flush_args*) args;
             size_t * p_remaining_memsize = bf_args -> arg0;
@@ -3286,7 +3415,7 @@ static int iterate_fn_bnc_flush(FT_MSG msg, bool is_fresh, void * args) {
                 bnc->unbound_insert_count --;
 		toku_list_remove(&entry->node_list);
             }
-            toku_ft_node_put_cmd(
+	    toku_ft_node_put_cmd(
                 ft,
                 ft->compare_fun,
                 ft->update_fun,
@@ -3457,12 +3586,13 @@ toku_ft_node_put_cmd (
 // SOSP TODO: update unbound_msg_count at node level. let lower-levels update their own partition counts
     
     
+   toku_ft_node_unbound_inserts_validation(node, cmd, __LINE__);
     if (node->height==0) {
         toku_ft_leaf_apply_cmd(ft, compare_fun, update_fun, desc, ubi_entry, node, target_childnum, cmd, gc_info, nullptr, stats_to_update);
     } else {
         ft_nonleaf_put_cmd(ft, compare_fun, desc, ubi_entry, node, target_childnum, cmd, is_fresh, flow_deltas);
     }
-   toku_ft_node_unbound_inserts_validation(node);
+   toku_ft_node_unbound_inserts_validation(node, cmd, __LINE__);
 }
 
 static const struct pivot_bounds infinite_bounds = {.lower_bound_exclusive=NULL,
@@ -3540,10 +3670,12 @@ void toku_ft_leaf_apply_cmd(
                                  gc_info,
                                  workdone,
                                  stats_to_update);
-        } else {//if unbound msg is already applied, free its unbound entry
+        } else {//if unbound msg is already appliedun, free its unbound entry
 		if(FT_UNBOUND_INSERT == ft_msg_get_type(cmd)) {
 			assert(ubi_entry != NULL);
+			toku_mutex_lock(&global_logger->ubi_lock);
 			toku_list_remove(&ubi_entry->in_or_out);
+			toku_mutex_unlock(&global_logger->ubi_lock);
 			destroy_unbound_insert_entry(ubi_entry);	
 		}
 	        STATUS_INC(FT_MSN_DISCARDS, 1);
@@ -3629,7 +3761,7 @@ static void inject_message_in_locked_node(
         flow_deltas,
         &stats_delta
         );
-    toku_ft_node_unbound_inserts_validation(node);
+    toku_ft_node_unbound_inserts_validation(node, cmd, __LINE__);
     if (stats_delta.numbytes || stats_delta.numrows) {
         toku_ft_update_stats(&ft->in_memory_stats, stats_delta);
     }
@@ -5340,6 +5472,13 @@ do_bn_apply_cmd(FT_HANDLE t, BASEMENTNODE bn, struct fifo_entry *entry, struct u
 	}
 #endif
     } else {
+	if(fifo_entry_get_msg_type(entry) == FT_UNBOUND_INSERT) {
+		assert(ubi_entry != NULL);
+		toku_mutex_lock(&global_logger->ubi_lock);
+		toku_list_remove(&ubi_entry->in_or_out);
+		toku_mutex_lock(&global_logger->ubi_lock);
+		destroy_unbound_insert_entry(ubi_entry);	
+	}
      //   paranoid_invariant(fifo_entry_get_msg_type(entry) != FT_UNBOUND_INSERT);
         STATUS_INC(FT_MSN_DISCARDS, 1);
     }
@@ -5689,7 +5828,6 @@ toku_apply_ancestors_messages_to_node (
 {
     VERIFY_NODE(t, node);
     paranoid_invariant(node->height == 0);
-
     TXNID oldest_referenced_xid = ancestors->node->oldest_referenced_xid_known;
     for (ANCESTORS curr_ancestors = ancestors; curr_ancestors; curr_ancestors = curr_ancestors->next) {
         if (curr_ancestors->node->oldest_referenced_xid_known > oldest_referenced_xid) {
@@ -5729,6 +5867,8 @@ toku_apply_ancestors_messages_to_node (
                 );
         }
     }
+    
+    toku_ft_node_unbound_inserts_validation(node, 0, __LINE__);
     VERIFY_NODE(t, node);
 }
 

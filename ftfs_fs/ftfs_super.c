@@ -6,8 +6,12 @@
 #include <linux/list_sort.h>
 #include <linux/writeback.h>
 #include <linux/path.h>
+#include <linux/kallsyms.h>
+#include <linux/sched.h>
 
 #include "ftfs_fs.h"
+
+#define DCACHE_FTFS_FLAG 0x04000000
 
 struct ftfs_meta_key root_dir_meta_key = {
 	META_KEY_MAGIC,
@@ -245,7 +249,7 @@ static int ftfs_next_ino(struct ftfs_sb_info *sbi, DB_TXN *txn, ino_t *ino)
 	put_cpu();
 
 	if (need_update)
-		ftfs_bstore_update_ino(sbi->meta_db, txn, need_update);
+		ftfs_bstore_update_ino(sbi, need_update);
 
 	return 0;
 }
@@ -438,8 +442,14 @@ ftfs_update_nr(struct dentry *dentry, int meta_change, int data_change, unsigned
 #define ftfs_update_nr_inode(inode, meta_change, data_change, flag) do { \
 		struct dentry *de = d_find_alias(inode); \
 		BUG_ON(de == NULL); \
+		spin_lock(&de->d_lock); \
+		de->d_flags |= DCACHE_FTFS_FLAG; \
+		spin_unlock(&de->d_lock); \
 		ftfs_update_nr(de, meta_change, data_change, flag); \
 		dput(de); \
+		spin_lock(&de->d_lock); \
+		de->d_flags &= ~DCACHE_FTFS_FLAG; \
+		spin_unlock(&de->d_lock); \
 	} while (0)
 
 static int split_circle(struct dentry *dentry)
@@ -577,6 +587,7 @@ static struct dentry *ftfs_find_dentry(struct inode *inode)
 			if (!IS_ROOT(de) && !d_unhashed(de)) {
 				//__dget_dlock(de);
 				de->d_lockref.count++;
+				de->d_flags |= DCACHE_FTFS_FLAG;
 				spin_unlock(&de->d_lock);
 				goto out;
 			}
@@ -587,6 +598,39 @@ out:
 	}
 
 	return de;
+}
+
+#if 0
+static struct dentry *ftfs_find_dentry_lock(struct inode *inode)
+{
+	struct dentry *de = NULL;
+
+	if (!hlist_empty(&inode->i_dentry)) {
+		spin_lock(&inode->i_lock);
+		hlist_for_each_entry(de, &inode->i_dentry, d_alias) {
+			spin_lock(&de->d_lock);
+			if (!IS_ROOT(de) && !d_unhashed(de)) {
+				de->d_lockref.count++;
+				goto out;
+			}
+			spin_unlock(&de->d_lock);
+		}
+out:
+		spin_unlock(&inode->i_lock);
+	}
+
+	return de;
+}
+#endif
+
+static void ftfs_dput(struct dentry *de)
+{
+	if (de == NULL)
+		return;
+	spin_lock(&de->d_lock);
+	de->d_lockref.count--;
+	de->d_flags &= (~DCACHE_FTFS_FLAG);
+	spin_unlock(&de->d_lock);
 }
 
 static int inline maybe_merge_circle(struct inode *inode)
@@ -614,12 +658,13 @@ static int inline maybe_merge_circle(struct inode *inode)
 			break;
 		it_dentry = it_dentry->d_parent;
 	} while (1);
-	if (!ret)
+
+	if (!ret) {
 		ret = merge_circle(dentry);
+	}
 
+	ftfs_dput(dentry);
 out:
-	dput(dentry);
-
 	return ret;
 }
 
@@ -820,7 +865,7 @@ ftfs_writepage(struct page *page, struct writeback_control *wbc)
 	ret = ftfs_get_read_trylock(FTFS_I(inode));
 	if (!ret)
 		return AOP_FTFS_WRITEPAGE;
-	else 
+	else
 		meta_key = FTFS_I(inode)->key;
 
 	set_page_writeback(page);
@@ -839,40 +884,6 @@ ftfs_writepage(struct page *page, struct writeback_control *wbc)
 out:
 	ftfs_put_read_lock(FTFS_I(inode));
 	unlock_page(page);
-
-	return ret;
-}
-
-static int inline
-__ftfs_writepages_write_page(struct page *page, struct writeback_control *wbc,
-                             struct inode *inode, struct ftfs_sb_info *sbi,
-                             DB_TXN *txn, struct ftfs_data_key *data_key, int is_seq)
-{
-	int ret;
-	loff_t i_size;
-	pgoff_t end_index;
-	unsigned offset;
-	char *buf;
-
-	set_page_writeback(page);
-	data_key->block_num = page->index;
-	buf = kmap(page);
-	i_size = i_size_read(inode);
-	end_index = i_size >> PAGE_CACHE_SHIFT;
-	if (page->index < end_index)
-		ret = ftfs_bstore_put(sbi->data_db, data_key, txn, buf, PAGE_CACHE_SIZE, is_seq);
-	else {
-		offset = i_size & (PAGE_CACHE_SIZE - 1);
-		if (page->index >= end_index + 1 || !offset)
-			ret = 0;
-		else
-			ret = ftfs_bstore_put(sbi->data_db, data_key, txn, buf, offset, is_seq);
-	}
-
-	kunmap(page);
-	end_page_writeback(page);
-	if (ret)
-		redirty_page_for_writepage(wbc, page);
 
 	return ret;
 }
@@ -918,6 +929,77 @@ radix_tree_tag_count_exceeds(struct radix_tree_root *root,
 	return 0;
 }
 
+struct ftfs_writepages_vec {
+	struct list_head list;
+	int nr_pages;
+	struct page *pages[];
+};
+#define FTFS_WRITEPAGES_VEC_SIZE 1024
+#define FTFS_WRITEPAGES_VEC_LIST_INIT_SIZE 16
+struct ftfs_writepages_vec *ftfs_alloc_writepages_vec(void)
+{
+	struct ftfs_writepages_vec *ret;
+	ret = kmalloc(sizeof(struct ftfs_writepages_vec) +
+	              sizeof(struct page *) * FTFS_WRITEPAGES_VEC_SIZE,
+	              GFP_KERNEL);
+	if (ret != NULL)
+		INIT_LIST_HEAD(&ret->list);
+	return ret;
+}
+struct mutex ftfs_writepages_vec_list_mutex;
+LIST_HEAD(ftfs_writepages_vec_list);
+
+static int
+__ftfs_writepages_write_pages(struct ftfs_writepages_vec *writepages_vec,
+                              struct writeback_control *wbc,
+                              struct inode *inode, struct ftfs_sb_info *sbi,
+                              struct ftfs_data_key *data_key, int is_seq)
+{
+	int i, ret;
+	loff_t i_size;
+	pgoff_t end_index;
+	unsigned offset;
+	char *buf;
+	struct page *page;
+	DB_TXN *txn;
+
+retry:
+	i_size = i_size_read(inode);
+	end_index = i_size >> PAGE_CACHE_SHIFT;
+	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
+	for (i = 0; i < writepages_vec->nr_pages; i++) {
+		page = writepages_vec->pages[i];
+		data_key->block_num = page->index;
+		buf = kmap(page);
+		if (page->index < end_index)
+			ret = ftfs_bstore_put(sbi->data_db, data_key, txn, buf, PAGE_CACHE_SIZE, is_seq);
+		else {
+			offset = i_size & (PAGE_CACHE_SIZE - 1);
+			if (page->index > end_index + 1 || !offset)
+				ret = 0;
+			else
+				ret = ftfs_bstore_put(sbi->data_db, data_key, txn, buf, offset, is_seq);
+		}
+		kunmap(page);
+		if (ret) {
+			DBOP_JUMP_ON_CONFLICT(ret, retry);
+			ftfs_bstore_txn_abort(txn);
+			goto out;
+		}
+	}
+	ret = ftfs_bstore_txn_commit(txn, DB_TXN_NOSYNC);
+	COMMIT_JUMP_ON_CONFLICT(ret, retry);
+out:
+	for (i = 0; i < writepages_vec->nr_pages; i++) {
+		page = writepages_vec->pages[i];
+		end_page_writeback(page);
+		if (ret)
+			redirty_page_for_writepage(wbc, page);
+		unlock_page(page);
+	}
+	return ret;
+}
+
 /**
  * (mostly) copied from write_cache_pages
  *
@@ -928,23 +1010,38 @@ radix_tree_tag_count_exceeds(struct radix_tree_root *root,
 static int ftfs_writepages(struct address_space *mapping,
 			struct writeback_control *wbc)
 {
-	int ret = 0;
+	int i, ret = 0;
 	int done = 0;
 	struct pagevec pvec;
 	int nr_pages;
 	pgoff_t uninitialized_var(writeback_index);
 	pgoff_t index;
 	pgoff_t end;		/* Inclusive */
-	pgoff_t done_index;
+	pgoff_t done_index, txn_done_index;
 	int cycled;
 	int range_whole = 0;
 	int tag;
 	int is_seq = 0;
-	DB_TXN *txn;
 	struct inode *inode;
 	struct ftfs_sb_info *sbi;
 	struct ftfs_meta_key *meta_key;
 	struct ftfs_data_key *data_key;
+	struct ftfs_writepages_vec *writepages_vec;
+
+	writepages_vec = NULL;
+	mutex_lock(&ftfs_writepages_vec_list_mutex);
+	if (!list_empty(&ftfs_writepages_vec_list)) {
+		writepages_vec = list_entry(ftfs_writepages_vec_list.next,
+		                            struct ftfs_writepages_vec, list);
+		list_del_init(&writepages_vec->list);
+	}
+	mutex_unlock(&ftfs_writepages_vec_list_mutex);
+	if (writepages_vec == NULL) {
+		writepages_vec = ftfs_alloc_writepages_vec();
+		if (writepages_vec == NULL)
+			return -ENOMEM;
+	}
+	writepages_vec->nr_pages = 0;
 
 	pagevec_init(&pvec, 0);
 	if (wbc->range_cyclic) {
@@ -970,6 +1067,7 @@ retry:
 	if (wbc->sync_mode == WB_SYNC_ALL || wbc->tagged_writepages)
 		tag_pages_for_writeback(mapping, index, end);
 	done_index = index;
+	txn_done_index = index;
 
 	/* wkj: add count of total pages for writeback: we need to
 	 * detect sequential I/Os somehow. */
@@ -987,7 +1085,7 @@ retry:
 		if (de) {
 			ftfs_put_read_lock(FTFS_I(inode));
 			split_circle(de);
-			dput(de);
+			ftfs_dput(de);
 			meta_key = ftfs_get_read_lock(FTFS_I(inode));
 		}
 	}
@@ -996,10 +1094,7 @@ retry:
 		ret = -ENOMEM;
 		goto out;
 	}
-	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
 	while (!done && (index <= end)) {
-		int i;
-
 		nr_pages = pagevec_lookup_tag(&pvec, mapping, &index, tag,
 			      min(end - index, (pgoff_t)PAGEVEC_SIZE-1) + 1);
 		if (nr_pages == 0)
@@ -1009,11 +1104,18 @@ retry:
 			struct page *page = pvec.pages[i];
 
 			if (page->index > end) {
+				if (writepages_vec->nr_pages > 0) {
+					ret = __ftfs_writepages_write_pages(writepages_vec, wbc, inode, sbi, data_key, is_seq);
+                    if (ret)
+                        goto free_dkey_out;
+					done_index = txn_done_index;
+					writepages_vec->nr_pages = 0;
+				}
 				done = 1;
 				break;
 			}
 
-			done_index = page->index;
+			txn_done_index = page->index;
 			lock_page(page);
 
 			if (unlikely(page->mapping != mapping)) {
@@ -1038,13 +1140,25 @@ continue_unlock:
 			if (!clear_page_dirty_for_io(page))
 				goto continue_unlock;
 
-			//set_page_writeback(page);
-			ret = __ftfs_writepages_write_page(page, wbc, inode, sbi, txn, data_key, is_seq);
-			BUG_ON(ret);
-			unlock_page(page);
+			set_page_writeback(page);
+			writepages_vec->pages[writepages_vec->nr_pages++] = page;
+			if (writepages_vec->nr_pages >= FTFS_WRITEPAGES_VEC_SIZE) {
+				ret = __ftfs_writepages_write_pages(writepages_vec, wbc, inode, sbi, data_key, is_seq);
+				if (ret)
+					goto free_dkey_out;
+				done_index = txn_done_index;
+				writepages_vec->nr_pages = 0;
+			}
 
 			if (--wbc->nr_to_write <= 0 &&
 			    wbc->sync_mode == WB_SYNC_NONE) {
+				if (writepages_vec->nr_pages > 0) {
+					ret = __ftfs_writepages_write_pages(writepages_vec, wbc, inode, sbi, data_key, is_seq);
+                    if (ret)
+                        goto free_dkey_out;
+					done_index = txn_done_index;
+					writepages_vec->nr_pages = 0;
+				}
 				done = 1;
 				break;
 			}
@@ -1052,8 +1166,14 @@ continue_unlock:
 		pagevec_release(&pvec);
 		cond_resched();
 	}
-	ret = ftfs_bstore_txn_commit(txn, DB_TXN_NOSYNC);
-	BUG_ON(ret);
+	if (writepages_vec->nr_pages > 0) {
+		ret = __ftfs_writepages_write_pages(writepages_vec, wbc, inode, sbi, data_key, is_seq);
+		if (!ret) {
+			done_index = txn_done_index;
+			writepages_vec->nr_pages = 0;
+		}
+	}
+free_dkey_out:
 	kfree(data_key);
 out:
 	ftfs_put_read_lock(FTFS_I(inode));
@@ -1066,6 +1186,10 @@ out:
 	}
 	if (wbc->range_cyclic || (range_whole && wbc->nr_to_write > 0))
 		mapping->writeback_index = done_index;
+
+	mutex_lock(&ftfs_writepages_vec_list_mutex);
+	list_add(&writepages_vec->list, &ftfs_writepages_vec_list);
+	mutex_unlock(&ftfs_writepages_vec_list_mutex);
 
 	return ret;
 }
@@ -1152,10 +1276,10 @@ out:
 				de = ftfs_find_dentry(inode);
 				BUG_ON(!de);
 				if (split_circle(de)) {
-					dput(de);
+					ftfs_dput(de);
 					goto split_fail;
 				}
-				dput(de);
+				ftfs_dput(de);
 			} else
 				ftfs_put_read_lock(FTFS_I(inode));
 		} else {
@@ -1169,7 +1293,7 @@ split_fail:
 				struct dentry *de = ftfs_find_dentry(inode);
 				if (de) {
 					ftfs_update_nr(de->d_parent, 0, dc, FTFS_UPDATE_NR_MAY_SPLIT);
-					dput(de);
+					ftfs_dput(de);
 				}
 			}
 		}
@@ -1432,20 +1556,21 @@ ftfs_mknod(struct inode *dir, struct dentry *dentry, umode_t mode, dev_t rdev)
 		goto out1;
 	}
 
-	TXN_GOTO_LABEL(retry);
-	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
 	ret = ftfs_next_ino(sbi, txn, &ino);
 	if (ret) {
-		DBOP_JUMP_ON_CONFLICT(ret, retry);
-		goto abort;
+		BUG();
 	}
 	ftfs_setup_metadata(&meta, mode, 0, rdev, ino);
 	inode = ftfs_setup_inode(dir->i_sb, meta_key, &meta);
 	if (IS_ERR(inode)) {
 		ret = PTR_ERR(inode);
 		inode = NULL;
-		goto abort;
+		goto out1;
 	}
+
+	TXN_GOTO_LABEL(retry);
+	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
+
 	ret = ftfs_bstore_meta_put(sbi->meta_db, meta_key, txn, &meta);
 	if (ret) {
 		DBOP_JUMP_ON_CONFLICT(ret, retry);
@@ -1466,6 +1591,7 @@ abort:
 	ftfs_bstore_txn_abort(txn);
 	meta_key_free(meta_key);
 	if (inode) {
+		iput(inode);
 		__destroy_inode(inode);
 		ftfs_destroy_inode(inode);
 	}
@@ -1590,21 +1716,22 @@ ftfs_symlink(struct inode *dir, struct dentry *dentry, const char *symname)
 		goto out1;
 	}
 
-	TXN_GOTO_LABEL(retry);
-	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
-
-	ret = ftfs_next_ino(sbi, txn, &ino);
+    ret = ftfs_next_ino(sbi, txn, &ino);
 	if (ret) {
-		DBOP_JUMP_ON_CONFLICT(ret, retry);
-		goto abort;
+		BUG();
 	}
-	ftfs_setup_metadata(&meta, S_IFLNK | S_IRWXUGO, len, 0, ino);
+
+    ftfs_setup_metadata(&meta, S_IFLNK | S_IRWXUGO, len, 0, ino);
 	inode = ftfs_setup_inode(dir->i_sb, meta_key, &meta);
 	if (IS_ERR(inode)) {
 		ret = PTR_ERR(inode);
 		inode = NULL;
-		goto abort;
+		goto out1;
 	}
+
+	TXN_GOTO_LABEL(retry);
+	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
+
 	ret = ftfs_bstore_meta_put(sbi->meta_db, meta_key, txn, &meta);
 	if (ret) {
 		DBOP_JUMP_ON_CONFLICT(ret, retry);
@@ -1748,7 +1875,73 @@ static int ftfs_unlink(struct inode *dir, struct dentry *dentry)
 	drop_nlink(inode);
 	mark_inode_dirty(inode);
 
+	/* A dirty hack */
+	while (dentry->d_flags & DCACHE_FTFS_FLAG)
+		yield();
+
+	if (dentry->d_lockref.count != 1) {
+		printk("%s dentry flag %x\n", __func__, dentry->d_flags);
+		printk("%s dentry is %s\n", __func__, dentry->d_name.name);
+		printk("%s dentry ref count %d\n", __func__, dentry->d_lockref.count);
+	}
+
 	return ret;
+}
+
+static void ftfs_d_prune(struct dentry *dentry)
+{
+#if 0
+	struct inode *inode;
+
+	if (dentry == NULL)
+		return;
+	inode = dentry->d_inode;
+
+	if (inode == NULL)
+		return;
+
+	/* Writeback the inode itself */
+	if (inode->i_state & I_DIRTY)
+		inode->i_sb->s_op->write_inode(inode, NULL);
+	spin_lock(&inode->i_lock);
+
+	/* Writeback inode's pages */
+	if (inode->i_state & (I_NEW | I_FREEING | I_WILL_FREE | I_SYNC)) {
+		spin_unlock(&inode->i_lock);
+		return;
+	}
+
+	inode->i_state |= I_SYNC;
+	spin_unlock(&inode->i_lock);
+
+	{
+		/* Real writeback after some checks */
+		struct address_space *mapping = inode->i_mapping;
+		int ret;
+		struct writeback_control wbc = {
+			.sync_mode              = WB_SYNC_NONE,
+			.range_cyclic           = 1,
+			.range_start            = 0,
+			.range_end              = LLONG_MAX,
+		};
+
+		WARN_ON(!(inode->i_state & I_SYNC));
+		ret = mapping->a_ops->writepages(mapping, &wbc);
+		if (ret)
+			BUG();
+	}
+#endif
+}
+
+static const struct dentry_operations ftfs_dentry_ops = {
+	.d_prune = ftfs_d_prune,
+};
+
+void ftfs_init_dentry(struct dentry *dentry)
+{
+	spin_lock(&dentry->d_lock);
+	d_set_d_op(dentry, &ftfs_dentry_ops);
+	spin_unlock(&dentry->d_lock);
 }
 
 static struct dentry *
@@ -1761,6 +1954,8 @@ ftfs_lookup(struct inode *dir, struct dentry *dentry, unsigned int flags)
 	struct ftfs_inode *ftfs_inode = FTFS_I(dir);
 	struct ftfs_meta_key *dir_meta_key, *meta_key;
 	DB_TXN *txn;
+
+	ftfs_init_dentry(dentry);
 
 	dir_meta_key = ftfs_get_read_lock(ftfs_inode);
 	meta_key = alloc_child_meta_key_from_meta_key(dir_meta_key,
@@ -1788,6 +1983,17 @@ ftfs_lookup(struct inode *dir, struct dentry *dentry, unsigned int flags)
 		r = ftfs_bstore_txn_commit(txn, DB_TXN_NOSYNC);
 		COMMIT_JUMP_ON_CONFLICT(r, retry);
 	}
+
+    if (IS_ERR(inode))
+        WARN_ON(inode != NULL && (flags & LOOKUP_CREATE));
+    else {
+        WARN_ON(inode != NULL && (flags & LOOKUP_CREATE));
+        if (inode != NULL && (flags & LOOKUP_CREATE)) {
+            printk("dentry is %s\n", dentry->d_name.name);
+            printk("inode i_nlink is %d\n", inode->i_nlink);
+            printk("inode is %p\n", inode);
+        }
+    }
 
 out:
 	/* aging bug */
@@ -1842,6 +2048,16 @@ static int ftfs_setattr(struct dentry *dentry, struct iattr *iattr)
 skip_txn:
 		i_size_write(inode, iattr->ia_size);
 	}
+
+    /**
+     *  ftruncate can call this to increase the file size
+     *  http://pubs.opengroup.org/onlinepubs/009695399/functions/ftruncate.html
+     */
+
+	if ((iattr->ia_valid & ATTR_SIZE) && iattr->ia_size > size) {
+        //printk("%s size:%lld\n", __func__, size);
+		i_size_write(inode, iattr->ia_size);
+    }
 
 	setattr_copy(inode, iattr);
 	mark_inode_dirty(inode);
@@ -1986,6 +2202,7 @@ static void ftfs_evict_inode(struct inode *inode)
 	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
 	ret = ftfs_do_unlink(meta_key, txn, inode, sbi);
 	if (ret) {
+		printk("Inode is %p\n", inode);
 		DBOP_JUMP_ON_CONFLICT(ret, retry);
 		ftfs_bstore_txn_abort(txn);
 	} else {
@@ -2316,33 +2533,128 @@ static struct dentry *ftfs_mount(struct file_system_type *fs_type, int flags,
 	return mount_bdev(fs_type, flags, dev_name, data, ftfs_fill_super);
 }
 
+static void find_dirty_inodes(struct super_block *sb)
+{
+	struct inode *inode, *next;
+
+	list_for_each_entry_safe(inode, next, &sb->s_inodes, i_sb_list) {
+		if (inode->i_state & I_DIRTY)
+			printk("Inode state %lu\n", inode->i_state);
+	}
+}
+
+static void find_remaining_inodes(struct super_block *sb)
+{
+	struct inode *inode, *next;
+
+	list_for_each_entry_safe(inode, next, &sb->s_inodes, i_sb_list) {
+		if (atomic_read(&inode->i_count)) {
+			printk("Inode i_count %d\n", atomic_read(&inode->i_count));
+			continue;
+		}
+
+		spin_lock(&inode->i_lock);
+		if (inode->i_state & I_DIRTY)
+			printk("Inode state %lu\n", inode->i_state);
+		spin_unlock(&inode->i_lock);
+	}
+}
+
+#if 0
+static void ftfs_writeback_inodes_sb(struct super_block *sb)
+{
+	struct dentry *object;
+	struct dentry *this_parent;
+	struct inode *inode;
+	struct list_head *next;
+
+	object = sb->s_root;
+	this_parent = object;;
+start:
+	if (this_parent->d_sb != object->d_sb)
+		goto end;
+	next = this_parent->d_subdirs.next;
+resume:
+	while (next != &this_parent->d_subdirs) {
+		this_parent = list_entry(next, struct dentry, d_u.d_child);
+		goto start;
+	}
+end:
+	inode = this_parent->d_inode;
+	sync_inode_metadata(inode, 1);
+	if (this_parent != object) {
+		next = this_parent->d_u.d_child.next;
+		this_parent = this_parent->d_parent;
+		goto resume;
+	}
+}
+#endif
+
+static void ftfs_kill_sb(struct super_block *sb)
+{
+	sync_filesystem(sb);
+	printk("dirty inode:\n");
+	find_dirty_inodes(sb);	
+	kill_block_super(sb);
+	printk("remaining inode:\n");
+	find_remaining_inodes(sb);	
+}
+
 static struct file_system_type ftfs_fs_type = {
 	.owner		= THIS_MODULE,
 	.name		= "ftfs",
 	.mount		= ftfs_mount,
-	.kill_sb	= kill_block_super,
+	.kill_sb	= ftfs_kill_sb,
 	.fs_flags	= FS_REQUIRES_DEV,
 };
+
+static int ftfs_init_writepages_vec(void)
+{
+	int i;
+	struct ftfs_writepages_vec *writepages_vec;
+	mutex_init(&ftfs_writepages_vec_list_mutex);
+	for (i = 0; i < FTFS_WRITEPAGES_VEC_LIST_INIT_SIZE; i++) {
+		writepages_vec = ftfs_alloc_writepages_vec();
+		if (writepages_vec == NULL) {
+			printk(KERN_ERR "FTFS_ERROR: Failed to alloc writepages_vec.\n");
+			return -ENOMEM;
+		}
+		list_add(&writepages_vec->list, &ftfs_writepages_vec_list);
+	}
+	return 0;
+}
+
+static void ftfs_free_writepages_vec(void)
+{
+	struct ftfs_writepages_vec *writepages_vec, *tmp;
+	list_for_each_entry_safe(writepages_vec, tmp, &ftfs_writepages_vec_list, list) {
+		list_del(&(writepages_vec->list));
+		kfree(writepages_vec);
+	}
+	mutex_destroy(&ftfs_writepages_vec_list_mutex);
+}
 
 int init_ftfs_fs(void)
 {
 	int ret;
 
+	ret = ftfs_init_writepages_vec();
+	if (ret)
+		goto out;
 	ftfs_inode_cachep =
 		kmem_cache_create("ftfs_i",
 		                  sizeof(struct ftfs_inode), 0,
 		                  SLAB_RECLAIM_ACCOUNT | SLAB_MEM_SPREAD,
 		                  ftfs_i_init_once);
 	if (!ftfs_inode_cachep) {
-		printk(KERN_ERR
-		       "FTFS ERROR: Failed to initialize inode cache.\n");
-		return -ENOMEM;
+		printk(KERN_ERR "FTFS ERROR: Failed to initialize inode cache.\n");
+		ret = -ENOMEM;
+		goto out;
 	}
 
 	ret = register_filesystem(&ftfs_fs_type);
 	if (ret) {
-		printk(KERN_ERR
-		       "FTFS ERROR: Failed to register filesystem\n");
+		printk(KERN_ERR "FTFS ERROR: Failed to register filesystem\n");
 		goto error_register;
 	}
 
@@ -2350,6 +2662,8 @@ int init_ftfs_fs(void)
 
 error_register:
 	kmem_cache_destroy(ftfs_inode_cachep);
+out:
+	ftfs_free_writepages_vec();
 	return ret;
 }
 
@@ -2358,4 +2672,6 @@ void exit_ftfs_fs(void)
 	unregister_filesystem(&ftfs_fs_type);
 
 	kmem_cache_destroy(ftfs_inode_cachep);
+
+	ftfs_free_writepages_vec();
 }

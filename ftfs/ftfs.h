@@ -52,6 +52,14 @@ static inline void ftfs_debug_break(void) {
 		return -EPERM;						\
 	}
 
+#define LOOKUP_SYMBOL_FTFS_VOID(kern_func)					\
+	ftfs_##kern_func =						\
+		(kern_func##_t) kallsyms_lookup_name(#kern_func);	\
+	if (!ftfs_##kern_func) {					\
+		ftfs_error(__func__, #kern_func " not found");		\
+		return;						\
+	}
+
 extern int toku_ft_layer_init_with_panicenv(void);
 static inline int init_ft_index(void)
 {

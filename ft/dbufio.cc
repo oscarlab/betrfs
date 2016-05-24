@@ -187,9 +187,13 @@ static ssize_t dbf_read_some_compressed(struct dbufio_file *dbf, char *buf, size
         goto exit;
     }
     if (readcode < header_size) {
+#ifdef TOKU_LINUX_MODULE
+        ret = -TOKUDB_NO_DATA;
+#else
         set_errno( TOKUDB_NO_DATA); 
         // XXX: why no -TOKUDB_NO_DATA?
         ret = -1;
+#endif
         goto exit;
     }
     uint32_t total_size;
@@ -198,16 +202,24 @@ static ssize_t dbf_read_some_compressed(struct dbufio_file *dbf, char *buf, size
         total_size = toku_dtoh32(p[0]);
     }
     if (total_size == 0 || total_size > (1<<30)) {
+#ifdef TOKU_LINUX_MODULE
+        ret = -toku_db_badformat();
+#else
         set_errno( toku_db_badformat()); 
         ret = -1;
+#endif
         goto exit;
     }
 
     //Cannot use XMALLOC
     MALLOC_N(total_size, raw_block);
     if (raw_block == nullptr) {
+#ifdef TOKU_LINUX_MODULE
+        ret = -ENOMEM;
+#else
         set_errno(ENOMEM);
         ret = -1;
+#endif
         goto exit;
     }
     readcode = toku_os_read(dbf->fd, raw_block, total_size);
@@ -216,8 +228,12 @@ static ssize_t dbf_read_some_compressed(struct dbufio_file *dbf, char *buf, size
         goto exit;
     }
     if (readcode < total_size) {
+#ifdef TOKU_LINUX_MODULE
+        ret = -TOKUDB_NO_DATA;
+#else
         set_errno(TOKUDB_NO_DATA);
         ret = -1;
+#endif
         goto exit;
     }
 
@@ -230,8 +246,12 @@ static ssize_t dbf_read_some_compressed(struct dbufio_file *dbf, char *buf, size
     size_t size_subblock_header;
     size_subblock_header = sub_block_header_size(n_sub_blocks);
     if (n_sub_blocks == 0 || n_sub_blocks > max_sub_blocks || size_subblock_header > total_size) {
+#ifdef TOKU_LINUX_MODULE
+        ret = -toku_db_badformat();
+#else
         set_errno(toku_db_badformat()); 
         ret = -1;
+#endif
         goto exit;
     }
     for (int i = 0; i < n_sub_blocks; i++) {
@@ -248,22 +268,34 @@ static ssize_t dbf_read_some_compressed(struct dbufio_file *dbf, char *buf, size
     for (int i = 0; i < n_sub_blocks; i++) {
         uint32_t compressed_size = sub_block[i].compressed_size;
         if (compressed_size<=0   || compressed_size>(1<<30)) { 
+#ifdef TOKU_LINUX_MODULE
+            ret = -toku_db_badformat();
+#else
             set_errno(toku_db_badformat()); 
             ret = -1;
+#endif
             goto exit;
         }
 
         uint32_t uncompressed_size = sub_block[i].uncompressed_size;
         if (uncompressed_size<=0 || uncompressed_size>(1<<30)) { 
+#ifdef TOKU_LINUX_MODULE
+            ret = -toku_db_badformat();
+#else
             set_errno(toku_db_badformat()); 
             ret = -1;
+#endif
             goto exit;
         }
         total_compressed_size += compressed_size;
     }
     if (total_size != total_compressed_size + size_subblock_header) {
+#ifdef TOKU_LINUX_MODULE
+        ret = -toku_db_badformat();
+#else
         set_errno(toku_db_badformat()); 
         ret = -1;
+#endif
         goto exit;
     }
 
@@ -271,8 +303,12 @@ static ssize_t dbf_read_some_compressed(struct dbufio_file *dbf, char *buf, size
     size_t uncompressed_size;
     uncompressed_size = get_sum_uncompressed_size(n_sub_blocks, sub_block);
     if (uncompressed_size > bufsize || uncompressed_size > MAX_UNCOMPRESSED_BUF) {
+#ifdef TOKU_LINUX_MODULE
+        ret = -toku_db_badformat();
+#else
         set_errno(toku_db_badformat()); 
         ret = -1;
+#endif
         goto exit;
     }
 
@@ -290,8 +326,12 @@ static ssize_t dbf_read_some_compressed(struct dbufio_file *dbf, char *buf, size
         if (r != 0) {
             fprintf(stderr, "%s:%d loader failed %d at %p size %" PRIu32"\n", __FUNCTION__, __LINE__, r, raw_block, total_size);
             dump_bad_block(raw_block, total_size);
+#ifdef TOKU_LINUX_MODULE
+            ret = r;
+#else
             set_errno(r);
             ret = -1;
+#endif
             goto exit;
         }
     }
@@ -373,7 +413,11 @@ static void* io_thread (void *v)
 		//printf("%s:%d readcode=%ld\n", __FILE__, __LINE__, readcode);
 		if (readcode < 0) {
 		    // a real error.  Save the real error.
-                    int the_errno = 1;
+#ifdef TOKU_LINUX_MODULE
+                    int the_errno = get_error_errno(readcode);
+#else
+                    int the_errno = get_error_errno();
+#endif
                     fprintf(stderr, "%s:%d dbf=%p fd=%d errno=%d\n", __FILE__, __LINE__, dbf, dbf->fd, the_errno);
 		    dbf->error_code[1] = the_errno;
 		    dbf->n_in_buf[1] = 0;
@@ -464,7 +508,11 @@ int create_dbufio_fileset (DBUFIO_FILESET *bfsp, int N, int fds[/*N*/], size_t b
             }
             {
 		if (r<0) {
-                   result = 1;
+#ifdef TOKU_LINUX_MODULE
+                    result = get_error_errno(r);
+#else
+		    result=get_error_errno();
+#endif
 		    break;
                 } else if (r==0) {
 		    // it's EOF

@@ -604,6 +604,11 @@ toku_rollback_load (FILENUM    UU(old_filenum),
         // unlink it if it's there and ignore the error if it's not.
         char *fname_in_cwd = toku_cachetable_get_fname_in_cwd(ct, fname_in_env);
         r = unlink(fname_in_cwd);
+#ifdef TOKU_LINUX_MODULE
+        assert(r == 0 || get_error_errno(r) == ENOENT);
+#else
+        assert(r == 0 || get_error_errno() == ENOENT);
+#endif
         toku_free(fname_in_cwd);
         r = 0;
     } else {

@@ -28,20 +28,20 @@ struct getdents_callback64 {
 	int error;
 };
 
-#ifdef CONFIG_SECURITY
-typedef int (* security_path_rmdir_t)(struct path *dir, struct dentry *dentry);
-DECLARE_SYMBOL_FTFS(security_path_rmdir);
-#else
-static inline int ftfs_security_path_rmdir(struct path *dir,
-					   struct dentry *dentry){ return 0; }
-#endif
+//#ifdef CONFIG_SECURITY
+//typedef int (* security_path_rmdir_t)(struct path *dir, struct dentry *dentry);
+//DECLARE_SYMBOL_FTFS(security_path_rmdir);
+//#else
+//static inline int ftfs_security_path_rmdir(struct path *dir,
+//					   struct dentry *dentry){ return 0; }
+//#endif
 
 int resolve_ftfs_dir_symbols(void)
 {
-#ifdef CONFIG_SECURITY
-	LOOKUP_SYMBOL_FTFS(security_path_rmdir);
-#endif
-    return 0;
+//#ifdef CONFIG_SECURITY
+//	LOOKUP_SYMBOL_FTFS(security_path_rmdir);
+//#endif
+	return 0;
 }
 
 static int filldir64(void * __buf, const char * name,
@@ -90,7 +90,7 @@ int getdents64(unsigned int fd, struct linux_dirent64 *dirent,
 
 	f = ftfs_fdget(fd);
 	if (!f.file)
-		return return_set_errno(-EBADF);
+		return -EBADF;
 
 	error = iterate_dir(f.file, &buf.ctx);
 	if (error >= 0)
@@ -102,7 +102,8 @@ int getdents64(unsigned int fd, struct linux_dirent64 *dirent,
 		error = count - buf.count;
 	}
 	ftfs_fdput(f);
-	return return_errno_pos(error);
+
+	return error;
 }
 
 int mkdir(const char *pathname, umode_t mode)
@@ -118,7 +119,7 @@ retry:
 	dentry = kern_path_create(AT_FDCWD, pathname, &path, lookup_flags);
 	if (IS_ERR(dentry)) {
 		SOUTHBOUND_RESTORE;
-		return return_set_errno(PTR_ERR(dentry));
+		return PTR_ERR(dentry);
 	}
 
 	/* wkj: we are in the southbound context, so ignore permissions? */
@@ -127,7 +128,8 @@ retry:
 
 	//error = security_path_mkdir(&path, dentry, mode);
 	//if (!error)
-		error = vfs_mkdir(path.dentry->d_inode, dentry, mode);
+	error = vfs_mkdir(path.dentry->d_inode, dentry, mode);
+
 	done_path_create(&path, dentry);
 	if (retry_estale(error, lookup_flags)) {
 		lookup_flags |= LOOKUP_REVAL;
@@ -138,7 +140,8 @@ retry:
 	//}
 
 	SOUTHBOUND_RESTORE;
-	return return_errno_nonzero(error);
+
+	return error;
 }
 #if 0
 char *getcwd(char *buf, int buflen)
@@ -223,7 +226,7 @@ int rmdir(const char *pathname)
 	len = strlen(pathname) + 1;
 	name = (char *)kmalloc(len, GFP_KERNEL);
 	if (!name)
-		return return_set_errno(-ENOMEM);
+		return -ENOMEM;
 	memcpy(name, pathname, len);
 	base = basename(name);
 
@@ -233,7 +236,7 @@ retry:
 	res = kern_path(pathname, LOOKUP_PARENT, &path);
 	if (res) {
 		ftfs_error(__func__, "path lookup failed");
-		return return_set_errno(res);
+		return res;
 	}
 
 	d = path.dentry;
@@ -252,9 +255,9 @@ retry:
 		res = -ENOENT;
 		goto exit3;
 	}
-	res = ftfs_security_path_rmdir(&path, dchild);
-	if(res)
-		goto exit3;
+	//res = ftfs_security_path_rmdir(&path, dchild);
+	//if(res)
+	//	goto exit3;
 	res = vfs_rmdir(path.dentry->d_inode, dchild);
 
 exit3:
@@ -272,7 +275,8 @@ exit1:
 
 	kfree(name);
 	SOUTHBOUND_RESTORE;
-	return return_errno_nonzero(res);
+
+	return res;
 }
 
 /*
@@ -299,7 +303,7 @@ int opendir_helper(const char *name, int flags)
 		ftfs_put_unused_fd(fd);
 		ftfs_error(__func__, "filp_open (%s) failed:%d", name,
 			PTR_ERR(f));
-		return return_set_errno(PTR_ERR(f));
+		return PTR_ERR(f);
 	}
 
 	inode = f->f_dentry->d_inode;
@@ -312,17 +316,16 @@ int opendir_helper(const char *name, int flags)
 	ftfs_put_unused_fd(fd);
 	ftfs_error(__func__, "%s is not a dir", name);
 	ftfs_filp_close(f);
-	return return_set_errno(-ENOTDIR);
+
+	return -ENOTDIR;
 }
 
 DIR *opendir_helper_fd(int fd)
 {
 	DIR *dirp;
 	dirp = (DIR *)kzalloc(sizeof(DIR), GFP_KERNEL);
-	if (!dirp) {
-	    ftfs_set_errno(-ENOMEM);
-	    return NULL;
-	}
+	if (!dirp)
+		return NULL;
 
 	dirp->fd = fd;
 	dirp->buf_pos = dirp->buf_end = 0;
@@ -336,7 +339,7 @@ DIR *opendir(const char *name)
 
 	fd = opendir_helper(name, O_RDONLY|O_NDELAY|O_DIRECTORY|O_LARGEFILE);
 	if (fd < 0)
-		return NULL; /* errno already set by open64 */
+		return NULL;
 
 	dir = opendir_helper_fd(fd);
 	if (!dir)
@@ -350,28 +353,28 @@ DIR *fdopendir(int fd)
 }
 
 struct dirent64 * readdir64(DIR* dirp) {
-    int length;
-    struct dirent64* dirent;
+	int length;
+	struct dirent64* dirent;
 
-    if(!dirp || IS_ERR(dirp)) {
-	    ftfs_set_errno(-EBADF);
-	    return NULL;
-    }
+	// Yang: It seems that although ft-index checks readdir return NULL,
+	//       their code never does anything about it.
+	if (!dirp || IS_ERR(dirp))
+		return NULL;
 
-    if(dirp->buf_pos >= dirp->buf_end) {
-	    length = getdents64(dirp->fd, (struct linux_dirent64 *)dirp->buf,
+	if(dirp->buf_pos >= dirp->buf_end) {
+		length = getdents64(dirp->fd, (struct linux_dirent64 *)dirp->buf,
 			    sizeof dirp->buf);
-	    if(length <= 0)
-		    return NULL; /* getdents64 already set errno */
+		if(length <= 0)
+			return NULL;
 
-	    dirp->buf_pos = 0;
-	    dirp->buf_end = length;
-    }
+		dirp->buf_pos = 0;
+		dirp->buf_end = length;
+	}
 
-    dirent = (void *)(dirp->buf + dirp->buf_pos);
-    dirp->buf_pos += dirent->d_reclen;
+	dirent = (void *)(dirp->buf + dirp->buf_pos);
+	dirp->buf_pos += dirent->d_reclen;
 
-    return dirent;
+	return dirent;
 }
 
 
@@ -380,7 +383,7 @@ int closedir(DIR * dirp)
 	int fd;
 
 	if(!dirp || IS_ERR(dirp))
-		return return_set_errno(-EINVAL);
+		return -EINVAL;
 
 	fd = dirp->fd;
 	kfree(dirp);
@@ -390,7 +393,7 @@ int closedir(DIR * dirp)
 int dirfd(DIR * dirp)
 {
 	if(!dirp || IS_ERR(dirp))
-		return return_set_errno(-EINVAL);
+		return -EINVAL;
 	return dirp->fd;
 }
 

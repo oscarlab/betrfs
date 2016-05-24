@@ -125,11 +125,13 @@ do {                                                    \
 
 
 static inline int
-get_maybe_error_errno(void)
+get_maybe_error_errno(int r)
 {
-//    return bogus_errno;
-    return   ftfs_get_errno();
+    if (r < 0)
+        return -r;
+    return r;
 }
+
 
  static inline void
 set_errno(int new_errno)
@@ -226,11 +228,10 @@ static inline int
 get_error_errno(int rv)
 {
 #ifdef TOKU_LINUX_MODULE
-    if(rv < 0) 
-        return ftfs_get_errno();
-    else
-      return rv;
-#else 
+    if (rv < 0)
+        return -rv;
+    return rv;
+#else
     invariant(errno);
     return errno;
 #endif

@@ -285,7 +285,7 @@ pthread_create_debug(pthread_t *thread, const pthread_attr_t *attr,
 {
 	thread->tps = kmalloc(sizeof(struct true_pthread_struct), GFP_KERNEL);
 	if (thread->tps == NULL) {
-		return -EAGAIN;
+		return EAGAIN;
 	}
 
 	init_completion(&thread->tps->event);
@@ -296,7 +296,7 @@ pthread_create_debug(pthread_t *thread, const pthread_attr_t *attr,
 	thread->tps->t = kthread_run(kthread_func, thread->tps, debug_str);
 	if (IS_ERR(thread->tps->t)) {
 		kfree(thread->tps);
-		return -EAGAIN;
+		return EAGAIN;
 	}
 	return 0;
 }
@@ -306,7 +306,7 @@ pthread_create(pthread_t *thread, const pthread_attr_t *attr,
 {
 	thread->tps = kmalloc(sizeof(struct true_pthread_struct), GFP_KERNEL);
 	if (thread->tps == NULL) {
-		return -EAGAIN;
+		return EAGAIN;
 	}
 
 	init_completion(&thread->tps->event);
@@ -317,7 +317,7 @@ pthread_create(pthread_t *thread, const pthread_attr_t *attr,
 	thread->tps->t = kthread_run(kthread_func, thread->tps, "ftfs_thread");
 	if (IS_ERR(thread->tps->t)) {
 		kfree(thread->tps);
-		return -EAGAIN;
+		return EAGAIN;
 	}
 	return 0;
 }

@@ -177,8 +177,9 @@ int ftfs_bstore_get_ino(DB *meta_db, DB_TXN *txn, ino_t *ino)
 	return ret;
 }
 
-int ftfs_bstore_update_ino(DB *meta_db, DB_TXN *txn, ino_t ino)
+int ftfs_bstore_update_ino(struct ftfs_sb_info *sbi, ino_t ino)
 {
+	DB_TXN *txn;
 	int ret;
 	ino_t curr_ino;
 	DBT next_ino_key_dbt, next_ino_value_dbt;
@@ -188,14 +189,25 @@ int ftfs_bstore_update_ino(DB *meta_db, DB_TXN *txn, ino_t ino)
 	dbt_init(&next_ino_value_dbt, &curr_ino,
 	         sizeof(curr_ino));
 
-	ret = meta_db->get(meta_db, txn, &next_ino_key_dbt,
-	                   &next_ino_value_dbt, DB_GET_FLAGS);
+	TXN_GOTO_LABEL(retry); 
+	{
 
-	if (!ret && ino > curr_ino) {
-		curr_ino = ino;
-		ret = meta_db->put(meta_db, txn, &next_ino_key_dbt,
-		                   &next_ino_value_dbt, DB_PUT_FLAGS);
+		ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
+
+		ret = sbi->meta_db->get(sbi->meta_db, txn, &next_ino_key_dbt,
+	        	           &next_ino_value_dbt, DB_GET_FLAGS);
+
+		if (!ret && ino > curr_ino) {
+			curr_ino = ino;
+			ret = sbi->meta_db->put(sbi->meta_db, txn, &next_ino_key_dbt,
+		        	           &next_ino_value_dbt, DB_PUT_FLAGS);
+		}
+	} if (ret) {
+		DBOP_JUMP_ON_CONFLICT(ret, retry);
 	}
+
+	ret = ftfs_bstore_txn_commit(txn, DB_TXN_NOSYNC);
+	COMMIT_JUMP_ON_CONFLICT(ret, retry);
 
 	return ret;
 }
@@ -689,6 +701,8 @@ int ftfs_bstore_get(DB *data_db, struct ftfs_data_key *data_key,
 	return ret;
 }
 
+#define FTFS_USE_SEQ_PUT 1
+
 // size of buf must be FTFS_BLOCK_SIZE
 int ftfs_bstore_put(DB *data_db, struct ftfs_data_key *data_key,
                     DB_TXN *txn, const void *buf, size_t len, int is_seq)
@@ -699,10 +713,13 @@ int ftfs_bstore_put(DB *data_db, struct ftfs_data_key *data_key,
 	dbt_init(&key, data_key, SIZEOF_KEY(*data_key));
 	dbt_init(&value, buf, len);
 
+#if FTFS_USE_SEQ_PUT
 	ret = is_seq ?
 	      data_db->seq_put(data_db, txn, &key, &value, DB_PUT_FLAGS) :
 	      data_db->put(data_db, txn, &key, &value, DB_PUT_FLAGS);
-
+#else
+	ret = data_db->put(data_db, txn, &key, &value, DB_PUT_FLAGS);
+#endif
 	return ret;
 }
 

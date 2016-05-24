@@ -284,15 +284,24 @@ toku_os_lock_file(const char *name) {
     int r;
     int fd = open(name, O_RDWR|O_CREAT, S_IRUSR | S_IWUSR);
     if (fd>=0) {
-	#ifdef TOKU_LINUX_MODULE
-	r = ftfs_toku_lock_file(name, strlen(name));
-	#else
-	r = flock(fd, LOCK_EX | LOCK_NB);
-	#endif
-	if (r!=0) {
-	    close(fd);
+#ifdef TOKU_LINUX_MODULE
+        r = ftfs_toku_lock_file(name, strlen(name));
+#else
+        r = flock(fd, LOCK_EX | LOCK_NB);
+#endif
+        if (r!=0) {
+            // it turns out that the caller, toku_single_process_lock,
+            // want to set errno, let him do the work
+#ifndef TOKU_LINUX_MODULE
+            r = errno;
+#endif
+            close(fd);
 	    fd = -1;
+#ifdef TOKU_LINUX_MODULE
 	    return r;
+#else
+	    errno = r;
+#endif
 	}
     }
     return fd;
@@ -300,12 +309,11 @@ toku_os_lock_file(const char *name) {
 
 int
 toku_os_unlock_file(int fildes, const char *name) {
-    int r = 0;
-    #ifdef TOKU_LINUX_MODULE
-    r = ftfs_toku_unlock_file(name, strlen(name));
-    #else
-    flock(fildes, LOCK_UN);
-    #endif
+#ifdef TOKU_LINUX_MODULE
+    int r = ftfs_toku_unlock_file(name, strlen(name));
+#else
+    int r = flock(fildes, LOCK_UN);
+#endif
     if (r==0) r = close(fildes);
     return r;
 }
@@ -519,7 +527,11 @@ toku_get_filesystem_sizes(const char *path, uint64_t *avail_size, uint64_t *free
 #endif
 
     if (r < 0){
-        r = 0;
+#ifdef TOKU_LINUX_MODULE
+        r = get_error_errno(r);
+#else
+        r = get_error_errno();
+#endif
     } else {
 
         // get the block size in bytes

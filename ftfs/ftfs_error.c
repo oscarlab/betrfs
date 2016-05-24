@@ -6,14 +6,13 @@
 extern char *strerror(int e);
 void set_errno(int ret)
 {
-	;
+	return;
 }
 
 int get_errno(void)
 {
-	return 0;
+	return ENOSYS;
 }
-
 
 void ftfs_set_errno(int ret)
 {
@@ -29,9 +28,6 @@ int ftfs_get_errno(void)
 void perror(const char *s)
 {
 	int e = get_errno();
-
-	if (e < 0)
-		e = 0 - e;
 
 	printk(KERN_ALERT "%s\n", s);
 	printk(KERN_ALERT ": %s\n", strerror(e));

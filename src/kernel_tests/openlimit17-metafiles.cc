@@ -149,10 +149,7 @@ int test_openlimit17_metafiles(void) {
             assert(r == 0);
             break;
         }
-        if (abs(r) != EMFILE)
-            printf("openlimit17-metafiles env->open():"
-                   "\n\texpected: %d\n\treturning: %d\n", EMFILE, r);
-        assert(abs(r) == EMFILE);
+        assert(r == EMFILE);
         r = env->close(env, 0);
         assert(r == 0);
     }

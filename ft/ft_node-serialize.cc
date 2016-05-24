@@ -732,8 +732,8 @@ rebalance_ftnode_leaf(FTNODE node, unsigned int basementnodesize)
 	BLB(node,0)->unbound_insert_count = n_unbound_entry;
 	}      
     node->unbound_insert_count = n_unbound_entry;  // destroy buffers of old mempools    
-    toku_ft_node_empty_unbound_inserts_validation(node);    
-    toku_ft_node_unbound_inserts_validation(node);
+    //toku_ft_node_empty_unbound_inserts_validation(node);    
+    //toku_ft_node_unbound_inserts_validation(node);
 
 
     for (uint32_t i = 0; i < num_orig_basements; i++) {

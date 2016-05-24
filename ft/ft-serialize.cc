@@ -548,7 +548,11 @@ int deserialize_ft_from_fd_into_rbuf(int fd,
         if (n==0) {
             r = TOKUDB_DICTIONARY_NO_HEADER;
         } else if (n<0) {
-            r = 1;
+#ifdef TOKU_LINUX_MODULE
+            r = get_error_errno(n);
+#else
+            r = get_error_errno();
+#endif
         } else {
             r = EINVAL;
         }
@@ -610,7 +614,11 @@ int deserialize_ft_from_fd_into_rbuf(int fd,
         n = toku_os_pread(fd, rb->buf, size_to_read, offset_of_header);
         if (n != size_to_read) {
             if (n < 0) {
-                r = 1;
+#ifdef TOKU_LINUX_MODULE
+                r = get_error_errno(n);
+#else
+                r = get_error_errno();
+#endif
             } else {
                 r = EINVAL; //Header might be useless (wrong size) or could be a disk read error.
             }

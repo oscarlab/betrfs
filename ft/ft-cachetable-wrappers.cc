@@ -272,7 +272,8 @@ toku_pin_ftnode_batched(
                 goto exit;
             }
             node = static_cast<FTNODE>(node_v);
-            toku_apply_ancestors_messages_to_node(
+    	    toku_ft_node_unbound_inserts_validation(node,0, __LINE__);
+	    toku_apply_ancestors_messages_to_node(
                 brt, 
                 node, 
                 ancestors, 

@@ -1291,7 +1291,7 @@ int toku_upgrade_subtree_estimates_to_stat64info(int fd, FT h) __attribute__((no
 int toku_upgrade_msn_from_root_to_header(int fd, FT h) __attribute__((nonnull));
 void ftnode_reset_unbound_counter(FTNODE);
 void ftnode_promise_to_bind_msgs(FTNODE); 
-void toku_ft_node_unbound_inserts_validation(FTNODE node) ;
+void toku_ft_node_unbound_inserts_validation(FTNODE node, FT_MSG msg = nullptr, int line = 0) ;
 void toku_ft_node_empty_unbound_inserts_validation(FTNODE node) ;
 
 extern void status_inc(ft_status_entry, int);

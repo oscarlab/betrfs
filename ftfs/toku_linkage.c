@@ -250,7 +250,7 @@ pid_t wait(int *status)
 
 
 pid_t fork(void)
-{    
+{
     ftfs_error(__func__, " not impl yet");
     BUG();
 }

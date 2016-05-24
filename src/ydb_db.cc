@@ -503,7 +503,10 @@ toku_db_open_iname(DB * db, DB_TXN * txn, const char *iname_in_env, uint32_t fla
                 toku_ft_get_bt_compare(db->i->ft_handle),
                 &on_create_extra);
 	if (IS_ERR(db->i->lt)) {
-	    r = PTR_ERR(db->i->lt);
+	    r = get_error_errno(PTR_ERR(db->i->lt));
+            if (r == 0) {
+                r = EINVAL;
+            }
 	    db->i->lt = nullptr;
 	    goto error_cleanup;
         }

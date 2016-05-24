@@ -206,7 +206,7 @@ test_make_tree_do(int height, int fanout, int nperleaf, int do_verify) {
     const char *fname = TOKU_TEST_FILENAME;
     r = unlink(fname);
     if (r != 0) {
-        assert(r == ENOENT);
+	assert(r == -ENOENT);
     }
 
     // create a cachetable

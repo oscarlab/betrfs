@@ -34,8 +34,8 @@ DECLARE_SYMBOL_FTFS(sys_getrlimit);
 int resolve_toku_misc_symbols(void)
 {
 	LOOKUP_SYMBOL_FTFS(sys_newlstat);
-	LOOKUP_SYMBOL_FTFS(sys_setrlimit);	
-	LOOKUP_SYMBOL_FTFS(sys_getrlimit);	
+	LOOKUP_SYMBOL_FTFS(sys_setrlimit);
+	LOOKUP_SYMBOL_FTFS(sys_getrlimit);
 	return 0;
 }
 
@@ -294,7 +294,8 @@ int setrlimit64(int resource, struct rlimit *rlim)
 	set_fs(get_ds());
 	ret = ftfs_sys_setrlimit(resource, rlim);
 	set_fs(saved);
-	return return_errno_nonzero(ret);
+
+	return ret;
 
 }
 
@@ -307,9 +308,10 @@ int getrlimit64(int resource, struct rlimit *rlim)
 	set_fs(get_ds());
 	ret = ftfs_sys_getrlimit(resource, rlim);
 	set_fs(saved);
-	return return_errno_nonzero(ret);
 
+	return ret;
 }
+
 /* isalnum defined as a macro in linux/ctype.h. use () to prevent expansion */
 int (isalnum)(int c)
 {

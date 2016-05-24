@@ -1599,7 +1599,11 @@ ft_merge_child(
         toku_init_dbt(&splitk);
         DBT *old_split_key = &node->childkeys[childnuma];
         unsigned int deleted_size = old_split_key->size;
-        maybe_merge_pinned_nodes(h, node, &node->childkeys[childnuma], childa, childb, &did_merge, &did_rebalance, &splitk, h->h->nodesize);
+        
+    	toku_ft_node_unbound_inserts_validation(childa);
+    	toku_ft_node_unbound_inserts_validation(childb);
+    // for test
+	maybe_merge_pinned_nodes(h, node, &node->childkeys[childnuma], childa, childb, &did_merge, &did_rebalance, &splitk, h->h->nodesize);
         if (childa->height>0) {
             for (int i=0; i+1<childa->n_children; i++) {
                 paranoid_invariant(childa->childkeys[i].data);
@@ -1969,7 +1973,7 @@ static void ft_flush_some_child(
     // for the root with a fresh one
     enum reactivity child_re = get_node_reactivity(child, ft->h->nodesize);
     if (parent && child_re == RE_STABLE) {
-	 toku_ft_node_unbound_inserts_validation(parent);    
+	 toku_ft_node_unbound_inserts_validation(parent, 0 , __LINE__);    
     toku_unpin_ftnode_off_client_thread(ft, parent);
         parent = NULL;
     }
@@ -2004,8 +2008,8 @@ static void ft_flush_some_child(
         destroy_nonleaf_childinfo(bnc);
     }
 
-    if(child) toku_ft_node_unbound_inserts_validation(child);
-    if(parent) toku_ft_node_unbound_inserts_validation(parent);
+    if(child) toku_ft_node_unbound_inserts_validation(child, 0, __LINE__);
+    if(parent) toku_ft_node_unbound_inserts_validation(parent,0, __LINE__);
     fa->update_status(child, dirtied, fa->extra);
     // let's get the reactivity of the child again,
     // it is possible that the flush got rid of some values
@@ -2243,7 +2247,7 @@ static void flush_node_fun(void *fe_v)
             fe->node,
             fe->oldest_referenced_xid
             );
-        toku_ft_node_unbound_inserts_validation(fe->node);
+        toku_ft_node_unbound_inserts_validation(fe->node,0, __LINE__);
         destroy_nonleaf_childinfo(fe->bnc);
 
         // after the flush has completed, now check to see if the node needs flushing

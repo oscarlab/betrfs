@@ -41,7 +41,7 @@ static int ftfs_stat(const char *name, struct stat *statbuf)
 
 	if (!name) {
 		ftfs_log(__func__, "file name is NULL");
-		return return_set_errno(error);
+		return error;
 	}
 
 	SOUTHBOUND_ATTACH;
@@ -51,7 +51,7 @@ static int ftfs_stat(const char *name, struct stat *statbuf)
 	if (error) {
 		ftfs_log(__func__, "kern_path failed:%d, pathname:%s",
 			error,name);
-		return return_set_errno(error);
+		return error;
 	}
 
 	error = vfs_getattr(&path, &stat); // NB context fine
@@ -59,7 +59,7 @@ static int ftfs_stat(const char *name, struct stat *statbuf)
 	if (error) {
 		ftfs_error(__func__, "vfs_getattr failed:%d, pathname:%s",
 			error, name);
-		return return_set_errno(error);
+		return error;
 	}
 
 	statbuf->st_dev = stat.dev;
@@ -118,7 +118,7 @@ int fstat(int fd, struct stat *statbuf)
 	error = ftfs_vfs_fstat(fd, &stat);
 	if (error) {
 		ftfs_error(__func__, "vfs_fstat(fd:%d, ...): %d\n", fd, error);
-		return return_set_errno(error);
+		return error;
 	}
 
 	statbuf->st_dev = stat.dev;
@@ -190,7 +190,7 @@ static int ftfs_statfs(const char *name, struct statfs *buf)
 
 	if (!name) {
 		ftfs_error(__func__, "file name is NULL");
-		 return return_set_errno(error);
+		return error;
 	}
 
 	SOUTHBOUND_ATTACH;
@@ -200,7 +200,7 @@ static int ftfs_statfs(const char *name, struct statfs *buf)
 	if (error) {
 		ftfs_log(__func__, "kern_path failed, error:%d,pathname:%s",
 			name);
-		return return_set_errno(error);
+		return error;
 	}
 
 	error = vfs_statfs(&path, &stat); // wkj: ok in NB context
@@ -208,7 +208,7 @@ static int ftfs_statfs(const char *name, struct statfs *buf)
 	if (error) {
 		ftfs_error(__func__, "vfs_statfs: error=%d, pathname=:%s",
 			name);
-		return return_set_errno(error);
+		return error;
 	}
 
 
@@ -223,9 +223,9 @@ static int ftfs_statfs(const char *name, struct statfs *buf)
 	buf->f_namelen = stat.f_namelen;
 	buf->f_frsize = stat.f_frsize;
 	buf->f_flags = stat.f_flags;
-/*
- *      memset(buf->f_spare, 0, sizeof(buf->f_spare));
- */
+
+	//memset(buf->f_spare, 0, sizeof(buf->f_spare));
+
 	return 0;
 }
 
@@ -248,7 +248,7 @@ int fstatfs(int fd, struct statfs *buf)
 	ftfs_fdput(f);
 	if (error) {
 		ftfs_log(__func__, "vfs_statfs: err=%d", error);
-		return return_set_errno(error);
+		return error;
 	}
 
 	buf->f_type = stat.f_type;
@@ -262,9 +262,9 @@ int fstatfs(int fd, struct statfs *buf)
 	buf->f_namelen = stat.f_namelen;
 	buf->f_frsize = stat.f_frsize;
 	buf->f_flags = stat.f_flags;
-/*
- *      memset(buf->f_spare, 0, sizeof(buf->f_spare));
- */
+
+	//memset(buf->f_spare, 0, sizeof(buf->f_spare));
+
 	return 0;
 }
 

@@ -144,8 +144,7 @@ static void test_stat(const char *dirname, int result, int ex_errno)
     int r;
     toku_struct_stat buf;
     r = toku_stat(dirname, &buf);
-    printf("in test stat %d, %d\n", result, ex_errno);
-    assert(r==ex_errno);
+    assert((result == 0 && r == 0)  || (result == -1 && r == -ex_errno));
     if (r == 0) {
         printf("file=%s\n", dirname);
         print_stat(&buf);

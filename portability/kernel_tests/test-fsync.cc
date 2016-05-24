@@ -100,7 +100,7 @@ PATENT RIGHTS GRANT:
 
 
 
-static int verbose = 1;
+static int verbose = 2;
 static void
 create_files(int N, int fds[/*N*/]) {
     int i;

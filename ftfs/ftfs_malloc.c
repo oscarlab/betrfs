@@ -204,7 +204,6 @@ int destroy_ftfs_vmalloc_cache(void) {
 //			ftfs_error(__func__, "error:upon unloading there are still in-use vmalloc cache. memleak warning already freed %d, alloc-ed %d", i, num_elts);
 		//	return -1;
 	//	}
-		
 	}
 	free_percpu(vcache_percpu_alloc);
         free_percpu(vcache_percpu_freed);

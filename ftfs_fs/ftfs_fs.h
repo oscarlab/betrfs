@@ -34,7 +34,7 @@
 		((err)==TOKUDB_INTERRUPTED)||				\
 		((err)==TOKUDB_TRY_AGAIN)||				\
 		((err)==TOKUDB_CANCELED)) {				\
-		ftfs_error(__func__, "dbop err=%d", (err));		\
+		ftfs_error(__func__, "%d dbop err=%d", __LINE__, (err));\
 		ftfs_bstore_txn_abort(txn);				\
 		goto label;						\
 	}								\
@@ -329,7 +329,7 @@ static inline int ftio_job_done(struct ftio *ftio)
 #define ftfs_bstore_checkpoint(env)	env->txn_checkpoint(env, 0, 0, 0)
 
 int ftfs_bstore_get_ino(DB *meta_db, DB_TXN *txn, ino_t *ino);
-int ftfs_bstore_update_ino(DB *meta_db, DB_TXN *txn, ino_t ino);
+int ftfs_bstore_update_ino(struct ftfs_sb_info *sbi, ino_t ino);
 
 int ftfs_bstore_data_hot_flush(DB *data_db, struct ftfs_meta_key *meta_key,
                                uint64_t start, uint64_t end);

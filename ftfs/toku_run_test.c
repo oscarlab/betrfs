@@ -1139,7 +1139,7 @@ struct {
 	{"perf-child-txn",test_perf_child_txn, 30},
 	{"perf-rangequery", test_perf_rangequery, 30},
 	{"perf-read-txn", test_perf_read_txn, 30},
-	{"perf-read-txn-single-thread", test_perf_read_txn_single_thread, 30},
+	{"perf-read-txn-single-thread", test_perf_read_txn_single_thread, 60},
 	{"perf-txn-single-thread", test_perf_txn_single_thread, 30},
 	{"perf-nop", test_perf_nop, 30},
 	{"perf-checkpoint-var", test_perf_checkpoint_var, 30},
@@ -1317,8 +1317,7 @@ int run_test(char * _test_name){
 		       "<name>invalid</name>"
 		       "<times_run>0</times_run>"
 		       "<status>-22</status>"
-		       "</test_completion>\n",
-		       test_name, nsucc, result);
+		       "</test_completion>\n");
 		result = -22;
 	}
 	kfree(_test_name_copy);

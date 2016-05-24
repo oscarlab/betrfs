@@ -306,7 +306,11 @@ int ft_loader_fi_close (struct file_infos *fi, FIDX idx, bool require_open)
         fi->file_infos[idx.idx].is_open = false;
         int r = toku_os_fclose(fi->file_infos[idx.idx].file);
         if (r)
-            result = 1;
+#ifdef TOKU_LINUX_MODULE
+            result = get_error_errno(r);
+#else
+            result = get_error_errno();
+#endif
         cleanup_big_buffer(&fi->file_infos[idx.idx]);
     } else if (require_open)
         result = EINVAL;
@@ -324,9 +328,13 @@ int ft_loader_fi_unlink (struct file_infos *fi, FIDX idx) {
         fi->n_files_extant--;
         invariant(!fi->file_infos[id].is_open); // must be closed before we unlink
         fi->file_infos[id].is_extant = false;
-        int r = unlink(fi->file_infos[id].fname);  
-        if (r != 0) 
-            result = 1;
+        int r = unlink(fi->file_infos[id].fname);
+        if (r != 0)
+#ifdef TOKU_LINUX_MODULE
+            result = get_error_errno(r);
+#else
+            result = get_error_errno();
+#endif
         toku_free(fi->file_infos[id].fname);
         fi->file_infos[id].fname = NULL;
     } else
@@ -822,9 +830,14 @@ static int bl_fwrite(void *ptr, size_t size, size_t nmemb, FILE *stream, struct 
         size_t r = do_fwrite(ptr, size, nmemb, stream);
         if (r!=nmemb) {
             int e;
-            if (os_fwrite_fun)    // if using hook to induce artificial errors (for testing) ...
+            if (os_fwrite_fun) {   // if using hook to induce artificial errors (for testing) ...
+#ifdef TOKU_LINUX_MODULE
+                // this thing should not happen, just put it here
+                e = get_maybe_error_errno(r);
+#else
                 e = get_maybe_error_errno();        // ... then there is no error in the stream, but there is one in errno
-            else
+#endif
+            } else
                 e = ferror(stream);
             invariant(e!=0);
             return e;
@@ -2646,7 +2659,11 @@ static int toku_loader_write_ft_from_q (FTLOADER bl,
 
     r = fsync(out.fd);
     if (r) {
-        result = 1; goto error;
+#ifdef TOKU_LINUX_MODULE
+        result = get_error_errno(r); goto error;
+#else
+        result = get_error_errno(); goto error;
+#endif
     }
 
     // Do we need to pay attention to user_said_stop?  Or should the guy at the other end of the queue pay attention and send in an EOF.
@@ -2655,7 +2672,11 @@ static int toku_loader_write_ft_from_q (FTLOADER bl,
     {
         int rr = toku_os_close(fd);
         if (rr)
-            result = 1;
+#ifdef TOKU_LINUX_MODULE
+            result = get_error_errno(rr);
+#else
+            result = get_error_errno();
+#endif
     }
     out.fd = -1;
 
@@ -3204,7 +3225,11 @@ static int write_nonleaves (FTLOADER bl, FIDX pivots_fidx, struct dbout *out, st
         //  3) We put the 16th pivot into the next pivots file.
         {
             int r = fseek(toku_bl_fidx2file(bl, pivots_fidx), 0, SEEK_SET);
-            if (r!=0) { return 1; }
+#ifdef TOKU_LINUX_MODULE
+            if (r!=0) { return get_error_errno(r); }
+#else
+            if (r!=0) { return get_error_errno(); }
+#endif
         }
 
         FIDX next_pivots_file;

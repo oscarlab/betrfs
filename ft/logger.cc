@@ -333,7 +333,9 @@ void toku_logger_append_unbound_insert_entry(TOKULOGGER logger, struct unbound_i
 //Entry and exit: hold input_lock
 {
     toku_list_init(&entry->in_or_out);
+    toku_mutex_lock(&logger->ubi_lock);
     toku_list_push(logger->ubi_in, &entry->in_or_out);
+    toku_mutex_unlock(&logger->ubi_lock);
     logger->n_unbound_inserts++;
 }
 
@@ -802,11 +804,14 @@ write_outbuf_to_logfile (TOKULOGGER logger, LSN *fsynced_lsn, unsigned int n_unb
 
         // cleanup outlist -- Done.
 	toku_list * head = logger->ubi_out;
+	toku_mutex_lock(&logger->ubi_lock);
 	while(!toku_list_empty(head)){
 		toku_list * item = toku_list_pop(head);
 		struct unbound_insert_entry * entry = toku_list_struct(item, struct unbound_insert_entry, in_or_out);
 		destroy_unbound_insert_entry(entry);
 	}
+
+	toku_mutex_unlock(&logger->ubi_lock);
     }
 
     if (logger->outbuf.n_in_buf>0) {
@@ -985,9 +990,18 @@ int toku_logger_find_next_unused_log_file(const char *directory, long long *resu
     DIR *d=opendir(directory);
     long long maxf=-1; *result = maxf;
     struct dirent *de;
+#ifdef TOKU_LINUX_MODULE
     if (d==0) return ENOSYS;
+#else
+    if (d==0) return get_error_errno();
+#endif
     while ((de=readdir(d))) {
+#ifdef TOKU_LINUX_MODULE
+        // the while already rules out error...
         if (de==0) return ENOSYS;
+#else
+        if (de==0) return get_error_errno();
+#endif
         long long thisl;
         if ( is_a_logfile(de->d_name, &thisl) ) {
             if ((long long)thisl > maxf) maxf = thisl;
@@ -1046,7 +1060,11 @@ int toku_logger_find_logfiles (const char *directory, char ***resultp, int *n_lo
     struct dirent *de;
     DIR *d=opendir(directory);
     if (d==0) {
+#ifdef TOKU_LINUX_MODULE
         int er = ENOSYS;
+#else
+        int er = get_error_errno();
+#endif
         toku_free(result);
         return er;
     }
@@ -1097,7 +1115,8 @@ static int open_logfile (TOKULOGGER logger)
         }
     }
     //XXX: adding fallocate to pre allocate log file: 09/20/2015
-    toku_fallocate(logger->fd, 0, logger->lg_max); 
+    int r = toku_fallocate(logger->fd, 0, logger->lg_max); 
+    assert(r == 0);
     toku_os_full_write(logger->fd, "tokulogg", 8);
     int version_l = toku_htonl(log_format_version); //version MUST be in network byte order regardless of disk order
     toku_os_full_write(logger->fd, &version_l, 4);
@@ -1852,31 +1871,43 @@ toku_get_version_of_logs_on_disk(const char *log_dir, bool *found_any_logs, uint
     struct dirent *de;
     fd = open(log_dir, O_DIRECTORY);
     if (fd < 0) {
-        r = fd;
-    }
-    else {
-	DIR *d = fdopendir(fd);
-
-        // Examine every file in the directory and find highest version
-        while ((de=readdir(d))) {
-            uint32_t this_log_version;
-            uint64_t this_log_number;
-            bool is_log = is_a_logfile_any_version(de->d_name, &this_log_number, &this_log_version);
-            if (is_log) {
-                if (!found) {  // first log file found
-                    found = true;
-                    highest_version = this_log_version;
-                }
-                else
-                    highest_version = highest_version > this_log_version ? highest_version : this_log_version;
-            }
+#ifdef TOKU_LINUX_MODULE
+        r = get_error_errno(fd);
+#else
+        r = get_error_errno();
+#endif
+    } else {
+        DIR *d = fdopendir(fd);
+        if (d == NULL) {
+#ifdef TOKU_LINUX_MODULE
+            // There is only one possibility in current impl.
+            r = ENOMEM;
+#else
+            r = get_error_errno();
+#endif
         }
-        r = closedir(d);
-    }
-    if (r==0) {
-        *found_any_logs = found;
-        if (found)
-            *version_found = highest_version;
+        else {
+            // Examine every file in the directory and find highest version
+            while ((de=readdir(d))) {
+                uint32_t this_log_version;
+                uint64_t this_log_number;
+                bool is_log = is_a_logfile_any_version(de->d_name, &this_log_number, &this_log_version);
+                if (is_log) {
+                    if (!found) {  // first log file found
+                        found = true;
+                        highest_version = this_log_version;
+                    }
+                    else
+                        highest_version = highest_version > this_log_version ? highest_version : this_log_version;
+                }
+            }
+            r = closedir(d);
+        }
+        if (r==0) {
+            *found_any_logs = found;
+            if (found)
+                *version_found = highest_version;
+        }
     }
     return r;
 }

@@ -67,13 +67,13 @@ typedef long (* sys_ftruncate_t)(unsigned int, loff_t);
 DECLARE_SYMBOL_FTFS(sys_ftruncate);
 #endif
 
-#ifdef CONFIG_SECURITY
-typedef int (* security_inode_readlink_t)(struct dentry *);
-DECLARE_SYMBOL_FTFS(security_inode_readlink);
-#else
-static inline int ftfs_security_inode_readlink(struct dentry *dentry)
-{ return 0; }
-#endif
+//#ifdef CONFIG_SECURITY
+//typedef int (* security_inode_readlink_t)(struct dentry *);
+//DECLARE_SYMBOL_FTFS(security_inode_readlink);
+//#else
+//static inline int ftfs_security_inode_readlink(struct dentry *dentry)
+//{ return 0; }
+//#endif
 
 int resolve_ftfs_files_symbols(void)
 {
@@ -97,21 +97,22 @@ int resolve_ftfs_files_symbols(void)
 	LOOKUP_SYMBOL_FTFS(sys_ftruncate);
 #endif
 
-#ifdef CONFIG_SECURITY
-	LOOKUP_SYMBOL_FTFS(security_inode_readlink);
-#endif
+//#ifdef CONFIG_SECURITY
+//	LOOKUP_SYMBOL_FTFS(security_inode_readlink);
+//#endif
 	return 0;
 }
 
-/* 
+/*
  * this is a hack. we should instead change the kernel to have a
- * helper that takes a files_struct */
+ * helper that takes a files_struct
+ */
 struct file *ftfs_fget_light(unsigned int fd, int *fput_needed)
 {
 	struct file *file;
 
 	struct files_struct *files = ftfs_files; /* only line changed */
-	
+
 	*fput_needed = 0;
 	if (atomic_read(&files->count) == 1) {
 		file = fcheck_files(files, fd);
@@ -136,7 +137,6 @@ struct file *ftfs_fget_light(unsigned int fd, int *fput_needed)
 
 int ftfs_get_unused_fd_flags(unsigned flags)
 {
-	
 	return ftfs___alloc_fd(ftfs_files, 0, rlimit(RLIMIT_NOFILE), flags);
 }
 
@@ -158,9 +158,9 @@ void ftfs_fd_install(unsigned int fd, struct file *file)
 	ftfs___fd_install(ftfs_files, fd, file);
 }
 
-extern int expand_files(struct files_struct *files, int nr);
-extern int do_dup2(struct files_struct *files,
-		   struct file *file, unsigned fd, unsigned flags);
+//extern int expand_files(struct files_struct *files, int nr);
+//extern int do_dup2(struct files_struct *files,
+//		   struct file *file, unsigned fd, unsigned flags);
 
 /* sys_dup3 (file.c) */
 /*static int ftfs_dup3(unsigned int oldfd, unsigned int newfd, int flags)
@@ -272,7 +272,7 @@ int close(int fd)
 	printk(KERN_NOTICE "close: %d\n", fd);
 #endif	// FTFS_DEBUG_IO
 
-	return return_errno_nonzero(ret);
+	return ret;
 }
 
 /* one line change from open.c */
@@ -328,7 +328,7 @@ int ftruncate64(int fd, loff_t length)
 {
 	int err;
 	err = do_sb_ftruncate(fd, length, 0);
-	return return_errno_nonzero(err);
+	return err;
 }
 
 /* similar to do_sys_truncate, but without user path lookup */
@@ -339,7 +339,7 @@ int truncate64(const char *path, loff_t length)
 	int err;
 	SOUTHBOUND_VARS;
 	if (length < 0)
-		return return_set_errno(-EINVAL);
+		return -EINVAL;
 	SOUTHBOUND_ATTACH;
 retry:
 	err = ftfs_kern_path(path, lookup_flags, &p);
@@ -352,7 +352,8 @@ retry:
 		goto retry;
 	}
 	SOUTHBOUND_RESTORE;
-	return return_errno_nonzero(err);
+
+	return err;
 }
 
 
@@ -360,52 +361,52 @@ int do_sb_fallocate(struct file *file, int mode, loff_t offset, loff_t len)
 {
          struct inode *inode = file_inode(file);
          long ret;
- 
+
          if (offset < 0 || len <= 0)
-                 return -EINVAL; 
+                 return -EINVAL;
          /* Return error if mode is not supported */
          if (mode & ~(FALLOC_FL_KEEP_SIZE | FALLOC_FL_PUNCH_HOLE))
                  return -EOPNOTSUPP;
- 
+
          /* Punch hole must have keep size set */
          if ((mode & FALLOC_FL_PUNCH_HOLE) &&
              !(mode & FALLOC_FL_KEEP_SIZE))
                  return -EOPNOTSUPP;
- 
+
          if (!(file->f_mode & FMODE_WRITE))
                  return -EBADF;
- 
+
          /* It's not possible punch hole on append only file */
          if (mode & FALLOC_FL_PUNCH_HOLE && IS_APPEND(inode))
-                 return -EPERM; 
+                 return -EPERM;
          if (IS_IMMUTABLE(inode))
                  return -EPERM;
- 
+
          /*
           * Revalidate the write permissions, in case security policy has
           * changed since the files were opened.
           */
-   //      ret = security_file_permission(file, MAY_WRITE);
-    //     if (ret)
-     //            return ret;
- 
+         //ret = security_file_permission(file, MAY_WRITE);
+         //if (ret)
+         //        return ret;
+
          if (S_ISFIFO(inode->i_mode))
                  return -ESPIPE;
- 
+
          /*
           * Let individual file system decide if it supports preallocation
           * for directories or not.
           */
          if (!S_ISREG(inode->i_mode) && !S_ISDIR(inode->i_mode))
                  return -ENODEV;
- 
+
             /* Check for wrap through zero too */
             if (((offset + len) > inode->i_sb->s_maxbytes) || ((offset + len) < 0))
                    return -EFBIG;
-  
+
             if (!file->f_op->fallocate)
                    return -EOPNOTSUPP;
- 
+
             sb_start_write(inode->i_sb);
             ret = file->f_op->fallocate(file, mode, offset, len);
             sb_end_write(inode->i_sb);
@@ -415,7 +416,7 @@ int fallocate64(int fd, int mode, loff_t offset, loff_t len)
 {
          struct fd f = ftfs_fdget(fd);
          int error = -EBADF;
- 
+
          if (f.file) {
                  error = do_sb_fallocate(f.file, mode, offset, len);
                  fdput(f);
@@ -506,6 +507,7 @@ static ssize_t ftfs_write(struct file *file, const char *buf, size_t count,
 		inc_syscw(current);
 		file_end_write(file);
 	}
+
 	set_fs(saved);
 	return ret;
 }
@@ -529,7 +531,7 @@ ssize_t write(int fd, const void *buf, size_t count)
 		ftfs_fdput(f);
 	}
 
-	return return_errno_pos(ret);
+	return ret;
 }
 
 ssize_t pwrite64(int fd, const void *buf, size_t count, loff_t pos)
@@ -542,7 +544,7 @@ ssize_t pwrite64(int fd, const void *buf, size_t count, loff_t pos)
 #endif // FTFS_DEBUG_IO
 
 	if (pos < 0)
-		return return_set_errno(-EINVAL);
+		return -EINVAL;
 
 	f = ftfs_fdget(fd);
 	if (f.file) {
@@ -556,7 +558,7 @@ ssize_t pwrite64(int fd, const void *buf, size_t count, loff_t pos)
 		ftfs_fdput(f);
 	}
 
-	return return_errno_pos(ret);
+	return ret;
 }
 
 /* (p)read(64) need this to be changed if we want to avoid the user copy */
@@ -571,7 +573,7 @@ static ssize_t ftfs_read(struct file *f, char *buf, size_t count, loff_t *pos)
 
 	set_fs(saved);
 
-	return return_errno_pos(ret);
+	return ret;
 }
 
 ssize_t pread64(int fd, void *buf, size_t count, loff_t pos)
@@ -584,7 +586,7 @@ ssize_t pread64(int fd, void *buf, size_t count, loff_t pos)
 #endif // FTFS_DEBUG_IO
 
 	if (pos < 0)
-		return return_set_errno(-EINVAL);
+		return -EINVAL;
 
 	f = ftfs_fdget(fd);
 	if (f.file) {
@@ -593,7 +595,8 @@ ssize_t pread64(int fd, void *buf, size_t count, loff_t pos)
 			ret = ftfs_read(f.file, buf, count, &pos);
 		ftfs_fdput(f);
 	}
-	return return_errno_pos(ret);
+
+	return ret;
 }
 
 ssize_t read(int fd, void *buf, size_t count)
@@ -614,7 +617,7 @@ ssize_t read(int fd, void *buf, size_t count)
 		ftfs_fdput(f);
 	}
 
-	return return_errno_pos(ret);
+	return ret;
 }
 
 
@@ -642,7 +645,7 @@ retry:
 	dentry = ftfs_kern_path_locked(pathname, &path);
 	if (IS_ERR(dentry)) {
 		err = PTR_ERR(dentry);
-		goto out; 
+		goto out;
 	}
 
 	/*
@@ -661,9 +664,9 @@ retry:
 		goto slashes;
 
 	ihold(inode);
-	err = security_path_unlink(&path, dentry);
-	if (err)
-		goto exit;
+	//err = security_path_unlink(&path, dentry);
+	//if (err)
+	//	goto exit;
 	err = vfs_unlink(path.dentry->d_inode, dentry);
 exit:
 	dput(dentry);
@@ -688,13 +691,13 @@ slashes:
 	goto exit;
 }
 
-
-int unlink(const char *pathname) {
-	return return_errno_nonzero(ftfs_sb_unlink(pathname));
+int unlink(const char *pathname)
+{
+	return ftfs_sb_unlink(pathname);
 }
 
-
-static int sync_helper(int fd, int data_sync) {
+static int sync_helper(int fd, int data_sync)
+{
 	struct fd f;
 	int ret = -EBADF;
 
@@ -709,31 +712,37 @@ static int sync_helper(int fd, int data_sync) {
 		ftfs_fdput(f);
 	}
 
-	return return_errno_nonzero(ret);
+	return ret;
 }
 
-int fsync(int fd) {
+int fsync(int fd)
+{
   	return sync_helper(fd, 0);
 }
 
-int fdatasync(int fd) {
+int fdatasync(int fd)
+{
   	return sync_helper(fd, 1);
 }
 
 //this is simply to test readlink
-int symlink(const char * oldname, const char * newname) {
+int symlink(const char * oldname, const char * newname)
+{
 	mm_segment_t saved;
 	int ret;
 	SOUTHBOUND_VARS;
+
 	SOUTHBOUND_ATTACH;
 	saved = get_fs();
 	set_fs(get_ds());
 	ret = ftfs_sys_symlink(oldname, newname);
 	set_fs(saved);
 	SOUTHBOUND_RESTORE;
-	return return_errno_nonzero(ret);
+
+	return ret;
 }
 
+// no code in ft-index check errno when readlink gets wrong
 ssize_t readlink(const char *pathname, char *buf, size_t bufsiz)
 {
 	struct path path;
@@ -742,7 +751,8 @@ ssize_t readlink(const char *pathname, char *buf, size_t bufsiz)
 	unsigned int lookup_flags = LOOKUP_EMPTY;
 	SOUTHBOUND_VARS;
 	if (bufsiz <= 0)
-		return return_set_errno(-EINVAL);
+		return -1;
+		//return -EINVAL;
 
 	SOUTHBOUND_ATTACH;
 retry:
@@ -752,17 +762,8 @@ retry:
 		struct inode *inode = path.dentry->d_inode;
 		error = empty ? -ENOENT : -EINVAL;
 		if (inode->i_op->readlink) {
-#ifdef CONFIG_SECURITY
-			error = ftfs_security_inode_readlink(path.dentry);
-			if (!error) {
-				touch_atime(&path);
-				error = inode->i_op->readlink(path.dentry, buf,
-							      bufsiz);
-			}
-#else
 			touch_atime(&path);
 			error = inode->i_op->readlink(path.dentry,buf, bufsiz);
-#endif
 		}
 		path_put(&path);
 		if (retry_estale(error, lookup_flags)) {
@@ -771,7 +772,8 @@ retry:
 		}
 	}
 	SOUTHBOUND_RESTORE;
-	return return_errno_pos(error);
+
+	return error ? -1 : 0;
 }
 
 static inline void stream_lock_init(FILE *stream)
@@ -796,14 +798,15 @@ loff_t lseek64(int fd, loff_t offset, int whence) {
 
 	f = ftfs_fdget(fd);
 	if (!f.file)
-		return return_set_errno_l(-EBADF);
+		return -EBADF;
 	retval = -EINVAL;
 
 	if (whence <= SEEK_MAX)
 		retval = vfs_llseek(f.file, offset, whence);
 
 	ftfs_fdput(f);
-	return return_errno_pos_l(retval);
+
+	return retval;
 }
 
 static off_t lseek(int fd, off_t offset, int whence) {
@@ -812,7 +815,7 @@ static off_t lseek(int fd, off_t offset, int whence) {
 
 	f = ftfs_fdget(fd);
 	if (!f.file)
-		return return_set_errno(-EBADF);
+		return -EBADF;
 	retval = -EINVAL;
 
 	if (whence <= SEEK_MAX) {
@@ -822,7 +825,8 @@ static off_t lseek(int fd, off_t offset, int whence) {
 			retval = -EOVERFLOW;
 	}
 	ftfs_fdput(f);
-	return return_errno_pos(retval);
+
+	return retval;
 }
 
 int __fseek(FILE *fp, long offset, int whence) {
@@ -836,7 +840,7 @@ int __fseek(FILE *fp, long offset, int whence) {
 		ret = fp->write(fp, 0, 0);
 		if (!fp->wpos) {
 			stream_unlock(fp);
-			return return_set_errno(ret);
+			return ret;
 		}
 	}
 	/*  Leave writing mode */
@@ -846,7 +850,7 @@ int __fseek(FILE *fp, long offset, int whence) {
 	if(ret < 0) {
 		stream_unlock(fp);
 		ftfs_error(__func__,"fseek failed: %d", ret);
-		return return_set_errno(ret);
+		return ret;
 	}
 	/* If seek succeed, file is seekable and we discard read buffer */
 	fp->rpos = fp->rend = 0;
@@ -875,7 +879,7 @@ long ftell(FILE * fp) {
 	if(ret < 0) {
 		stream_unlock(fp);
 		ftfs_log(__func__, "ftell failed: %d",ret);
-		return return_set_errno(ret);
+		return ret;
 	}
 
 	/*  Adjust for data in buffer. */
@@ -894,7 +898,7 @@ off64_t ftello64(FILE * fp) {
 	if(ret < 0) {
 		stream_unlock(fp);
 		ftfs_log(__func__, "ftello64 failed: %d", ret);
-		return return_set_errno(ret);
+		return ret;
 	}
 	ret -= (fp->rend - fp->rpos) + (fp->wpos - fp->wbase);
 	stream_unlock(fp);
@@ -910,7 +914,7 @@ off_t ftello(FILE * fp) {
 	if(ret < 0) {
 		stream_unlock(fp);
 		ftfs_log(__func__,"ftello failed :%d", ret);
-		return return_set_errno(ret);
+		return ret;
 	}
 	ret -= (fp->rend - fp->rpos) + (fp->wpos - fp->wbase);
 	stream_unlock(fp);
@@ -982,7 +986,7 @@ ssize_t readv(int fd, const struct iovec *vec, unsigned int vlen)
 	if (ret > 0)
 		add_rchar(current, ret);
 	inc_syscr(current);
-	return return_errno_pos(ret);
+	return ret;
 }
 
 /* __stdio_read from musl/tree/src/stdio/__stdio_read.c */
@@ -1026,7 +1030,6 @@ FILE *ftfs_fdopen(int fd)
 	FILE *file = (FILE *)kzalloc(sizeof(FILE) + FSTREAM_BUFSZ, GFP_KERNEL);
 	if (!file) {
 		ftfs_error(__func__, "kzalloc failed to allocate a FILE");
-		ftfs_set_errno(-ENOMEM);
 		return NULL;
 	}
 
@@ -1057,7 +1060,7 @@ FILE *fopen64(const char * path, const char * mode)
 	}
 
 	if (fd < 0)
-		return NULL; /* errno already set by open64 */
+		return NULL;
 
 	/* internally sets errno if necessary */
 	file = ftfs_fdopen(fd);
@@ -1077,7 +1080,6 @@ int fclose(FILE * stream) {
 		stream->write(stream, 0, 0);
 		if (!stream->wpos) {
 			stream_unlock(stream);
-			ftfs_set_errno(-EBADF);
 			return EOF;
 		}
 	}
@@ -1103,9 +1105,9 @@ int fclose(FILE * stream) {
 
 /* changed fs/locks.c sys_flock for this to work --- added exported
  * function do_flock() */
+/*
 int flock(int fd, int cmd)
 {
-	/*
 	struct fd f = ftfs_fdget(fd);
 	int error;
 	error = -EBADF;
@@ -1117,9 +1119,10 @@ int flock(int fd, int cmd)
 	ftfs_fdput(f);
  out:
 	return return_errno_nonzero(error);
-	*/
+
 	return 0;
 }
+*/
 
 /* mostly copied from musl */
 
@@ -1204,7 +1207,7 @@ ssize_t getdelim(char **s, size_t *n, int delim, FILE *f)
 	int c;
 
 	if (!n || !s)
-		return return_set_errno(-EINVAL);
+		return -EINVAL;
 
 	if (!*s)
 		*n=0;
@@ -1251,7 +1254,7 @@ ssize_t getdelim(char **s, size_t *n, int delim, FILE *f)
 	return i;
 oom:
 	stream_unlock(f);
-	return return_set_errno(-ENOMEM);
+	return -ENOMEM;
 }
 
 ssize_t getline(char **s, size_t *n, FILE *f)
@@ -1340,15 +1343,16 @@ size_t fwrite(const void *src, size_t size, size_t nmemb, FILE *f)
 }
 
 //purely for testing
-long sync(void) {
-	return return_errno_nonzero(ftfs_sys_sync());
+long sync(void)
+{
+	return ftfs_sys_sync();
 }
 
 
 int remove(const char *path)
 {
 	int r = unlink(path);
-	return (r && get_errno() == EISDIR) ? rmdir(path) : r;
+	return (r == -EISDIR) ? rmdir(path) : r;
 }
 
 // quick implementation of link
@@ -1356,10 +1360,12 @@ int link(const char *oldpath, const char *newpath)
 {
 	int err;
 	SOUTHBOUND_VARS;
+
 	SOUTHBOUND_ATTACH;
 	err = ftfs_sys_link(oldpath, newpath);
 	SOUTHBOUND_RESTORE;
-	return return_errno_nonzero(err);
+
+	return err;
 }
 
 
@@ -1376,13 +1382,13 @@ int fcopy(const char * src, const char * dest) {
 	fd_src = open64(src, O_RDONLY, 0755);
 	if (fd_src < 0) {
 		ftfs_log(__func__,"src %s failed to open", src);
-		return return_errno_nonzero(fd_src);
+		return fd_src;
 	}
 
 	fd_dest = open64(dest, O_CREAT|O_WRONLY|O_TRUNC, 0755);
 	if (fd_dest < 0) {
 		ftfs_log(__func__,"dest %s failed to open", dest);
-		return return_errno_nonzero(fd_dest);
+		return fd_dest;
 	}
 
 	while (nread = read(fd_src, buf, sizeof buf), nread > 0) {

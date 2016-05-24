@@ -1157,8 +1157,13 @@ toku_single_process_lock(const char *lock_dir, const char *which, int *lockfd) {
     assert(l+1 == (signed)(sizeof(lockfname)));
     *lockfd = toku_os_lock_file(lockfname);
     if (*lockfd < 0) {
+#ifdef TOKU_LINUX_MODULE
+        int e = get_error_errno(*lockfd);
+#else
+        int e = get_error_errno();
+#endif
         fprintf(stderr, "Couldn't start tokudb because some other tokudb process is using the same directory [%s] for [%s]\n", lock_dir, which);
-        return *lockfd;
+        return e;
     }
     return 0;
 }

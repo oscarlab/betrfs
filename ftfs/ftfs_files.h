@@ -190,7 +190,7 @@ int closedir(DIR *dirp);
 
 struct dirent64 * readdir64(DIR *dirp);
 int dirfd(DIR* dirp);
-int flock(int fd, int cmd);
+//int flock(int fd, int cmd);
 
 
 #endif /* _FTFS_FILES_H */
