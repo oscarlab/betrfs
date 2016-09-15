@@ -112,6 +112,12 @@ An abbreviated version:
 
 The next step is to build TokuDB. TokuDB uses cmake, and it is very finicky.
 You must have the right versions of gcc, and g++: gcc-4.7, g++-4.7.
+You must also have valgrind and zlib.
+(To build TokuDB on ubuntu 13.10 server, we found that we needed the
+following packages: zlib1g-dev, build-essential, gcc-4.7, g++-4.7,
+cmake, valgrind, cscoppe. Some of these requirements may be relaxed by
+changing settings in the cmake_modules/ directory, but we will not
+explore this in depth.)
 
 For those unfamiliar with cmake, I would suggest an out-of-source
 build. The following commands should work:
