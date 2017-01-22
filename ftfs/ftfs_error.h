@@ -8,4 +8,5 @@ void set_errno(int ret);
 int get_errno(void);
 void perror(const char *s);
 
+void print_day_time(void);
 #endif

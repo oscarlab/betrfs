@@ -2,12 +2,14 @@
 #include <time.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <string.h>
 #include <getopt.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 
-static long randomwrites = 10000;
+
+static long randomwrites = 32 * (256 * 1024);
 static char * fname = NULL;
 static long long fsize = 0;
 static char * prog_name;
@@ -19,7 +21,7 @@ int main(int argc, char* argv[]) {
     int pos;
     int fd;
     int i;
-    long long *array;	
+    long long *array;
     
     char buffer[4] = {'\20','\10','\5','W'};
 
@@ -35,7 +37,7 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
-    array = malloc(sizeof(int) * randomwrites);
+    array = malloc(sizeof(long long) * randomwrites);
     if (random == NULL) {
         fprintf(stderr, "Allocate memory failed\n");
         return -1;
@@ -46,7 +48,7 @@ int main(int argc, char* argv[]) {
     for (i = 0; i < randomwrites; i++) {
 	array[i] = (random()<<32|random()) % (fsize - 4);
     }
-	 
+ 
     if((fd = open(fname, O_RDWR,0644)) < 0) {
         fprintf(stderr, "open file failed\n");
         return -1;
@@ -106,4 +108,3 @@ void process_options(int argc, char * argv[]){
             }
 
 }
-

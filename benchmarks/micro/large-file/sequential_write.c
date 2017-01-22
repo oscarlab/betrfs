@@ -23,12 +23,13 @@ static unsigned int rand_blocks = RAND_BLOCKS;
 static void process_options(int, char *[]);
 
 int main(int argc, char* argv[]) {
-	struct timespec start, end;
+	struct timespec start, end, gb_start, gb_end;
 	double elapsed, mb;
 	long long pos;
 	int fd;
 	int ret;
 	int i, j;
+	unsigned long nr_gb;
 	char **array;
 
 	prog_name = argv[0];
@@ -71,31 +72,52 @@ int main(int argc, char* argv[]) {
 	}
 
 	clock_gettime(CLOCK_MONOTONIC, &start);
+	clock_gettime(CLOCK_MONOTONIC, &gb_start);
 
 	i = 0;
 	pos = 0;
+	nr_gb = 1;
 	for(pos = 0; pos < fsize; pos += block_size) {
 		ret = pwrite(fd, array[i], block_size, pos);
 		if (ret != block_size)
 			printf("short write (ret: %d)\n", ret);
 		i = (i+1) % rand_blocks;
+
+		{
+			unsigned long gb = nr_gb << 30;
+
+			if (gb >= pos && (pos + block_size) >= gb) {
+				clock_gettime(CLOCK_MONOTONIC, &gb_end);
+				elapsed = (gb_end.tv_sec - gb_start.tv_sec) +
+					(gb_end.tv_nsec - gb_start.tv_nsec) / 1000000000.0;
+				printf("%lu GB\n", nr_gb);
+				printf("write, seq, %lf, %lf, %lf\n", 1024.0, elapsed, 1024.0 / elapsed);
+				gb_start = gb_end;
+				nr_gb++;
+			}
+		}
+	}
+
+
+	{
+		clock_gettime(CLOCK_MONOTONIC, &end);
+		elapsed = (end.tv_sec - start.tv_sec) +
+			(end.tv_nsec - start.tv_nsec) / 1000000000.0;
+		printf("before fsync: write, seq, %lf, %lf, %lf\n", fsize/1.0E6, elapsed, (fsize/1.0E6) / elapsed);
 	}
 
 	fsync(fd);
-
 	clock_gettime(CLOCK_MONOTONIC, &end);
-
 	close(fd);
 
 	elapsed = (end.tv_sec - start.tv_sec) +
 		(end.tv_nsec - start.tv_nsec) / 1000000000.0;
-
 	mb = fsize/1.0E6;
 	printf("op, seq.or.rand, size.MB, time.s, throughput.MBps\n");
 	printf("write, seq, %lf, %lf, %lf\n", mb, elapsed, mb / elapsed);
-
 	return 0;
 }
+
 void print_usage (FILE * stream){
 	fprintf(stream, "%s -s FILESIZE -f FNAME [-r RANDOMWRITES]\n", prog_name);
 	fprintf(stream, "\t -r  --random_seed   seed for srand()\n");

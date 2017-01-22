@@ -10,6 +10,7 @@
 #include <linux/sched.h>
 
 #include "ftfs_fs.h"
+#include "ftfs_profile.h"
 
 #define DCACHE_FTFS_FLAG 0x04000000
 
@@ -213,6 +214,7 @@ static inline int ftfs_get_read_trylock(struct ftfs_inode *f_inode)
 {
 	return down_read_trylock(&f_inode->key_lock);
 }
+
 
 static inline void ftfs_put_read_lock(struct ftfs_inode *f_inode)
 {
@@ -463,6 +465,7 @@ static int split_circle(struct dentry *dentry)
 	LIST_HEAD(locked_children);
 	DB_TXN *txn;
 
+	trace_printk("split_circle is called\n");
 	old_meta_key = ftfs_get_write_lock(FTFS_I(inode));
 	if (meta_key_is_circle_root(old_meta_key)) {
 		ftfs_put_write_lock(FTFS_I(inode));
@@ -862,12 +865,7 @@ ftfs_writepage(struct page *page, struct writeback_control *wbc)
 	struct ftfs_sb_info *sbi = inode->i_sb->s_fs_info;
 	DB_TXN *txn;
 
-	ret = ftfs_get_read_trylock(FTFS_I(inode));
-	if (!ret)
-		return AOP_FTFS_WRITEPAGE;
-	else
-		meta_key = FTFS_I(inode)->key;
-
+	meta_key = ftfs_get_read_lock(FTFS_I(inode));
 	set_page_writeback(page);
 	TXN_GOTO_LABEL(retry);
 	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
@@ -961,8 +959,13 @@ __ftfs_writepages_write_pages(struct ftfs_writepages_vec *writepages_vec,
 	unsigned offset;
 	char *buf;
 	struct page *page;
+	struct ftfs_meta_key *meta_key;
 	DB_TXN *txn;
 
+	meta_key = ftfs_get_read_lock(FTFS_I(inode));
+	if (unlikely(meta_key->circle_id != data_key->circle_id ||
+	             strcmp(meta_key->path, data_key->path) != 0))
+		copy_data_key_from_meta_key(data_key, meta_key, 0);
 retry:
 	i_size = i_size_read(inode);
 	end_index = i_size >> PAGE_CACHE_SHIFT;
@@ -990,6 +993,7 @@ retry:
 	ret = ftfs_bstore_txn_commit(txn, DB_TXN_NOSYNC);
 	COMMIT_JUMP_ON_CONFLICT(ret, retry);
 out:
+	ftfs_put_read_lock(FTFS_I(inode));
 	for (i = 0; i < writepages_vec->nr_pages; i++) {
 		page = writepages_vec->pages[i];
 		end_page_writeback(page);
@@ -1089,11 +1093,14 @@ retry:
 			meta_key = ftfs_get_read_lock(FTFS_I(inode));
 		}
 	}
-	data_key = alloc_data_key_from_meta_key(meta_key, 0);
+	data_key = kmalloc(DATA_KEY_MAX_LEN, GFP_KERNEL);
 	if (!data_key) {
+		ftfs_put_read_lock(FTFS_I(inode));
 		ret = -ENOMEM;
 		goto out;
 	}
+	copy_data_key_from_meta_key(data_key, meta_key, 0);
+	ftfs_put_read_lock(FTFS_I(inode));
 	while (!done && (index <= end)) {
 		nr_pages = pagevec_lookup_tag(&pvec, mapping, &index, tag,
 			      min(end - index, (pgoff_t)PAGEVEC_SIZE-1) + 1);
@@ -1176,8 +1183,6 @@ continue_unlock:
 free_dkey_out:
 	kfree(data_key);
 out:
-	ftfs_put_read_lock(FTFS_I(inode));
-
 	if (!cycled && !done) {
 		cycled = 1;
 		index = 0;
@@ -1614,6 +1619,9 @@ static int ftfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 static int ftfs_rmdir(struct inode *dir, struct dentry *dentry)
 {
+#ifdef FTFS_PROFILE_RMDIR
+	ktime_t rmdir_start = ktime_get();
+#endif
 	int r, ret;
 	struct inode *inode = dentry->d_inode;
 	struct ftfs_sb_info *sbi = inode->i_sb->s_fs_info;
@@ -1681,7 +1689,11 @@ out:
 
 	if (!ret)
 		ftfs_update_nr_inode(dir, -1, 0, 0);
-
+#ifdef FTFS_PROFILE_RMDIR
+	unlink_stat.rmdir = ktime_add(unlink_stat.rmdir,
+				      ktime_sub(ktime_get(), rmdir_start));
+	unlink_stat.count_rmdir += 1;
+#endif
 	return ret;
 }
 
@@ -1828,12 +1840,18 @@ out:
 	return ret;
 }
 
+struct ftfs_unlink_stat unlink_stat;
+
 static int ftfs_unlink(struct inode *dir, struct dentry *dentry)
 {
 	int ret = 0;
 	struct inode *inode = dentry->d_inode;
 	struct ftfs_meta_key *dir_meta_key, *meta_key;
-
+#ifdef FTFS_PROFILE_UNLINK
+	ktime_t stage1_start;
+	ktime_t stage2_start;
+	stage1_start = ktime_get();
+#endif
 	dir_meta_key = ftfs_get_read_lock(FTFS_I(dir));
 	meta_key = ftfs_get_read_lock(FTFS_I(inode));
 
@@ -1863,15 +1881,28 @@ static int ftfs_unlink(struct inode *dir, struct dentry *dentry)
 		ftfs_put_read_lock(FTFS_I(dir));
 		if (!ret)
 			ftfs_update_nr_inode(dir, -1, 0, 0);
+#ifdef FTFS_PROFILE_UNLINK
+		unlink_stat.stage1_if = ktime_add(unlink_stat.stage1_if,
+				        ktime_sub(ktime_get(), stage1_start));
+		unlink_stat.count_if += 1;
+#endif
 	} else {
 		ftfs_put_read_lock(FTFS_I(inode));
 		ftfs_put_read_lock(FTFS_I(dir));
 		ftfs_update_nr_inode(dir, -1, -FTFS_I(inode)->nr_data, 0);
+
+#ifdef FTFS_PROFILE_UNLINK
+		unlink_stat.stage1_else = ktime_add(unlink_stat.stage1_else,
+					       ktime_sub(ktime_get(), stage1_start));
+		unlink_stat.count_else += 1;
+#endif
 	}
 
 	if (ret)
 		return ret;
-
+#ifdef FTFS_PROFILE_UNLINK
+	stage2_start = ktime_get();
+#endif
 	drop_nlink(inode);
 	mark_inode_dirty(inode);
 
@@ -1885,6 +1916,10 @@ static int ftfs_unlink(struct inode *dir, struct dentry *dentry)
 		printk("%s dentry ref count %d\n", __func__, dentry->d_lockref.count);
 	}
 
+#ifdef FTFS_PROFILE_UNLINK
+	unlink_stat.stage2 = ktime_add(unlink_stat.stage2,
+			          ktime_sub(ktime_get(), stage2_start));
+#endif
 	return ret;
 }
 
@@ -2137,13 +2172,21 @@ static struct inode *ftfs_alloc_inode(struct super_block *sb)
 static void ftfs_destroy_inode(struct inode *inode)
 {
 	struct ftfs_inode *ftfs_inode = FTFS_I(inode);
-
+#ifdef FTFS_PROFILE_DESTROY
+	ktime_t destroy_start = ktime_get();
+#endif
 	ftfs_get_write_lock(ftfs_inode);
 	if (ftfs_inode->key != &root_dir_meta_key)
 		meta_key_free(ftfs_inode->key);
 	ftfs_inode->key = NULL;
 
 	kmem_cache_free(ftfs_inode_cachep, ftfs_inode);
+
+#ifdef FTFS_PROFILE_DESTROY
+	unlink_stat.destroy_inode = ktime_add(unlink_stat.destroy_inode,
+				        ktime_sub(ktime_get(), destroy_start));
+	unlink_stat.count_destroy += 1;
+#endif
 }
 
 static int
@@ -2192,7 +2235,9 @@ static void ftfs_evict_inode(struct inode *inode)
 	struct ftfs_meta_key *meta_key;
 	struct ftfs_inode *ftfs_inode = FTFS_I(inode);
 	DB_TXN *txn;
-
+#ifdef FTFS_PROFILE_EVICT
+	ktime_t evict_start = ktime_get();
+#endif
 	if (inode->i_nlink)
 		goto no_delete;
 
@@ -2222,6 +2267,11 @@ no_delete:
 
 	invalidate_inode_buffers(inode);
 	clear_inode(inode);
+#ifdef FTFS_PROFILE_EVICT
+	unlink_stat.evict_inode = ktime_add(unlink_stat.evict_inode,
+				        ktime_sub(ktime_get(), evict_start));
+	unlink_stat.count_evict += 1;
+#endif
 }
 
 // called when VFS wishes to free sb (unmount), sync southbound here
@@ -2594,10 +2644,10 @@ static void ftfs_kill_sb(struct super_block *sb)
 {
 	sync_filesystem(sb);
 	printk("dirty inode:\n");
-	find_dirty_inodes(sb);	
+	find_dirty_inodes(sb);
 	kill_block_super(sb);
 	printk("remaining inode:\n");
-	find_remaining_inodes(sb);	
+	find_remaining_inodes(sb);
 }
 
 static struct file_system_type ftfs_fs_type = {

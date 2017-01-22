@@ -1,6 +1,6 @@
 diff -ru linux-3.11.10-orig/arch/x86/include/asm/page_64_types.h linux-3.11.10/arch/x86/include/asm/page_64_types.h
 --- linux-3.11.10-orig/arch/x86/include/asm/page_64_types.h	2013-11-29 13:42:37.000000000 -0500
-+++ linux-3.11.10/arch/x86/include/asm/page_64_types.h	2016-05-24 10:14:49.078980632 -0400
++++ linux-3.11.10/arch/x86/include/asm/page_64_types.h	2016-02-13 17:20:55.178810833 -0500
 @@ -1,7 +1,7 @@
  #ifndef _ASM_X86_PAGE_64_DEFS_H
  #define _ASM_X86_PAGE_64_DEFS_H
@@ -12,7 +12,7 @@ diff -ru linux-3.11.10-orig/arch/x86/include/asm/page_64_types.h linux-3.11.10/a
  
 diff -ru linux-3.11.10-orig/fs/direct-io.c linux-3.11.10/fs/direct-io.c
 --- linux-3.11.10-orig/fs/direct-io.c	2013-11-29 13:42:37.000000000 -0500
-+++ linux-3.11.10/fs/direct-io.c	2016-05-24 10:14:52.082980559 -0400
++++ linux-3.11.10/fs/direct-io.c	2016-02-12 23:28:35.200314074 -0500
 @@ -154,6 +154,43 @@
  	return sdio->tail - sdio->head;
  }
@@ -84,7 +84,7 @@ diff -ru linux-3.11.10-orig/fs/direct-io.c linux-3.11.10/fs/direct-io.c
  		struct page *page = ZERO_PAGE(0);
 diff -ru linux-3.11.10-orig/fs/fcntl.c linux-3.11.10/fs/fcntl.c
 --- linux-3.11.10-orig/fs/fcntl.c	2013-11-29 13:42:37.000000000 -0500
-+++ linux-3.11.10/fs/fcntl.c	2016-05-24 10:14:52.110980558 -0400
++++ linux-3.11.10/fs/fcntl.c	2016-02-12 23:30:28.436311429 -0500
 @@ -730,14 +730,15 @@
  	 * Exceptions: O_NONBLOCK is a two bit define on parisc; O_NDELAY
  	 * is defined as O_NONBLOCK on some platforms and not on others.
@@ -103,20 +103,9 @@ diff -ru linux-3.11.10-orig/fs/fcntl.c linux-3.11.10/fs/fcntl.c
  		));
  
  	fasync_cache = kmem_cache_create("fasync_cache",
-diff -ru linux-3.11.10-orig/include/linux/fs.h linux-3.11.10/include/linux/fs.h
---- linux-3.11.10-orig/include/linux/fs.h	2013-11-29 13:42:37.000000000 -0500
-+++ linux-3.11.10/include/linux/fs.h	2016-05-24 10:14:52.286980554 -0400
-@@ -274,6 +274,7 @@
- enum positive_aop_returns {
- 	AOP_WRITEPAGE_ACTIVATE	= 0x80000,
- 	AOP_TRUNCATED_PAGE	= 0x80001,
-+	AOP_FTFS_WRITEPAGE	= 0x80002,
- };
- 
- #define AOP_FLAG_UNINTERRUPTIBLE	0x0001 /* will not do a short write */
 diff -ru linux-3.11.10-orig/include/uapi/asm-generic/fcntl.h linux-3.11.10/include/uapi/asm-generic/fcntl.h
 --- linux-3.11.10-orig/include/uapi/asm-generic/fcntl.h	2013-11-29 13:42:37.000000000 -0500
-+++ linux-3.11.10/include/uapi/asm-generic/fcntl.h	2016-05-24 10:14:52.414980551 -0400
++++ linux-3.11.10/include/uapi/asm-generic/fcntl.h	2016-02-12 23:30:49.772310930 -0500
 @@ -88,6 +88,11 @@
  #define __O_TMPFILE	020000000
  #endif
@@ -129,34 +118,3 @@ diff -ru linux-3.11.10-orig/include/uapi/asm-generic/fcntl.h linux-3.11.10/inclu
  /* a horrid kludge trying to make sure that this will fail on old kernels */
  #define O_TMPFILE (__O_TMPFILE | O_DIRECTORY)
  #define O_TMPFILE_MASK (__O_TMPFILE | O_DIRECTORY | O_CREAT)      
-diff -ru linux-3.11.10-orig/lib/percpu_counter.c linux-3.11.10/lib/percpu_counter.c
---- linux-3.11.10-orig/lib/percpu_counter.c	2013-11-29 13:42:37.000000000 -0500
-+++ linux-3.11.10/lib/percpu_counter.c	2016-05-24 10:14:52.994980536 -0400
-@@ -80,8 +80,13 @@
- 	if (count >= batch || count <= -batch) {
- 		raw_spin_lock(&fbc->lock);
- 		fbc->count += count;
--		raw_spin_unlock(&fbc->lock);
-+		// dep 2/23/16: Backport a fix from 3/13.
-+		//  Zeroing the local counter without the lock held
-+		//  can cause sums of a series monotonic increments to 
-+		//  decrease.  The reader needs to wait for the local
-+		//  count to be zeroed.
- 		__this_cpu_write(*fbc->counters, 0);
-+		raw_spin_unlock(&fbc->lock);
- 	} else {
- 		__this_cpu_write(*fbc->counters, count);
- 	}
-diff -ru linux-3.11.10-orig/mm/vmscan.c linux-3.11.10/mm/vmscan.c
---- linux-3.11.10-orig/mm/vmscan.c	2013-11-29 13:42:37.000000000 -0500
-+++ linux-3.11.10/mm/vmscan.c	2016-05-24 10:14:53.014980536 -0400
-@@ -435,6 +435,9 @@
- 			return PAGE_ACTIVATE;
- 		}
- 
-+		if (res == AOP_FTFS_WRITEPAGE)
-+			return PAGE_KEEP;
-+
- 		if (!PageWriteback(page)) {
- 			/* synchronous write or broken a_ops? */
- 			ClearPageReclaim(page);

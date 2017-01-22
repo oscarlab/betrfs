@@ -27,6 +27,7 @@
 #include "toku_checkpoint.h"
 #include "toku_flusher.h"
 #include "toku_memleak_detect.h"
+#include "ftfs_profile.h"
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Stony Brook University");
@@ -82,6 +83,7 @@ static void __exit ftfs_module_exit(void)
 
 	TOKU_MEMLEAK_EXIT;
 	toku_engine_status_exit();
+	ftfs_profile_exit();
 	toku_checkpoint_exit();
 	toku_flusher_exit();
 	printf_count_blindwrite();
@@ -106,6 +108,8 @@ static int __init ftfs_module_init(void)
 {
 	int ret;
 	void *data = NULL;
+
+	trace_printk("ftfs_module_init is called!\n");
 
 	if (!sb_dev) {
 		ftfs_error(__func__, "no mount device for ftfs_southbound!");
@@ -163,6 +167,12 @@ static int __init ftfs_module_init(void)
 	ret = toku_engine_status_init();
 	if (ret) {
 		ftfs_error(__func__, "can't init toku engine proc");
+		return ret;
+	}
+
+	ret = ftfs_profile_init();
+	if (ret) {
+		ftfs_error(__func__, "can't init ftfs profile proc");
 		return ret;
 	}
 
