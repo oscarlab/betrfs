@@ -1,0 +1,13 @@
+#!/bin/bash
+
+DIR="${BASH_SOURCE%/*}"
+if [[ ! -d "$DIR" ]]; then DIR="$PWD"; fi
+
+#mkfs.ext4 $1
+mkfs -t ext4 -E lazy_itable_init=0,lazy_journal_init=0 $1
+mount $1 /mnt
+cd /mnt; mkdir db; mkdir dev; touch dev/null; mkdir tmp; chmod 1777 tmp; cd -;
+
+sleep 1
+
+umount /mnt
