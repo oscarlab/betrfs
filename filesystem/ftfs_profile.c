@@ -1,3 +1,6 @@
+/* -*- mode: C++; c-basic-offset: 8; indent-tabs-mode: t -*- */
+// vim: set tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab:
+
 #include <linux/types.h>
 #include <linux/fs.h>
 #include <linux/slab.h>
@@ -9,11 +12,11 @@ static struct proc_dir_entry * ftfs_profile_entry;
 
 static void ftfs_print_unlink_profile(void)
 {
-	printk("===== unlink =====\n");	
+	printk("===== unlink =====\n");
 	printk("time of if branch:%lld\n", unlink_stat.stage1_if.tv64);
 	printk("time of else branch:%lld\n", unlink_stat.stage1_else.tv64);
 	printk("time of stage2:%lld\n", unlink_stat.stage2.tv64);
-	printk("time of ftfs_unlink:%lld\n", unlink_stat.stage2.tv64 + 
+	printk("time of ftfs_unlink:%lld\n", unlink_stat.stage2.tv64 +
 					     unlink_stat.stage1_else.tv64 +
 					     unlink_stat.stage1_if.tv64);
 	printk("time of ftfs_rmdir:%lld\n", unlink_stat.rmdir.tv64);
@@ -24,7 +27,7 @@ static void ftfs_print_unlink_profile(void)
 	printk("count of ftfs_rmdir:%u\n", unlink_stat.count_rmdir);
 	printk("count of ftfs_destroy_inode:%u\n", unlink_stat.count_destroy);
 	printk("count of ftfs_evict_inode:%u\n", unlink_stat.count_evict);
-	printk("===== end ======\n");	
+	printk("===== end ======\n");
 	memset(&unlink_stat, 0, sizeof(unlink_stat));
 }
 

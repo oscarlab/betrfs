@@ -1,3 +1,5 @@
+/* -*- mode: C++; c-basic-offset: 8; indent-tabs-mode: t -*- */
+// vim: set tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab:
 #ifndef RBTREE_KV_H
 #define RBTREE_KV_H
 
@@ -191,7 +193,7 @@ static int rb_kv_insert(DB *db, struct rb_kv_node *node)
 			new = &((*new)->rb_left);
 		else if (result > 0)
 			new = &((*new)->rb_right);
-		else 
+		else
 			return -1;
 	}
 
@@ -363,7 +365,7 @@ static int dbc_c_set_bounds(DBC *dbc, const DBT *left_key, const DBT *right_key,
 	ret = dbt_alloc_and_copy(&wrap->right, right_key);
 	BUG_ON(ret != 0);
 
-	return 0; 
+	return 0;
 }
 
 static int dbc_c_getf_current(DBC *c, uint32_t flag, YDB_CALLBACK_FUNCTION f, void *extra)

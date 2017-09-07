@@ -1,3 +1,5 @@
+/* -*- mode: C++; c-basic-offset: 8; indent-tabs-mode: t -*- */
+// vim: set tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab:
 #ifndef _FTFS_SOUTHBOUND_H
 #define _FTFS_SOUTHBOUND_H
 
@@ -95,7 +97,7 @@ int ftfs_private_umount(void);
 
 int in_southbound_context(struct task_struct *tsk);
 
-void save_task_southbound(struct task_struct *tsk, 
+void save_task_southbound(struct task_struct *tsk,
 			struct ftfs_southbound *save);
 void restore_task_southbound(struct task_struct *tsk,
 			struct ftfs_southbound *saved);

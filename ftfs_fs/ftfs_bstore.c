@@ -1,3 +1,5 @@
+/* -*- mode: C++; c-basic-offset: 8; indent-tabs-mode: t -*- */
+// vim: set tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab:
 #include <linux/kernel.h>
 #include <linux/slab.h>
 
@@ -189,7 +191,7 @@ int ftfs_bstore_update_ino(struct ftfs_sb_info *sbi, ino_t ino)
 	dbt_init(&next_ino_value_dbt, &curr_ino,
 	         sizeof(curr_ino));
 
-	TXN_GOTO_LABEL(retry); 
+	TXN_GOTO_LABEL(retry);
 	{
 
 		ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
