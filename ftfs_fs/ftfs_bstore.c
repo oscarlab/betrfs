@@ -457,7 +457,10 @@ int ftfs_bstore_env_open(struct ftfs_sb_info *sbi)
 	BUG_ON(sbi->db_env);
 	r = db_env_create(&sbi->db_env, 0);
 	if (r != 0) {
-	  printk(KERN_ERR "Failed to create the TokuDB environment, errno %d\n", r);
+	  if (r == TOKUDB_HUGE_PAGES_ENABLED)
+	    printk(KERN_ERR "Failed to create the TokuDB environment because Transparent Huge Pages (THP) are enabled.  Please disable THP following the instructions at https://docs.mongodb.com/manual/tutorial/transparent-huge-pages/.  You may set the parameter to madvise or never. (errno %d)\n", r);
+	  else
+	    printk(KERN_ERR "Failed to create the TokuDB environment, errno %d\n", r);
 	  return r;
 	}
 
