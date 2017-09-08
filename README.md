@@ -89,7 +89,7 @@ Compiling the code
 ------------------
 
 Apply the provided patch (linux-3.11.10.diff) to the 3.11.10 Linux kernel
-available from https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.11.10.tar.bz2. Please remember to turn off Transparent Huge Pages when configuring the kernel. You may set it to madvise or never. The MongoDB project has a <a href="https://docs.mongodb.org/manual/tutorial/transparent-huge-pages/">good guide </a>on doing this with an init script if you don't want to mess with your kernel config.
+available from https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.11.10.tar.bz2. Please remember to turn off Transparent Huge Pages when configuring the kernel (disable option CONFIG_TRANSPARENT_HUGEPAGE_ALWAYS). You may set it to madvise or never. The MongoDB project has a <a href="https://docs.mongodb.org/manual/tutorial/transparent-huge-pages/">good guide </a>on doing this with an init script if you don't want to mess with your kernel config.
 
 There are many guides on how to do this, so please read one if you have
 never compiled your own kernel. The build scripts assume you will download 
@@ -103,6 +103,7 @@ An abbreviated version:
 	cp ../pthread_union_check.py ./
 	patch -p1 < ../linux-3.11.10.diff
 	make oldconfig
+	(double check that CONFIG_TRANSPARENT_HUGEPAGE_ALWAYS is not set in .config)
 	./pthread_union_check.py
 	make
 	make modules
