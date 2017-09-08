@@ -1,3 +1,5 @@
+/* -*- mode: C++; c-basic-offset: 8; indent-tabs-mode: t -*- */
+// vim: set tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab:
 #include <linux/zlib.h>
 #include <linux/vmalloc.h>
 #include "ftfs.h"
@@ -17,7 +19,7 @@ int deflateInit2_(z_streamp strm, int level, int method,
 		  int windowBits, int memLevel, int strategy) {
     vfree(strm->workspace);
     init_stream_workspace(strm);
-	return zlib_deflateInit2(strm, level,  method, 
+	return zlib_deflateInit2(strm, level,  method,
                     windowBits, memLevel, strategy);
 }
 

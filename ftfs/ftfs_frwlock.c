@@ -1,9 +1,11 @@
+/* -*- mode: C++; c-basic-offset: 8; indent-tabs-mode: t -*- */
+// vim: set tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab:
 #include "ftfs_frwlock.h"
 #include <linux/types.h>
 #include <linux/kernel.h>
 #include <linux/sched.h>
 #include <linux/export.h>
-#include <linux/rwsem.h> 
+#include <linux/rwsem.h>
 #include <linux/atomic.h>
 
 void __sched ftfs_down_read(struct rw_semaphore *sem)

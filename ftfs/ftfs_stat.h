@@ -1,3 +1,5 @@
+/* -*- mode: C++; c-basic-offset: 8; indent-tabs-mode: t -*- */
+// vim: set tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab:
 #ifndef _FTFS_STAT_H
 #define _FTFS_STAT_H
 #include<linux/statfs.h>

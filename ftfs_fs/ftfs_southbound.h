@@ -1,3 +1,5 @@
+/* -*- mode: C++; c-basic-offset: 8; indent-tabs-mode: t -*- */
+// vim: set tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab:
 #ifndef _FTFS_SOUTHBOUND_H
 #define _FTFS_SOUTHBOUND_H
 
@@ -16,7 +18,7 @@ extern size_t db_cachesize;
 static inline int ftfs_super_statfs(struct dentry * d, struct kstatfs * buf)
 { return 0; }
 static inline int attach_ftfs_southbound(struct task_struct *tsk) { return 0; }
-static inline void save_task_southbound(struct task_struct *tsk, 
+static inline void save_task_southbound(struct task_struct *tsk,
 					struct ftfs_southbound *save) { }
 static inline void restore_task_southbound(struct task_struct *tsk,
 			struct ftfs_southbound *saved) { }

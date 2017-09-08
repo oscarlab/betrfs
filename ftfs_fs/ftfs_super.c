@@ -1,3 +1,5 @@
+/* -*- mode: C++; c-basic-offset: 8; indent-tabs-mode: t -*- */
+// vim: set tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab:
 #include <linux/kernel.h>
 #include <linux/namei.h>
 #include <linux/slab.h>
@@ -147,7 +149,7 @@ ftfs_setup_inode(struct super_block *sb, struct ftfs_meta_key *meta_key,
                  struct ftfs_metadata *meta);
 
 static inline void
-ftfs_setup_metadata(struct ftfs_metadata *meta, umode_t mode, 
+ftfs_setup_metadata(struct ftfs_metadata *meta, umode_t mode,
                     loff_t size, dev_t rdev, ino_t ino)
 {
 	struct timespec now_tspec;
@@ -334,7 +336,7 @@ ftfs_do_unlink(struct ftfs_meta_key *meta_key, DB_TXN *txn,
  * we lock the whole subtree before rename for exclusive access. for
  * either success or fail, you have to call unlock or else you are
  * hosed
- * 
+ *
  * only the children are locked not the parent
  */
 static int prelock_children_for_rename(struct dentry *object, struct list_head *locked)

@@ -1,3 +1,5 @@
+/* -*- mode: C++; c-basic-offset: 8; indent-tabs-mode: t -*- */
+// vim: set tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab:
 /*as values and the counter type limits the number of
  * potential readers/writers to 32767 for 32 bits and 2147483647
  * for 64 bits.
@@ -39,7 +41,7 @@ static inline int __ftfs_down_read_trylock(struct rw_semaphore *sem)
                     return 1;
 		}
 	}
-	return 0;	
+	return 0;
 
 }
 
@@ -50,7 +52,7 @@ static inline void __ftfs_down_write_nested(struct rw_semaphore *sem, int subcla
 {
 
 
-        long tmp; 
+        long tmp;
       tmp = atomic_long_add_return(FTFS_RWSEM_ACTIVE_WRITE_BIAS,
                                       (atomic_long_t *)&sem->count);
       if (unlikely(tmp != FTFS_RWSEM_ACTIVE_WRITE_BIAS))
@@ -82,7 +84,7 @@ static inline void __ftfs_up_read(struct rw_semaphore *sem)
 	long tmp;
  	tmp = atomic_long_dec_return((atomic_long_t *)&sem->count);
  	if (unlikely(tmp < -1 && (tmp & FTFS_RWSEM_ACTIVE_MASK) == 0))
- 	            ftfs_rwsem_wake(sem);	
+ 	            ftfs_rwsem_wake(sem);
 }
 
 /*
