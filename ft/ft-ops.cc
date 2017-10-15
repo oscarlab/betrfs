@@ -991,6 +991,7 @@ void toku_ftnode_clone_callback(
     toku_assert_entire_node_in_memory(node);
     FT ft = static_cast<FT>(write_extraargs);
     FTNODE XCALLOC(cloned_node);
+
     if (node->height == 0) {
         // set header stats, must be done before rebalancing
         ftnode_update_disk_stats(node, ft, for_checkpoint);
@@ -1040,7 +1041,7 @@ void toku_ftnode_clone_callback(
     }
     *clone_size = ftnode_memory_size(cloned_node);
     *cloned_value_data = cloned_node;
-    cloned_node->ct_pair = node->ct_pair; 	
+    cloned_node->ct_pair = node->ct_pair;
     toku_ft_node_unbound_inserts_validation(node);
     //toku_ft_node_unbound_inserts_validation(cloned_node);
 }
@@ -1341,10 +1342,15 @@ compress_internal_node_partition(FTNODE node, int i, enum toku_compression_metho
 
 void toku_evict_bn_from_memory(FTNODE node, int childnum, FT h) {
     // free the basement node
+    uint64_t ubi_count;
     assert(!node->dirty);
     BASEMENTNODE bn = BLB(node, childnum);
+    ubi_count = bn->unbound_insert_count;
     toku_ft_decrease_stats(&h->in_memory_stats, bn->stat64_delta);
     destroy_basement_node(bn);
+    if (ubi_count > 0) {
+        node->unbound_insert_count -= ubi_count;
+    }
     set_BNULL(node, childnum);
     BP_STATE(node, childnum) = PT_ON_DISK;
 }
@@ -2086,7 +2092,7 @@ toku_ft_nonleaf_append_child(FTNODE node, FTNODE child, const DBT *pivotkey) {
 void
 toku_ft_bn_apply_cmd_once (
     BASEMENTNODE bn,
-    struct unbound_insert_entry *ubi_entry,
+    struct unbound_insert_entry *UU(ubi_entry),
     const FT_MSG cmd,
     uint32_t idx,
     LEAFENTRY le,
@@ -3584,7 +3590,6 @@ toku_ft_node_put_cmd (
     //
 
 // SOSP TODO: update unbound_msg_count at node level. let lower-levels update their own partition counts
-    
     
    toku_ft_node_unbound_inserts_validation(node, cmd, __LINE__);
     if (node->height==0) {

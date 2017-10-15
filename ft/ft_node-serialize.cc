@@ -707,8 +707,8 @@ rebalance_ftnode_leaf(FTNODE node, unsigned int basementnodesize)
         BLB_MAX_MSN_APPLIED(node,i) = max_msn;
         baseindex_this_bn += num_les_to_copy;  // set to index of next bn
     }
-    node->max_msn_applied_to_node_on_disk = max_msn;
 
+    node->max_msn_applied_to_node_on_disk = max_msn;
     //SOSP: Jun : hack on rebalance, since rebalancing only happens before checkpoint or serialization
     //either case is right before writing back.
      //there is no chance for split or merge to mess up with unbound entries then we can solely use the bn
@@ -730,13 +730,20 @@ rebalance_ftnode_leaf(FTNODE node, unsigned int basementnodesize)
     	  old_bns[i]->unbound_insert_count = 0;
 	}
 	BLB(node,0)->unbound_insert_count = n_unbound_entry;
-	}      
+    }      
     node->unbound_insert_count = n_unbound_entry;  // destroy buffers of old mempools    
     //toku_ft_node_empty_unbound_inserts_validation(node);    
     //toku_ft_node_unbound_inserts_validation(node);
 
 
     for (uint32_t i = 0; i < num_orig_basements; i++) {
+        toku_list * head = &old_bns[i]->unbound_inserts;
+	if (toku_list_empty(head)) {
+	   if (old_bns[i]->unbound_insert_count != 0) {
+               printf("i=%d, unbound_insert_count=%d\n", i, old_bns[i]->unbound_insert_count);
+	       paranoid_invariant(old_bns[i]->unbound_insert_count == 0);
+           } 
+        }
         destroy_basement_node(old_bns[i]);
     }
    
@@ -1276,16 +1283,41 @@ NONLEAF_CHILDINFO toku_clone_nl(NONLEAF_CHILDINFO orig_childinfo) {
     return cn;
 }
 
-static void toku_jun_debug(void) {
-	printf("oh nooo\n");
-}
+extern TOKULOGGER global_logger;
+
 void destroy_basement_node (BASEMENTNODE bn)
 {
     bn->data_buffer.destroy();
+
+    if (!toku_list_empty(&bn->unbound_inserts)) {
+        toku_list *unbound_msgs;
+        unbound_msgs = &(bn->unbound_inserts);
+
+        struct toku_list *list = unbound_msgs->next;
+
+   	while (list != unbound_msgs) {
+            struct unbound_insert_entry *entry = toku_list_struct(list, struct unbound_insert_entry, node_list);
+            paranoid_invariant(entry->state == UBI_UNBOUND);
+            toku_mutex_lock(&global_logger->ubi_lock);
+            toku_list_remove(&entry->in_or_out);
+            toku_mutex_unlock(&global_logger->ubi_lock);
+            list = list->next;
+        }
+
+        list = unbound_msgs->next;
+
+        while (list != unbound_msgs) {
+              struct unbound_insert_entry *entry = toku_list_struct(list, struct unbound_insert_entry, node_list);
+              paranoid_invariant(entry->state == UBI_UNBOUND);
+
+	      toku_list *to_be_removed = list;
+              list = list->next;
+              toku_list_remove(to_be_removed); 
+              bn->unbound_insert_count--;
+        }
+    }
+
     paranoid_invariant(bn->unbound_insert_count == 0);
-	if(!toku_list_empty(&bn->unbound_inserts)) {
-	 	toku_jun_debug() ;
-	}
     paranoid_invariant(toku_list_empty(&bn->unbound_inserts));
     toku_free(bn);
 }

@@ -116,6 +116,9 @@ PATENT RIGHTS GRANT:
 #include <util/rwlock.h>
 #include <util/status.h>
 #include "ft/ule.h"
+
+extern TOKULOGGER global_logger;
+
 ///////////////////////////////////////////////////////////////////////////////////
 // Engine status
 //
@@ -1079,6 +1082,7 @@ write_locked_pair_for_checkpoint(CACHETABLE ct, PAIR p, bool checkpoint_pending)
         }
     }
 }
+
 
 // On entry and exit: hold the pair's mutex (p->mutex)
 // Method:   take write lock
@@ -4823,6 +4827,36 @@ void checkpointer::turn_on_pending_bits_partial() {
         //     we may end up clearing the pending bit before the
         //     current lock is ever released.
         p->checkpoint_pending = true;
+
+
+///////////////////////////////////////////
+        FTNODE node = (FTNODE) p->value_data;
+        if (p->dirty == false && node->unbound_insert_count > 0 && node->height == 0) {
+            printf("skip the pair=%p, unbound=%u, height=%d\n", p, node->unbound_insert_count, node->height);
+            for (int ii=0; ii<node->n_children; ii++) {
+                 if(BP_STATE(node,ii) != PT_AVAIL) {
+                    printf("partition ii=%d is not in memory\n", ii);
+                    continue;
+                 }
+                 toku_list *unbound_msgs;
+                 if (node->height > 0) {
+                     unbound_msgs = &BNC(node,ii)->unbound_inserts;
+                 } else {
+                     unbound_msgs = &BLB(node,ii)->unbound_inserts;
+                 }
+                struct toku_list *list = unbound_msgs->next;
+                while(list!=unbound_msgs) {
+                     struct unbound_insert_entry *entry = toku_list_struct(list, struct unbound_insert_entry, node_list);
+                     paranoid_invariant(entry->state == UBI_UNBOUND);
+                     toku_mutex_lock(&global_logger->ubi_lock);
+                     toku_list_remove(&entry->in_or_out);
+                     toku_mutex_unlock(&global_logger->ubi_lock);
+                     list = list->next;
+                }
+            }
+        }
+///////////////////////////////////////////
+
         if (m_list->m_pending_head) {
             m_list->m_pending_head->pending_prev = p;
         }
@@ -4860,6 +4894,35 @@ void checkpointer::turn_on_pending_bits() {
         //     we may end up clearing the pending bit before the
         //     current lock is ever released.
         p->checkpoint_pending = true;
+
+///////////////////////////////////////////
+        FTNODE node = (FTNODE) p->value_data;
+        if (p->dirty == false && node->unbound_insert_count > 0 && node->height == 0) {
+            printf("skip the pair=%p, unbound=%u, height=%d\n", p, node->unbound_insert_count, node->height);
+            for (int ii=0; ii<node->n_children; ii++) {
+                 if(BP_STATE(node,ii) != PT_AVAIL) {
+                    printf("partition ii=%d is not in memory\n", ii);
+                    continue;
+                 }
+                 toku_list *unbound_msgs;
+                 if (node->height > 0) {
+                     unbound_msgs = &BNC(node,ii)->unbound_inserts;
+                 } else {
+                     unbound_msgs = &BLB(node,ii)->unbound_inserts;
+                 }
+                 struct toku_list *list = unbound_msgs->next;
+                 while(list!=unbound_msgs) {
+                     struct unbound_insert_entry *entry = toku_list_struct(list, struct unbound_insert_entry, node_list);
+                     paranoid_invariant(entry->state == UBI_UNBOUND);
+                     toku_mutex_lock(&global_logger->ubi_lock);
+                     toku_list_remove(&entry->in_or_out);
+                     toku_mutex_unlock(&global_logger->ubi_lock);
+                     list = list->next;
+                 }
+            }
+        }
+///////////////////////////////////////////
+
         if (m_list->m_pending_head) {
             m_list->m_pending_head->pending_prev = p;
         }
@@ -5337,8 +5400,6 @@ void cachefile_list::free_stale_data(evictor* ev) {
         evict_pair_from_cachefile(p);
         ev->remove_pair_attr(p->attr);
         cachetable_free_pair(p);
-        
-        // now that we have evicted something,
         // let's check if the cachefile is needed anymore
         if (m_stale_tail->cf_head == NULL) {
             CACHEFILE cf_to_destroy = m_stale_tail;

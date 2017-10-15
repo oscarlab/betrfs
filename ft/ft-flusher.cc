@@ -1745,6 +1745,7 @@ setup_available_ftnode_partition(FTNODE node, int i) {
 
 #ifdef DEAD_LEAF
 static void ft_flush_blind_delete_basement(FTNODE node, int i, FT_MSG msg) {
+    uint64_t ubi_count;
     call_flusher_thread_callback(flt_flush_completely_delete_basement);
     switch(BP_STATE(node, i)) {
         case PT_AVAIL: 
@@ -1754,8 +1755,12 @@ static void ft_flush_blind_delete_basement(FTNODE node, int i, FT_MSG msg) {
         
                 BASEMENTNODE bn = BLB(node, i);     
                 if(msg->msn.msn > bn ->max_msn_applied.msn){
-                    call_flusher_thread_callback(flt_flush_delete_in_mem_basement);                    
+                    call_flusher_thread_callback(flt_flush_delete_in_mem_basement);
+                    ubi_count = bn->unbound_insert_count;
                     destroy_basement_node(bn);
+                    if (ubi_count > 0) {
+                        node->unbound_insert_count -= ubi_count;
+                    }
                     BP_WORKDONE(node,i)=0;
                     setup_available_ftnode_partition(node, i);
                     BLB_MAX_MSN_APPLIED(node,i) = msg->msn;
@@ -1781,7 +1786,7 @@ static void ft_flush_blind_delete_basement(FTNODE node, int i, FT_MSG msg) {
             } else {
                 status_inc(FT_MSN_DISCARDS, 1);
             }
-            }            
+        }            
          break;
         case PT_ON_DISK:
         //just init the bn
