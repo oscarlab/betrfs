@@ -740,7 +740,7 @@ static void cachetable_only_write_locked_data(
     // Luckily, old_attr here is only used for some test applications,
     // so inaccurate non-size fields are ok.
     if (is_clone) {
-        old_attr = make_pair_attr(p->cloned_value_size);
+        old_attr = make_pair_attr_with_type(p->cloned_value_size, p->attr.is_tree_node);
     }
     else {
         old_attr = p->attr;
@@ -4828,10 +4828,10 @@ void checkpointer::turn_on_pending_bits_partial() {
         //     current lock is ever released.
         p->checkpoint_pending = true;
 
-
 ///////////////////////////////////////////
         FTNODE node = (FTNODE) p->value_data;
-        if (p->dirty == false && node->unbound_insert_count > 0 && node->height == 0) {
+        PAIR_ATTR attr = p->attr;
+        if (p->dirty == false && attr.is_tree_node &&  node != NULL && node->unbound_insert_count > 0 && node->height == 0) {
             printf("skip the pair=%p, unbound=%u, height=%d\n", p, node->unbound_insert_count, node->height);
             for (int ii=0; ii<node->n_children; ii++) {
                  if(BP_STATE(node,ii) != PT_AVAIL) {
@@ -4897,7 +4897,8 @@ void checkpointer::turn_on_pending_bits() {
 
 ///////////////////////////////////////////
         FTNODE node = (FTNODE) p->value_data;
-        if (p->dirty == false && node->unbound_insert_count > 0 && node->height == 0) {
+        PAIR_ATTR attr = p->attr;
+        if (p->dirty == false && attr.is_tree_node && node != NULL && node->unbound_insert_count > 0 && node->height == 0) {
             printf("skip the pair=%p, unbound=%u, height=%d\n", p, node->unbound_insert_count, node->height);
             for (int ii=0; ii<node->n_children; ii++) {
                  if(BP_STATE(node,ii) != PT_AVAIL) {
@@ -4922,7 +4923,6 @@ void checkpointer::turn_on_pending_bits() {
             }
         }
 ///////////////////////////////////////////
-
         if (m_list->m_pending_head) {
             m_list->m_pending_head->pending_prev = p;
         }

@@ -1135,7 +1135,7 @@ struct {
 	{"test-stress6",test_test_stress6, 45},
 	{"test-stress7",test_test_stress7, 90},
 	{"test-stress-openclose",test_test_stress_openclose, 45},
-	{"test-stress-with-verify",test_test_stress_with_verify, 45},
+	{"test-stress-with-verify",test_test_stress_with_verify, 60},
 	{"perf-child-txn",test_perf_child_txn, 30},
 	{"perf-rangequery", test_perf_rangequery, 30},
 	{"perf-read-txn", test_perf_read_txn, 30},
