@@ -128,7 +128,7 @@ cachetable_put_empty_node_with_dep_nodes(
         h->cf,
         ftnode_get_key_and_fullhash,
         new_node,
-        make_pair_attr(sizeof(FTNODE)),
+        make_pair_attr_with_type(sizeof(FTNODE), true),
         get_write_callbacks_for_node(h),
         h,
         num_dependent_nodes,
