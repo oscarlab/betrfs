@@ -224,7 +224,7 @@ basement nodes, bulk fetch,  and partial fetch:
 #include <util/sort.h>
 
 #include <stdint.h>
-static TOKULOGGER global_logger = nullptr;
+TOKULOGGER global_logger = nullptr;
 static const uint32_t this_version = FT_LAYOUT_VERSION;
 
 /* Status is intended for display to humans to help understand system behavior.
