@@ -458,7 +458,8 @@ ydb_do_recovery (DB_ENV *env) {
                            toku_keep_prepared_txn_callback,
                            keep_cachetable_callback,
                            env->i->logger,
-                           env->i->dir, env->i->real_log_dir, env->i->bt_compare,
+                           env->i->dir, env->i->real_log_dir,
+                           &env->i->key_ops,
                            env->i->update_function,
                            env->i->generate_row_for_put, env->i->generate_row_for_del,
                            env->i->cachetable_size);
@@ -918,7 +919,6 @@ env_open(DB_ENV * env, const char *home, uint32_t flags, int mode) {
     env_setup_real_data_dir(env);
     env_setup_real_log_dir(env);
     env_setup_real_tmp_dir(env);
-
     r = toku_single_process_lock(env->i->dir, "environment", &env->i->envdir_lockfd);
     if (r!=0) goto cleanup;
     r = toku_single_process_lock(env->i->real_data_dir, "data", &env->i->datadir_lockfd);
@@ -1688,14 +1688,15 @@ env_checkpointing_end_atomic_operation(DB_ENV * env) {
 }
 
 static int
-env_set_default_bt_compare(DB_ENV * env, int (*bt_compare) (DB *, const DBT *, const DBT *)) {
+env_set_key_ops(DB_ENV *env, struct toku_db_key_operations *key_ops)
+{
     HANDLE_PANICKED_ENV(env);
-    int r = 0;
-    if (env_opened(env)) r = EINVAL;
+    if (env_opened(env))
+        return EINVAL;
     else {
-        env->i->bt_compare = bt_compare;
+        memcpy(&env->i->key_ops, key_ops, sizeof(*key_ops));
+        return 0;
     }
-    return r;
 }
 
 static void
@@ -2498,6 +2499,8 @@ static uint64_t env_get_loader_memory_size(DB_ENV *env) {
     return memory_size;
 }
 
+extern struct toku_db_key_operations toku_builtin_key_ops;
+
 static int 
 toku_env_create(DB_ENV ** envp, uint32_t flags) {
     int r = ENOSYS;
@@ -2523,7 +2526,7 @@ toku_env_create(DB_ENV ** envp, uint32_t flags) {
     // unlocked methods
     USENV(open);
     USENV(close);
-    USENV(set_default_bt_compare);
+    USENV(set_key_ops);
     USENV(set_update);
     USENV(set_generate_row_callback_for_put);
     USENV(set_generate_row_callback_for_del);
@@ -2598,7 +2601,7 @@ toku_env_create(DB_ENV ** envp, uint32_t flags) {
     env_fs_init(result);
     env_fsync_log_init(result);
 
-    result->i->bt_compare = toku_builtin_compare_fun;
+    memcpy(&result->i->key_ops, &toku_builtin_key_ops, sizeof(toku_builtin_key_ops));
 
     r = toku_logger_create(&result->i->logger);
     if (r!=0) goto cleanup; // In particular, logger_create can return the huge page error.

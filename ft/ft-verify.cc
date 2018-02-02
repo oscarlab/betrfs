@@ -104,7 +104,7 @@ PATENT RIGHTS GRANT:
 static int 
 compare_pairs (FT_HANDLE brt, const DBT *a, const DBT *b) {
     FAKE_DB(db, &brt->ft->cmp_descriptor);
-    int cmp = brt->ft->compare_fun(&db, a, b);
+    int cmp = brt->ft->key_ops.keycmp(&db, a, b);
     return cmp;
 }
 
@@ -112,7 +112,7 @@ static int
 compare_pair_to_key (FT_HANDLE brt, const DBT *a, bytevec key, ITEMLEN keylen) {
     DBT y;
     FAKE_DB(db, &brt->ft->cmp_descriptor);
-    int cmp = brt->ft->compare_fun(&db, a, toku_fill_dbt(&y, key, keylen));
+    int cmp = brt->ft->key_ops.keycmp(&db, a, toku_fill_dbt(&y, key, keylen));
     return cmp;
 }
 
@@ -196,6 +196,7 @@ int count_msgs(const int32_t &offset, const uint32_t UU(idx), struct count_msgs_
 struct verify_message_tree_extra {
     FIFO fifo;
     bool broadcast;
+    bool kupsert;
     bool is_fresh;
     int i;
     int verbose;
@@ -215,7 +216,10 @@ int verify_message_tree(const int32_t &offset, const uint32_t UU(idx), struct ve
     if (e->broadcast) {
         VERIFY_ASSERTION(ft_msg_type_applies_multiple((enum ft_msg_type) entry->type) || ft_msg_type_does_nothing((enum ft_msg_type) entry->type),
                          e->i, "message found in broadcast list that is not a broadcast");
-    } else {
+    } else if(e->kupsert) {
+        VERIFY_ASSERTION((FT_KUPSERT_BROADCAST_ALL == (enum ft_msg_type) (char) entry->type),
+                e->i, "message found in kupsert list that is not a kupsert msg");
+     } else {
         VERIFY_ASSERTION(ft_msg_type_applies_once((enum ft_msg_type) entry->type),
                          e->i, "message found in fresh or stale message tree that does not apply once");
         if (e->is_fresh) {
@@ -263,7 +267,7 @@ verify_sorted_by_key_msn(FT_HANDLE brt, FIFO fifo, const verify_omt_t &mt) {
             struct toku_fifo_entry_key_msn_cmp_extra extra;
             ZERO_STRUCT(extra);
             extra.desc = &brt->ft->cmp_descriptor;
-            extra.cmp = brt->ft->compare_fun;
+            extra.cmp = brt->ft->key_ops.keycmp;
             extra.fifo = fifo;
             if (toku_fifo_entry_key_msn_cmp(extra, last_offset, offset) >= 0) {
                 result = TOKUDB_NEEDS_REPAIR;
@@ -281,7 +285,7 @@ count_eq_key_msn(FT_HANDLE brt, FIFO fifo, const count_omt_t &mt, const DBT *key
     struct toku_fifo_entry_key_msn_heaviside_extra extra;
     ZERO_STRUCT(extra);
     extra.desc = &brt->ft->cmp_descriptor;
-    extra.cmp = brt->ft->compare_fun;
+    extra.cmp = brt->ft->key_ops.keycmp;
     extra.fifo = fifo;
     extra.key = key;
     extra.msn = msn;
@@ -392,7 +396,9 @@ static int verify_sub(FT_MSG msg, bool is_fresh, void *args) {
                             VERIFY_ASSERTION2(ft_msg_type_applies_multiple(type) || ft_msg_type_does_nothing(type), i, "a message was found that does not apply either to all or to only one key");
                             struct count_msgs_extra extra = { .count = 0, .msn = msn, .fifo = bnc->buffer };
                             bnc->broadcast_list.iterate<struct count_msgs_extra, count_msgs>(&extra);
-                            VERIFY_ASSERTION2(extra.count == 1, i, "a broadcast message was not found in the broadcast list");
+                            
+                            bnc->kupsert_list.iterate<struct count_msgs_extra, count_msgs>(&extra);
+                            VERIFY_ASSERTION2(extra.count == 1, i, "a broadcast/kupsert message was not found in the broadcast list");
                              }
                             *p_last_msn = msn;
                             return  0;
@@ -451,7 +457,7 @@ toku_verify_ftnode_internal(FT_HANDLE brt,
            struct verify_sub_args args = {i, brt, curr_less_pivot, curr_geq_pivot, &last_msn, &this_msn, bnc, &blocknum, &result, verbose,  keep_going_on_failure}; 
             int r = toku_fifo_iterate(bnc->buffer, verify_sub, &args);
            if(r) goto done; 
-            struct verify_message_tree_extra extra = { .fifo = bnc->buffer, .broadcast = false, .is_fresh = true, .i = i, .verbose = verbose, .blocknum = node->thisnodename, .keep_going_on_failure = keep_going_on_failure, .messages_have_been_moved = messages_have_been_moved };
+            struct verify_message_tree_extra extra = { .fifo = bnc->buffer, .broadcast = false, .kupsert = false, .is_fresh = true, .i = i, .verbose = verbose, .blocknum = node->thisnodename, .keep_going_on_failure = keep_going_on_failure, .messages_have_been_moved = messages_have_been_moved };
             r = bnc->fresh_message_tree.iterate<struct verify_message_tree_extra, verify_message_tree>(&extra);
             if (r != 0) { result = r; goto done; }
             extra.is_fresh = false;
@@ -472,6 +478,11 @@ toku_verify_ftnode_internal(FT_HANDLE brt,
             extra.broadcast = true;
             r = bnc->broadcast_list.iterate<struct verify_message_tree_extra, verify_message_tree>(&extra);
             if (r != 0) { result = r; goto done; }
+	
+	    extra.kupsert = true;
+            r = bnc->kupsert_list.iterate<struct verify_message_tree_extra, verify_message_tree>(&extra);
+            if (r != 0) { result = r; goto done; }
+
         }
         else {
             BASEMENTNODE bn = BLB(node, i);

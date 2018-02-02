@@ -108,13 +108,12 @@ typedef int (*ft_search_compare_func_t)(const struct ft_search &, const DBT *);
 
 /* the search object contains the compare function, search direction, and the kv pair that
    is used in the compare function.  the context is the user's private data */
-
 typedef struct ft_search {
     ft_search_compare_func_t compare;
     enum ft_search_direction_e direction;
     const DBT *k;
     void *context;
-    
+
     // To fix #3522, we need to remember the pivots that we have searched unsuccessfully.
     // For example, when searching right (left), we call search->compare() on the ith pivot key.  If search->compare(0 returns
     //  nonzero, then we search the ith subtree.  If that subsearch returns DB_NOTFOUND then maybe the key isn't present in the
@@ -136,20 +135,21 @@ typedef struct ft_search {
     //   no guarantee that we will get everything pinned again.  We ought to keep nodes pinned when we retry, except that on the
     //   way out with a DB_NOTFOUND we ought to unpin those nodes.  See #3528.
     DBT pivot_bound;
+
+    ANCESTORS kupsert_ancestors;
 } ft_search_t;
 
-/* initialize the search compare object */
-static inline ft_search_t *ft_search_init(ft_search_t *so, ft_search_compare_func_t compare, enum ft_search_direction_e direction, const DBT *k, void *context) {
+static inline ft_search_t *
+ft_search_init(ft_search_t *so, ft_search_compare_func_t compare,
+               enum ft_search_direction_e direction,
+               const DBT *k, void *context)
+{
     so->compare = compare;
     so->direction = direction;
     so->k = k;
     so->context = context;
     toku_init_dbt(&so->pivot_bound);
+    so->kupsert_ancestors = NULL;
     return so;
 }
-
-static inline void ft_search_finish(ft_search_t *so) {
-    toku_destroy_dbt(&so->pivot_bound);
-}
-
 #endif

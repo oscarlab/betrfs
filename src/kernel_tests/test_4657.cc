@@ -113,7 +113,10 @@ int test_test_4657(void) {
   DB_ENV *env;
   r = db_env_create(&env, 0);                                                         CKERR(r);
   env->set_errfile(env, stderr);
-  r = env->set_default_bt_compare(env, int64_dbt_cmp); CKERR(r);
+    struct toku_db_key_operations key_ops;
+    memset(&key_ops, 0, sizeof(key_ops));
+    key_ops.keycmp = int64_dbt_cmp;
+    r = env->set_key_ops(env, &key_ops); CKERR(r);
   r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                      CKERR(r);
     
   DB *db;

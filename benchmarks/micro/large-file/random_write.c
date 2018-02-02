@@ -9,7 +9,7 @@
 #include <fcntl.h>
 
 
-static long randomwrites = 32 * (256 * 1024);
+static long randomwrites = (256 * 1024);
 static char * fname = NULL;
 static long long fsize = 0;
 static char * prog_name;

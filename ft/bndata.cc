@@ -142,7 +142,7 @@ void bn_data::initialize_from_data(uint32_t num_entries, unsigned char *buf, uin
             curr_src_pos += keylen;
         }
         else {
-            paranoid_invariant(curr_type == LE_MVCC);
+            paranoid_invariant(curr_type >= LE_MVCC && curr_type < LE_MVCC_END);
             num_cxrs = toku_htod32(*(uint32_t *)curr_src_pos);
             curr_src_pos += sizeof(uint32_t); // num_cxrs
             num_pxrs = curr_src_pos[0];
@@ -323,6 +323,121 @@ void bn_data::get_space_for_insert(
     }
 }
 
+void bn_data::move_leafentries_to_through_kupsert(
+    struct toku_db_key_operations *key_ops,
+    BN_DATA dst_bd,
+    FT_MSG cmd,
+    int32_t lbi, //lower bound inclusive
+    int32_t ube  //upper bound exclusive
+    )
+//Effect: move leafentreis in the range [lbi, ube) from this to src_omt to newly created dest_omt
+{
+    paranoid_invariant(lbi < ube);
+    paranoid_invariant((uint32_t)ube <= omt_size());
+    KLPAIR *XMALLOC_N(ube - lbi, newklpointers);
+
+    size_t mpsize = toku_mempool_get_used_space(&m_buffer_mempool); // overkill, but safe
+    struct mempool *dst_mp = &dst_bd->m_buffer_mempool;
+    struct mempool *src_mp = &m_buffer_mempool;
+    toku_mempool_construct(dst_mp, mpsize);
+
+    int32_t i = 0;
+    for (i = lbi; i < ube; i++) {
+        KLPAIR curr_kl;
+        m_buffer.fetch(i, &curr_kl);
+
+        int old_keylen = curr_kl->keylen;
+        void *old_keyp = curr_kl->key_le;
+        LEAFENTRY old_le = get_le_from_klpair(curr_kl);
+        int old_le_size = leafentry_memsize(old_le);
+
+        DBT old_key, new_key;
+        toku_memdup_dbt(&old_key, old_keyp, old_keylen);
+        toku_init_dbt(&new_key);
+        ft_msg_kupsert_forward_transform(key_ops, cmd, &old_key, &new_key);
+
+        size_t old_kl_size = old_keylen + sizeof(*curr_kl) + old_le_size;
+        size_t new_kl_size = new_key.size + sizeof(*curr_kl) + old_le_size;
+        KLPAIR new_kl = NULL;
+        CAST_FROM_VOIDP(new_kl, toku_mempool_malloc(dst_mp, new_kl_size, 1));
+
+        new_kl->keylen = new_key.size;
+        memcpy(new_kl->key_le, new_key.data, new_key.size);
+        memcpy((char *)new_kl->key_le + new_kl->keylen, old_le, old_le_size);
+
+        newklpointers[i - lbi] = new_kl;
+        toku_mempool_mfree(src_mp, curr_kl, old_kl_size);
+        toku_destroy_dbt(&old_key);
+        toku_destroy_dbt(&new_key);
+    }
+
+    dst_bd->m_buffer.create_steal_sorted_array(&newklpointers, ube - lbi, ube - lbi);
+    // now remove the elements from src_omt
+    for (i = ube - 1; i >= lbi; i--) {
+        // i really really hate the uint overflow guts -Jun
+        m_buffer.delete_at((uint32_t)i);
+    }
+}
+
+#include "ft-ops.h"
+
+void bn_data::relift_leafentries(BN_DATA dst_bd, FT ft,
+                                 DBT *old_lifted, DBT *new_lifted)
+{
+    uint32_t size = omt_size();
+    KLPAIR *XMALLOC_N(size, newklpointers);
+    size_t mpsize = toku_mempool_get_used_space(&m_buffer_mempool);
+    struct mempool *dst_mp = &dst_bd->m_buffer_mempool;
+    struct mempool *src_mp = &m_buffer_mempool;
+    toku_mempool_construct(dst_mp, mpsize);
+
+    for (int i = 0; i < size; i++) {
+        KLPAIR curr_kl;
+        m_buffer.fetch(i, &curr_kl);
+
+        int old_keylen = curr_kl->keylen;
+        void *old_keyp = curr_kl->key_le;
+        LEAFENTRY old_le = get_le_from_klpair(curr_kl);
+        int old_le_size = leafentry_memsize(old_le);
+
+        DBT old_key, unlifted_key, new_key;
+        toku_fill_dbt(&old_key, old_keyp, old_keylen);
+        toku_init_dbt(&unlifted_key);
+        int r;
+        if (old_lifted->size != 0 && new_lifted->size != 0) {
+            r = toku_ft_unlift_key(ft, &unlifted_key, &old_key, old_lifted);
+            assert_zero(r);
+            r = toku_ft_lift_key_no_alloc(ft, &new_key, &unlifted_key, new_lifted);
+            assert_zero(r);
+        } else if (old_lifted->size == 0) {
+            assert(new_lifted->size != 0);
+            r = toku_ft_lift_key_no_alloc(ft, &new_key, &old_key, new_lifted);
+            assert_zero(r);
+        } else {
+            r = toku_ft_unlift_key(ft, &unlifted_key, &old_key, old_lifted);
+            assert_zero(r);
+            toku_copy_dbt(&new_key, unlifted_key);
+        }
+        size_t old_kl_size = old_keylen + sizeof(*curr_kl) + old_le_size;
+        size_t new_kl_size = new_key.size + sizeof(*curr_kl) + old_le_size;
+        KLPAIR new_kl = NULL;
+        CAST_FROM_VOIDP(new_kl, toku_mempool_malloc(dst_mp, new_kl_size, 1));
+        new_kl->keylen = new_key.size;
+        memcpy(new_kl->key_le, new_key.data, new_key.size);
+        memcpy((char *)new_kl->key_le + new_key.size, old_le, old_le_size);
+
+        newklpointers[i] = new_kl;
+        toku_mempool_mfree(src_mp, curr_kl, old_kl_size);
+        toku_destroy_dbt(&old_key);
+        toku_cleanup_dbt(&unlifted_key);
+    }
+
+    dst_bd->m_buffer.create_steal_sorted_array(&newklpointers, size, size);
+    for (int i = size - 1; i >= 0; i--) {
+        m_buffer.delete_at((uint32_t)i);
+    }
+}
+
 void bn_data::move_leafentries_to(
      BN_DATA dest_bd,
      uint32_t lbi, //lower bound inclusive
@@ -470,5 +585,3 @@ void bn_data::clone(bn_data* orig_bn_data) {
     int r = m_buffer.iterate_on_range<decltype(p), fix_mp_offset>(0, omt_size(), &p);
     invariant_zero(r);
 }
-
-

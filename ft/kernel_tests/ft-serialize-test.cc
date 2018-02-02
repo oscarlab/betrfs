@@ -168,7 +168,7 @@ string_key_cmp(DB *UU(e), const DBT *a, const DBT *b)
 static void
 setup_dn(enum ftnode_verify_type bft, int fd, FT brt_h, FTNODE *dn, FTNODE_DISK_DATA* ndd) {
     int r;
-    brt_h->compare_fun = string_key_cmp;
+    brt_h->key_ops.keycmp = string_key_cmp;
     if (bft == read_all) {
         struct ftnode_fetch_extra bfe;
         fill_bfe_for_full_read(&bfe, brt_h);
@@ -1137,8 +1137,8 @@ test_serialize_nonleaf(enum ftnode_verify_type bft, bool do_clone) {
     BP_BLOCKNUM(&sn, 1).b = 35;
     BP_STATE(&sn,0) = PT_AVAIL;
     BP_STATE(&sn,1) = PT_AVAIL;
-    set_BNC(&sn, 0, toku_create_empty_nl());
-    set_BNC(&sn, 1, toku_create_empty_nl());
+    set_BNC(&sn, 0, toku_create_empty_nl(nullptr));
+    set_BNC(&sn, 1, toku_create_empty_nl(nullptr));
     //Create XIDS
     XIDS xids_0 = xids_get_root_xids();
     XIDS xids_123;

@@ -5,7 +5,7 @@
 support=$HOME/$repo/benchmarks/support-files
 
 if [ ! -e $support/$clone_repo ] ; then
-    cd $support; git clone git@camilla.oscar.cs.stonybrook.edu:$clone_repo.git; cd -
+    cd $support; git clone https://github.com/torvalds/linux.git; cd -
 fi
 
 if [ -e $mntpnt/$clone_repo ]; then

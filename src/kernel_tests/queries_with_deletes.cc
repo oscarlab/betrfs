@@ -117,7 +117,10 @@ int test_queries_with_deletes(void) {
   // we don't have cachet pressure
   r = env->set_cachesize(env, 0, 4*cachesize, 1); CKERR(r);
   r = env->set_lg_bsize(env, 4096);                                                   CKERR(r);
-  r = env->set_default_bt_compare(env, int64_dbt_cmp); CKERR(r);
+    struct toku_db_key_operations key_ops;
+    memset(&key_ops, 0, sizeof(key_ops));
+    key_ops.keycmp = int64_dbt_cmp;
+    r = env->set_key_ops(env, &key_ops), CKERR(r);
   r = env->open(env, testfile, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                      CKERR(r);
     
   DB *db;

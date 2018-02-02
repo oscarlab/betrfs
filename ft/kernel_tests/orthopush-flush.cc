@@ -219,7 +219,7 @@ insert_random_message_to_bn(
     *keyp = toku_xmemdup(keydbt->data, keydbt->size);
     int64_t numbytes;
     toku_le_apply_msg(&msg, NULL, NULL, 0, TXNID_NONE, make_gc_info(false), save, &numbytes);
-    toku_ft_bn_apply_cmd(t->ft, t->ft->compare_fun, t->ft->update_fun, NULL, NULL, blb, &msg, TXNID_NONE, make_gc_info(false), NULL, NULL);
+    toku_ft_bn_apply_cmd(t->ft, NULL, NULL, blb, &msg, TXNID_NONE, make_gc_info(false), NULL, NULL);
     if (msn.msn > blb->max_msn_applied.msn) {
         blb->max_msn_applied = msn;
     }
@@ -269,11 +269,11 @@ insert_same_message_to_bns(
     *keyp = toku_xmemdup(keydbt->data, keydbt->size);
     int64_t numbytes;
     toku_le_apply_msg(&msg, NULL, NULL, 0, TXNID_NONE, make_gc_info(false), save, &numbytes);
-    toku_ft_bn_apply_cmd(t->ft, t->ft->compare_fun, t->ft->update_fun, NULL, NULL, blb1, &msg, TXNID_NONE, make_gc_info(false), NULL, NULL);
+    toku_ft_bn_apply_cmd(t->ft, NULL, NULL, blb1, &msg, TXNID_NONE, make_gc_info(false), NULL, NULL);
     if (msn.msn > blb1->max_msn_applied.msn) {
         blb1->max_msn_applied = msn;
     }
-    toku_ft_bn_apply_cmd(t->ft, t->ft->compare_fun, t->ft->update_fun, NULL, NULL, blb2, &msg, TXNID_NONE, make_gc_info(false), NULL, NULL);
+    toku_ft_bn_apply_cmd(t->ft, NULL, NULL, blb2, &msg, TXNID_NONE, make_gc_info(false), NULL, NULL);
     if (msn.msn > blb2->max_msn_applied.msn) {
         blb2->max_msn_applied = msn;
     }
@@ -426,14 +426,14 @@ flush_to_internal(FT_HANDLE t) {
     r = xids_create_child(xids_0, &xids_234, (TXNID)234);
     CKERR(r);
 
-    NONLEAF_CHILDINFO child_bnc = toku_create_empty_nl();
+    NONLEAF_CHILDINFO child_bnc = toku_create_empty_nl(nullptr);
     int i;
     for (i = 0; toku_bnc_memory_used(child_bnc) < 128*1024; ++i) {
         insert_random_message(child_bnc, &child_messages[i], &child_messages_is_fresh[i], xids_123, 0);
     }
     int num_child_messages = i;
 
-    NONLEAF_CHILDINFO parent_bnc = toku_create_empty_nl();
+    NONLEAF_CHILDINFO parent_bnc = toku_create_empty_nl(nullptr);
     for (i = 0; toku_bnc_memory_used(parent_bnc) < 128*1024; ++i) {
         insert_random_message(parent_bnc, &parent_messages[i], &parent_messages_is_fresh[i], xids_234, 0);
     }
@@ -578,7 +578,7 @@ flush_to_internal_multiple(FT_HANDLE t) {
     FT_MSG childkeys[7];
     int i;
     for (i = 0; i < 8; ++i) {
-        child_bncs[i] = toku_create_empty_nl();
+        child_bncs[i] = toku_create_empty_nl(nullptr);
         if (i < 7) {
             childkeys[i] = NULL;
         }
@@ -596,7 +596,7 @@ flush_to_internal_multiple(FT_HANDLE t) {
     }
     int num_child_messages = i;
 
-    NONLEAF_CHILDINFO parent_bnc = toku_create_empty_nl();
+    NONLEAF_CHILDINFO parent_bnc = toku_create_empty_nl(nullptr);
     for (i = 0; toku_bnc_memory_used(parent_bnc) < 128*1024; ++i) {
         insert_random_message(parent_bnc, &parent_messages[i], &parent_messages_is_fresh[i], xids_234, 0);
     }
@@ -759,7 +759,7 @@ flush_to_leaf(FT_HANDLE t, bool make_leaf_up_to_date, bool use_flush) {
         int num_stale = random() % 2000;
         memset(&parent_messages_is_fresh[num_stale], true, (4096 - num_stale) * (sizeof parent_messages_is_fresh[0]));
     }
-    NONLEAF_CHILDINFO parent_bnc = toku_create_empty_nl();
+    NONLEAF_CHILDINFO parent_bnc = toku_create_empty_nl(nullptr);
     MSN max_parent_msn = MIN_MSN;
     for (i = 0; toku_bnc_memory_used(parent_bnc) < 128*1024; ++i) {
         insert_random_update_message(parent_bnc, &parent_messages[i], parent_messages_is_fresh[i], xids_234, i%8, &parent_messages_applied[i], &max_parent_msn);
@@ -773,7 +773,7 @@ flush_to_leaf(FT_HANDLE t, bool make_leaf_up_to_date, bool use_flush) {
     if (make_leaf_up_to_date) {
         for (i = 0; i < num_parent_messages; ++i) {
             if (!parent_messages_is_fresh[i]) {
-                toku_ft_leaf_apply_cmd(t->ft, t->ft->compare_fun, t->ft->update_fun, &t->ft->descriptor, NULL, child, -1, parent_messages[i], make_gc_info(false), NULL, NULL);
+                toku_ft_leaf_apply_cmd(t->ft, &t->ft->descriptor, NULL, child, -1, parent_messages[i], make_gc_info(false), NULL, NULL);
             }
         }
         for (i = 0; i < 8; ++i) {
@@ -807,7 +807,7 @@ flush_to_leaf(FT_HANDLE t, bool make_leaf_up_to_date, bool use_flush) {
         struct ancestors ancestors = { .node = parentnode, .childnum = 0, .next = NULL };
         const struct pivot_bounds infinite_bounds = { .lower_bound_exclusive = NULL, .upper_bound_inclusive = NULL };
         bool msgs_applied;
-        toku_apply_ancestors_messages_to_node(t, child, &ancestors, &infinite_bounds, &msgs_applied, -1);
+        toku_apply_ancestors_messages_to_node(t, child, &ancestors, &infinite_bounds, &msgs_applied, -1, nullptr);
 #if 0
 
         FIFO_ITERATE(parent_bnc->buffer, key, keylen, val, vallen, type, msn, xids, is_fresh,
@@ -1026,7 +1026,7 @@ flush_to_leaf_with_keyrange(FT_HANDLE t, bool make_leaf_up_to_date) {
         int num_stale = random() % 2000;
         memset(&parent_messages_is_fresh[num_stale], true, (4096 - num_stale) * (sizeof parent_messages_is_fresh[0]));
     }
-    NONLEAF_CHILDINFO parent_bnc = toku_create_empty_nl();
+    NONLEAF_CHILDINFO parent_bnc = toku_create_empty_nl(nullptr);
     MSN max_parent_msn = MIN_MSN;
     for (i = 0; toku_bnc_memory_used(parent_bnc) < 128*1024; ++i) {
         insert_random_update_message(parent_bnc, &parent_messages[i], parent_messages_is_fresh[i], xids_234, i%8, &parent_messages_applied[i], &max_parent_msn);
@@ -1041,7 +1041,7 @@ flush_to_leaf_with_keyrange(FT_HANDLE t, bool make_leaf_up_to_date) {
         for (i = 0; i < num_parent_messages; ++i) {
             if (dummy_cmp(NULL, parent_messages[i]->key, &childkeys[7]) <= 0 &&
                 !parent_messages_is_fresh[i]) {
-                toku_ft_leaf_apply_cmd(t->ft, t->ft->compare_fun, t->ft->update_fun, &t->ft->descriptor, NULL, child, -1, parent_messages[i], make_gc_info(false), NULL, NULL);
+                toku_ft_leaf_apply_cmd(t->ft, &t->ft->descriptor, NULL, child, -1, parent_messages[i], make_gc_info(false), NULL, NULL);
             }
         }
         for (i = 0; i < 8; ++i) {
@@ -1077,7 +1077,7 @@ flush_to_leaf_with_keyrange(FT_HANDLE t, bool make_leaf_up_to_date) {
         .upper_bound_inclusive = toku_clone_dbt(&ubi, childkeys[7])
     };
     bool msgs_applied;
-    toku_apply_ancestors_messages_to_node(t, child, &ancestors, &bounds, &msgs_applied, -1);
+    toku_apply_ancestors_messages_to_node(t, child, &ancestors, &bounds, &msgs_applied, -1, nullptr);
 
 //    FIFO_ITERATE(parent_bnc->buffer, key, keylen, val, vallen, type, msn, xids, is_fresh,
 struct iter_fn2_args args = {
@@ -1120,7 +1120,6 @@ struct iter_fn2_args args = {
         toku_free(child_messages[i]);
         toku_free(key_pointers[i]);
     }
-    toku_free(ubi.data);
     toku_ftnode_free(&child);
     toku_free(parent_messages);
     toku_free(key_pointers);
@@ -1216,7 +1215,7 @@ compare_apply_and_flush(FT_HANDLE t, bool make_leaf_up_to_date) {
         int num_stale = random() % 2000;
         memset(&parent_messages_is_fresh[num_stale], true, (4096 - num_stale) * (sizeof parent_messages_is_fresh[0]));
     }
-    NONLEAF_CHILDINFO parent_bnc = toku_create_empty_nl();
+    NONLEAF_CHILDINFO parent_bnc = toku_create_empty_nl(nullptr);
     MSN max_parent_msn = MIN_MSN;
     for (i = 0; toku_bnc_memory_used(parent_bnc) < 128*1024; ++i) {
         insert_random_update_message(parent_bnc, &parent_messages[i], parent_messages_is_fresh[i], xids_234, i%8, &parent_messages_applied[i], &max_parent_msn);
@@ -1231,8 +1230,8 @@ compare_apply_and_flush(FT_HANDLE t, bool make_leaf_up_to_date) {
     if (make_leaf_up_to_date) {
         for (i = 0; i < num_parent_messages; ++i) {
             if (!parent_messages_is_fresh[i]) {
-                toku_ft_leaf_apply_cmd(t->ft, t->ft->compare_fun, t->ft->update_fun, &t->ft->descriptor, NULL, child1, -1, parent_messages[i], make_gc_info(false), NULL, NULL);
-                toku_ft_leaf_apply_cmd(t->ft, t->ft->compare_fun, t->ft->update_fun, &t->ft->descriptor, NULL, child2, -1, parent_messages[i], make_gc_info(false), NULL, NULL);
+                toku_ft_leaf_apply_cmd(t->ft, &t->ft->descriptor, NULL, child1, -1, parent_messages[i], make_gc_info(false), NULL, NULL);
+                toku_ft_leaf_apply_cmd(t->ft, &t->ft->descriptor, NULL, child2, -1, parent_messages[i], make_gc_info(false), NULL, NULL);
             }
         }
         for (i = 0; i < 8; ++i) {
@@ -1258,7 +1257,7 @@ compare_apply_and_flush(FT_HANDLE t, bool make_leaf_up_to_date) {
     struct ancestors ancestors = { .node = parentnode, .childnum = 0, .next = NULL };
     const struct pivot_bounds infinite_bounds = { .lower_bound_exclusive = NULL, .upper_bound_inclusive = NULL };
     bool msgs_applied;
-    toku_apply_ancestors_messages_to_node(t, child2, &ancestors, &infinite_bounds, &msgs_applied, -1);
+    toku_apply_ancestors_messages_to_node(t, child2, &ancestors, &infinite_bounds, &msgs_applied, -1, nullptr);
 #if 0
 
     FIFO_ITERATE(parent_bnc->buffer, key, keylen, val, vallen, type, msn, xids, is_fresh,

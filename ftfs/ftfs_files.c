@@ -106,6 +106,7 @@ int resolve_ftfs_files_symbols(void)
 /*
  * this is a hack. we should instead change the kernel to have a
  * helper that takes a files_struct
+ * same as fget_light in file.c
  */
 struct file *ftfs_fget_light(unsigned int fd, int *fput_needed)
 {
@@ -223,6 +224,9 @@ out_unlock:
 #define __O_KERNFS 0
 #endif
 
+/*
+similar to do_sys_open but with southbound context switch
+ */
 int open(const char *pathname, int flags, umode_t mode)
 {
 	int fd;
@@ -275,7 +279,7 @@ int close(int fd)
 	return ret;
 }
 
-/* one line change from open.c */
+/* one line change from do_sys_ftruncate in open.c */
 static long do_sb_ftruncate(unsigned int fd, loff_t length, int small)
 {
 	struct inode *inode;
@@ -324,6 +328,7 @@ out:
 	return error;
 }
 
+/* same as ftrncate64 in open.c */
 int ftruncate64(int fd, loff_t length)
 {
 	int err;
@@ -356,7 +361,7 @@ retry:
 	return err;
 }
 
-
+/* do_fallocate from open.c */
 int do_sb_fallocate(struct file *file, int mode, loff_t offset, loff_t len)
 {
          struct inode *inode = file_inode(file);
@@ -412,6 +417,7 @@ int do_sb_fallocate(struct file *file, int mode, loff_t offset, loff_t len)
             sb_end_write(inode->i_sb);
             return ret;
 }
+/* fallocate from open.c */
 int fallocate64(int fd, int mode, loff_t offset, loff_t len)
 {
          struct fd f = ftfs_fdget(fd);
@@ -512,6 +518,7 @@ static ssize_t ftfs_write(struct file *file, const char *buf, size_t count,
 	return ret;
 }
 
+/* similar to write syscall in read_write.c */
 ssize_t write(int fd, const void *buf, size_t count)
 {
 	struct fd f;
@@ -534,6 +541,7 @@ ssize_t write(int fd, const void *buf, size_t count)
 	return ret;
 }
 
+/* mostly pwrite64 from read_write.c */
 ssize_t pwrite64(int fd, const void *buf, size_t count, loff_t pos)
 {
 	struct fd f;
@@ -576,6 +584,7 @@ static ssize_t ftfs_read(struct file *f, char *buf, size_t count, loff_t *pos)
 	return ret;
 }
 
+/* pread64 syscall from read_write.c */
 ssize_t pread64(int fd, void *buf, size_t count, loff_t pos)
 {
 	struct fd f;
@@ -696,6 +705,7 @@ int unlink(const char *pathname)
 	return ftfs_sb_unlink(pathname);
 }
 
+/* do_fsync in fsycn.c */
 static int sync_helper(int fd, int data_sync)
 {
 	struct fd f;
@@ -715,11 +725,13 @@ static int sync_helper(int fd, int data_sync)
 	return ret;
 }
 
+/* fsync in fsync.c */
 int fsync(int fd)
 {
   	return sync_helper(fd, 0);
 }
 
+/* fdatasync in fsync.c */
 int fdatasync(int fd)
 {
   	return sync_helper(fd, 1);
@@ -742,6 +754,7 @@ int symlink(const char * oldname, const char * newname)
 	return ret;
 }
 
+/* readlinkat from stat.c (with extra southbound context switching) */
 // no code in ft-index check errno when readlink gets wrong
 ssize_t readlink(const char *pathname, char *buf, size_t bufsiz)
 {
@@ -969,6 +982,7 @@ static ssize_t ftfs_readv(struct file *file, const struct iovec *vec,
 	return ret;
 }
 
+/* readv syscall from read_write.c */
 ssize_t readv(int fd, const struct iovec *vec, unsigned int vlen)
 {
 	struct fd f;

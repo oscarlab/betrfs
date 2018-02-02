@@ -8,7 +8,7 @@ cnt=0
 for i in 2048 1024 512 256 128 64 32 16 8 4 2 1 0
 #for i in 2048 
 do
-	FT_HOMEDIR=/home/ftfs/ft-index
+	FT_HOMEDIR=/home/betrfs/frwlock-fixup/ft-index
 	. $FT_HOMEDIR/benchmarks/fs-info.sh
 	sudo $FT_HOMEDIR/benchmarks/cleanup-fs.sh
 	sudo $FT_HOMEDIR/benchmarks/setup-ftfs-parameterized.sh $i 

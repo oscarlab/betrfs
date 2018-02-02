@@ -13,6 +13,11 @@ if [[ $fstype == "ext4" || $fstype == "btrfs" || $fstype == "xfs" ]]
 then
     umount $mntpnt
     exit 0
+elif [[ $fstype == "nilfs2" ]]
+then
+    sudo nilfs-clean -q
+    umount $mntpnt
+    exit 0
 elif [[ $fstype == "ftfs" ]]
 then
     umount $mntpnt

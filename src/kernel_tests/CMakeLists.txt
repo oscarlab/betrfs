@@ -451,6 +451,7 @@ update-multiple-with-indexer
 #upgrade-test-7 (transparent_upgrade_sources)
 zombie_db
 seqwrites-no-txn
+rename-simple
 )
 add_library(tokusrc_kernel_static STATIC ${tokusrc_kernel_srcs})
 maybe_add_gcov_to_libraries(tokusrc_static_conv)

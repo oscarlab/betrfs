@@ -101,13 +101,16 @@ static void
 setup (void) {
     toku_os_recursive_delete(TOKU_TEST_FILENAME);
     int r;
+    struct toku_db_key_operations key_ops;
+    memset(&key_ops, 0, sizeof(key_ops));
+    key_ops.keycmp = int_dbt_cmp;
     toku_os_recursive_delete(TOKU_TEST_FILENAME);
     r=toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
 
     r=db_env_create(&env, 0); CKERR(r);
 #ifdef TOKUDB
     r=env->set_redzone(env, 0); CKERR(r);
-    r=env->set_default_bt_compare(env, int_dbt_cmp); CKERR(r);
+    r = env->set_key_ops(env, &key_ops); CKERR(r);
 #endif
     env->set_errfile(env, stderr);
 #ifdef USE_BDB

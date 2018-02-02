@@ -147,7 +147,30 @@ ft_msg_get_max_keylen(FT_MSG ft_msg) {
 enum pacman_status 
 ft_msg_get_pm_status(FT_MSG ft_msg) {
     assert(FT_DELETE_MULTICAST == ft_msg->type);
-    return ft_msg -> pm_status;
+    return ft_msg -> u.rd_extra.pm_status;
+}
+
+char * 
+ft_msg_get_kupsert_new_prefix(FT_MSG ft_msg) {
+    assert(FT_KUPSERT_BROADCAST_ALL == (enum ft_msg_type) (char) ft_msg->type);
+    return ft_msg -> u.k_extra.new_prefix.data;
+}
+
+uint32_t
+ft_msg_get_kupsert_new_prefix_len(FT_MSG ft_msg) {
+    assert(FT_KUPSERT_BROADCAST_ALL == (enum ft_msg_type) (char) ft_msg->type);
+    return ft_msg -> u.k_extra.new_prefix.len;
+}
+char * 
+ft_msg_get_kupsert_old_prefix(FT_MSG ft_msg) {
+    assert(FT_KUPSERT_BROADCAST_ALL == (enum ft_msg_type) (char) ft_msg->type);
+    return ft_msg -> u.k_extra.old_prefix.data;
+}
+
+uint32_t
+ft_msg_get_kupsert_old_prefix_len(FT_MSG ft_msg) {
+    assert(FT_KUPSERT_BROADCAST_ALL == (enum ft_msg_type) (char)ft_msg->type);
+    return ft_msg -> u.k_extra.old_prefix.len;
 }
 
 MSN 
@@ -170,7 +193,7 @@ void ft_msg_init(FT_MSG ft_msg, enum ft_msg_type type, MSN msn, XIDS xids, const
     ft_msg->key = key;
     ft_msg->val = val?val:&empty_dbt;
     ft_msg->max_key = &empty_dbt;
-    ft_msg->is_right_excl=false;
+    memset(&ft_msg->u,0, sizeof(ft_msg->u));
 }
 
 void ft_msg_multicast_init(FT_MSG ft_msg, enum ft_msg_type type, MSN msn, XIDS xids, const DBT * key, const DBT * max_key, const DBT * val, bool is_re, enum pacman_status pm_status){
@@ -181,8 +204,26 @@ void ft_msg_multicast_init(FT_MSG ft_msg, enum ft_msg_type type, MSN msn, XIDS x
     ft_msg->key = key;
     ft_msg->val = val?val:&empty_dbt;
     ft_msg->max_key = max_key;
-    ft_msg->is_right_excl= is_re;
-    ft_msg->pm_status = pm_status;
+    ft_msg->u.rd_extra.is_right_excl= is_re;
+    ft_msg->u.rd_extra.pm_status = pm_status;
+}
+
+void ft_msg_kupsert_init(FT_MSG ft_msg, enum ft_msg_type type, MSN msn, XIDS
+                         xids, BYTESTRING old_prefix, BYTESTRING new_prefix){
+
+    ft_msg->type = type;
+    ft_msg->msn = msn;
+    ft_msg->xids = xids;
+    ft_msg->key = &empty_dbt;
+    ft_msg->max_key = &empty_dbt;
+    ft_msg->val = &empty_dbt;
+    //    ft_msg->key = key;
+//    ft_msg->val = val?val:&empty_dbt;
+//    ft_msg->max_key = max_key;
+    ft_msg->u.k_extra.old_prefix= old_prefix;
+    ft_msg->u.k_extra.new_prefix = new_prefix;
+  //  ft_msg->u.k_extra.forward = default_forward;
+  //  ft_msg->u.k_extra.backward = default_backward;
 }
 
 static void fill_dbt(DBT *dbt, bytevec k, ITEMLEN len) {
@@ -217,6 +258,16 @@ void ft_msg_read_from_rbuf(FT_MSG msg, DBT * k, DBT * v, DBT * m, struct rbuf *r
 	}
         ft_msg_multicast_init(msg,t, msn, *x ,k,m,v,is_right_excl, pm_status);
     }
+    else if(t == FT_KUPSERT_BROADCAST_ALL) {
+        const void * old_prefix;
+        uint32_t old_prefix_len;
+        const void * new_prefix;
+        uint32_t new_prefix_len;
+        rbuf_bytes(rb, &old_prefix, &old_prefix_len);
+        rbuf_bytes(rb, &new_prefix, &new_prefix_len);
+        ft_msg_kupsert_init(msg, t, msn, *x, {.len=old_prefix_len, .data=(char *)old_prefix},
+                            {.len=new_prefix_len, .data=(char *)new_prefix});  
+    }
     else {
         memset(m,0,sizeof(*m));
         ft_msg_init(msg, t, msn, *x, k, v);
@@ -248,5 +299,14 @@ void ft_msg_write_to_wbuf(FT_MSG msg, struct wbuf *wb, int is_fresh) {
 	enum pacman_status pm_status = ft_msg_multicast_pm_status(msg);
 	wbuf_nocrc_uint(wb, pm_status);	
     	}
-     }
+    } else if(type == FT_KUPSERT_BROADCAST_ALL) {
+        void * orig_prefix = ft_msg_get_kupsert_old_prefix(msg); 
+        uint32_t orig_prefix_len = ft_msg_get_kupsert_old_prefix_len(msg);
+        void * new_prefix = ft_msg_get_kupsert_new_prefix(msg);
+        uint32_t new_prefix_len = ft_msg_get_kupsert_new_prefix_len(msg);
+        wbuf_nocrc_bytes(wb, orig_prefix, orig_prefix_len);
+        wbuf_nocrc_bytes(wb, new_prefix, new_prefix_len);
+    
+    }
+
 }

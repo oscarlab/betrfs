@@ -145,7 +145,12 @@ static void setup (void) {
     env->set_errfile(env, stderr);
     env->set_update(env, update_fun);
     env->set_cachesize(env, 0, 10*(1<<20), 1);
-    { int chk_r = env->set_default_bt_compare(env, int_cmp); CKERR(chk_r); }
+    {
+        struct toku_db_key_operations key_ops;
+        memset(&key_ops, 0, sizeof(key_ops));
+        key_ops.keycmp = int_cmp;
+        int chk_r = env->set_key_ops(env, &key_ops); CKERR(chk_r);
+    }
     { int chk_r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
 }
 

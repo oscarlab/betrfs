@@ -90,10 +90,8 @@ PATENT RIGHTS GRANT:
 #ident "The technology is licensed by the Massachusetts Institute of Technology, Rutgers State University of New Jersey, and the Research Foundation of State University of New York at Stony Brook under United States of America Serial No. 11/760379 and to the patents and/or patent applications resulting from it."
 
 #include <ft-cachetable-wrappers.h>
-
 #include <fttypes.h>
 #include <ft-flusher.h>
-#include <ft-internal.h>
 #include "ft.h"
 
 static void
@@ -130,7 +128,7 @@ cachetable_put_empty_node_with_dep_nodes(
         h->cf,
         ftnode_get_key_and_fullhash,
         new_node,
-        make_pair_attr_with_type(sizeof(FTNODE), true),
+        make_pair_attr(sizeof(FTNODE)),
         get_write_callbacks_for_node(h),
         h,
         num_dependent_nodes,
@@ -210,7 +208,8 @@ toku_pin_ftnode_batched(
     FTNODE_FETCH_EXTRA bfe,
     bool apply_ancestor_messages, // this bool is probably temporary, for #3972, once we know how range query estimates work, will revisit this
     FTNODE *node_p,
-    bool* msgs_applied)
+    bool* msgs_applied,
+    ANCESTORS kupsert_ancestor)
 {
     void *node_v;
     *msgs_applied = false;
@@ -223,7 +222,7 @@ toku_pin_ftnode_batched(
     if (apply_ancestor_messages) {
         paranoid_invariant(bfe->type == ftnode_fetch_subset);
     }
-    
+
     int r = toku_cachetable_get_and_pin_nonblocking_batched(
             brt->ft->cf,
             blocknum,
@@ -244,12 +243,13 @@ toku_pin_ftnode_batched(
     node = static_cast<FTNODE>(node_v);
     if (apply_ancestor_messages && node->height == 0) {
         needs_ancestors_messages = toku_ft_leaf_needs_ancestors_messages(
-            brt->ft, 
-            node, 
-            ancestors, 
-            bounds, 
-            &max_msn_in_path, 
-            bfe->child_to_read
+            brt->ft,
+            node,
+            ancestors,
+            bounds,
+            &max_msn_in_path,
+            bfe->child_to_read,
+	    kupsert_ancestor
             );
         if (needs_ancestors_messages) {
             toku_unpin_ftnode_read_only(brt->ft, node);
@@ -274,12 +274,13 @@ toku_pin_ftnode_batched(
             node = static_cast<FTNODE>(node_v);
     	    toku_ft_node_unbound_inserts_validation(node,0, __LINE__);
 	    toku_apply_ancestors_messages_to_node(
-                brt, 
-                node, 
-                ancestors, 
-                bounds, 
+                brt,
+                node,
+                ancestors,
+                bounds,
                 msgs_applied,
-                bfe->child_to_read
+                bfe->child_to_read,
+		kupsert_ancestor
                 );
         } else {
             // At this point, we aren't going to run
@@ -352,6 +353,7 @@ toku_pin_ftnode_off_client_thread(
 {
     toku_pin_ftnode_off_client_thread_and_maybe_move_messages(
             h, blocknum, fullhash, bfe, lock_type, num_dependent_nodes, dependent_nodes, node_p, true);
+
 }
 
 void

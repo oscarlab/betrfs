@@ -10,10 +10,15 @@ if [[ ! -d "$DIR" ]]; then DIR="$PWD"; fi
 
 set -x
 
+# load zfs 
+sudo modprobe zfs
+
+rm -rf /mnt/benchmark/*
+
 # prep file system
 mkdir -p $mntpnt
 sudo zpool create -f datastore $sb_dev
 
 # mount the file system
 sudo zfs create -o mountpoint=$mntpnt datastore/files
-chown -R ftfs:ftfs $mntpnt
+chown -R betrfs:betrfs $mntpnt

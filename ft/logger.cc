@@ -116,15 +116,15 @@ static void toku_print_bytes (FILE *outf, uint32_t len, char *data) {
     uint32_t i;
     for (i=0; i<len; i++) {
         switch (data[i]) {
-        case '"':  fprintf(outf, "\\\""); break;
-        case '\\': fprintf(outf, "\\\\"); break;
-        case '\n': fprintf(outf, "\\n");  break;
+        case '"':  fprintf(outf, " \\\""); break;
+        case '\\': fprintf(outf, " \\\\"); break;
+        case '\n': fprintf(outf, " \\n");  break;
         default:
-            if (isprint(data[i])) fprintf(outf, "%c", data[i]);
-            else fprintf(outf, "\\%03o", (unsigned char)(data[i]));
+            if (isprint(data[i])) fprintf(outf, " %c", data[i]);
+            else fprintf(outf, " \\%03o", (unsigned char)(data[i]));
         }
     }
-    fprintf(outf, "\"");
+    fprintf(outf, " \"");
 }
 
 static bool is_a_logfile_any_version (const char *name, uint64_t *number_result, uint32_t *version_of_log) {
@@ -199,7 +199,7 @@ int toku_logger_create (TOKULOGGER *resultp) {
 
     bjm_init(&result->bjm);
     int num_processors = toku_os_get_number_active_processors();
-    result->writeback_kibbutz = toku_kibbutz_create_debug(num_processors, "logger_writeback_kibbutz_thread");
+    result->writeback_kibbutz = toku_kibbutz_create_debug(num_processors, "toku_logger_wb");
 
     result->write_block_size = FT_DEFAULT_NODE_SIZE; // default logging size is the same as the default brt block size
     toku_logfilemgr_create(&result->logfilemgr);
@@ -335,8 +335,8 @@ void toku_logger_append_unbound_insert_entry(TOKULOGGER logger, struct unbound_i
     toku_list_init(&entry->in_or_out);
     toku_mutex_lock(&logger->ubi_lock);
     toku_list_push(logger->ubi_in, &entry->in_or_out);
-    toku_mutex_unlock(&logger->ubi_lock);
     logger->n_unbound_inserts++;
+    toku_mutex_unlock(&logger->ubi_lock);
 }
 
 
@@ -601,7 +601,7 @@ release_output (TOKULOGGER logger, LSN fsynced_lsn)
 
 //static void
 void
-swap_inbuf_outbuf (TOKULOGGER logger)
+swap_inbuf_outbuf (TOKULOGGER logger, unsigned int *n_ubi)
 // Effect: Swap the inbuf and outbuf (including the unbound_insert lists)
 //         Reserve LSNs for the existing unbound_insert_sync messages in the outbuf
 // Entry and exit: Hold the input lock and permission to modify output.
@@ -611,17 +611,29 @@ swap_inbuf_outbuf (TOKULOGGER logger)
     logger->outbuf = tmp;
     assert(logger->inbuf.n_in_buf == 0);
 
-    struct toku_list * tmp2 = logger->ubi_in;
+    toku_mutex_lock(&logger->ubi_lock);
+    struct toku_list *tmp2 = logger->ubi_in;
     logger->ubi_in = logger->ubi_out;
     logger->ubi_out = tmp2;
     assert(toku_list_empty(logger->ubi_in));
+    *n_ubi = logger->n_unbound_inserts;
+    logger->n_unbound_inserts = 0;
+    toku_mutex_unlock(&logger->ubi_lock);
+
+    logger->unbound_insert_lsn = logger->lsn;
+    logger->lsn.lsn += *n_ubi;
+
+//    struct toku_list * tmp2 = logger->ubi_in;
+//    logger->ubi_in = logger->ubi_out;
+//    logger->ubi_out = tmp2;
+//    assert(toku_list_empty(logger->ubi_in));
 
     // reserve LSNs for our unbound_inserts in the outbuf
-    logger->unbound_insert_lsn = logger->lsn;
-    logger->lsn.lsn += logger->n_unbound_inserts;
+//    logger->unbound_insert_lsn = logger->lsn;
+//    logger->lsn.lsn += logger->n_unbound_inserts;
 
     // ubi_in list is now empty
-    logger->n_unbound_inserts = 0;
+//    logger->n_unbound_inserts = 0;
 }
 #if 0
 static bool logger_has_unbound_inserts(TOKULOGGER logger) {
@@ -896,8 +908,10 @@ if(!logger_unbound_test_callback||!logger_unbound_test_callback(callback_extra))
     }
     if (logger->inbuf.n_in_buf > 0) {
         // There isn't enough space, and there is something in the buffer, so write the inbuf.
-        unsigned int n = logger->n_unbound_inserts;
-	swap_inbuf_outbuf(logger);
+        //unsigned int n = logger->n_unbound_inserts;
+	//swap_inbuf_outbuf(logger);
+        unsigned int n;
+        swap_inbuf_outbuf(logger, &n);
 
 	//printf("%s:%d going to call write_outbuf_to_logfile\n", __func__, __LINE__);
         // Don't release the inlock in this case, because we don't want to get starved.
@@ -919,8 +933,10 @@ if(!logger_unbound_test_callback||!logger_unbound_test_callback(callback_extra))
     grab_output(logger, &fsynced_lsn);
 
     ml_lock(&logger->input_lock);
-    unsigned int n = logger->n_unbound_inserts;   
-    swap_inbuf_outbuf(logger);
+    //unsigned int n = logger->n_unbound_inserts;   
+    //swap_inbuf_outbuf(logger);
+    unsigned int n;
+    swap_inbuf_outbuf(logger, &n);
     
   //  printf("%s:%d going to call write_outbuf_to_logfile\n", __func__, __LINE__);
     write_outbuf_to_logfile(logger, &fsynced_lsn, n);
@@ -1211,8 +1227,10 @@ void toku_logger_maybe_fsync(TOKULOGGER logger, LSN lsn, int do_fsync, bool hold
         // otherwise we now own the output permission, and our lsn isn't outputed.
 
         ml_lock(&logger->input_lock);
-	unsigned int n = logger->n_unbound_inserts;
-        swap_inbuf_outbuf(logger);
+	//unsigned int n = logger->n_unbound_inserts;
+        //swap_inbuf_outbuf(logger);
+        unsigned int n;
+        swap_inbuf_outbuf(logger, &n);
 	toku_cond_broadcast(&logger->input_swapped);
         ml_unlock(&logger->input_lock); // release the input lock now, so other threads can fill the inbuf.  (Thus enabling group commit.)
 
@@ -1240,8 +1258,10 @@ logger_write_buffer(TOKULOGGER logger, LSN *fsynced_lsn)
 // Effect:  Write the buffers to the output.  If DO_FSYNC is true, then fsync.
 // Note: Only called during single-threaded activity from toku_logger_restart, so locks aren't really needed.
 {
-    unsigned int n = logger->n_unbound_inserts;
-    swap_inbuf_outbuf(logger);
+    //unsigned int n = logger->n_unbound_inserts;
+    //swap_inbuf_outbuf(logger);
+    unsigned int n;
+    swap_inbuf_outbuf(logger, &n);
     toku_cond_broadcast(&logger->input_swapped);
     ml_unlock(&logger->input_lock);
     //printf("%s:%d going to call write_outbuf_to_logfile\n", __func__, __LINE__);

@@ -74,6 +74,7 @@ set(FT_SOURCES
   ule
   x1764
   xids
+  ft-slice
   ybt
   "${CMAKE_CURRENT_BINARY_DIR}/log_code"
   "${CMAKE_CURRENT_BINARY_DIR}/log_print"

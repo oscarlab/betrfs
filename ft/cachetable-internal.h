@@ -648,11 +648,12 @@ struct cachetable {
     evictor ev;
     checkpointer cp;
     cachefile_list cf_list;
-    
+
     KIBBUTZ client_kibbutz; // pool of worker threads and jobs to do asynchronously for the client.
     KIBBUTZ ct_kibbutz; // pool of worker threads and jobs to do asynchronously for the cachetable
     KIBBUTZ checkpointing_kibbutz; // small pool for checkpointing cloned pairs
-    
+    KIBBUTZ rr_kibbutz;
+
     char *env_dir;
 };
 

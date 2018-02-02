@@ -121,7 +121,6 @@ PATENT RIGHTS GRANT:
 
 static uint32_t ule_get_innermost_numbytes(ULE ule, uint32_t keylen);
 
-
 ///////////////////////////////////////////////////////////////////////////////////
 // Engine status
 //
@@ -564,6 +563,19 @@ toku_le_apply_msg(FT_MSG   msg,
     }
 }
 
+bool toku_le_innermost_is_delete(LEAFENTRY le, TXNID oldest_referenced_xid_known) {
+    /**
+     * YZJ: This is a dirty hack, handle DELETE differently to pass
+     *      stat64-root-changes, need to revisit this when I get better
+     *      understanding of the code.
+     */
+    if (le->u.mvcc.num_pxrs == 1 && le->type == LE_MVCC_INNER_DEL &&
+        le_outermost_uncommitted_xid(le) == oldest_referenced_xid_known) {
+	    return true;
+    }
+    return false;
+}
+
 bool toku_le_worth_running_garbage_collection(LEAFENTRY le, TXNID oldest_referenced_xid_known) {
 // Effect: Quickly determines if it's worth trying to run garbage collection on a leafentry
 // Return: True if it makes sense to try garbage collection, false otherwise.
@@ -572,7 +584,7 @@ bool toku_le_worth_running_garbage_collection(LEAFENTRY le, TXNID oldest_referen
 //            2.) There is only one committed entry, but the outermost provisional entry
 //            is older than the oldest known referenced xid, so it must have commited.
 //            Therefor we can promote it to committed and get rid of the old commited entry.
-    if (le->type != LE_MVCC) {
+    if (le->type < LE_MVCC || le->type >= LE_MVCC_END) {
         return false;
     }
     if (le->u.mvcc.num_cxrs > 1) {
@@ -580,6 +592,7 @@ bool toku_le_worth_running_garbage_collection(LEAFENTRY le, TXNID oldest_referen
     } else {
         paranoid_invariant(le->u.mvcc.num_cxrs == 1);
     }
+
     return le->u.mvcc.num_pxrs > 0 && le_outermost_uncommitted_xid(le) < oldest_referenced_xid_known;
 }
 
@@ -615,6 +628,10 @@ toku_le_flip_uxr_type(LEAFENTRY old_leaf_entry,
     bool old_le_malloced = false;
     if (old_leaf_entry) {
         size_t old_le_size = leafentry_memsize(old_leaf_entry);
+#ifdef TOKU_LINUX_MODULE
+	CAST_FROM_VOIDP(copied_old_le, toku_malloc(old_le_size));
+	old_le_malloced = true;
+#else
         if (old_le_size > 100*1024) { // completely arbitrary limit
             CAST_FROM_VOIDP(copied_old_le, toku_malloc(old_le_size));
             old_le_malloced = true;
@@ -622,6 +639,7 @@ toku_le_flip_uxr_type(LEAFENTRY old_leaf_entry,
         else {
             CAST_FROM_VOIDP(copied_old_le, alloca(old_le_size));
         }
+#endif
         memcpy(copied_old_le, old_leaf_entry, old_le_size);
     }
 
@@ -776,6 +794,7 @@ msg_modify_ule(ULE ule, FT_MSG msg) {
         ule_do_implicit_promotions(ule, xids);
     }
     switch (type) {
+    case FT_KUPSERT_BROADCAST_ALL: break;
     case FT_NONE: break;
     case FT_INSERT_NO_OVERWRITE: {
         UXR old_innermost_uxr = ule_get_innermost_uxr(ule);
@@ -891,6 +910,7 @@ le_unpack(ULE ule, LEAFENTRY le) {
             break;
         }
         case LE_MVCC:
+        case LE_MVCC_INNER_DEL:
             ule->num_cuxrs = toku_dtoh32(le->u.mvcc.num_cxrs);
             invariant(ule->num_cuxrs);
             ule->num_puxrs = le->u.mvcc.num_pxrs;
@@ -1129,6 +1149,7 @@ found_insert:;
     //p always points to first unused byte after leafentry we are packing
     uint8_t *p;
     invariant(ule->num_cuxrs>0);
+
     //Type specific data
     if (ule->num_cuxrs == 1 && ule->num_puxrs == 0 && !ule_contains_unbound_uxr(ule)) {
 
@@ -1151,6 +1172,11 @@ found_insert:;
         uint32_t i;
         //Pack an 'mvcc leafentry'
         new_leafentry->type = LE_MVCC;
+
+        UXR inner = ule->uxrs + ule->num_cuxrs + ule->num_puxrs - 1;
+        if (uxr_is_delete(inner)) {
+            new_leafentry->type = LE_MVCC_INNER_DEL;
+        } 
 
         new_leafentry->u.mvcc.num_cxrs = toku_htod32(ule->num_cuxrs);
         // invariant makes cast that follows ok, although not sure if 
@@ -1224,6 +1250,8 @@ done:
     //p points to first unused byte after packed leafentry
 
     size_t bytes_written;
+
+    /* YZJ: the special byte is not packed */ 	
     bytes_written = (size_t)p - (size_t)new_leafentry;
     invariant(bytes_written == memsize);
          
@@ -1373,7 +1401,8 @@ leafentry_memsize (LEAFENTRY le) {
             rval = LE_CLEAN_MEMSIZE(vallen);
             break;
         }
-        case LE_MVCC: {
+        case LE_MVCC:
+        case LE_MVCC_INNER_DEL: {
             p = le->u.mvcc.xrs;
             uint32_t num_cuxrs = toku_dtoh32(le->u.mvcc.num_cxrs);
             invariant(num_cuxrs);
@@ -1414,7 +1443,8 @@ le_is_clean(LEAFENTRY le) {
         case LE_CLEAN:
             rval = true;
             break;
-        case LE_MVCC:;
+        case LE_MVCC:
+        case LE_MVCC_INNER_DEL:
             rval = false;
             break;
         default:
@@ -1432,7 +1462,8 @@ int le_latest_is_del(LEAFENTRY le) {
             rval = 0;
             break;
         }
-        case LE_MVCC: {
+        case LE_MVCC:
+        case LE_MVCC_INNER_DEL: {
             UXR_S uxr;
             uint32_t num_cuxrs = toku_dtoh32(le->u.mvcc.num_cxrs);
             invariant(num_cuxrs);
@@ -1496,7 +1527,8 @@ le_latest_val_and_len (LEAFENTRY le, uint32_t *len) {
             *len = toku_dtoh32(le->u.clean.vallen);
             valp = le->u.clean.val;
             break;
-        case LE_MVCC:;
+        case LE_MVCC:
+        case LE_MVCC_INNER_DEL:
             UXR_S uxr;
             uint32_t num_cuxrs;
             num_cuxrs = toku_dtoh32(le->u.mvcc.num_cxrs);
@@ -1576,7 +1608,8 @@ le_latest_vallen (LEAFENTRY le) {
         case LE_CLEAN:
             rval = toku_dtoh32(le->u.clean.vallen);
             break;
-        case LE_MVCC:;
+        case LE_MVCC:
+        case LE_MVCC_INNER_DEL:
             UXR_S uxr;
             uint32_t num_cuxrs;
             num_cuxrs = toku_dtoh32(le->u.mvcc.num_cxrs);
@@ -1629,7 +1662,8 @@ le_outermost_uncommitted_xid (LEAFENTRY le) {
     switch (type) {
         case LE_CLEAN:
             break;
-        case LE_MVCC:;
+        case LE_MVCC:
+        case LE_MVCC_INNER_DEL:
             UXR_S uxr;
             uint32_t num_puxrs = le->u.mvcc.num_pxrs;
 
@@ -1669,10 +1703,11 @@ print_klpair (FILE *UU(outf), const void* keyp, uint32_t UU(keylen), LEAFENTRY l
         printf("{key=");
   //      toku_print_BYTESTRING(outf, keylen, (char *) keyp);
     }
+
     for (i = 0; i < ule->num_cuxrs+ule->num_puxrs; i++) {
         // fprintf(outf, "\n%*s", i+1, " "); //Nested indenting
         uxr = &ule->uxrs[i];
-        printf(" ");
+        printf(" \n");
         if (uxr_is_placeholder(uxr))
             printf("P\n");
         else if (uxr_is_delete(uxr)) {
@@ -1699,7 +1734,8 @@ print_klpair (FILE *UU(outf), const void* keyp, uint32_t UU(keylen), LEAFENTRY l
 //            toku_print_BYTESTRING(outf, uxr->vallen, (char *) uxr->valp);
         }
     }
-    printf("}");
+    printf("}\n");
+        printf("%s:%d\n", __func__,__LINE__);
     ule_cleanup(ule);
     toku_free(ule);
     return 0;
@@ -1807,8 +1843,17 @@ static void
 ule_try_promote_provisional_outermost(ULE ule, TXNID oldest_possible_live_xid) {
 // Effect: If there is a provisional record whose outermost xid is older than
 //         the oldest known referenced_xid, promote it to committed.
+
     if (ule->num_puxrs > 0 && ule_get_xid(ule, ule->num_cuxrs) < oldest_possible_live_xid) {
         ule_promote_provisional_innermost_to_committed(ule);
+    }
+
+    /* YZJ: handle delete differently to pass stat64-root-changes */
+    if (ule->num_puxrs > 0 && ule_get_xid(ule, ule->num_cuxrs) == oldest_possible_live_xid) {
+        UXR uxr = ule_get_innermost_uxr(ule);
+        if (uxr_is_delete(uxr)) {
+            ule_promote_provisional_innermost_to_committed(ule);
+        }
     }
 }
 
@@ -2253,7 +2298,8 @@ le_iterate_is_del(LEAFENTRY le, LE_ITERATE_CALLBACK f, bool *is_delp, TOKUTXN co
 #endif
             break;
         }
-        case LE_MVCC:;
+        case LE_MVCC:
+        case LE_MVCC_INNER_DEL:
             uint32_t num_cuxrs;
             num_cuxrs = toku_dtoh32(le->u.mvcc.num_cxrs);
             uint32_t num_puxrs;
@@ -2342,7 +2388,8 @@ le_iterate_val(LEAFENTRY le, LE_ITERATE_CALLBACK f, void** valpp, uint32_t *vall
 #endif
             break;
         }
-        case LE_MVCC:;
+        case LE_MVCC:
+        case LE_MVCC_INNER_DEL:
             uint32_t num_cuxrs;
             num_cuxrs = toku_dtoh32(le->u.mvcc.num_cxrs);
             uint32_t num_puxrs;

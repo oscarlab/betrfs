@@ -215,6 +215,11 @@ DBT *toku_clone_dbt(DBT *dst, const DBT &src) {
 }
 
 void
+toku_cleanup_dbt(DBT * dbt) {
+    if (dbt->data) toku_free(dbt->data);
+    memset(dbt, 0, sizeof(*dbt));
+}
+void
 toku_sdbt_cleanup(struct simple_dbt *sdbt) {
     if (sdbt->data) toku_free(sdbt->data);
     memset(sdbt, 0, sizeof(*sdbt));

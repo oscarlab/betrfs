@@ -159,7 +159,7 @@ insert_into_child_buffer(FT_HANDLE brt, FTNODE node, int childnum, int minkey, i
         DBT theval; toku_fill_dbt(&theval, &val, sizeof val);
         FT_MSG_S msg;
         ft_msg_init(&msg, FT_INSERT, msn, xids_get_root_xids(), &thekey, &theval);
-        toku_ft_append_to_child_buffer(brt->ft->compare_fun, NULL, NULL, node, childnum, &msg, true);
+        toku_ft_append_to_child_buffer(brt->ft->key_ops.keycmp, NULL, NULL, node, childnum, &msg, true);
 
 
 	// Create bad tree (don't do following):

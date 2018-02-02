@@ -1,6 +1,6 @@
 #!/bin/bash
 set -x
-FT_HOMEDIR=/home/ftfs/ft-index
+FT_HOMEDIR=/home/betrfs/ft-index
 . $FT_HOMEDIR/benchmarks/fs-info.sh
 if [ -d $mntpnt/linux-3.11.10 ]; then
 :

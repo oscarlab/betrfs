@@ -101,7 +101,7 @@ PATENT RIGHTS GRANT:
 #include "ydb-internal.h"
 #include "ydb_txn.h"
 #include "ydb_row_lock.h"
-#include "locktree/generic_stack.h"
+
 static uint64_t toku_txn_id64(DB_TXN * txn) {
     HANDLE_PANICKED_ENV(txn->mgrp);
     return toku_txn_get_root_id(db_txn_struct_i(txn)->tokutxn);
@@ -303,11 +303,64 @@ cleanup:
     toku_txn_destroy(txn);
     return r;
 }
+
+#define STACK_SIZE 10
+class toku_stack {
+public:
+    stack_elem static_buf[STACK_SIZE];
+    void *head;
+    int index;
+    int size;
+
+    void init(int s) {
+        index = 0;
+        size = s;
+        if (size > STACK_SIZE) {
+             head = (stack_elem *)toku_malloc(sizeof(stack_elem) * size);
+        } else {
+             head = &static_buf[0];
+        }
+    }
+
+    void push(stack_elem elem) {
+        assert(index < STACK_SIZE);
+        ((stack_elem *)head)[index] = elem;
+        index += 1;
+    }
+
+    stack_elem pop() {
+        assert(index > 0);
+        index -= 1;
+        return ((stack_elem *)head)[index];
+    }
+
+    bool is_empty() {
+        return (index == 0);
+    }
+
+    void destroy() {
+        if (size > STACK_SIZE) {
+            toku_free(head);
+        }
+    }
+};
+
 static int toku_txn_commit(DB_TXN * txn, uint32_t flags,
                            TXN_PROGRESS_POLL_FUNCTION poll, void *poll_extra,
                            bool release_mo_lock, bool low_priority) {
     int ret = -1;
-    GenericStack <stack_elem> stack(1500);
+    DB_TXN *tmp_txn = txn;
+    int depth1 = 0;
+
+    while (db_txn_struct_i(tmp_txn)->child) {
+        depth1++;
+        tmp_txn = db_txn_struct_i(tmp_txn)->child;
+    }
+
+    int stack_size = 2 * depth1 + 2;
+    toku_stack stack;
+    stack.init(stack_size);
+
     marker status = marker::ENTRY;
     txn_commit_args * cur_args = txn_commit_args_alloc_init(txn, flags, poll, poll_extra, release_mo_lock, low_priority);
     stack_elem e1 = {.status= EXIT};
@@ -385,8 +438,10 @@ static int toku_txn_commit(DB_TXN * txn, uint32_t flags,
             }
         }
     }
+    stack.destroy();
+
     return ret;
-} 
+}
 #endif /* TOKU_LINUX_MODULE */
 
 static uint32_t toku_txn_id(DB_TXN * txn) {

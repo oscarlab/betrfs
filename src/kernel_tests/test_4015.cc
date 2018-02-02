@@ -192,7 +192,12 @@ int test_test_4015(void) {
     db_env_set_num_bucket_mutexes(32);
     { int chk_r = db_env_create(&env, 0); CKERR(chk_r); }
     { int chk_r = env->set_redzone(env, 0); CKERR(chk_r); }
-    { int chk_r = env->set_default_bt_compare(env, my_compare); CKERR(chk_r); }
+    {
+        struct toku_db_key_operations key_ops;
+        memset(&key_ops, 0, sizeof(key_ops));
+        key_ops.keycmp = my_compare;
+        int chk_r = env->set_key_ops(env, &key_ops); CKERR(chk_r);
+    }
     {
 /*
 	const int size = 10+strlen(env_dir);

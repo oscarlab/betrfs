@@ -301,7 +301,7 @@ toku_loader_create_loader(DB_ENV *env,
     {
         ft_compare_func compare_functions[N];
         for (int i=0; i<N; i++) {
-            compare_functions[i] = env->i->bt_compare;
+            compare_functions[i] = env->i->key_ops.keycmp;
         }
 
         // time to open the big kahuna

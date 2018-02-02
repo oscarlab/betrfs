@@ -1,5 +1,6 @@
 /* -*- mode: C++; c-basic-offset: 8; indent-tabs-mode: t -*- */
 // vim: set tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab:
+
 #include <linux/kernel.h>
 #include <linux/namei.h>
 #include <linux/slab.h>
@@ -12,124 +13,10 @@
 #include <linux/sched.h>
 
 #include "ftfs_fs.h"
-#include "ftfs_profile.h"
 
-#define DCACHE_FTFS_FLAG 0x04000000
-
-struct ftfs_meta_key root_dir_meta_key = {
-	META_KEY_MAGIC,
-	0,
-	""
-};
+static char root_meta_key[] = "m\x00\x00\x00\x00\x00\x00\x00\x00";
 
 static struct kmem_cache *ftfs_inode_cachep;
-
-static inline struct ftfs_meta_key *
-meta_key_move_to_target_directory(struct ftfs_meta_key *source,
-                                  struct ftfs_meta_key *target,
-                                  struct ftfs_meta_key *entry)
-{
-	struct ftfs_meta_key *newkey;
-	int source_len = strlen(source->path);
-	int target_len = strlen(target->path);
-	int entry_len = strlen(entry->path);
-	int path_size = target_len + (entry_len - source_len) + 1;
-	newkey = kmalloc(sizeof(struct ftfs_meta_key) + path_size, GFP_KERNEL);
-	if (newkey == NULL)
-		return NULL;
-	newkey->magic = META_KEY_MAGIC;
-	newkey->circle_id = target->circle_id;
-	snprintf(newkey->path, path_size, "%s%s", target->path, entry->path + source_len);
-	return newkey;
-}
-
-static inline struct ftio *ftio_alloc(int nr_iovecs)
-{
-	struct ftio *ftio;
-
-	ftio = kmalloc(sizeof(*ftio) + nr_iovecs * sizeof(struct ftio_vec),
-	               GFP_KERNEL);
-	if (unlikely(!ftio))
-		return NULL;
-	ftio->ft_max_vecs = nr_iovecs;
-	ftio->ft_vcnt = 0;
-	ftio->ft_bvidx = 0;
-
-	return ftio;
-}
-
-static inline void ftio_free(struct ftio *ftio)
-{
-	kfree(ftio);
-}
-
-static int
-ftfs_page_cmp(void *priv, struct list_head *a, struct list_head *b)
-{
-	struct page *a_pg = container_of(a, struct page, lru);
-	struct page *b_pg = container_of(b, struct page, lru);
-
-	if (a_pg->index < b_pg->index)
-		return 1;
-	else if (a_pg->index > b_pg->index)
-		return -1;
-	else
-		return 0;
-}
-
-static inline void ftio_add_page(struct ftio *ftio, struct page *page)
-{
-	struct ftio_vec *fv;
-	BUG_ON(ftio->ft_vcnt >= ftio->ft_max_vecs);
-	fv = ftio->ft_io_vec + ftio->ft_vcnt++;
-	fv->fv_page = page;
-#if (FTFS_BSTORE_BLOCKSIZE != PAGE_CACHE_SIZE)
-	fv->fv_offset = 0;
-#endif
-}
-
-static inline void ftio_setup(struct ftio *ftio, struct list_head *pages,
-                              int nr_pages, struct address_space *mapping)
-{
-	unsigned page_idx;
-
-	list_sort(NULL, pages, ftfs_page_cmp);
-
-	for (page_idx = 0; page_idx < nr_pages; page_idx++) {
-		struct page *page = list_entry(pages->prev, struct page, lru);
-		prefetchw(&page->flags);
-		list_del(&page->lru);
-		if (!add_to_page_cache_lru(page, mapping, page->index,
-		                           GFP_KERNEL))
-			ftio_add_page(ftio, page);
-		page_cache_release(page);
-	}
-	BUG_ON(!list_empty(pages));
-}
-
-static inline void ftio_set_pages_uptodate(struct ftio *ftio)
-{
-	unsigned i;
-	for (i = 0; i < ftio->ft_vcnt; i++)
-		SetPageUptodate((ftio->ft_io_vec + i)->fv_page);
-}
-
-static inline void ftio_set_pages_error(struct ftio *ftio)
-{
-	unsigned i;
-	for (i = 0; i < ftio->ft_vcnt; i++) {
-		struct page *page = (ftio->ft_io_vec + i)->fv_page;
-		ClearPageUptodate(page);
-		SetPageError(page);
-	}
-}
-
-static inline void ftio_unlock_pages(struct ftio *ftio)
-{
-	unsigned i;
-	for (i = 0; i < ftio->ft_vcnt; i++)
-		unlock_page((ftio->ft_io_vec + i)->fv_page);
-}
 
 /*
  * ftfs_i_init_once is passed to kmem_cache_create
@@ -139,16 +26,12 @@ static void ftfs_i_init_once(void *inode)
 {
 	struct ftfs_inode *ftfs_inode = inode;
 
-	ftfs_inode->key = NULL;
+	dbt_init(&ftfs_inode->meta_dbt);
 
 	inode_init_once(&ftfs_inode->vfs_inode);
 }
 
-static struct inode *
-ftfs_setup_inode(struct super_block *sb, struct ftfs_meta_key *meta_key,
-                 struct ftfs_metadata *meta);
-
-static inline void
+static void
 ftfs_setup_metadata(struct ftfs_metadata *meta, umode_t mode,
                     loff_t size, dev_t rdev, ino_t ino)
 {
@@ -157,11 +40,12 @@ ftfs_setup_metadata(struct ftfs_metadata *meta, umode_t mode,
 
 	now_tspec = current_kernel_time();
 	TIMESPEC_TO_TIME_T(now, now_tspec);
-	memset(meta, 0, sizeof(*meta));
+
+	meta->type = FTFS_METADATA_TYPE_NORMAL;
+	meta->u.st.st_dev = 0;
 	meta->u.st.st_ino = ino;
 	meta->u.st.st_mode = mode;
 	meta->u.st.st_size = size;
-	meta->u.st.st_dev = rdev;
 	meta->u.st.st_nlink = 1;
 #ifdef CONFIG_UIDGID_STRICT_TYPE_CHECKS
 	meta->u.st.st_uid = current_uid().val;
@@ -170,25 +54,25 @@ ftfs_setup_metadata(struct ftfs_metadata *meta, umode_t mode,
 	meta->u.st.st_uid = current_uid();
 	meta->u.st.st_gid = current_gid();
 #endif
-	meta->u.st.st_blocks = ((size + FTFS_BSTORE_BLOCKSIZE - 1) /
-	                        FTFS_BSTORE_BLOCKSIZE);
+	meta->u.st.st_rdev = rdev;
+	meta->u.st.st_blocks = ftfs_get_block_num_by_size(size);
 	meta->u.st.st_blksize = FTFS_BSTORE_BLOCKSIZE;
 	meta->u.st.st_atime = now;
 	meta->u.st.st_mtime = now;
 	meta->u.st.st_ctime = now;
 
+#ifdef FTFS_CIRCLE
 	meta->nr_meta = 1;
 	meta->nr_data = meta->u.st.st_blocks;
+#endif
 }
 
-static inline void
+static void
 ftfs_copy_metadata_from_inode(struct ftfs_metadata *meta, struct inode *inode)
 {
 	meta->type = FTFS_METADATA_TYPE_NORMAL;
-	meta->nr_meta = FTFS_I(inode)->nr_meta;
-	meta->nr_data = FTFS_I(inode)->nr_data;
+	meta->u.st.st_dev = 0;
 	meta->u.st.st_ino = inode->i_ino;
-	meta->u.st.st_dev = inode->i_rdev;
 	meta->u.st.st_mode = inode->i_mode;
 	meta->u.st.st_nlink = inode->i_nlink;
 #ifdef CONFIG_UIDGID_STRICT_TYPE_CHECKS
@@ -198,35 +82,35 @@ ftfs_copy_metadata_from_inode(struct ftfs_metadata *meta, struct inode *inode)
 	meta->u.st.st_uid = inode->i_uid;
 	meta->u.st.st_gid = inode->i_gid;
 #endif
+	meta->u.st.st_rdev = inode->i_rdev;
 	meta->u.st.st_size = i_size_read(inode);
-	meta->u.st.st_blocks = ((meta->u.st.st_size + FTFS_BSTORE_BLOCKSIZE - 1) /
-	                        FTFS_BSTORE_BLOCKSIZE);
+	meta->u.st.st_blocks = ftfs_get_block_num_by_size(meta->u.st.st_size);
+	meta->u.st.st_blksize = FTFS_BSTORE_BLOCKSIZE;
 	TIMESPEC_TO_TIME_T(meta->u.st.st_atime, inode->i_atime);
 	TIMESPEC_TO_TIME_T(meta->u.st.st_mtime, inode->i_mtime);
 	TIMESPEC_TO_TIME_T(meta->u.st.st_ctime, inode->i_ctime);
+
+#ifdef FTFS_CIRCLE
+	meta->nr_meta = FTFS_I(inode)->nr_meta;
+	meta->nr_data = FTFS_I(inode)->nr_data;
+#endif
 }
 
-static inline struct ftfs_meta_key *ftfs_get_read_lock(struct ftfs_inode *f_inode)
+static inline DBT *ftfs_get_read_lock(struct ftfs_inode *f_inode)
 {
 	down_read(&f_inode->key_lock);
-	return f_inode->key;
+	return &f_inode->meta_dbt;
 }
-
-static inline int ftfs_get_read_trylock(struct ftfs_inode *f_inode)
-{
-	return down_read_trylock(&f_inode->key_lock);
-}
-
 
 static inline void ftfs_put_read_lock(struct ftfs_inode *f_inode)
 {
 	up_read(&f_inode->key_lock);
 }
 
-static inline struct ftfs_meta_key *ftfs_get_write_lock(struct ftfs_inode *f_inode)
+static inline DBT *ftfs_get_write_lock(struct ftfs_inode *f_inode)
 {
 	down_write(&f_inode->key_lock);
-	return f_inode->key;
+	return &f_inode->meta_dbt;
 }
 
 static inline void ftfs_put_write_lock(struct ftfs_inode *f_inode)
@@ -234,97 +118,211 @@ static inline void ftfs_put_write_lock(struct ftfs_inode *f_inode)
 	up_write(&f_inode->key_lock);
 }
 
-// if the txn eventually aborts, db ino value would be changed in retrial
-// this is dangerous;
-static int ftfs_next_ino(struct ftfs_sb_info *sbi, DB_TXN *txn, ino_t *ino)
+// get the next available (unused ino)
+// we alloc some ino to each cpu, if more are needed, we will do update_ino
+static int ftfs_next_ino(struct ftfs_sb_info *sbi, ino_t *ino)
 {
+	int ret = 0;
 	unsigned int cpu;
-	ino_t need_update;
+	ino_t new_max;
+	DB_TXN *txn;
 
+	new_max = 0;
 	cpu = get_cpu();
 	*ino = per_cpu_ptr(sbi->s_ftfs_info, cpu)->next_ino;
-	per_cpu_ptr(sbi->s_ftfs_info, cpu)->next_ino += sbi->s_nr_cpus;
 	if (*ino >= per_cpu_ptr(sbi->s_ftfs_info, cpu)->max_ino) {
-		need_update = per_cpu_ptr(sbi->s_ftfs_info, cpu)->max_ino +
-		              sbi->s_nr_cpus * FTFS_INO_INC;
-		per_cpu_ptr(sbi->s_ftfs_info, cpu)->max_ino = need_update;
-	} else
-		need_update = 0;
+		// we expand for all cpus here, it is lavish
+		// we can't do txn while holding cpu
+		new_max = per_cpu_ptr(sbi->s_ftfs_info, cpu)->max_ino +
+		          sbi->s_nr_cpus * FTFS_INO_INC;
+		per_cpu_ptr(sbi->s_ftfs_info, cpu)->max_ino = new_max;
+	}
+	per_cpu_ptr(sbi->s_ftfs_info, cpu)->next_ino += sbi->s_nr_cpus;
 	put_cpu();
 
-	if (need_update)
-		ftfs_bstore_update_ino(sbi, need_update);
+	if (new_max) {
+		TXN_GOTO_LABEL(retry);
+		ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
+		ret = ftfs_bstore_update_ino(sbi->meta_db, txn, new_max);
+		if (ret) {
+			DBOP_JUMP_ON_CONFLICT(ret, retry);
+			ftfs_bstore_txn_abort(txn);
+			// we already updated max_cpu, if we get error here
+			//  it is hard to go back
+			BUG();
+		}
+		ret = ftfs_bstore_txn_commit(txn, DB_TXN_NOSYNC);
+		COMMIT_JUMP_ON_CONFLICT(ret, retry);
+	}
 
+	return ret;
+}
+
+static int alloc_meta_dbt_from_ino(DBT *dbt, uint64_t ino)
+{
+	char *meta_key;
+	size_t size;
+
+	size = SIZEOF_CIRCLE_ROOT_META_KEY;
+	meta_key = kmalloc(size, GFP_KERNEL);
+	if (meta_key == NULL)
+		return -ENOMEM;
+	ftfs_key_set_magic(meta_key, META_KEY_MAGIC);
+	ftfs_key_set_ino(meta_key, ino);
+	(ftfs_key_path(meta_key))[0] = '\0';
+
+	dbt_setup(dbt, meta_key, size);
 	return 0;
 }
 
-// iget must free 'meta_key' if it is not passed to inode
-static struct inode *ftfs_iget(struct super_block *sb,
-                               struct ftfs_meta_key *meta_key, DB_TXN *txn)
+void copy_meta_dbt_from_ino(DBT *dbt, uint64_t ino)
 {
-	int ret;
-	struct inode *inode;
-	struct ftfs_sb_info *sbi = sb->s_fs_info;
-	struct ftfs_metadata meta;
+	char *meta_key = dbt->data;
+	size_t size;
 
-	ret = ftfs_bstore_meta_get(sbi->meta_db, meta_key, txn, &meta);
-	if (ret) {
-#ifdef TXN_ON
-		IF_DBOP_CONFLICT(ret)
-			return ERR_PTR(ret);
-#endif
-		meta_key_free(meta_key);
-		return ERR_PTR(-ENOENT);
-	}
-	if (meta.type == FTFS_METADATA_TYPE_REDIRECT) {
-		struct ftfs_meta_key *real_meta_key;
+	size = SIZEOF_CIRCLE_ROOT_META_KEY;
+	BUG_ON(size > dbt->ulen);
+	ftfs_key_set_magic(meta_key, META_KEY_MAGIC);
+	ftfs_key_set_ino(meta_key, ino);
+	(ftfs_key_path(meta_key))[0] = '\0';
 
-		meta_key_free(meta_key);
-		real_meta_key = alloc_meta_key_from_circle_id(meta.u.circle_id);
-		if (!real_meta_key)
-			return ERR_PTR(-ENOMEM);
-		ret = ftfs_bstore_meta_get(sbi->meta_db, real_meta_key,
-		                           txn, &meta);
-		if (ret) {
-			BUG_ON(ret == -ENOENT);
-			meta_key_free(real_meta_key);
-#ifdef TXN_ON
-			IF_DBOP_CONFLICT(ret)
-				return ERR_PTR(ret);
-#endif
-			return ERR_PTR(ret);
-		}
-		BUG_ON(meta.type == FTFS_METADATA_TYPE_REDIRECT);
-
-		inode = ftfs_setup_inode(sb, real_meta_key, &meta);
-		if (IS_ERR(inode))
-			meta_key_free(real_meta_key);
-
-		return inode;
-	}
-
-	inode = ftfs_setup_inode(sb, meta_key, &meta);
-	if (IS_ERR(inode))
-		meta_key_free(meta_key);
-
-	return inode;
+	dbt->size = size;
 }
 
-static inline int
-ftfs_do_unlink(struct ftfs_meta_key *meta_key, DB_TXN *txn,
-               struct inode *inode, struct ftfs_sb_info *sbi)
+void
+copy_data_dbt_from_meta_dbt(DBT *data_dbt, DBT *meta_dbt, uint64_t block_num)
+{
+	char *meta_key = meta_dbt->data;
+	char *data_key = data_dbt->data;
+	size_t size;
+
+	size = meta_dbt->size + DATA_META_KEY_SIZE_DIFF;
+	BUG_ON(size > data_dbt->ulen);
+	ftfs_key_set_magic(data_key, DATA_KEY_MAGIC);
+	ftfs_key_copy_ino(data_key, meta_key);
+	strcpy(ftfs_key_path(data_key), ftfs_key_path(meta_key));
+	ftfs_data_key_set_blocknum(data_key, size, block_num);
+
+	data_dbt->size = size;
+}
+
+int
+alloc_data_dbt_from_meta_dbt(DBT *data_dbt, DBT *meta_dbt, uint64_t block_num)
+{
+	char *meta_key = meta_dbt->data;
+	char *data_key;
+	size_t size;
+
+	size = meta_dbt->size + DATA_META_KEY_SIZE_DIFF;
+	data_key = kmalloc(size, GFP_KERNEL);
+	if (data_key == NULL)
+		return -ENOMEM;
+	ftfs_key_set_magic(data_key, DATA_KEY_MAGIC);
+	ftfs_key_copy_ino(data_key, meta_key);
+	strcpy(ftfs_key_path(data_key), ftfs_key_path(meta_key));
+	ftfs_data_key_set_blocknum(data_key, size, block_num);
+
+	dbt_setup(data_dbt, data_key, size);
+	return 0;
+}
+
+int
+alloc_child_meta_dbt_from_meta_dbt(DBT *dbt, DBT *parent_dbt, const char *name)
+{
+	char *parent_key = parent_dbt->data;
+	char *meta_key;
+	size_t size;
+	char *last_slash;
+
+	if ((ftfs_key_path(parent_key))[0] == '\0')
+		size = parent_dbt->size + strlen(name) + 2;
+	else
+		size = parent_dbt->size + strlen(name) + 1;
+	meta_key = kmalloc(size, GFP_KERNEL);
+	if (meta_key == NULL)
+		return -ENOMEM;
+	ftfs_key_set_magic(meta_key, META_KEY_MAGIC);
+	ftfs_key_copy_ino(meta_key, parent_key);
+	if ((ftfs_key_path(parent_key))[0] == '\0') {
+		sprintf(ftfs_key_path(meta_key), "\x01\x01%s", name);
+	} else {
+		last_slash = strrchr(ftfs_key_path(parent_key), '\x01');
+		BUG_ON(last_slash == NULL);
+		memcpy(ftfs_key_path(meta_key), ftfs_key_path(parent_key),
+		       last_slash - ftfs_key_path(parent_key));
+		sprintf(ftfs_key_path(meta_key) + (last_slash - ftfs_key_path(parent_key)),
+		        "%s\x01\x01%s", last_slash + 1, name);
+	}
+
+	dbt_setup(dbt, meta_key, size);
+	return 0;
+}
+
+int alloc_meta_dbt_prefix(DBT *prefix_dbt, DBT *meta_dbt)
+{
+	char *meta_key = meta_dbt->data;
+	char *prefix_key;
+	size_t size;
+	char *last_slash;
+
+	if ((ftfs_key_path(meta_key))[0] == '\0')
+		size = meta_dbt->size;
+	else
+		size = meta_dbt->size - 1;
+	prefix_key = kmalloc(size, GFP_KERNEL);
+	if (prefix_key == NULL)
+		return -ENOMEM;
+	ftfs_key_set_magic(prefix_key, META_KEY_MAGIC);
+	ftfs_key_copy_ino(prefix_key, meta_key);
+	if ((ftfs_key_path(meta_key))[0] == '\0') {
+		(ftfs_key_path(prefix_key))[0] = '\0';
+	} else {
+		last_slash = strrchr(ftfs_key_path(meta_key), '\x01');
+		BUG_ON(last_slash == NULL);
+		memcpy(ftfs_key_path(prefix_key), ftfs_key_path(meta_key),
+		       last_slash - ftfs_key_path(meta_key));
+		strcpy(ftfs_key_path(prefix_key) + (last_slash - ftfs_key_path(meta_key)),
+		       last_slash + 1);
+	}
+
+	dbt_setup(prefix_dbt, prefix_key, size);
+	return 0;
+}
+
+static int alloc_meta_dbt_movdir(DBT *old_prefix_dbt, DBT *new_prefix_dbt,
+                                 DBT *old_dbt, DBT *new_dbt)
+{
+	char *new_prefix_key = new_prefix_dbt->data;
+	char *old_key = old_dbt->data;
+	char *new_key;
+	size_t size;
+
+	size = old_dbt->size - old_prefix_dbt->size + new_prefix_dbt->size;
+	new_key = kmalloc(size, GFP_KERNEL);
+	if (new_key == NULL)
+		return -ENOMEM;
+	ftfs_key_set_magic(new_key, META_KEY_MAGIC);
+	ftfs_key_copy_ino(new_key, new_prefix_key);
+	sprintf(ftfs_key_path(new_key), "%s%s", ftfs_key_path(new_prefix_key),
+	        old_key + old_prefix_dbt->size - 1);
+
+	dbt_setup(new_dbt, new_key, size);
+	return 0;
+}
+
+static struct inode *
+ftfs_setup_inode(struct super_block *sb, DBT *meta_dbt,
+                 struct ftfs_metadata *meta);
+
+static int
+ftfs_do_unlink(DBT *meta_dbt, DB_TXN *txn, struct inode *inode,
+               struct ftfs_sb_info *sbi)
 {
 	int ret;
-	loff_t size;
 
-	ret = ftfs_bstore_meta_del(sbi->meta_db, meta_key, txn);
-	if (ret)
-		return ret;
-
-	size = i_size_read(inode);
-	if (size > 0)
-		ret = ftfs_bstore_truncate(sbi->data_db, meta_key, txn,
-		                           0, FTFS_UINT64_MAX);
+	ret = ftfs_bstore_meta_del(sbi->meta_db, meta_dbt, txn);
+	if (!ret && i_size_read(inode) > 0)
+		ret = ftfs_bstore_trunc(sbi->data_db, meta_dbt, txn, 0, 0);
 
 	return ret;
 }
@@ -344,12 +342,12 @@ static int prelock_children_for_rename(struct dentry *object, struct list_head *
 	struct dentry *this_parent;
 	struct list_head *next;
 	struct inode *inode;
-	struct ftfs_meta_key *meta_key;
-	uint64_t object_circleid;
-	uint64_t current_circleid;
-	this_parent = object;
-	object_circleid = meta_key_get_circle_id(FTFS_I(object->d_inode)->key);
+	uint64_t object_ino;
+	DBT *dbt;
 
+	this_parent = object;
+	dbt = &FTFS_I(object->d_inode)->meta_dbt;
+	object_ino = ftfs_key_get_ino((char *)dbt->data);
 start:
 	if (this_parent->d_sb != object->d_sb)
 		goto end;
@@ -357,9 +355,9 @@ start:
 	if (inode == NULL)
 		goto repeat;
 	if (this_parent != object) {
-		meta_key = ftfs_get_write_lock(FTFS_I(inode));
-		current_circleid = meta_key_get_circle_id(meta_key);
-		if (current_circleid != object_circleid) {
+		dbt = ftfs_get_write_lock(FTFS_I(inode));
+		// we don't need to lock inodes in another circle
+		if (ftfs_key_get_ino((char *)dbt->data) != object_ino) {
 			ftfs_put_write_lock(FTFS_I(inode));
 			goto end;
 		}
@@ -392,34 +390,87 @@ static int unlock_children_after_rename(struct list_head *locked)
 	return 0;
 }
 
-static int
+static void
 ftfs_update_ftfs_inode_keys(struct list_head *locked,
-                            struct ftfs_meta_key *old_meta_key,
-                            struct ftfs_meta_key *new_meta_key)
+                            DBT *old_meta_dbt, DBT *new_meta_dbt)
 {
+	int ret;
 	struct ftfs_inode *f_inode, *tmp;
-	struct ftfs_meta_key *old_mkey, *new_mkey;
+	DBT tmp_dbt, old_prefix_dbt, new_prefix_dbt;
+
+	if (list_empty(locked))
+		return;
+
+	ret = alloc_meta_dbt_prefix(&old_prefix_dbt, old_meta_dbt);
+	BUG_ON(ret);
+	alloc_meta_dbt_prefix(&new_prefix_dbt, new_meta_dbt);
+	BUG_ON(ret);
+
 	list_for_each_entry_safe(f_inode, tmp, locked, rename_locked) {
-		old_mkey = f_inode->key;
-		new_mkey = meta_key_move_to_target_directory(old_meta_key, new_meta_key, old_mkey);
-		if (new_mkey == NULL)
-			BUG();
-		f_inode->key = new_mkey;
-		meta_key_free(old_mkey);
+		dbt_copy(&tmp_dbt, &f_inode->meta_dbt);
+		ret = alloc_meta_dbt_movdir(&old_prefix_dbt, &new_prefix_dbt,
+		                            &tmp_dbt, &f_inode->meta_dbt);
+		BUG_ON(ret);
+		dbt_destroy(&tmp_dbt);
 	}
-	return 0;
+
+	dbt_destroy(&old_prefix_dbt);
+	dbt_destroy(&new_prefix_dbt);
+}
+
+static inline int meta_key_is_circle_root(char *meta_key)
+{
+	return ((ftfs_key_path(meta_key))[0] == '\0');
+}
+
+#ifdef FTFS_CIRCLE
+#define DCACHE_FTFS_FLAG 0x04000000
+
+// change from d_find_alias
+static struct dentry *ftfs_find_dentry(struct inode *inode)
+{
+	struct dentry *de = NULL;
+
+	if (!hlist_empty(&inode->i_dentry)) {
+		spin_lock(&inode->i_lock);
+		hlist_for_each_entry(de, &inode->i_dentry, d_alias) {
+			spin_lock(&de->d_lock);
+			if (S_ISDIR(inode->i_mode) || !d_unhashed(de)) {
+				//__dget_dlock(de);
+				de->d_lockref.count++;
+				de->d_flags |= DCACHE_FTFS_FLAG;
+				spin_unlock(&de->d_lock);
+				goto out;
+			}
+			spin_unlock(&de->d_lock);
+		}
+out:
+		spin_unlock(&inode->i_lock);
+	}
+
+	return de;
+}
+
+static void ftfs_dput(struct dentry *de)
+{
+	if (de == NULL)
+		return;
+	spin_lock(&de->d_lock);
+	de->d_lockref.count--;
+	de->d_flags &= (~DCACHE_FTFS_FLAG);
+	spin_unlock(&de->d_lock);
 }
 
 static int split_circle(struct dentry *dentry);
 
-#define FTFS_UPDATE_NR_MAY_SPLIT 0x1
-
-static void inline
-ftfs_update_nr(struct dentry *dentry, int meta_change, int data_change, unsigned flag)
+#define FTFS_UPDATE_NR_MAY_SPLIT ((unsigned)(1 << 0))
+static void
+ftfs_update_nr(struct dentry *dentry, int meta_change, int data_change,
+               unsigned flag)
 {
 	struct inode *inode;
-	struct ftfs_meta_key *meta_key;
 	struct ftfs_sb_info *sbi = dentry->d_sb->s_fs_info;
+	DBT *meta_dbt;
 	int end;
 
 	if (unlikely(meta_change == 0 && data_change == 0))
@@ -427,10 +478,18 @@ ftfs_update_nr(struct dentry *dentry, int meta_change, int data_change, unsigned
 
 	do {
 		inode = dentry->d_inode;
-		meta_key = ftfs_get_read_lock(FTFS_I(inode));
-		end = meta_key_is_circle_root(meta_key);
+
+		meta_dbt = ftfs_get_read_lock(FTFS_I(inode));
+		end = meta_key_is_circle_root(meta_dbt->data);
 		ftfs_put_read_lock(FTFS_I(inode));
-		if (!end && (flag & FTFS_UPDATE_NR_MAY_SPLIT) &&
+
+		// quit if we reach a circle root
+		if (end)
+			break;
+		// if this call allows split && current subtree is big enough
+		// we split circle, and if circle split succeeds, we dont need
+		//  to go up anymore
+		if ((flag & FTFS_UPDATE_NR_MAY_SPLIT) &&
 		    (FTFS_I(inode)->nr_meta + meta_change >= sbi->max_circle_size ||
 		     FTFS_I(inode)->nr_data + data_change >= sbi->max_circle_size))
 			end = !split_circle(dentry);
@@ -439,90 +498,24 @@ ftfs_update_nr(struct dentry *dentry, int meta_change, int data_change, unsigned
 		mark_inode_dirty(inode);
 		if (end)
 			break;
+
 		dentry = dentry->d_parent;
 	} while (1);
 }
 
+// the caller only gets an inode, find dentry for him
 #define ftfs_update_nr_inode(inode, meta_change, data_change, flag) do { \
-		struct dentry *de = d_find_alias(inode); \
-		BUG_ON(de == NULL); \
-		spin_lock(&de->d_lock); \
-		de->d_flags |= DCACHE_FTFS_FLAG; \
-		spin_unlock(&de->d_lock); \
-		ftfs_update_nr(de, meta_change, data_change, flag); \
-		dput(de); \
-		spin_lock(&de->d_lock); \
-		de->d_flags &= ~DCACHE_FTFS_FLAG; \
-		spin_unlock(&de->d_lock); \
+		struct dentry *de = ftfs_find_dentry(inode);             \
+		BUG_ON(de == NULL);                                      \
+		ftfs_update_nr(de, meta_change, data_change, flag);      \
+		ftfs_dput(de);                                           \
 	} while (0)
-
-static int split_circle(struct dentry *dentry)
-{
-	int ret;
-	uint64_t circle_id;
-	struct ftfs_sb_info *sbi = dentry->d_sb->s_fs_info;
-	struct ftfs_meta_key *old_meta_key, *new_meta_key;
-	struct inode *inode = dentry->d_inode;
-	struct ftfs_metadata meta;
-	LIST_HEAD(locked_children);
-	DB_TXN *txn;
-
-	trace_printk("split_circle is called\n");
-	old_meta_key = ftfs_get_write_lock(FTFS_I(inode));
-	if (meta_key_is_circle_root(old_meta_key)) {
-		ftfs_put_write_lock(FTFS_I(inode));
-		return 0;
-	}
-	circle_id = inode->i_ino;
-	new_meta_key = alloc_meta_key_from_circle_id(circle_id);
-	if (!new_meta_key) {
-		ftfs_put_write_lock(FTFS_I(inode));
-		return -ENOMEM;
-	}
-	prelock_children_for_rename(dentry, &locked_children);
-	ftfs_copy_metadata_from_inode(&meta, inode);
-	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
-	ret = ftfs_bstore_move(sbi->meta_db, sbi->data_db,
-	                       old_meta_key, new_meta_key, txn,
-	                       0, &meta);
-	if (ret)
-		goto abort;
-	meta.type = FTFS_METADATA_TYPE_REDIRECT;
-	meta.u.circle_id = circle_id;
-	ret = ftfs_bstore_meta_put(sbi->meta_db, old_meta_key, txn, &meta);
-	if (ret)
-		goto abort;
-	ret = ftfs_bstore_txn_commit(txn, DB_TXN_NOSYNC);
-	if (!ret) {
-		ftfs_update_ftfs_inode_keys(&locked_children, old_meta_key, new_meta_key);
-		FTFS_I(inode)->key = new_meta_key;
-		meta_key_free(old_meta_key);
-	}
-
-unlock_out:
-	unlock_children_after_rename(&locked_children);
-	ftfs_put_write_lock(FTFS_I(inode));
-
-	if (!ret) {
-		ftfs_update_nr(dentry->d_parent,
-		               -(FTFS_I(inode)->nr_meta - 1),
-		               -FTFS_I(inode)->nr_data,
-		               0);
-	}
-
-	return ret;
-
-abort:
-	ftfs_bstore_txn_abort(txn);
-	meta_key_free(new_meta_key);
-	goto unlock_out;
-}
 
 static int merge_circle(struct dentry *dentry)
 {
 	int ret;
 	struct ftfs_sb_info *sbi = dentry->d_sb->s_fs_info;
-	struct ftfs_meta_key *old_meta_key, *new_meta_key, *parent_meta_key;
+	DBT *old_dbt, *parent_dbt, new_dbt;
 	struct inode *inode = dentry->d_inode;
 	struct ftfs_metadata meta;
 	struct inode *parent_inode = dentry->d_parent->d_inode;
@@ -530,33 +523,36 @@ static int merge_circle(struct dentry *dentry)
 	DB_TXN *txn;
 
 	BUG_ON(dentry->d_parent == dentry);
-	parent_meta_key = ftfs_get_read_lock(FTFS_I(parent_inode));
-	old_meta_key = ftfs_get_write_lock(FTFS_I(inode));
-	if (!meta_key_is_circle_root(old_meta_key)) {
-		ret = -1;
+	parent_dbt = ftfs_get_read_lock(FTFS_I(parent_inode));
+	old_dbt = ftfs_get_write_lock(FTFS_I(inode));
+	if (!meta_key_is_circle_root(old_dbt->data)) {
+		ret = -EINVAL;
 		goto out;
 	}
-	new_meta_key = alloc_child_meta_key_from_meta_key(parent_meta_key, dentry->d_name.name);
-	if (!new_meta_key) {
-		ret = -ENOMEM;
+	ret = alloc_child_meta_dbt_from_meta_dbt(&new_dbt, parent_dbt,
+	                                         dentry->d_name.name);
+	if (ret)
 		goto out;
-	}
 	prelock_children_for_rename(dentry, &locked_children);
 	ftfs_copy_metadata_from_inode(&meta, inode);
 	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
-	ret = ftfs_bstore_move(sbi->meta_db, sbi->data_db,
-	                       old_meta_key, new_meta_key, txn,
-	                       0, &meta);
-
+	ret = ftfs_bstore_meta_del(sbi->meta_db, old_dbt, txn);
+	if (ret)
+		goto abort;
+	ret = ftfs_bstore_meta_put(sbi->meta_db, &new_dbt, txn, &meta);
+	if (ret)
+		goto abort;
+	ret = ftfs_bstore_move(sbi->meta_db, sbi->data_db, old_dbt, &new_dbt,
+	                       txn, ftfs_bstore_get_move_type(&meta));
 	if (ret)
 		goto abort;
 	ret = ftfs_bstore_txn_commit(txn, DB_TXN_NOSYNC);
 	if (!ret) {
-		ftfs_update_ftfs_inode_keys(&locked_children, old_meta_key, new_meta_key);
-		FTFS_I(inode)->key = new_meta_key;
-		meta_key_free(old_meta_key);
+		ftfs_update_ftfs_inode_keys(&locked_children, old_dbt, &new_dbt);
+		dbt_destroy(&FTFS_I(inode)->meta_dbt);
+		dbt_copy(&FTFS_I(inode)->meta_dbt, &new_dbt);
 	} else {
-		meta_key_free(new_meta_key);
+		dbt_destroy(&new_dbt);
 	}
 
 unlock_out:
@@ -573,89 +569,32 @@ out:
 	}
 
 	return ret;
-
 abort:
 	ftfs_bstore_txn_abort(txn);
-	meta_key_free(new_meta_key);
+	dbt_destroy(&new_dbt);
 	goto unlock_out;
 }
 
-// change from d_find_alias
-static struct dentry *ftfs_find_dentry(struct inode *inode)
-{
-	struct dentry *de = NULL;
-
-	if (!hlist_empty(&inode->i_dentry)) {
-		spin_lock(&inode->i_lock);
-		hlist_for_each_entry(de, &inode->i_dentry, d_alias) {
-			spin_lock(&de->d_lock);
-			if (!IS_ROOT(de) && !d_unhashed(de)) {
-				//__dget_dlock(de);
-				de->d_lockref.count++;
-				de->d_flags |= DCACHE_FTFS_FLAG;
-				spin_unlock(&de->d_lock);
-				goto out;
-			}
-			spin_unlock(&de->d_lock);
-		}
-out:
-		spin_unlock(&inode->i_lock);
-	}
-
-	return de;
-}
-
-#if 0
-static struct dentry *ftfs_find_dentry_lock(struct inode *inode)
-{
-	struct dentry *de = NULL;
-
-	if (!hlist_empty(&inode->i_dentry)) {
-		spin_lock(&inode->i_lock);
-		hlist_for_each_entry(de, &inode->i_dentry, d_alias) {
-			spin_lock(&de->d_lock);
-			if (!IS_ROOT(de) && !d_unhashed(de)) {
-				de->d_lockref.count++;
-				goto out;
-			}
-			spin_unlock(&de->d_lock);
-		}
-out:
-		spin_unlock(&inode->i_lock);
-	}
-
-	return de;
-}
-#endif
-
-static void ftfs_dput(struct dentry *de)
-{
-	if (de == NULL)
-		return;
-	spin_lock(&de->d_lock);
-	de->d_lockref.count--;
-	de->d_flags &= (~DCACHE_FTFS_FLAG);
-	spin_unlock(&de->d_lock);
-}
-
-static int inline maybe_merge_circle(struct inode *inode)
+static int maybe_merge_circle(struct inode *inode)
 {
 	int ret;
 	struct dentry *it_dentry, *dentry;
 	struct ftfs_sb_info *sbi;
 	struct inode *it_inode;
-	struct ftfs_meta_key *meta_key;
+	DBT *meta_dbt;
 
 	dentry = ftfs_find_dentry(inode);
-	ret = -1;
-	if (dentry == NULL)
+	if (dentry == NULL) {
+		ret = -EINVAL;
 		goto out;
+	}
 	it_dentry = dentry->d_parent;
 	sbi = dentry->d_sb->s_fs_info;
+	// if the merge would cause one ancester to split, don't do it
 	do {
 		it_inode = it_dentry->d_inode;
-		meta_key = ftfs_get_read_lock(FTFS_I(it_inode));
-		ret = !meta_key_is_circle_root(meta_key);
+		meta_dbt = ftfs_get_read_lock(FTFS_I(it_inode));
+		ret = !meta_key_is_circle_root(meta_dbt->data);
 		ftfs_put_read_lock(FTFS_I(it_inode));
 		if (!ret ||
 		    FTFS_I(it_inode)->nr_meta + FTFS_I(inode)->nr_meta - 1 >= sbi->max_circle_size ||
@@ -664,13 +603,80 @@ static int inline maybe_merge_circle(struct inode *inode)
 		it_dentry = it_dentry->d_parent;
 	} while (1);
 
-	if (!ret) {
+	if (!ret)
 		ret = merge_circle(dentry);
-	}
 
 	ftfs_dput(dentry);
 out:
 	return ret;
+}
+#endif /* FTFS_CIRCLE */
+
+// ifndef FTFS_CIRCLE, this is called for hard link
+static int split_circle(struct dentry *dentry)
+{
+	int ret;
+	uint64_t circle_id;
+	struct ftfs_sb_info *sbi = dentry->d_sb->s_fs_info;
+	DBT *old_dbt, new_dbt;
+	struct inode *inode = dentry->d_inode;
+	struct ftfs_metadata meta, redirect_meta;
+	LIST_HEAD(locked_children);
+	DB_TXN *txn;
+
+	old_dbt = ftfs_get_write_lock(FTFS_I(inode));
+	if (meta_key_is_circle_root(old_dbt->data)) {
+		ftfs_put_write_lock(FTFS_I(inode));
+		return 0;
+	}
+	circle_id = inode->i_ino;
+	ret = alloc_meta_dbt_from_ino(&new_dbt, circle_id);
+	if (ret) {
+		ftfs_put_write_lock(FTFS_I(inode));
+		return ret;
+	}
+	prelock_children_for_rename(dentry, &locked_children);
+	ftfs_copy_metadata_from_inode(&meta, inode);
+	redirect_meta.type = FTFS_METADATA_TYPE_REDIRECT;
+	redirect_meta.u.ino = circle_id;
+	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
+	ret = ftfs_bstore_meta_put(sbi->meta_db, old_dbt, txn, &redirect_meta);
+	if (ret)
+		goto abort;
+	ret = ftfs_bstore_meta_put(sbi->meta_db, &new_dbt, txn, &meta);
+	if (ret)
+		goto abort;
+	ret = ftfs_bstore_move(sbi->meta_db, sbi->data_db, old_dbt, &new_dbt,
+	                       txn, ftfs_bstore_get_move_type(&meta));
+	if (ret)
+		goto abort;
+	ret = ftfs_bstore_txn_commit(txn, DB_TXN_NOSYNC);
+	if (!ret) {
+		ftfs_update_ftfs_inode_keys(&locked_children, old_dbt, &new_dbt);
+		dbt_destroy(&FTFS_I(inode)->meta_dbt);
+		dbt_copy(&FTFS_I(inode)->meta_dbt, &new_dbt);
+	} else {
+		dbt_destroy(&new_dbt);
+	}
+
+unlock_out:
+	unlock_children_after_rename(&locked_children);
+	ftfs_put_write_lock(FTFS_I(inode));
+
+#ifdef FTFS_CIRCLE
+	if (!ret) {
+		ftfs_update_nr(dentry->d_parent,
+		               -(FTFS_I(inode)->nr_meta - 1),
+		               -FTFS_I(inode)->nr_data,
+		               0);
+	}
+#endif
+
+	return ret;
+abort:
+	ftfs_bstore_txn_abort(txn);
+	dbt_destroy(&new_dbt);
+	goto unlock_out;
 }
 
 static int ftfs_readpage(struct file *file, struct page *page)
@@ -678,15 +684,14 @@ static int ftfs_readpage(struct file *file, struct page *page)
 	int ret;
 	struct inode *inode = page->mapping->host;
 	struct ftfs_sb_info *sbi = inode->i_sb->s_fs_info;
-	struct ftfs_meta_key *meta_key;
-	struct ftfs_inode *ftfs_inode = FTFS_I(inode);
+	DBT *meta_dbt;
 	DB_TXN *txn;
 
-	meta_key = ftfs_get_read_lock(ftfs_inode);
+	meta_dbt = ftfs_get_read_lock(FTFS_I(inode));
 
 	TXN_GOTO_LABEL(retry);
 	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_READONLY);
-	ret = ftfs_bstore_scan_one_page(sbi->data_db, meta_key, txn, page);
+	ret = ftfs_bstore_scan_one_page(sbi->data_db, meta_dbt, txn, page);
 	if (ret) {
 		DBOP_JUMP_ON_CONFLICT(ret, retry);
 		ftfs_bstore_txn_abort(txn);
@@ -695,7 +700,7 @@ static int ftfs_readpage(struct file *file, struct page *page)
 		COMMIT_JUMP_ON_CONFLICT(ret, retry);
 	}
 
-	ftfs_put_read_lock(ftfs_inode);
+	ftfs_put_read_lock(FTFS_I(inode));
 
 	flush_dcache_page(page);
 	if (!ret) {
@@ -715,8 +720,8 @@ static int ftfs_readpages(struct file *filp, struct address_space *mapping,
 	int ret;
 	struct ftfs_sb_info *sbi = mapping->host->i_sb->s_fs_info;
 	struct ftfs_inode *ftfs_inode = FTFS_I(mapping->host);
-	struct ftfs_meta_key *meta_key;
 	struct ftio *ftio;
+	DBT *meta_dbt;
 	DB_TXN *txn;
 
 	ftio = ftio_alloc(nr_pages);
@@ -724,12 +729,12 @@ static int ftfs_readpages(struct file *filp, struct address_space *mapping,
 		return -ENOMEM;
 	ftio_setup(ftio, pages, nr_pages, mapping);
 
-	meta_key = ftfs_get_read_lock(ftfs_inode);
+	meta_dbt = ftfs_get_read_lock(ftfs_inode);
 
 	TXN_GOTO_LABEL(retry);
 	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_READONLY);
 
-	ret = ftfs_bstore_scan_pages(sbi->data_db, meta_key, txn, ftio);
+	ret = ftfs_bstore_scan_pages(sbi->data_db, meta_dbt, txn, ftio);
 
 	if (ret) {
 		DBOP_JUMP_ON_CONFLICT(ret, retry);
@@ -751,109 +756,47 @@ static int ftfs_readpages(struct file *filp, struct address_space *mapping,
 	return ret;
 }
 
-static int inline
-__ftfs_writen(struct ftfs_meta_key *meta_key, struct page *page,
-              size_t len, DB_TXN *txn, int is_seq)
+static int
+__ftfs_updatepage(struct ftfs_sb_info *sbi, struct inode *inode, DBT *meta_dbt,
+                  struct page *page, size_t len, loff_t offset, DB_TXN *txn)
 {
-#if (PAGE_CACHE_SIZE == FTFS_BSTORE_BLOCKSIZE)
 	int ret;
 	char *buf;
-	struct inode *inode;
-	uint64_t block_num;
-	struct ftfs_sb_info *sbi;
-	struct ftfs_data_key *data_key;
+	size_t off;
+	DBT data_dbt;
 
-	inode = page->mapping->host;
-	sbi = inode->i_sb->s_fs_info;
+	// now data_db keys start from 1
+	ret = alloc_data_dbt_from_meta_dbt(&data_dbt, meta_dbt,
+	                                   PAGE_TO_BLOCK_NUM(page));
+	if (ret)
+		return ret;
 	buf = kmap(page);
-	block_num = page->index;
-	data_key = alloc_data_key_from_meta_key(meta_key, block_num);
-	if (!data_key) {
-		ret = -ENOMEM;
-		goto out;
-	}
-	ret = ftfs_bstore_put(sbi->data_db, data_key, txn, buf, len, is_seq);
-
-	data_key_free(data_key);
-out:
+	buf = buf + (offset & ~PAGE_CACHE_MASK);
+	off = block_get_off_by_position(offset);
+	ret = ftfs_bstore_update(sbi->data_db, &data_dbt, txn, buf, len, off);
 	kunmap(page);
+	dbt_destroy(&data_dbt);
 
 	return ret;
-#else
-	BUG_ON();
-#endif
 }
 
-static int inline
-__ftfs_updaten(struct ftfs_meta_key *meta_key, struct page *page,
-               size_t len, loff_t offset, DB_TXN *txn)
+static int
+__ftfs_writepage(struct ftfs_sb_info *sbi, struct inode *inode, DBT *meta_dbt,
+                 struct page *page, size_t len, DB_TXN *txn)
 {
-#if (PAGE_CACHE_SIZE == FTFS_BSTORE_BLOCKSIZE)
 	int ret;
 	char *buf;
-	struct inode *inode;
-	uint64_t block_num;
-	size_t block_offset;
-	struct ftfs_sb_info *sbi;
-	struct ftfs_data_key *data_key;
+	DBT data_dbt;
 
-	inode = page->mapping->host;
-	sbi = inode->i_sb->s_fs_info;
+	// now data_db keys start from 1
+	ret = alloc_data_dbt_from_meta_dbt(&data_dbt, meta_dbt,
+	                                   PAGE_TO_BLOCK_NUM(page));
+	if (ret)
+		return ret;
 	buf = kmap(page);
-	buf = &buf[offset & ~PAGE_CACHE_MASK];
-	block_num = block_get_num_by_position(offset);
-	block_offset = block_get_offset_by_position(offset);
-	data_key = alloc_data_key_from_meta_key(meta_key, block_num);
-	if (!data_key) {
-		ret = -ENOMEM;
-		goto out;
-	}
-	ret = ftfs_bstore_update(sbi->data_db, data_key, txn, buf,
-	                         len, block_offset);
-
-	data_key_free(data_key);
-out:
+	ret = ftfs_bstore_put(sbi->data_db, &data_dbt, txn, buf, len, 0);
 	kunmap(page);
-
-	return ret;
-#else
-	BUG_ON();
-#endif
-}
-
-static int inline
-__ftfs_writepage(struct page *page, struct writeback_control *wbc,
-                 DB_TXN *txn, struct ftfs_meta_key *meta_key, int is_seq)
-{
-	int ret;
-	struct inode *inode = page->mapping->host;
-	loff_t i_size;
-	pgoff_t end_index;
-	unsigned offset;
-
-	i_size = i_size_read(inode);
-	end_index = i_size >> PAGE_CACHE_SHIFT;
-	if (page->index < end_index)
-		ret = __ftfs_writen(meta_key, page, PAGE_CACHE_SIZE,
-		                    txn, is_seq);
-	else {
-		offset = i_size & (PAGE_CACHE_SIZE - 1);
-		if (page->index >= end_index + 1 || !offset)
-			ret = 0;
-		else
-			ret = __ftfs_writen(meta_key, page, offset,
-			                    txn, is_seq);
-	}
-
-	if (ret) {
-		if (ret == -EAGAIN) {
-			redirty_page_for_writepage(wbc, page);
-			ret = 0;
-		} else {
-			SetPageError(page);
-			mapping_set_error(page->mapping, ret);
-		}
-	}
+	dbt_destroy(&data_dbt);
 
 	return ret;
 }
@@ -862,26 +805,46 @@ static int
 ftfs_writepage(struct page *page, struct writeback_control *wbc)
 {
 	int ret;
-	struct ftfs_meta_key *meta_key;
+	DBT *meta_dbt;
 	struct inode *inode = page->mapping->host;
 	struct ftfs_sb_info *sbi = inode->i_sb->s_fs_info;
+	loff_t i_size;
+	pgoff_t end_index;
+	unsigned offset;
 	DB_TXN *txn;
 
-	meta_key = ftfs_get_read_lock(FTFS_I(inode));
+	meta_dbt = ftfs_get_read_lock(FTFS_I(inode));
 	set_page_writeback(page);
+	i_size = i_size_read(inode);
+	end_index = i_size >> PAGE_CACHE_SHIFT;
+
 	TXN_GOTO_LABEL(retry);
 	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
-	ret = __ftfs_writepage(page, wbc, txn, meta_key, 0);
+	if (page->index < end_index)
+		ret = __ftfs_writepage(sbi, inode, meta_dbt, page, PAGE_CACHE_SIZE, txn);
+	else {
+		offset = i_size & (~PAGE_CACHE_MASK);
+		if (page->index == end_index && offset != 0)
+			ret = __ftfs_writepage(sbi, inode, meta_dbt, page, offset, txn);
+		else
+			ret = 0;
+	}
 	if (ret) {
 		DBOP_JUMP_ON_CONFLICT(ret, retry);
 		ftfs_bstore_txn_abort(txn);
-		goto out;
+		if (ret == -EAGAIN) {
+			redirty_page_for_writepage(wbc, page);
+			ret = 0;
+		} else {
+			SetPageError(page);
+			mapping_set_error(page->mapping, ret);
+		}
+	} else {
+		ret = ftfs_bstore_txn_commit(txn, DB_TXN_NOSYNC);
+		COMMIT_JUMP_ON_CONFLICT(ret, retry);
 	}
-	ret = ftfs_bstore_txn_commit(txn, DB_TXN_NOSYNC);
-	COMMIT_JUMP_ON_CONFLICT(ret, retry);
 	end_page_writeback(page);
 
-out:
 	ftfs_put_read_lock(FTFS_I(inode));
 	unlock_page(page);
 
@@ -929,62 +892,54 @@ radix_tree_tag_count_exceeds(struct radix_tree_root *root,
 	return 0;
 }
 
-struct ftfs_writepages_vec {
-	struct list_head list;
-	int nr_pages;
-	struct page *pages[];
+struct ftfs_wp_node {
+	struct page *page;
+	struct ftfs_wp_node *next;
 };
-#define FTFS_WRITEPAGES_VEC_SIZE 1024
-#define FTFS_WRITEPAGES_VEC_LIST_INIT_SIZE 16
-struct ftfs_writepages_vec *ftfs_alloc_writepages_vec(void)
-{
-	struct ftfs_writepages_vec *ret;
-	ret = kmalloc(sizeof(struct ftfs_writepages_vec) +
-	              sizeof(struct page *) * FTFS_WRITEPAGES_VEC_SIZE,
-	              GFP_KERNEL);
-	if (ret != NULL)
-		INIT_LIST_HEAD(&ret->list);
-	return ret;
-}
-struct mutex ftfs_writepages_vec_list_mutex;
-LIST_HEAD(ftfs_writepages_vec_list);
+#define FTFS_WRITEPAGES_LIST_SIZE 4096
+
+static struct kmem_cache *ftfs_writepages_cachep;
 
 static int
-__ftfs_writepages_write_pages(struct ftfs_writepages_vec *writepages_vec,
+__ftfs_writepages_write_pages(struct ftfs_wp_node *list, int nr_pages,
                               struct writeback_control *wbc,
                               struct inode *inode, struct ftfs_sb_info *sbi,
-                              struct ftfs_data_key *data_key, int is_seq)
+                              DBT *data_dbt, int is_seq)
 {
 	int i, ret;
 	loff_t i_size;
 	pgoff_t end_index;
 	unsigned offset;
 	char *buf;
+	struct ftfs_wp_node *it;
 	struct page *page;
-	struct ftfs_meta_key *meta_key;
+	DBT *meta_dbt;
+	char *data_key;
 	DB_TXN *txn;
 
-	meta_key = ftfs_get_read_lock(FTFS_I(inode));
-	if (unlikely(meta_key->circle_id != data_key->circle_id ||
-	             strcmp(meta_key->path, data_key->path) != 0))
-		copy_data_key_from_meta_key(data_key, meta_key, 0);
+	meta_dbt = ftfs_get_read_lock(FTFS_I(inode));
+	data_key = data_dbt->data;
+	if (unlikely(!key_is_same_of_key((char *)meta_dbt->data, data_key)))
+		copy_data_dbt_from_meta_dbt(data_dbt, meta_dbt, 0);
 retry:
 	i_size = i_size_read(inode);
 	end_index = i_size >> PAGE_CACHE_SHIFT;
+	offset = i_size & (PAGE_CACHE_SIZE - 1);
 	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
-	for (i = 0; i < writepages_vec->nr_pages; i++) {
-		page = writepages_vec->pages[i];
-		data_key->block_num = page->index;
+	// we did a lazy approach about the list, so we need an additional i here
+	for (i = 0, it = list->next; i < nr_pages; i++, it = it->next) {
+		page = it->page;
+		ftfs_data_key_set_blocknum(data_key, data_dbt->size,
+		                           PAGE_TO_BLOCK_NUM(page));
 		buf = kmap(page);
 		if (page->index < end_index)
-			ret = ftfs_bstore_put(sbi->data_db, data_key, txn, buf, PAGE_CACHE_SIZE, is_seq);
-		else {
-			offset = i_size & (PAGE_CACHE_SIZE - 1);
-			if (page->index > end_index + 1 || !offset)
-				ret = 0;
-			else
-				ret = ftfs_bstore_put(sbi->data_db, data_key, txn, buf, offset, is_seq);
-		}
+			ret = ftfs_bstore_put(sbi->data_db, data_dbt, txn, buf,
+			                      PAGE_CACHE_SIZE, is_seq);
+		else if (page->index == end_index && offset != 0)
+			ret = ftfs_bstore_put(sbi->data_db, data_dbt, txn, buf,
+			                      offset, is_seq);
+		else
+			ret = 0;
 		kunmap(page);
 		if (ret) {
 			DBOP_JUMP_ON_CONFLICT(ret, retry);
@@ -996,8 +951,8 @@ retry:
 	COMMIT_JUMP_ON_CONFLICT(ret, retry);
 out:
 	ftfs_put_read_lock(FTFS_I(inode));
-	for (i = 0; i < writepages_vec->nr_pages; i++) {
-		page = writepages_vec->pages[i];
+	for (i = 0, it = list->next; i < nr_pages; i++, it = it->next) {
+		page = it->page;
 		end_page_writeback(page);
 		if (ret)
 			redirty_page_for_writepage(wbc, page);
@@ -1030,24 +985,9 @@ static int ftfs_writepages(struct address_space *mapping,
 	int is_seq = 0;
 	struct inode *inode;
 	struct ftfs_sb_info *sbi;
-	struct ftfs_meta_key *meta_key;
-	struct ftfs_data_key *data_key;
-	struct ftfs_writepages_vec *writepages_vec;
-
-	writepages_vec = NULL;
-	mutex_lock(&ftfs_writepages_vec_list_mutex);
-	if (!list_empty(&ftfs_writepages_vec_list)) {
-		writepages_vec = list_entry(ftfs_writepages_vec_list.next,
-		                            struct ftfs_writepages_vec, list);
-		list_del_init(&writepages_vec->list);
-	}
-	mutex_unlock(&ftfs_writepages_vec_list_mutex);
-	if (writepages_vec == NULL) {
-		writepages_vec = ftfs_alloc_writepages_vec();
-		if (writepages_vec == NULL)
-			return -ENOMEM;
-	}
-	writepages_vec->nr_pages = 0;
+	DBT *meta_dbt, data_dbt;
+	int nr_list_pages;
+	struct ftfs_wp_node list, *tail, *it;
 
 	pagevec_init(&pvec, 0);
 	if (wbc->range_cyclic) {
@@ -1083,26 +1023,31 @@ retry:
 
 	inode = mapping->host;
 	sbi = inode->i_sb->s_fs_info;
-	meta_key = ftfs_get_read_lock(FTFS_I(inode));
+	meta_dbt = ftfs_get_read_lock(FTFS_I(inode));
+#ifdef FTFS_CIRCLE
 	if (i_size_read(inode) >= sbi->max_file_size &&
-	    !meta_key_is_circle_root(meta_key)) {
+	    !meta_key_is_circle_root(meta_dbt->data)) {
 		struct dentry *de;
 		de = ftfs_find_dentry(inode);
 		if (de) {
 			ftfs_put_read_lock(FTFS_I(inode));
 			split_circle(de);
 			ftfs_dput(de);
-			meta_key = ftfs_get_read_lock(FTFS_I(inode));
+			meta_dbt = ftfs_get_read_lock(FTFS_I(inode));
 		}
 	}
-	data_key = kmalloc(DATA_KEY_MAX_LEN, GFP_KERNEL);
-	if (!data_key) {
+#endif
+	ret = dbt_alloc(&data_dbt, DATA_KEY_MAX_LEN);
+	if (ret) {
 		ftfs_put_read_lock(FTFS_I(inode));
-		ret = -ENOMEM;
 		goto out;
 	}
-	copy_data_key_from_meta_key(data_key, meta_key, 0);
+	copy_data_dbt_from_meta_dbt(&data_dbt, meta_dbt, 0);
 	ftfs_put_read_lock(FTFS_I(inode));
+
+	nr_list_pages = 0;
+	list.next = NULL;
+	tail = &list;
 	while (!done && (index <= end)) {
 		nr_pages = pagevec_lookup_tag(&pvec, mapping, &index, tag,
 			      min(end - index, (pgoff_t)PAGEVEC_SIZE-1) + 1);
@@ -1113,13 +1058,6 @@ retry:
 			struct page *page = pvec.pages[i];
 
 			if (page->index > end) {
-				if (writepages_vec->nr_pages > 0) {
-					ret = __ftfs_writepages_write_pages(writepages_vec, wbc, inode, sbi, data_key, is_seq);
-                    if (ret)
-                        goto free_dkey_out;
-					done_index = txn_done_index;
-					writepages_vec->nr_pages = 0;
-				}
 				done = 1;
 				break;
 			}
@@ -1150,24 +1088,27 @@ continue_unlock:
 				goto continue_unlock;
 
 			set_page_writeback(page);
-			writepages_vec->pages[writepages_vec->nr_pages++] = page;
-			if (writepages_vec->nr_pages >= FTFS_WRITEPAGES_VEC_SIZE) {
-				ret = __ftfs_writepages_write_pages(writepages_vec, wbc, inode, sbi, data_key, is_seq);
+			if (tail->next == NULL) {
+				tail->next = kmem_cache_alloc(
+					ftfs_writepages_cachep, GFP_KERNEL);
+				tail->next->next = NULL;
+			}
+			tail = tail->next;
+			tail->page = page;
+			++nr_list_pages;
+			if (nr_list_pages >= FTFS_WRITEPAGES_LIST_SIZE) {
+				ret = __ftfs_writepages_write_pages(&list,
+					nr_list_pages, wbc, inode, sbi,
+					&data_dbt, is_seq);
 				if (ret)
 					goto free_dkey_out;
 				done_index = txn_done_index;
-				writepages_vec->nr_pages = 0;
+				nr_list_pages = 0;
+				tail = &list;
 			}
 
 			if (--wbc->nr_to_write <= 0 &&
 			    wbc->sync_mode == WB_SYNC_NONE) {
-				if (writepages_vec->nr_pages > 0) {
-					ret = __ftfs_writepages_write_pages(writepages_vec, wbc, inode, sbi, data_key, is_seq);
-                    if (ret)
-                        goto free_dkey_out;
-					done_index = txn_done_index;
-					writepages_vec->nr_pages = 0;
-				}
 				done = 1;
 				break;
 			}
@@ -1175,15 +1116,21 @@ continue_unlock:
 		pagevec_release(&pvec);
 		cond_resched();
 	}
-	if (writepages_vec->nr_pages > 0) {
-		ret = __ftfs_writepages_write_pages(writepages_vec, wbc, inode, sbi, data_key, is_seq);
-		if (!ret) {
+
+	if (nr_list_pages > 0) {
+		ret = __ftfs_writepages_write_pages(&list, nr_list_pages, wbc,
+			inode, sbi, &data_dbt, is_seq);
+		if (!ret)
 			done_index = txn_done_index;
-			writepages_vec->nr_pages = 0;
-		}
 	}
 free_dkey_out:
-	kfree(data_key);
+	dbt_destroy(&data_dbt);
+	tail = list.next;
+	while (tail != NULL) {
+		it = tail->next;
+		kmem_cache_free(ftfs_writepages_cachep, tail);
+		tail = it;
+	}
 out:
 	if (!cycled && !done) {
 		cycled = 1;
@@ -1193,10 +1140,6 @@ out:
 	}
 	if (wbc->range_cyclic || (range_whole && wbc->nr_to_write > 0))
 		mapping->writeback_index = done_index;
-
-	mutex_lock(&ftfs_writepages_vec_list_mutex);
-	list_add(&writepages_vec->list, &ftfs_writepages_vec_list);
-	mutex_unlock(&ftfs_writepages_vec_list_mutex);
 
 	return ret;
 }
@@ -1227,7 +1170,11 @@ ftfs_write_end(struct file *file, struct address_space *mapping,
 	/* make sure that ftfs can't guarantee uptodate page */
 	loff_t last_pos = pos + copied;
 	struct inode *inode = page->mapping->host;
+	struct ftfs_sb_info *sbi = inode->i_sb->s_fs_info;
+	DBT *meta_dbt;
+	char *buf;
 	int ret;
+	DB_TXN *txn;
 
 	/*
 	 * 1. if page is uptodate/writesize=PAGE_SIZE (we have new content),
@@ -1238,33 +1185,31 @@ ftfs_write_end(struct file *file, struct address_space *mapping,
 	if (PageDirty(page) || copied == PAGE_CACHE_SIZE) {
 		goto postpone_to_writepage;
 	} else if (page_offset(page) >= i_size_read(inode)) {
-		char *buf = kmap(page);
+		buf = kmap(page);
 		if (pos & ~PAGE_CACHE_MASK)
 			memset(buf, 0, pos & ~PAGE_CACHE_MASK);
 		if (last_pos & ~PAGE_CACHE_MASK)
-			memset(buf + (last_pos & ~PAGE_CACHE_MASK),
-			       0, PAGE_CACHE_SIZE - (last_pos & ~PAGE_CACHE_MASK));
+			memset(buf + (last_pos & ~PAGE_CACHE_MASK), 0,
+			       PAGE_CACHE_SIZE - (last_pos & ~PAGE_CACHE_MASK));
 		kunmap(page);
 postpone_to_writepage:
 		SetPageUptodate(page);
 		if (!PageDirty(page))
 			__set_page_dirty_nobuffers(page);
 	} else {
-		struct ftfs_meta_key *meta_key =
-			ftfs_get_read_lock(FTFS_I(inode));
-		DB_TXN *txn;
+		meta_dbt = ftfs_get_read_lock(FTFS_I(inode));
 		TXN_GOTO_LABEL(retry);
-		ftfs_bstore_txn_begin(((struct ftfs_sb_info *)inode->i_sb->s_fs_info)->db_env,
-		                      NULL, &txn, TXN_MAY_WRITE);
-		ret = __ftfs_updaten(meta_key, page, copied, pos, txn);
+		ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
+		ret = __ftfs_updatepage(sbi, inode, meta_dbt, page, copied, pos,
+		                        txn);
 		if (ret) {
 			DBOP_JUMP_ON_CONFLICT(ret, retry);
 			ftfs_bstore_txn_abort(txn);
-			goto out;
+		} else {
+			ret = ftfs_bstore_txn_commit(txn, DB_TXN_NOSYNC);
+			COMMIT_JUMP_ON_CONFLICT(ret, retry);
 		}
-		ret = ftfs_bstore_txn_commit(txn, DB_TXN_NOSYNC);
-		COMMIT_JUMP_ON_CONFLICT(ret, retry);
-out:
+
 		ftfs_put_read_lock(FTFS_I(inode));
 		BUG_ON(ret);
 		clear_page_dirty_for_io(page);
@@ -1275,10 +1220,11 @@ out:
 
 	/* holding i_mutconfigex */
 	if (last_pos > i_size_read(inode)) {
-		if (last_pos >= ((struct ftfs_sb_info *)inode->i_sb->s_fs_info)->max_file_size) {
-			struct ftfs_meta_key *meta_key = ftfs_get_read_lock(FTFS_I(inode));
-			struct dentry *de;
-			if (!meta_key_is_circle_root(meta_key)) {
+#ifdef FTFS_CIRCLE
+		if (last_pos >= sbi->max_file_size) {
+			meta_dbt = ftfs_get_read_lock(FTFS_I(inode));
+			if (!meta_key_is_circle_root(meta_dbt->data)) {
+				struct dentry *de;
 				ftfs_put_read_lock(FTFS_I(inode));
 				de = ftfs_find_dentry(inode);
 				BUG_ON(!de);
@@ -1298,13 +1244,15 @@ split_fail:
 			// the file doesn't form a circle itself
 			if (dc > 0) {
 				struct dentry *de = ftfs_find_dentry(inode);
-				if (de) {
-					ftfs_update_nr(de->d_parent, 0, dc, FTFS_UPDATE_NR_MAY_SPLIT);
-					ftfs_dput(de);
-				}
+				BUG_ON(!de);
+				ftfs_update_nr(de->d_parent, 0, dc,
+				               FTFS_UPDATE_NR_MAY_SPLIT);
+				ftfs_dput(de);
 			}
 		}
+		// it is a file
 		FTFS_I(inode)->nr_data = ftfs_get_block_num_by_size(last_pos);
+#endif
 		i_size_write(inode, last_pos);
 		mark_inode_dirty(inode);
 	}
@@ -1328,28 +1276,32 @@ static int ftfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 {
 	int ret, err;
 	struct inode *old_inode, *new_inode;
+	struct ftfs_sb_info *sbi = old_dir->i_sb->s_fs_info;
+	DBT *old_meta_dbt, new_meta_dbt, *old_dir_meta_dbt, *new_dir_meta_dbt,
+	    *new_inode_meta_dbt;
+	struct ftfs_metadata old_meta;
 	LIST_HEAD(locked_children);
 	DB_TXN *txn;
-	struct ftfs_sb_info *sbi = old_dir->i_sb->s_fs_info;
-	struct ftfs_meta_key *old_meta_key, *new_meta_key,
-	                     *old_dir_meta_key, *new_dir_meta_key;
+#ifdef FTFS_CIRCLE
 	int old_mc, old_dc, new_mc, new_dc;
-	struct ftfs_metadata old_meta;
+#endif
 
 	// to prevent any other move from happening, we grab sem of parents
-	old_dir_meta_key = ftfs_get_read_lock(FTFS_I(old_dir));
-	new_dir_meta_key = ftfs_get_read_lock(FTFS_I(new_dir));
+	old_dir_meta_dbt = ftfs_get_read_lock(FTFS_I(old_dir));
+	new_dir_meta_dbt = ftfs_get_read_lock(FTFS_I(new_dir));
 
 	old_inode = old_dentry->d_inode;
-	old_meta_key = ftfs_get_write_lock(FTFS_I(old_inode));
-	prelock_children_for_rename(old_dentry, &locked_children);
+	old_meta_dbt = ftfs_get_write_lock(FTFS_I(old_inode));
 	new_inode = new_dentry->d_inode;
-	new_meta_key = new_inode ? ftfs_get_write_lock(FTFS_I(new_inode)) : NULL;
+	new_inode_meta_dbt = new_inode ?
+		ftfs_get_write_lock(FTFS_I(new_inode)) : NULL;
+	prelock_children_for_rename(old_dentry, &locked_children);
 
 	TXN_GOTO_LABEL(retry);
 	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
 
-	if (!meta_key_is_circle_root(old_meta_key)) {
+#ifdef FTFS_CIRCLE
+	if (!meta_key_is_circle_root(old_meta_dbt->data)) {
 		new_mc = FTFS_I(old_inode)->nr_meta;
 		new_dc = FTFS_I(old_inode)->nr_data;
 	}
@@ -1359,22 +1311,25 @@ static int ftfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 	}
 	old_mc = -new_mc;
 	old_dc = -new_dc;
+#endif
 	if (new_inode) {
+#ifdef FTFS_CIRCLE
 		// we either delete an emptry dir or one file,
 		new_mc -= 1;
-		if (!meta_key_is_circle_root(new_meta_key))
+		if (!meta_key_is_circle_root(new_inode_meta_dbt->data))
 			new_dc -= FTFS_I(new_inode)->nr_data;
+#endif
 		if (S_ISDIR(old_inode->i_mode)) {
 			if (!S_ISDIR(new_inode->i_mode)) {
 				ret = -ENOTDIR;
 				goto abort;
 			}
-			err = ftfs_directory_is_empty(sbi->meta_db,
-			                              new_meta_key,
-			                              txn, &ret);
+			err = ftfs_dir_is_empty(sbi->meta_db, new_inode_meta_dbt,
+			                        txn, &ret);
 			if (err) {
 				DBOP_JUMP_ON_CONFLICT(err, retry);
-				BUG();
+				ret = err;
+				goto abort;
 			}
 			if (!ret) {
 				ret = -ENOTEMPTY;
@@ -1384,25 +1339,30 @@ static int ftfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 			// delete meta here. but if it is a circle root,
 			// we need to perform delete and avoid future update
 			// to that inode.
-			if (meta_key_is_circle_root(new_meta_key)) {
+			// For non-circle case, there will be no dir circle
+			// root;
+#ifdef FTFS_CIRCLE
+			if (meta_key_is_circle_root(new_inode_meta_dbt->data)) {
 				ret = ftfs_bstore_meta_del(sbi->meta_db,
-				                           new_meta_key,
-				                           txn);
+					new_inode_meta_dbt, txn);
 				if (ret) {
 					DBOP_JUMP_ON_CONFLICT(ret, retry);
 					goto abort;
 				}
 			}
+#endif
 		} else {
 			if (S_ISDIR(new_inode->i_mode)) {
 				ret = -ENOTDIR;
 				goto abort;
 			}
-			// basically the same as dirs, but we also have to
-			// take care of data entries and hard links
-			if (!meta_key_is_circle_root(new_meta_key) ||
-			    new_inode->i_nlink == 1) {
-				ret = ftfs_do_unlink(new_meta_key, txn,
+			// if this file is a circle root, evict_inode can decide
+			//   whether it should be deleted
+			// otherwise, we cannot let this inode touch the path
+			//   any more because another inode owns that path. So
+			//   we need to delete here
+			if (!meta_key_is_circle_root(new_inode_meta_dbt->data)) {
+				ret = ftfs_do_unlink(new_inode_meta_dbt, txn,
 				                     new_inode, sbi);
 				if (ret) {
 					DBOP_JUMP_ON_CONFLICT(ret, retry);
@@ -1412,33 +1372,33 @@ static int ftfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 		}
 	}
 
-	new_meta_key = alloc_child_meta_key_from_meta_key(new_dir_meta_key, new_dentry->d_name.name);
-	if (!new_meta_key) {
-		ret = -ENOMEM;
+	ret = alloc_child_meta_dbt_from_meta_dbt(&new_meta_dbt,
+			new_dir_meta_dbt, new_dentry->d_name.name);
+	if (ret)
 		goto abort;
-	}
 
-	if (meta_key_is_circle_root(old_meta_key)) {
-		struct ftfs_meta_key *old_redirect_meta_key =
-			alloc_child_meta_key_from_meta_key(old_dir_meta_key,
-			                                   old_dentry->d_name.name);
-
-		old_meta.type = FTFS_METADATA_TYPE_REDIRECT;
-		old_meta.u.circle_id = old_meta_key->circle_id;
-
-		if (!old_redirect_meta_key) {
-			ret = -ENOMEM;
+	if (meta_key_is_circle_root(old_meta_dbt->data)) {
+		DBT old_indirect_dbt;
+		ret = alloc_child_meta_dbt_from_meta_dbt(&old_indirect_dbt,
+				old_dir_meta_dbt, old_dentry->d_name.name);
+		if (ret)
 			goto abort1;
-		}
-		ret = ftfs_bstore_move(sbi->meta_db, sbi->data_db,
-		                       old_redirect_meta_key, new_meta_key,
-		                       txn, FTFS_BSTORE_MOVE_NO_DATA, &old_meta);
-		meta_key_free(old_redirect_meta_key);
+		old_meta.type = FTFS_METADATA_TYPE_REDIRECT;
+		old_meta.u.ino = old_inode->i_ino;
+
+		ret = ftfs_bstore_meta_del(sbi->meta_db, &old_indirect_dbt, txn);
+		if (!ret)
+			ret = ftfs_bstore_meta_put(sbi->meta_db, &new_meta_dbt, txn, &old_meta);
+		dbt_destroy(&old_indirect_dbt);
 	} else {
 		ftfs_copy_metadata_from_inode(&old_meta, old_inode);
-		ret = ftfs_bstore_move(sbi->meta_db, sbi->data_db,
-		                       old_meta_key, new_meta_key, txn,
-		                       0, &old_meta);
+		ret = ftfs_bstore_meta_del(sbi->meta_db, old_meta_dbt, txn);
+		if (!ret)
+			ret = ftfs_bstore_meta_put(sbi->meta_db, &new_meta_dbt, txn, &old_meta);
+		if (!ret)
+			ret = ftfs_bstore_move(sbi->meta_db, sbi->data_db,
+					       old_meta_dbt, &new_meta_dbt, txn,
+			                       ftfs_bstore_get_move_type(&old_meta));
 	}
 
 	if (ret) {
@@ -1446,44 +1406,39 @@ static int ftfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 		goto abort1;
 	}
 
-	if (!meta_key_is_circle_root(old_meta_key)) {
-		ret = ftfs_update_ftfs_inode_keys(&locked_children, old_meta_key, new_meta_key);
-		if (ret) {
-			DBOP_JUMP_ON_CONFLICT(ret, retry);
-			goto abort1;
-		}
-		FTFS_I(old_inode)->key = new_meta_key;
-		meta_key_free(old_meta_key);
-	}
-
 	ret = ftfs_bstore_txn_commit(txn, DB_TXN_NOSYNC);
 	COMMIT_JUMP_ON_CONFLICT(ret, retry);
 
+	if (!meta_key_is_circle_root(old_meta_dbt->data)) {
+		ftfs_update_ftfs_inode_keys(&locked_children, old_meta_dbt,
+		                            &new_meta_dbt);
+		dbt_destroy(&FTFS_I(old_inode)->meta_dbt);
+		dbt_copy(&FTFS_I(old_inode)->meta_dbt, &new_meta_dbt);
+	} else
+		dbt_destroy(&new_meta_dbt);
+
 	unlock_children_after_rename(&locked_children);
-	ftfs_put_write_lock(FTFS_I(old_inode));
 	if (new_inode) {
-		if (new_inode->i_nlink > 1) {
-			drop_nlink(new_inode);
-			mark_inode_dirty(new_inode);
-		} else {
-			// basically, we are trying to avoid any future updates
-			spin_lock(&new_inode->i_lock);
-			i_size_write(new_inode, 0);
-			new_inode->i_state &= ~I_DIRTY;
-			spin_unlock(&new_inode->i_lock);
-		}
+		drop_nlink(new_inode);
+		mark_inode_dirty(new_inode);
+		// avoid future updates from write_inode and evict_inode
+		if (!meta_key_is_circle_root(new_inode_meta_dbt->data))
+			FTFS_I(new_inode)->ftfs_flags |= FTFS_FLAG_DELETED;
 		ftfs_put_write_lock(FTFS_I(new_inode));
 	}
+	ftfs_put_write_lock(FTFS_I(old_inode));
 	ftfs_put_read_lock(FTFS_I(old_dir));
 	ftfs_put_read_lock(FTFS_I(new_dir));
 
+#ifdef FTFS_CIRCLE
 	ftfs_update_nr_inode(new_dir, new_mc, new_dc, FTFS_UPDATE_NR_MAY_SPLIT);
 	ftfs_update_nr_inode(old_dir, old_mc, old_dc, 0);
+#endif
 
 	return 0;
 
 abort1:
-	meta_key_free(new_meta_key);
+	dbt_destroy(&new_meta_dbt);
 abort:
 	ftfs_bstore_txn_abort(txn);
 	unlock_children_after_rename(&locked_children);
@@ -1496,20 +1451,36 @@ abort:
 	return ret;
 }
 
+/*
+ * ftfs_readdir: ctx->pos (vfs get from f_pos)
+ *   ctx->pos == 0, readdir just starts
+ *   ctx->pos == 1/2, readdir has emit dots, used by dir_emit_dots
+ *   ctx->pos == 3, readdir has emit all entries
+ *   ctx->pos == ?, ctx->pos stores a pointer to the position of last readdir
+ */
 static int ftfs_readdir(struct file *file, struct dir_context *ctx)
 {
 	int ret;
 	struct inode *inode = file_inode(file);
 	struct ftfs_sb_info *sbi = inode->i_sb->s_fs_info;
-	struct ftfs_inode *ftfs_inode = FTFS_I(inode);
-	struct ftfs_meta_key *meta_key;
+	DBT *meta_dbt;
 	DB_TXN *txn;
 
-	meta_key = ftfs_get_read_lock(ftfs_inode);
+	// done
+	if (ctx->pos == 3)
+		return 0;
+
+	if (ctx->pos == 0) {
+		if (!dir_emit_dots(file, ctx))
+			return -ENOMEM;
+		ctx->pos = 2;
+	}
+
+	meta_dbt = ftfs_get_read_lock(FTFS_I(inode));
 
 	TXN_GOTO_LABEL(retry);
 	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_READONLY);
-	ret = ftfs_bstore_meta_readdir(sbi->meta_db, meta_key, txn, ctx);
+	ret = ftfs_bstore_meta_readdir(sbi->meta_db, meta_dbt, txn, ctx);
 	if (ret) {
 		DBOP_JUMP_ON_CONFLICT(ret, retry);
 		ftfs_bstore_txn_abort(txn);
@@ -1518,7 +1489,8 @@ static int ftfs_readdir(struct file *file, struct dir_context *ctx)
 		COMMIT_JUMP_ON_CONFLICT(ret, retry);
 	}
 
-	ftfs_put_read_lock(ftfs_inode);
+	ftfs_put_read_lock(FTFS_I(inode));
+
 	return ret;
 }
 
@@ -1536,8 +1508,6 @@ ftfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	return ret;
 }
 
-static void ftfs_destroy_inode(struct inode *inode);
-
 static int
 ftfs_mknod(struct inode *dir, struct dentry *dentry, umode_t mode, dev_t rdev)
 {
@@ -1545,66 +1515,57 @@ ftfs_mknod(struct inode *dir, struct dentry *dentry, umode_t mode, dev_t rdev)
 	struct inode *inode = NULL;
 	struct ftfs_metadata meta;
 	struct ftfs_sb_info *sbi = dir->i_sb->s_fs_info;
-	struct ftfs_inode *ftfs_inode = FTFS_I(dir);
-	struct ftfs_meta_key *dir_meta_key, *meta_key;
+	DBT *dir_meta_dbt, meta_dbt;
 	ino_t ino;
 	DB_TXN *txn;
 
-	if (rdev && !new_valid_dev(rdev)) {
-		ret = -EINVAL;
+	if (rdev && !new_valid_dev(rdev))
+		return -EINVAL;
+
+	dir_meta_dbt = ftfs_get_read_lock(FTFS_I(dir));
+	ret = alloc_child_meta_dbt_from_meta_dbt(&meta_dbt, dir_meta_dbt,
+	                                         dentry->d_name.name);
+	if (ret)
+		goto out;
+
+	ret = ftfs_next_ino(sbi, &ino);
+	if (ret) {
+err_free_dbt:
+		dbt_destroy(&meta_dbt);
 		goto out;
 	}
 
-	dir_meta_key = ftfs_get_read_lock(ftfs_inode);
-	meta_key = alloc_child_meta_key_from_meta_key(dir_meta_key,
-	                                              dentry->d_name.name);
-	if (!meta_key) {
-		ret = -ENOMEM;
-		goto out1;
-	}
-
-	ret = ftfs_next_ino(sbi, txn, &ino);
-	if (ret) {
-		BUG();
-	}
 	ftfs_setup_metadata(&meta, mode, 0, rdev, ino);
-	inode = ftfs_setup_inode(dir->i_sb, meta_key, &meta);
+	inode = ftfs_setup_inode(dir->i_sb, &meta_dbt, &meta);
 	if (IS_ERR(inode)) {
 		ret = PTR_ERR(inode);
-		inode = NULL;
-		goto out1;
+		goto err_free_dbt;
 	}
 
 	TXN_GOTO_LABEL(retry);
 	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
-
-	ret = ftfs_bstore_meta_put(sbi->meta_db, meta_key, txn, &meta);
+	ret = ftfs_bstore_meta_put(sbi->meta_db, &meta_dbt, txn, &meta);
 	if (ret) {
 		DBOP_JUMP_ON_CONFLICT(ret, retry);
-		goto abort;
+		ftfs_bstore_txn_abort(txn);
+		set_nlink(inode, 0);
+		FTFS_I(inode)->ftfs_flags |= FTFS_FLAG_DELETED;
+		dbt_destroy(&FTFS_I(inode)->meta_dbt);
+		iput(inode);
+		goto out;
 	}
 	ret = ftfs_bstore_txn_commit(txn, DB_TXN_NOSYNC);
 	COMMIT_JUMP_ON_CONFLICT(ret, retry);
 
 	d_instantiate(dentry, inode);
 
-	ftfs_put_read_lock(ftfs_inode);
-
-	ftfs_update_nr_inode(dir, 1, 0, FTFS_UPDATE_NR_MAY_SPLIT);
-
-	return 0;
-
-abort:
-	ftfs_bstore_txn_abort(txn);
-	meta_key_free(meta_key);
-	if (inode) {
-		iput(inode);
-		__destroy_inode(inode);
-		ftfs_destroy_inode(inode);
-	}
-out1:
-	ftfs_put_read_lock(ftfs_inode);
 out:
+	ftfs_put_read_lock(FTFS_I(dir));
+#ifdef FTFS_CIRCLE
+	if (!ret)
+		ftfs_update_nr_inode(dir, 1, 0, FTFS_UPDATE_NR_MAY_SPLIT);
+#endif
+
 	return ret;
 }
 
@@ -1621,63 +1582,66 @@ static int ftfs_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 static int ftfs_rmdir(struct inode *dir, struct dentry *dentry)
 {
-#ifdef FTFS_PROFILE_RMDIR
-	ktime_t rmdir_start = ktime_get();
-#endif
 	int r, ret;
 	struct inode *inode = dentry->d_inode;
 	struct ftfs_sb_info *sbi = inode->i_sb->s_fs_info;
 	struct ftfs_inode *ftfs_inode = FTFS_I(inode);
-	struct ftfs_meta_key *meta_key;
-	struct ftfs_meta_key *dir_meta_key = ftfs_get_read_lock(FTFS_I(dir));
+	DBT *meta_dbt;
+#ifdef FTFS_CIRCLE
+	DBT *dir_meta_dbt;
+#endif
 	DB_TXN *txn;
 
-	meta_key = ftfs_get_read_lock(ftfs_inode);
+#ifdef FTFS_CIRCLE
+	// if we turn circle off, it is not possible that a dir becomes
+	// the circle root;
+	dir_meta_dbt = ftfs_get_read_lock(FTFS_I(dir));
+#endif
+	meta_dbt = ftfs_get_read_lock(ftfs_inode);
 
-	if (meta_key == &root_dir_meta_key) {
+	if (meta_dbt->data == &root_meta_key) {
 		ret = -EINVAL;
 		goto out;
 	}
 
 	TXN_GOTO_LABEL(retry);
+#ifdef FTFS_CIRCLE
 	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
-	r = ftfs_directory_is_empty(sbi->meta_db, meta_key, txn, &ret);
-	if (r) {
-		DBOP_JUMP_ON_CONFLICT(r, retry);
+#else
+	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_READONLY);
+#endif
+	ret = ftfs_dir_is_empty(sbi->meta_db, meta_dbt, txn, &r);
+	if (ret) {
+		DBOP_JUMP_ON_CONFLICT(ret, retry);
 		ftfs_bstore_txn_abort(txn);
-		ret = r;
 		goto out;
 	}
 
-	if (ret && meta_key_is_circle_root(meta_key)) {
-		struct ftfs_meta_key *redirect_meta_key;
-		redirect_meta_key = alloc_child_meta_key_from_meta_key(
-		                            dir_meta_key, dentry->d_name.name);
-		if (!redirect_meta_key) {
-			r = -ENOMEM;
+#ifdef FTFS_CIRCLE
+	if (r && meta_key_is_circle_root(meta_dbt->data)) {
+		DBT indirect_dbt;
+		ret = alloc_child_meta_dbt_from_meta_dbt(&indirect_dbt,
+				dir_meta_dbt, dentry->d_name.name);
+		if (ret)
 			goto failed;
-		}
 
-		r = ftfs_bstore_meta_del(sbi->meta_db, redirect_meta_key, txn);
+		ret = ftfs_bstore_meta_del(sbi->meta_db, &indirect_dbt, txn);
 
-		kfree(redirect_meta_key);
-		if (r) {
-			DBOP_JUMP_ON_CONFLICT(r, retry);
+		dbt_destroy(&indirect_dbt);
+		if (ret) {
+			DBOP_JUMP_ON_CONFLICT(ret, retry);
 failed:
 			ftfs_bstore_txn_abort(txn);
-			ret = r;
 			goto out;
 		}
 	}
+#endif
 
-	r = ftfs_bstore_txn_commit(txn, DB_TXN_NOSYNC);
-	COMMIT_JUMP_ON_CONFLICT(r, retry);
+	ret = ftfs_bstore_txn_commit(txn, DB_TXN_NOSYNC);
+	COMMIT_JUMP_ON_CONFLICT(ret, retry);
 
-	if (r) {
-		ret = r;
-		goto out;
-	}
-	if (!ret)
+
+	if (!r)
 		ret = -ENOTEMPTY;
 	else {
 		clear_nlink(inode);
@@ -1686,16 +1650,14 @@ failed:
 	}
 
 out:
-	ftfs_put_read_lock(FTFS_I(dir));
 	ftfs_put_read_lock(ftfs_inode);
+#ifdef FTFS_CIRCLE
+	ftfs_put_read_lock(FTFS_I(dir));
 
 	if (!ret)
 		ftfs_update_nr_inode(dir, -1, 0, 0);
-#ifdef FTFS_PROFILE_RMDIR
-	unlink_stat.rmdir = ktime_add(unlink_stat.rmdir,
-				      ktime_sub(ktime_get(), rmdir_start));
-	unlink_stat.count_rmdir += 1;
 #endif
+
 	return ret;
 }
 
@@ -1703,83 +1665,75 @@ static int
 ftfs_symlink(struct inode *dir, struct dentry *dentry, const char *symname)
 {
 	int ret;
-	struct inode *inode = NULL;
+	struct inode *inode;
 	struct ftfs_sb_info *sbi = dir->i_sb->s_fs_info;
 	struct ftfs_metadata meta;
-	struct ftfs_inode *ftfs_inode = FTFS_I(dir);
-	struct ftfs_meta_key *meta_key, *dir_meta_key;
-	struct ftfs_data_key *data_key;
+	DBT *dir_meta_dbt, meta_dbt;
+	DBT data_dbt;
 	size_t len = strlen(symname);
 	ino_t ino;
 	DB_TXN *txn;
 
-	if (len > dir->i_sb->s_blocksize)
+	if (len > FTFS_BSTORE_BLOCKSIZE)
 		return -ENAMETOOLONG;
 
-	dir_meta_key = ftfs_get_read_lock(ftfs_inode);
-	meta_key = alloc_child_meta_key_from_meta_key(dir_meta_key,
-	                                              dentry->d_name.name);
-	if (!meta_key) {
-		ret = -ENOMEM;
+	dir_meta_dbt = ftfs_get_read_lock(FTFS_I(dir));
+	ret = alloc_child_meta_dbt_from_meta_dbt(&meta_dbt,
+			dir_meta_dbt, dentry->d_name.name);
+	if (ret)
+		goto out;
+
+	// now we start from 1
+	ret = alloc_data_dbt_from_meta_dbt(&data_dbt, &meta_dbt, 1);
+	if (ret) {
+free_meta_out:
+		dbt_destroy(&meta_dbt);
 		goto out;
 	}
 
-	data_key = alloc_data_key_from_meta_key(meta_key, 0);
-	if (!data_key) {
-		ret = -ENOMEM;
-		goto out1;
-	}
-
-    ret = ftfs_next_ino(sbi, txn, &ino);
+	ret = ftfs_next_ino(sbi, &ino);
 	if (ret) {
-		BUG();
+free_data_out:
+		dbt_destroy(&data_dbt);
+		goto free_meta_out;
 	}
-
-    ftfs_setup_metadata(&meta, S_IFLNK | S_IRWXUGO, len, 0, ino);
-	inode = ftfs_setup_inode(dir->i_sb, meta_key, &meta);
+	ftfs_setup_metadata(&meta, S_IFLNK | S_IRWXUGO, len, 0, ino);
+	inode = ftfs_setup_inode(dir->i_sb, &meta_dbt, &meta);
 	if (IS_ERR(inode)) {
 		ret = PTR_ERR(inode);
-		inode = NULL;
-		goto out1;
+		goto free_data_out;
 	}
 
 	TXN_GOTO_LABEL(retry);
 	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
-
-	ret = ftfs_bstore_meta_put(sbi->meta_db, meta_key, txn, &meta);
+	ret = ftfs_bstore_meta_put(sbi->meta_db, &meta_dbt, txn, &meta);
 	if (ret) {
+abort:
 		DBOP_JUMP_ON_CONFLICT(ret, retry);
-		goto abort;
+		ftfs_bstore_txn_abort(txn);
+		set_nlink(inode, 0);
+		FTFS_I(inode)->ftfs_flags |= FTFS_FLAG_DELETED;
+		dbt_destroy(&FTFS_I(inode)->meta_dbt);
+		iput(inode);
+		dbt_destroy(&data_dbt);
+		goto out;
 	}
-	ret = ftfs_bstore_update(sbi->data_db, data_key, txn,
-	                         symname, len, 0);
-	if (ret) {
-		DBOP_JUMP_ON_CONFLICT(ret,retry);
+	ret = ftfs_bstore_put(sbi->data_db, &data_dbt, txn, symname, len, 0);
+	if (ret)
 		goto abort;
-	}
 
 	ret = ftfs_bstore_txn_commit(txn, DB_TXN_NOSYNC);
 	COMMIT_JUMP_ON_CONFLICT(ret, retry);
 
 	d_instantiate(dentry, inode);
-	ftfs_put_read_lock(ftfs_inode);
-	data_key_free(data_key);
-
-	ftfs_update_nr_inode(dir, 1, 1, FTFS_UPDATE_NR_MAY_SPLIT);
-
-	return 0;
-
-abort:
-	ftfs_bstore_txn_abort(txn);
-	if (inode) {
-		inode_dec_link_count(inode);
-		iput(inode);
-	}
-	data_key_free(data_key);
-out1:
-	meta_key_free(meta_key);
+	dbt_destroy(&data_dbt);
 out:
-	ftfs_put_read_lock(ftfs_inode);
+	ftfs_put_read_lock(FTFS_I(dir));
+
+#ifdef FTFS_CIRCLE
+	if (!ret)
+		ftfs_update_nr_inode(dir, 1, 1, FTFS_UPDATE_NR_MAY_SPLIT);
+#endif
 
 	return ret;
 }
@@ -1790,12 +1744,12 @@ static int ftfs_link(struct dentry *old_dentry,
 	int ret;
 	struct ftfs_sb_info *sbi = dentry->d_sb->s_fs_info;
 	struct inode *inode = old_dentry->d_inode;
-	struct ftfs_meta_key *meta_key, *new_meta_key, *dir_meta_key;
+	DBT *meta_dbt, *dir_meta_dbt, new_meta_dbt;
 	struct ftfs_metadata meta;
 	DB_TXN *txn;
 
-	meta_key = ftfs_get_read_lock(FTFS_I(inode));
-	if (!meta_key_is_circle_root(meta_key)) {
+	meta_dbt = ftfs_get_read_lock(FTFS_I(inode));
+	if (!meta_key_is_circle_root(meta_dbt->data)) {
 		ftfs_put_read_lock(FTFS_I(inode));
 		ret = split_circle(old_dentry);
 		if (ret)
@@ -1803,18 +1757,20 @@ static int ftfs_link(struct dentry *old_dentry,
 	} else
 		ftfs_put_read_lock(FTFS_I(inode));
 
-	dir_meta_key = ftfs_get_read_lock(FTFS_I(dir));
-	meta_key = ftfs_get_read_lock(FTFS_I(inode));
+	dir_meta_dbt = ftfs_get_read_lock(FTFS_I(dir));
+	meta_dbt = ftfs_get_read_lock(FTFS_I(inode));
 
-	BUG_ON(!meta_key_is_circle_root(meta_key));
+	BUG_ON(!meta_key_is_circle_root(meta_dbt->data));
 
-	new_meta_key = alloc_child_meta_key_from_meta_key(dir_meta_key,
-	                                                  dentry->d_name.name);
+	ret = alloc_child_meta_dbt_from_meta_dbt(&new_meta_dbt,
+			dir_meta_dbt, dentry->d_name.name);
+	if (ret)
+		goto out;
 	meta.type = FTFS_METADATA_TYPE_REDIRECT;
-	meta.u.circle_id = meta_key_get_circle_id(meta_key);
+	meta.u.ino = inode->i_ino;
 	TXN_GOTO_LABEL(retry);
 	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
-	ret = ftfs_bstore_meta_put(sbi->meta_db, new_meta_key, txn, &meta);
+	ret = ftfs_bstore_meta_put(sbi->meta_db, &new_meta_dbt, txn, &meta);
 	if (ret) {
 		DBOP_JUMP_ON_CONFLICT(ret, retry);
 		ftfs_bstore_txn_abort(txn);
@@ -1831,217 +1787,141 @@ static int ftfs_link(struct dentry *old_dentry,
 		d_instantiate(dentry, inode);
 	}
 
-	meta_key_free(new_meta_key);
+	dbt_destroy(&new_meta_dbt);
 	ftfs_put_read_lock(FTFS_I(inode));
 	ftfs_put_read_lock(FTFS_I(dir));
 
+#ifdef FTFS_CIRCLE
 	if (!ret)
 		ftfs_update_nr_inode(dir, 1, 0, FTFS_UPDATE_NR_MAY_SPLIT);
+#endif
 
 out:
 	return ret;
 }
 
-struct ftfs_unlink_stat unlink_stat;
-
 static int ftfs_unlink(struct inode *dir, struct dentry *dentry)
 {
 	int ret = 0;
 	struct inode *inode = dentry->d_inode;
-	struct ftfs_meta_key *dir_meta_key, *meta_key;
-#ifdef FTFS_PROFILE_UNLINK
-	ktime_t stage1_start;
-	ktime_t stage2_start;
-	stage1_start = ktime_get();
-#endif
-	dir_meta_key = ftfs_get_read_lock(FTFS_I(dir));
-	meta_key = ftfs_get_read_lock(FTFS_I(inode));
+	DBT *dir_meta_dbt, *meta_dbt;
 
-	if (meta_key_is_circle_root(meta_key)) {
+	dir_meta_dbt = ftfs_get_read_lock(FTFS_I(dir));
+	meta_dbt = ftfs_get_read_lock(FTFS_I(inode));
+
+	if (meta_key_is_circle_root(meta_dbt->data)) {
 		struct ftfs_sb_info *sbi = inode->i_sb->s_fs_info;
-		struct ftfs_meta_key *redirect_meta_key;
+		DBT indirect_dbt;
 		DB_TXN *txn;
 
-		redirect_meta_key = alloc_child_meta_key_from_meta_key(
-		                            dir_meta_key, dentry->d_name.name);
-		if (!redirect_meta_key) {
-			ret = -ENOMEM;
+		ret = alloc_child_meta_dbt_from_meta_dbt(&indirect_dbt,
+				dir_meta_dbt, dentry->d_name.name);
+		if (ret)
+			goto out;
+		TXN_GOTO_LABEL(retry);
+		ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
+		ret = ftfs_bstore_meta_del(sbi->meta_db, &indirect_dbt, txn);
+		if (ret) {
+			DBOP_JUMP_ON_CONFLICT(ret, retry);
+			ftfs_bstore_txn_abort(txn);
 		} else {
-			TXN_GOTO_LABEL(retry);
-			ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
-			ret = ftfs_bstore_meta_del(sbi->meta_db, redirect_meta_key, txn);
-			if (ret) {
-				DBOP_JUMP_ON_CONFLICT(ret, retry);
-				ftfs_bstore_txn_abort(txn);
-			} else {
-				ret = ftfs_bstore_txn_commit(txn, DB_TXN_NOSYNC);
-				COMMIT_JUMP_ON_CONFLICT(ret, retry);
-			}
-			kfree(redirect_meta_key);
+			ret = ftfs_bstore_txn_commit(txn, DB_TXN_NOSYNC);
+			COMMIT_JUMP_ON_CONFLICT(ret, retry);
 		}
+		dbt_destroy(&indirect_dbt);
+out:
 		ftfs_put_read_lock(FTFS_I(inode));
 		ftfs_put_read_lock(FTFS_I(dir));
+#ifdef FTFS_CIRCLE
 		if (!ret)
 			ftfs_update_nr_inode(dir, -1, 0, 0);
-#ifdef FTFS_PROFILE_UNLINK
-		unlink_stat.stage1_if = ktime_add(unlink_stat.stage1_if,
-				        ktime_sub(ktime_get(), stage1_start));
-		unlink_stat.count_if += 1;
 #endif
 	} else {
 		ftfs_put_read_lock(FTFS_I(inode));
 		ftfs_put_read_lock(FTFS_I(dir));
+#ifdef FTFS_CIRCLE
 		ftfs_update_nr_inode(dir, -1, -FTFS_I(inode)->nr_data, 0);
-
-#ifdef FTFS_PROFILE_UNLINK
-		unlink_stat.stage1_else = ktime_add(unlink_stat.stage1_else,
-					       ktime_sub(ktime_get(), stage1_start));
-		unlink_stat.count_else += 1;
 #endif
 	}
 
 	if (ret)
 		return ret;
-#ifdef FTFS_PROFILE_UNLINK
-	stage2_start = ktime_get();
-#endif
 	drop_nlink(inode);
 	mark_inode_dirty(inode);
 
-	/* A dirty hack */
+#ifdef FTFS_CIRCLE
 	while (dentry->d_flags & DCACHE_FTFS_FLAG)
 		yield();
-
-	if (dentry->d_lockref.count != 1) {
-		printk("%s dentry flag %x\n", __func__, dentry->d_flags);
-		printk("%s dentry is %s\n", __func__, dentry->d_name.name);
-		printk("%s dentry ref count %d\n", __func__, dentry->d_lockref.count);
-	}
-
-#ifdef FTFS_PROFILE_UNLINK
-	unlink_stat.stage2 = ktime_add(unlink_stat.stage2,
-			          ktime_sub(ktime_get(), stage2_start));
 #endif
+
 	return ret;
-}
-
-static void ftfs_d_prune(struct dentry *dentry)
-{
-#if 0
-	struct inode *inode;
-
-	if (dentry == NULL)
-		return;
-	inode = dentry->d_inode;
-
-	if (inode == NULL)
-		return;
-
-	/* Writeback the inode itself */
-	if (inode->i_state & I_DIRTY)
-		inode->i_sb->s_op->write_inode(inode, NULL);
-	spin_lock(&inode->i_lock);
-
-	/* Writeback inode's pages */
-	if (inode->i_state & (I_NEW | I_FREEING | I_WILL_FREE | I_SYNC)) {
-		spin_unlock(&inode->i_lock);
-		return;
-	}
-
-	inode->i_state |= I_SYNC;
-	spin_unlock(&inode->i_lock);
-
-	{
-		/* Real writeback after some checks */
-		struct address_space *mapping = inode->i_mapping;
-		int ret;
-		struct writeback_control wbc = {
-			.sync_mode              = WB_SYNC_NONE,
-			.range_cyclic           = 1,
-			.range_start            = 0,
-			.range_end              = LLONG_MAX,
-		};
-
-		WARN_ON(!(inode->i_state & I_SYNC));
-		ret = mapping->a_ops->writepages(mapping, &wbc);
-		if (ret)
-			BUG();
-	}
-#endif
-}
-
-static const struct dentry_operations ftfs_dentry_ops = {
-	.d_prune = ftfs_d_prune,
-};
-
-void ftfs_init_dentry(struct dentry *dentry)
-{
-	spin_lock(&dentry->d_lock);
-	d_set_d_op(dentry, &ftfs_dentry_ops);
-	spin_unlock(&dentry->d_lock);
 }
 
 static struct dentry *
 ftfs_lookup(struct inode *dir, struct dentry *dentry, unsigned int flags)
 {
-	int r;
+	int r, err;
 	struct dentry *ret;
 	struct inode *inode;
 	struct ftfs_sb_info *sbi = dir->i_sb->s_fs_info;
-	struct ftfs_inode *ftfs_inode = FTFS_I(dir);
-	struct ftfs_meta_key *dir_meta_key, *meta_key;
+	DBT *dir_meta_dbt, meta_dbt;
 	DB_TXN *txn;
+	struct ftfs_metadata meta;
 
-	ftfs_init_dentry(dentry);
-
-	dir_meta_key = ftfs_get_read_lock(ftfs_inode);
-	meta_key = alloc_child_meta_key_from_meta_key(dir_meta_key,
-	                                              dentry->d_name.name);
-	if (!meta_key) {
-		inode = ERR_PTR(-ENOMEM);
+	dir_meta_dbt = ftfs_get_read_lock(FTFS_I(dir));
+	r = alloc_child_meta_dbt_from_meta_dbt(&meta_dbt,
+			dir_meta_dbt, dentry->d_name.name);
+	if (r) {
+		inode = ERR_PTR(r);
 		goto out;
 	}
 
 	TXN_GOTO_LABEL(retry);
 	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_READONLY);
 
-	inode = ftfs_iget(dir->i_sb, meta_key, txn);
-	if (IS_ERR(inode)) {
-		int err = PTR_ERR(inode);
-		if (err == -ENOENT) {
-			inode = NULL;
-			r = ftfs_bstore_txn_commit(txn, DB_TXN_NOSYNC);
-			COMMIT_JUMP_ON_CONFLICT(r, retry);
-		} else {
-			DBOP_JUMP_ON_CONFLICT(err, retry);
-			ftfs_bstore_txn_abort(txn);
-		}
-	} else {
-		r = ftfs_bstore_txn_commit(txn, DB_TXN_NOSYNC);
-		COMMIT_JUMP_ON_CONFLICT(r, retry);
+	r = ftfs_bstore_meta_get(sbi->meta_db, &meta_dbt, txn, &meta);
+	if (r == -ENOENT) {
+		inode = NULL;
+		dbt_destroy(&meta_dbt);
+		goto commit;
+	} else if (r) {
+abort:
+		inode = ERR_PTR(r);
+		ftfs_bstore_txn_abort(txn);
+		dbt_destroy(&meta_dbt);
+		goto out;
+	} else if (meta.type == FTFS_METADATA_TYPE_REDIRECT) {
+		copy_meta_dbt_from_ino(&meta_dbt, meta.u.ino);
+		r = ftfs_bstore_meta_get(sbi->meta_db, &meta_dbt, txn, &meta);
+		BUG_ON(r == -ENOENT);
+		if (r)
+			goto abort;
 	}
 
-    if (IS_ERR(inode))
-        WARN_ON(inode != NULL && (flags & LOOKUP_CREATE));
-    else {
-        WARN_ON(inode != NULL && (flags & LOOKUP_CREATE));
-        if (inode != NULL && (flags & LOOKUP_CREATE)) {
-            printk("dentry is %s\n", dentry->d_name.name);
-            printk("inode i_nlink is %d\n", inode->i_nlink);
-            printk("inode is %p\n", inode);
-        }
-    }
+	BUG_ON(meta.type != FTFS_METADATA_TYPE_NORMAL);
+commit:
+	err = ftfs_bstore_txn_commit(txn, DB_TXN_NOSYNC);
+	COMMIT_JUMP_ON_CONFLICT(err, retry);
+
+	// r == -ENOENT, inode == 0
+	// r == 0, get meta, need to setup inode
+	// r == err, error, will not execute this code
+	if (r == 0) {
+		inode = ftfs_setup_inode(dir->i_sb, &meta_dbt, &meta);
+		if (IS_ERR(inode))
+			dbt_destroy(&meta_dbt);
+	}
 
 out:
-	/* aging bug */
+	ftfs_put_read_lock(FTFS_I(dir));
 	ret = d_splice_alias(inode, dentry);
-	ftfs_put_read_lock(ftfs_inode);
+
 	return ret;
 }
 
 static int ftfs_setattr(struct dentry *dentry, struct iattr *iattr)
 {
-	int ret, circle_root;
+	int ret;
 	struct inode *inode = dentry->d_inode;
 	loff_t size;
 
@@ -2051,55 +1931,43 @@ static int ftfs_setattr(struct dentry *dentry, struct iattr *iattr)
 
 	size = i_size_read(inode);
 	if ((iattr->ia_valid & ATTR_SIZE) && iattr->ia_size < size) {
-		uint64_t block_num, old_block_num;
+		uint64_t block_num;
+		size_t block_off;
+		loff_t size;
 		struct ftfs_inode *ftfs_inode = FTFS_I(inode);
 		struct ftfs_sb_info *sbi = inode->i_sb->s_fs_info;
-		struct ftfs_meta_key *meta_key;
+		DBT *meta_dbt;
 		DB_TXN *txn;
 
-		block_num = ftfs_get_block_num_by_size(iattr->ia_size);
-		old_block_num = ftfs_get_block_num_by_size(iattr->ia_size);
-		if (block_num == old_block_num)
+		size = i_size_read(inode);
+		if (iattr->ia_size >= size)
 			goto skip_txn;
+		block_num = block_get_num_by_position(iattr->ia_size);
+		block_off = block_get_off_by_position(iattr->ia_size);
 
-		meta_key = ftfs_get_read_lock(ftfs_inode);
+		meta_dbt = ftfs_get_read_lock(ftfs_inode);
 		TXN_GOTO_LABEL(retry);
-		ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn,
-		                      TXN_MAY_WRITE);
-		ret = ftfs_bstore_truncate(sbi->data_db, meta_key, txn,
-		                           block_num + 1,
-		                           old_block_num);
+		ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
+		ret = ftfs_bstore_trunc(sbi->data_db, meta_dbt, txn,
+		                        block_num, block_off);
 		if (ret) {
 			DBOP_JUMP_ON_CONFLICT(ret, retry);
 			ftfs_bstore_txn_abort(txn);
 			ftfs_put_read_lock(ftfs_inode);
-			goto failed;
+			goto err;
 		}
 		ret = ftfs_bstore_txn_commit(txn, DB_TXN_NOSYNC);
 		COMMIT_JUMP_ON_CONFLICT(ret, retry);
-		circle_root = meta_key_is_circle_root(meta_key);
 		ftfs_put_read_lock(ftfs_inode);
-		if (!ret && !circle_root)
-			ftfs_update_nr(dentry->d_parent, 0, block_num - old_block_num, 0);
 
 skip_txn:
 		i_size_write(inode, iattr->ia_size);
 	}
 
-    /**
-     *  ftruncate can call this to increase the file size
-     *  http://pubs.opengroup.org/onlinepubs/009695399/functions/ftruncate.html
-     */
-
-	if ((iattr->ia_valid & ATTR_SIZE) && iattr->ia_size > size) {
-        //printk("%s size:%lld\n", __func__, size);
-		i_size_write(inode, iattr->ia_size);
-    }
-
 	setattr_copy(inode, iattr);
 	mark_inode_dirty(inode);
 
-failed:
+err:
 	return ret;
 }
 
@@ -2110,8 +1978,7 @@ static void *ftfs_follow_link(struct dentry *dentry, struct nameidata *nd)
 	void *buf;
 	struct ftfs_sb_info *sbi = dentry->d_sb->s_fs_info;
 	struct ftfs_inode *ftfs_inode = FTFS_I(dentry->d_inode);
-	struct ftfs_meta_key *meta_key;
-	struct ftfs_data_key *data_key;
+	DBT *meta_dbt, data_dbt;
 	DB_TXN *txn;
 
 	buf = kmalloc(FTFS_BSTORE_BLOCKSIZE, GFP_KERNEL);
@@ -2119,16 +1986,17 @@ static void *ftfs_follow_link(struct dentry *dentry, struct nameidata *nd)
 		ret = ERR_PTR(-ENOMEM);
 		goto err1;
 	}
-	meta_key = ftfs_get_read_lock(ftfs_inode);
-	data_key = alloc_data_key_from_meta_key(meta_key, 0);
-	if (!data_key) {
-		ret = ERR_PTR(-ENOMEM);
+	meta_dbt = ftfs_get_read_lock(ftfs_inode);
+	// now block start from 1
+	r = alloc_data_dbt_from_meta_dbt(&data_dbt, meta_dbt, 1);
+	if (r) {
+		ret = ERR_PTR(r);
 		goto err2;
 	}
 
 	TXN_GOTO_LABEL(retry);
 	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_READONLY);
-	r = ftfs_bstore_get(sbi->data_db, data_key, txn, buf);
+	r = ftfs_bstore_get(sbi->data_db, &data_dbt, txn, buf);
 	if (r) {
 		DBOP_JUMP_ON_CONFLICT(r, retry);
 		ftfs_bstore_txn_abort(txn);
@@ -2141,9 +2009,8 @@ static void *ftfs_follow_link(struct dentry *dentry, struct nameidata *nd)
 	nd_set_link(nd, buf);
 
 	ret = buf;
-
 err3:
-	data_key_free(data_key);
+	dbt_destroy(&data_dbt);
 err2:
 	ftfs_put_read_lock(ftfs_inode);
 	if (ret != buf)
@@ -2165,8 +2032,7 @@ static struct inode *ftfs_alloc_inode(struct super_block *sb)
 	struct ftfs_inode *ftfs_inode;
 
 	ftfs_inode = kmem_cache_alloc(ftfs_inode_cachep, GFP_KERNEL);
-	if (ftfs_inode)
-		INIT_LIST_HEAD(&ftfs_inode->rename_locked);
+	// initialization in ftfs_i_init_once
 
 	return ftfs_inode ? &ftfs_inode->vfs_inode : NULL;
 }
@@ -2174,49 +2040,45 @@ static struct inode *ftfs_alloc_inode(struct super_block *sb)
 static void ftfs_destroy_inode(struct inode *inode)
 {
 	struct ftfs_inode *ftfs_inode = FTFS_I(inode);
-#ifdef FTFS_PROFILE_DESTROY
-	ktime_t destroy_start = ktime_get();
-#endif
 	ftfs_get_write_lock(ftfs_inode);
-	if (ftfs_inode->key != &root_dir_meta_key)
-		meta_key_free(ftfs_inode->key);
-	ftfs_inode->key = NULL;
+	if (ftfs_inode->meta_dbt.data &&
+	    ftfs_inode->meta_dbt.data != &root_meta_key)
+		dbt_destroy(&ftfs_inode->meta_dbt);
 
 	kmem_cache_free(ftfs_inode_cachep, ftfs_inode);
-
-#ifdef FTFS_PROFILE_DESTROY
-	unlink_stat.destroy_inode = ktime_add(unlink_stat.destroy_inode,
-				        ktime_sub(ktime_get(), destroy_start));
-	unlink_stat.count_destroy += 1;
-#endif
 }
 
 static int
 ftfs_write_inode(struct inode *inode, struct writeback_control *wbc)
 {
-	int ret;
+	int ret = 0;
 	DB_TXN *txn;
-	struct ftfs_meta_key *meta_key;
+	DBT *meta_dbt;
 	struct ftfs_metadata meta;
 	struct ftfs_sb_info *sbi = inode->i_sb->s_fs_info;
 
-	meta_key = ftfs_get_read_lock(FTFS_I(inode));
+	if (inode->i_nlink == 0)
+		goto no_write;
 
-	if (meta_key_is_circle_root(meta_key) &&
-	    meta_key->circle_id != 0 &&
+	meta_dbt = ftfs_get_read_lock(FTFS_I(inode));
+
+#ifdef FTFS_CIRCLE
+	if (meta_key_is_circle_root(meta_dbt->data) &&
+	    meta_dbt->data != &root_meta_key &&
 	    FTFS_I(inode)->nr_meta < sbi->max_circle_size &&
 	    FTFS_I(inode)->nr_data < sbi->max_circle_size &&
 	    inode->i_nlink == 1) {
 		ftfs_put_read_lock(FTFS_I(inode));
 		ret = maybe_merge_circle(inode);
-		meta_key = ftfs_get_read_lock(FTFS_I(inode));
+		meta_dbt = ftfs_get_read_lock(FTFS_I(inode));
 	}
+#endif
 
 	ftfs_copy_metadata_from_inode(&meta, inode);
 
 	TXN_GOTO_LABEL(retry);
 	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
-	ret = ftfs_bstore_meta_put(sbi->meta_db, meta_key, txn, &meta);
+	ret = ftfs_bstore_meta_put(sbi->meta_db, meta_dbt, txn, &meta);
 	if (ret) {
 		DBOP_JUMP_ON_CONFLICT(ret, retry);
 		ftfs_bstore_txn_abort(txn);
@@ -2227,6 +2089,7 @@ ftfs_write_inode(struct inode *inode, struct writeback_control *wbc)
 
 	ftfs_put_read_lock(FTFS_I(inode));
 
+no_write:
 	return ret;
 }
 
@@ -2234,22 +2097,18 @@ static void ftfs_evict_inode(struct inode *inode)
 {
 	int ret;
 	struct ftfs_sb_info *sbi = inode->i_sb->s_fs_info;
-	struct ftfs_meta_key *meta_key;
-	struct ftfs_inode *ftfs_inode = FTFS_I(inode);
+	DBT *meta_dbt;
 	DB_TXN *txn;
-#ifdef FTFS_PROFILE_EVICT
-	ktime_t evict_start = ktime_get();
-#endif
-	if (inode->i_nlink)
+
+	if (inode->i_nlink || (FTFS_I(inode)->ftfs_flags & FTFS_FLAG_DELETED))
 		goto no_delete;
 
-	meta_key = ftfs_get_read_lock(ftfs_inode);
+	meta_dbt = ftfs_get_read_lock(FTFS_I(inode));
 
 	TXN_GOTO_LABEL(retry);
 	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
-	ret = ftfs_do_unlink(meta_key, txn, inode, sbi);
+	ret = ftfs_do_unlink(meta_dbt, txn, inode, sbi);
 	if (ret) {
-		printk("Inode is %p\n", inode);
 		DBOP_JUMP_ON_CONFLICT(ret, retry);
 		ftfs_bstore_txn_abort(txn);
 	} else {
@@ -2262,18 +2121,13 @@ static void ftfs_evict_inode(struct inode *inode)
 					inode->i_size)); */
 	}
 
-	ftfs_put_read_lock(ftfs_inode);
+	ftfs_put_read_lock(FTFS_I(inode));
 
 no_delete:
 	truncate_inode_pages(&inode->i_data, 0);
 
 	invalidate_inode_buffers(inode);
 	clear_inode(inode);
-#ifdef FTFS_PROFILE_EVICT
-	unlink_stat.evict_inode = ktime_add(unlink_stat.evict_inode,
-				        ktime_sub(ktime_get(), evict_start));
-	unlink_stat.count_evict += 1;
-#endif
 }
 
 // called when VFS wishes to free sb (unmount), sync southbound here
@@ -2376,7 +2230,7 @@ static const struct super_operations ftfs_super_ops = {
  * fill inode with meta_key, metadata from database and inode number
  */
 static struct inode *
-ftfs_setup_inode(struct super_block *sb, struct ftfs_meta_key *meta_key,
+ftfs_setup_inode(struct super_block *sb, DBT *meta_dbt,
                  struct ftfs_metadata *meta)
 {
 	struct inode *i;
@@ -2387,22 +2241,24 @@ ftfs_setup_inode(struct super_block *sb, struct ftfs_meta_key *meta_key,
 
 	ftfs_inode = FTFS_I(i);
 	if (!(i->i_state & I_NEW)) {
-		/* In-memory inode not binding to a dentry causes the git
-		   bugs being seen */
-		struct ftfs_meta_key *mkey = ftfs_get_write_lock(FTFS_I(i));
-		FTFS_I(i)->key = meta_key;
-		ftfs_put_write_lock(FTFS_I(i));
-		kfree(mkey);
+		DBT *old_dbt = ftfs_get_write_lock(ftfs_inode);
+		dbt_destroy(old_dbt);
+		dbt_copy(old_dbt, meta_dbt);
+		ftfs_put_write_lock(ftfs_inode);
 		return i;
 	}
 
-	BUG_ON(ftfs_inode->key);
-	ftfs_inode->key = meta_key;
+	BUG_ON(ftfs_inode->meta_dbt.data != NULL);
+	dbt_copy(&ftfs_inode->meta_dbt, meta_dbt);
 	init_rwsem(&ftfs_inode->key_lock);
+	INIT_LIST_HEAD(&ftfs_inode->rename_locked);
+	ftfs_inode->ftfs_flags = 0;
 
 	BUG_ON(meta->type != FTFS_METADATA_TYPE_NORMAL);
+#ifdef FTFS_CIRCLE
 	FTFS_I(i)->nr_meta = meta->nr_meta;
 	FTFS_I(i)->nr_data = meta->nr_data;
+#endif
 	i->i_rdev = meta->u.st.st_dev;
 	i->i_mode = meta->u.st.st_mode;
 	set_nlink(i, meta->u.st.st_nlink);
@@ -2444,6 +2300,7 @@ ftfs_setup_inode(struct super_block *sb, struct ftfs_meta_key *meta_key,
 	return i;
 }
 
+#ifdef FTFS_CIRCLE
 enum {
 	Opt_circle_size
 };
@@ -2458,10 +2315,10 @@ static void parse_options(char *options, struct ftfs_sb_info *sbi)
 	substring_t args[MAX_OPT_ARGS];
 	int option;
 
-	sbi->max_circle_size = FTFS_MAX_CIRCLE_SIZE;
+	sbi->max_circle_size = FTFS_DEFAULT_CIRCLE;
 
 	if (!options)
-		return;
+		goto out;
 
 	while ((p = strsep(&options, ",")) != NULL) {
 		int token;
@@ -2482,9 +2339,10 @@ static void parse_options(char *options, struct ftfs_sb_info *sbi)
 	}
 out:
 	sbi->max_file_size = (sbi->max_circle_size) ?
-	                     (((uint64_t)sbi->max_circle_size - 1) << FTFS_BSTORE_BLOCKSIZE_BITS) + 1 :
+	                     ((sbi->max_circle_size - 1) << FTFS_BSTORE_BLOCKSIZE_BITS) + 1 :
 	                     0;
 }
+#endif /* FTFS_CIRCLE */
 
 /*
  * fill in the superblock
@@ -2497,81 +2355,86 @@ static int ftfs_fill_super(struct super_block *sb, void *data, int silent)
 	struct inode *root;
 	struct ftfs_metadata meta;
 	struct ftfs_sb_info *sbi;
+	DBT root_dbt;
 	DB_TXN *txn;
 
 	// FTFS specific info
+	ret = -ENOMEM;
 	sbi = kzalloc(sizeof(struct ftfs_sb_info), GFP_KERNEL);
-	if (!sbi) {
-		ret = -ENOMEM;
-		goto failed;
-	}
+	if (!sbi)
+		goto err;
 
-	ret = ftfs_bstore_env_open(sbi);
-	if (ret)
-		goto failed_free_sbi;
-
+#ifdef FTFS_CIRCLE
 	parse_options(data, sbi);
+#endif
 	sbi->s_ftfs_info = alloc_percpu(struct ftfs_info);
 	if (!sbi->s_ftfs_info)
-		goto failed_free_sbi;
-	sb->s_fs_info = sbi;
+		goto err;
 
+	sb->s_fs_info = sbi;
 	sb_set_blocksize(sb, FTFS_BSTORE_BLOCKSIZE);
 	sb->s_op = &ftfs_super_ops;
 	sb->s_maxbytes = MAX_LFS_FILESIZE;
 
+	ret = ftfs_bstore_env_open(sbi);
+	if (ret)
+		goto err;
+
 	TXN_GOTO_LABEL(retry);
 	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
-	ret = ftfs_bstore_meta_get(sbi->meta_db, &root_dir_meta_key,
-	                           txn, &meta);
+	dbt_setup(&root_dbt, &root_meta_key, SIZEOF_CIRCLE_ROOT_META_KEY);
+	ret = ftfs_bstore_meta_get(sbi->meta_db, &root_dbt, txn, &meta);
 	if (ret) {
-#ifdef TXN_ON
-		IF_DBOP_CONFLICT(ret)
-			goto retry;
-#endif
 		if (ret == -ENOENT) {
 			ftfs_setup_metadata(&meta, 0755 | S_IFDIR, 0, 0,
 			                    FTFS_ROOT_INO);
 			ret = ftfs_bstore_meta_put(sbi->meta_db,
-			                           &root_dir_meta_key,
+			                           &root_dbt,
 			                           txn, &meta);
-			DBOP_JUMP_ON_CONFLICT(ret, retry);
-			BUG_ON(ret);
 		}
+		if (ret)
+			goto db_op_err;
 	}
 	ret = ftfs_bstore_get_ino(sbi->meta_db, txn, &ino);
 	if (ret) {
+db_op_err:
 		DBOP_JUMP_ON_CONFLICT(ret, retry);
-		BUG_ON(ret);
+		ftfs_bstore_txn_abort(txn);
+		goto err;
+	} else {
+		ret = ftfs_bstore_txn_commit(txn, DB_TXN_SYNC);
+		COMMIT_JUMP_ON_CONFLICT(ret, retry);
 	}
+
 	sbi->s_nr_cpus = 0;
 	for_each_possible_cpu(cpu) {
 		(per_cpu_ptr(sbi->s_ftfs_info, cpu))->next_ino = ino + cpu;
 		(per_cpu_ptr(sbi->s_ftfs_info, cpu))->max_ino = ino;
 		sbi->s_nr_cpus++;
 	}
-	ret = ftfs_bstore_txn_commit(txn, DB_TXN_SYNC);
-	COMMIT_JUMP_ON_CONFLICT(ret, retry);
 
-	root = ftfs_setup_inode(sb, &root_dir_meta_key, &meta);
+	root = ftfs_setup_inode(sb, &root_dbt, &meta);
 	if (IS_ERR(root)) {
 		ret = PTR_ERR(root);
-		goto failed_free_sbi;
+		goto err_close;
 	}
 
 	sb->s_root = d_make_root(root);
 	if (!sb->s_root) {
 		ret = -EINVAL;
-		goto failed_free_percpu;
+		goto err_close;
 	}
 
 	return 0;
 
-failed_free_percpu:
-	free_percpu(sbi->s_ftfs_info);
-failed_free_sbi:
-	kfree(sbi);
-failed:
+err_close:
+	ftfs_bstore_env_close(sbi);
+err:
+	if (sbi) {
+		if (sbi->s_ftfs_info)
+			free_percpu(sbi->s_ftfs_info);
+		kfree(sbi);
+	}
 	return ret;
 }
 
@@ -2585,71 +2448,10 @@ static struct dentry *ftfs_mount(struct file_system_type *fs_type, int flags,
 	return mount_bdev(fs_type, flags, dev_name, data, ftfs_fill_super);
 }
 
-static void find_dirty_inodes(struct super_block *sb)
-{
-	struct inode *inode, *next;
-
-	list_for_each_entry_safe(inode, next, &sb->s_inodes, i_sb_list) {
-		if (inode->i_state & I_DIRTY)
-			printk("Inode state %lu\n", inode->i_state);
-	}
-}
-
-static void find_remaining_inodes(struct super_block *sb)
-{
-	struct inode *inode, *next;
-
-	list_for_each_entry_safe(inode, next, &sb->s_inodes, i_sb_list) {
-		if (atomic_read(&inode->i_count)) {
-			printk("Inode i_count %d\n", atomic_read(&inode->i_count));
-			continue;
-		}
-
-		spin_lock(&inode->i_lock);
-		if (inode->i_state & I_DIRTY)
-			printk("Inode state %lu\n", inode->i_state);
-		spin_unlock(&inode->i_lock);
-	}
-}
-
-#if 0
-static void ftfs_writeback_inodes_sb(struct super_block *sb)
-{
-	struct dentry *object;
-	struct dentry *this_parent;
-	struct inode *inode;
-	struct list_head *next;
-
-	object = sb->s_root;
-	this_parent = object;;
-start:
-	if (this_parent->d_sb != object->d_sb)
-		goto end;
-	next = this_parent->d_subdirs.next;
-resume:
-	while (next != &this_parent->d_subdirs) {
-		this_parent = list_entry(next, struct dentry, d_u.d_child);
-		goto start;
-	}
-end:
-	inode = this_parent->d_inode;
-	sync_inode_metadata(inode, 1);
-	if (this_parent != object) {
-		next = this_parent->d_u.d_child.next;
-		this_parent = this_parent->d_parent;
-		goto resume;
-	}
-}
-#endif
-
 static void ftfs_kill_sb(struct super_block *sb)
 {
 	sync_filesystem(sb);
-	printk("dirty inode:\n");
-	find_dirty_inodes(sb);
 	kill_block_super(sb);
-	printk("remaining inode:\n");
-	find_remaining_inodes(sb);
 }
 
 static struct file_system_type ftfs_fs_type = {
@@ -2660,39 +2462,10 @@ static struct file_system_type ftfs_fs_type = {
 	.fs_flags	= FS_REQUIRES_DEV,
 };
 
-static int ftfs_init_writepages_vec(void)
-{
-	int i;
-	struct ftfs_writepages_vec *writepages_vec;
-	mutex_init(&ftfs_writepages_vec_list_mutex);
-	for (i = 0; i < FTFS_WRITEPAGES_VEC_LIST_INIT_SIZE; i++) {
-		writepages_vec = ftfs_alloc_writepages_vec();
-		if (writepages_vec == NULL) {
-			printk(KERN_ERR "FTFS_ERROR: Failed to alloc writepages_vec.\n");
-			return -ENOMEM;
-		}
-		list_add(&writepages_vec->list, &ftfs_writepages_vec_list);
-	}
-	return 0;
-}
-
-static void ftfs_free_writepages_vec(void)
-{
-	struct ftfs_writepages_vec *writepages_vec, *tmp;
-	list_for_each_entry_safe(writepages_vec, tmp, &ftfs_writepages_vec_list, list) {
-		list_del(&(writepages_vec->list));
-		kfree(writepages_vec);
-	}
-	mutex_destroy(&ftfs_writepages_vec_list_mutex);
-}
-
 int init_ftfs_fs(void)
 {
 	int ret;
 
-	ret = ftfs_init_writepages_vec();
-	if (ret)
-		goto out;
 	ftfs_inode_cachep =
 		kmem_cache_create("ftfs_i",
 		                  sizeof(struct ftfs_inode), 0,
@@ -2704,18 +2477,30 @@ int init_ftfs_fs(void)
 		goto out;
 	}
 
+	ftfs_writepages_cachep =
+		kmem_cache_create("ftfs_wp",
+		                  sizeof(struct ftfs_wp_node), 0,
+		                  SLAB_RECLAIM_ACCOUNT | SLAB_MEM_SPREAD,
+		                  NULL);
+	if (!ftfs_writepages_cachep) {
+		printk(KERN_ERR "FTFS ERROR: Failed to initialize write page vec cache.\n");
+		ret = -ENOMEM;
+		goto out_free_inode_cachep;
+	}
+
 	ret = register_filesystem(&ftfs_fs_type);
 	if (ret) {
 		printk(KERN_ERR "FTFS ERROR: Failed to register filesystem\n");
-		goto error_register;
+		goto out_free_writepages_cachep;
 	}
 
 	return 0;
 
-error_register:
+out_free_writepages_cachep:
+	kmem_cache_destroy(ftfs_writepages_cachep);
+out_free_inode_cachep:
 	kmem_cache_destroy(ftfs_inode_cachep);
 out:
-	ftfs_free_writepages_vec();
 	return ret;
 }
 
@@ -2723,7 +2508,7 @@ void exit_ftfs_fs(void)
 {
 	unregister_filesystem(&ftfs_fs_type);
 
-	kmem_cache_destroy(ftfs_inode_cachep);
+	kmem_cache_destroy(ftfs_writepages_cachep);
 
-	ftfs_free_writepages_vec();
+	kmem_cache_destroy(ftfs_inode_cachep);
 }

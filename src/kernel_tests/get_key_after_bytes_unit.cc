@@ -105,13 +105,16 @@ static const int num_keys = 1<<10;
 
 static void setup(DB_ENV **envp, DB **dbp, uint32_t nodesize, uint32_t basementnodesize) {
     int r;
+    struct toku_db_key_operations key_ops;
+    memset(&key_ops, 0, sizeof(key_ops));
+    key_ops.keycmp = int_dbt_cmp;
     toku_os_recursive_delete(TOKU_TEST_FILENAME);
     r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU|S_IRWXG|S_IRWXO);
     CKERR(r);
     r = db_env_create(envp, 0);
     CKERR(r);
     DB_ENV *env = *envp;
-    r = env->set_default_bt_compare(env, int_dbt_cmp);
+    r = env->set_key_ops(env, &key_ops);
     CKERR(r);
     env->set_errfile(env, stderr);
     r = env->open(env, TOKU_TEST_FILENAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU|S_IRWXG|S_IRWXO);

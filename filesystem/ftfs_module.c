@@ -27,7 +27,7 @@
 #include "toku_checkpoint.h"
 #include "toku_flusher.h"
 #include "toku_memleak_detect.h"
-#include "ftfs_profile.h"
+#include "toku_dump_node.h"
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Stony Brook University");
@@ -83,9 +83,9 @@ static void __exit ftfs_module_exit(void)
 
 	TOKU_MEMLEAK_EXIT;
 	toku_engine_status_exit();
-	ftfs_profile_exit();
 	toku_checkpoint_exit();
 	toku_flusher_exit();
+	toku_dump_node_exit();
 	printf_count_blindwrite();
 	if (ftfs_private_umount())
 		ftfs_error(__func__, "unable to umount ftfs southbound");
@@ -109,7 +109,7 @@ static int __init ftfs_module_init(void)
 	int ret;
 	void *data = NULL;
 
-	trace_printk("ftfs_module_init is called!\n");
+	//trace_printk("ftfs_module_init is called!\n");
 
 	if (!sb_dev) {
 		ftfs_error(__func__, "no mount device for ftfs_southbound!");
@@ -170,12 +170,6 @@ static int __init ftfs_module_init(void)
 		return ret;
 	}
 
-	ret = ftfs_profile_init();
-	if (ret) {
-		ftfs_error(__func__, "can't init ftfs profile proc");
-		return ret;
-	}
-
 	ret = toku_checkpoint_init();
 	if (ret) {
 		ftfs_error(__func__, "can't init toku checkpoint proc");
@@ -185,6 +179,12 @@ static int __init ftfs_module_init(void)
 	ret = toku_flusher_init();
 	if (ret) {
 		ftfs_error(__func__, "can't init toku flusher proc");
+		return ret;
+	}
+
+	ret = toku_dump_node_init();
+	if (ret) {
+		ftfs_error(__func__, "can't init toku dump node proc");
 		return ret;
 	}
 

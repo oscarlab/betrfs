@@ -93,8 +93,8 @@ PATENT RIGHTS GRANT:
 #ident "The technology is licensed by the Massachusetts Institute of Technology, Rutgers State University of New Jersey, and the Research Foundation of State University of New York at Stony Brook under United States of America Serial No. 11/760379 and to the patents and/or patent applications resulting from it."
 
 #include <fttypes.h>
+#include <ft-internal.h>
 #include "cachetable.h"
-
 /**
  * Put an empty node (that is, no fields filled) into the cachetable. 
  * In the process, write dependent nodes out for checkpoint if 
@@ -142,6 +142,7 @@ toku_create_new_ftnode (
  * Batched version of toku_pin_ftnode, see cachetable batched API for more
  * details.
  */
+
 int
 toku_pin_ftnode_batched(
     FT_HANDLE brt,
@@ -149,11 +150,12 @@ toku_pin_ftnode_batched(
     uint32_t fullhash,
     UNLOCKERS unlockers,
     ANCESTORS ancestors,
-    const PIVOT_BOUNDS pbounds,
+    const PIVOT_BOUNDS bounds,
     FTNODE_FETCH_EXTRA bfe,
     bool apply_ancestor_messages, // this bool is probably temporary, for #3972, once we know how range query estimates work, will revisit this
     FTNODE *node_p,
-    bool* msgs_applied
+    bool* msgs_applied,
+    ANCESTORS kupsert_ancestor
     );
 
 /**

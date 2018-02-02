@@ -24,4 +24,4 @@ modprobe zlib
 insmod $module sb_dev=$sb_dev sb_fstype=ext4
 mount -t ftfs $dummy_dev $mntpnt -o max=$1
 #$circle_size
-chown -R ftfs:ftfs $mntpnt
+chown -R betrfs:betrfs $mntpnt

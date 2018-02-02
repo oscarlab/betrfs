@@ -618,6 +618,7 @@ void toku_cachetable_set_env_dir(CACHETABLE ct, const char *env_dir);
 char * toku_construct_full_name(int count, ...);
 char * toku_cachetable_get_fname_in_cwd(CACHETABLE ct, const char * fname_in_env);
 
+void cachetable_rr_kibbutz_enq(CACHETABLE ct, void (*f)(void *), void *extra);
 void cachefile_kibbutz_enq (CACHEFILE cf, void (*f)(void*), void *extra);
 // Effect: Add a job to the cachetable's collection of work to do.  Note that function f must call remove_background_job_from_cf()
 

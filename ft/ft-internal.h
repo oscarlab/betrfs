@@ -108,6 +108,7 @@ PATENT RIGHTS GRANT:
 #include "cachetable.h"
 #include "fifo.h"
 #include "ft-ops.h"
+#include "ft-search.h"
 #include "toku_list.h"
 #include <util/omt.h>
 #include "leafentry.h"
@@ -202,10 +203,21 @@ struct toku_fifo_entry_key_msn_heaviside_extra {
     MSN msn;
 };
 
+struct toku_fifo_entry_key_msn_heaviside_extra_with_kupserts {
+    DESCRIPTOR desc;
+    ft_compare_func cmp;
+    FIFO fifo;
+    const DBT *key;
+    MSN msn;
+    ANCESTORS kupsert_ancestors;
+    struct toku_db_key_operations * key_ops;
+};
 // comparison function for inserting messages into a
 // ftnode_nonleaf_childinfo's message_tree
 int
 toku_fifo_entry_key_msn_heaviside(const int32_t &v, const struct toku_fifo_entry_key_msn_heaviside_extra &extra);
+
+int toku_fifo_entry_key_msn_heaviside_with_kupserts(const int32_t &v, const struct toku_fifo_entry_key_msn_heaviside_extra_with_kupserts &extra);
 
 struct toku_fifo_entry_key_msn_cmp_extra {
     DESCRIPTOR desc;
@@ -225,12 +237,14 @@ struct ftnode_nonleaf_childinfo {
     //SOSP
     struct toku_list unbound_inserts;
     uint32_t unbound_insert_count;
-    
+
+    DBT lifted;
+
     FIFO buffer;
     off_omt_t broadcast_list;
+    off_omt_t kupsert_list;
     marked_off_omt_t fresh_message_tree;
     off_omt_t stale_message_tree;
-    uint64_t flow[2];  // current and last checkpoint
 };
 
 //SOSP
@@ -370,6 +384,9 @@ struct ftnode {
     // code path.
     TXNID oldest_referenced_xid_known;
 
+    DBT bound_l;
+    DBT bound_r;
+
     // array of size n_children, consisting of ftnode partitions
     // each one is associated with a child
     // for internal nodes, the ith partition corresponds to the ith message buffer
@@ -463,6 +480,8 @@ static inline void set_BSB(FTNODE node, int i, SUB_BLOCK sb) {
     p->tag = BCT_SUBBLOCK;
     p->u.subblock = sb;
 }
+
+void setup_available_ftnode_partition(FTNODE node, int i);
 
 // ftnode leaf basementnode macros, 
 #define BLB_MAX_MSN_APPLIED(node,i) (BLB(node,i)->max_msn_applied)
@@ -560,7 +579,7 @@ struct ft {
     CACHEFILE cf;
     // unique id for dictionary
     DICTIONARY_ID dict_id;
-    ft_compare_func compare_fun;
+    struct toku_db_key_operations key_ops;
     ft_update_func update_fun;
 
     // protected by locktree
@@ -609,7 +628,7 @@ struct ft_options {
     unsigned int basementnodesize;
     enum toku_compression_method compression_method;
     unsigned int flags;
-    ft_compare_func compare_fun;
+    struct toku_db_key_operations key_ops;
     ft_update_func update_fun;
 };
 
@@ -636,8 +655,8 @@ toku_create_compressed_partition_from_available(
     enum toku_compression_method compression_method,
     SUB_BLOCK sb
     );
-void rebalance_ftnode_leaf(FTNODE node, unsigned int basementnodesize);
-int toku_serialize_ftnode_to_memory (FTNODE node,
+void rebalance_ftnode_leaf(FT ft, FTNODE node, unsigned int basementnodesize);
+int toku_serialize_ftnode_to_memory (FT h, FTNODE node,
                                       FTNODE_DISK_DATA* ndd,
                                       unsigned int basementnodesize,
                                       enum toku_compression_method compression_method,
@@ -718,7 +737,7 @@ BASEMENTNODE toku_create_empty_bn(void);
 BASEMENTNODE toku_create_empty_bn_no_buffer(void); // create a basement node with a null buffer.
 NONLEAF_CHILDINFO toku_clone_nl(NONLEAF_CHILDINFO orig_childinfo);
 BASEMENTNODE toku_clone_bn(BASEMENTNODE orig_bn);
-NONLEAF_CHILDINFO toku_create_empty_nl(void);
+NONLEAF_CHILDINFO toku_create_empty_nl(NONLEAF_CHILDINFO orig);
 // FIXME needs toku prefix
 void destroy_basement_node (BASEMENTNODE bn);
 // FIXME needs toku prefix
@@ -981,11 +1000,13 @@ struct pivot_bounds {
     const DBT * const upper_bound_inclusive; // NULL to indicate negative or positive infinity (which are in practice exclusive since there are now transfinite keys in messages).
 };
 
+
+
 __attribute__((nonnull))
 void toku_move_ftnode_messages_to_stale(FT ft, FTNODE node);
-void toku_apply_ancestors_messages_to_node (FT_HANDLE t, FTNODE node, ANCESTORS ancestors, struct pivot_bounds const * const bounds, bool* msgs_applied, int child_to_read);
+void toku_apply_ancestors_messages_to_node (FT_HANDLE t, FTNODE node, ANCESTORS ancestors, struct pivot_bounds const *const bounds, bool* msgs_applied, int child_to_read, ANCESTORS kupsert_ancestor);
 __attribute__((nonnull))
-bool toku_ft_leaf_needs_ancestors_messages(FT ft, FTNODE node, ANCESTORS ancestors, struct pivot_bounds const * const bounds, MSN *const max_msn_in_path, int child_to_read);
+bool toku_ft_leaf_needs_ancestors_messages(FT ft, FTNODE node, ANCESTORS ancestors, struct pivot_bounds const *const bounds, MSN *const max_msn_in_path, int child_to_read, ANCESTORS kupsert_ancestor);
 __attribute__((nonnull))
 void toku_ft_bn_update_max_msn(FTNODE node, MSN max_msn_applied, int child_to_read);
 
@@ -993,12 +1014,7 @@ __attribute__((const,nonnull))
 size_t toku_ft_msg_memsize_in_fifo(FT_MSG cmd);
 
 int
-toku_ft_search_which_child(
-    DESCRIPTOR desc,
-    ft_compare_func cmp,
-    FTNODE node,
-    ft_search_t *search
-    );
+toku_ft_search_which_child(FT ft, FTNODE node, ft_search_t *search);
 
 bool
 toku_bfe_wants_child_available (struct ftnode_fetch_extra* bfe, int childnum);
@@ -1045,6 +1061,7 @@ int toku_testsetup_nonleaf (FT_HANDLE brt, int height, BLOCKNUM *diskoff, int n_
 int toku_testsetup_root(FT_HANDLE brt, BLOCKNUM);
 int toku_testsetup_get_sersize(FT_HANDLE brt, BLOCKNUM); // Return the size on disk.
 int toku_testsetup_insert_to_leaf (FT_HANDLE brt, BLOCKNUM, const char *key, int keylen, const char *val, int vallen, enum ft_msg_type type);
+MSN get_last_dummymsn(void);
 #if 0
 int toku_testsetup_insert_to_nonleaf_with_txn (FT_HANDLE brt, BLOCKNUM, enum ft_msg_type, const char *key, int keylen, const char *val, int vallen, TOKUTXN txn);
 #endif
@@ -1239,8 +1256,6 @@ toku_ft_bn_apply_cmd_once (
 void
 toku_ft_bn_apply_cmd (
     FT ft,
-    ft_compare_func compare_fun,
-    ft_update_func update_fun,
     DESCRIPTOR desc,
     struct unbound_insert_entry *ubi_entry,
     BASEMENTNODE bn,
@@ -1254,8 +1269,6 @@ toku_ft_bn_apply_cmd (
 void
 toku_ft_leaf_apply_cmd (
     FT ft,
-    ft_compare_func compare_fun,
-    ft_update_func update_fun,
     DESCRIPTOR desc,
     struct unbound_insert_entry *ubi_entry,
     FTNODE node,
@@ -1269,8 +1282,6 @@ toku_ft_leaf_apply_cmd (
 void
 toku_ft_node_put_cmd (
     FT ft,
-    ft_compare_func compare_fun,
-    ft_update_func update_fun,
     DESCRIPTOR desc,
     struct unbound_insert_entry *entry,
     FTNODE node,
@@ -1278,7 +1289,6 @@ toku_ft_node_put_cmd (
     FT_MSG cmd,
     bool is_fresh,
     GC_INFO gc_info,
-    size_t flow_deltas[],
     STAT64INFO stats_to_update
     );
 void ftnode_remove_unbound_insert_list_and_reset_count(FTNODE);

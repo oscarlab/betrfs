@@ -124,11 +124,14 @@ run_test(void) {
     }
 #endif
     // run recovery
+    struct toku_db_key_operations key_ops;
+    memset(&key_ops, 0, sizeof(key_ops));
+    key_ops.keycmp = toku_builtin_compare_fun;
     r = tokudb_recover(NULL,
 		       NULL_prepared_txn_callback,
 		       NULL_keep_cachetable_callback,
 		       NULL_logger, TOKU_TEST_FILENAME, TOKU_TEST_FILENAME,
-                       toku_builtin_compare_fun,
+                       &key_ops,
                        NULL, NULL, NULL,
                        0);
     assert(r == 0);

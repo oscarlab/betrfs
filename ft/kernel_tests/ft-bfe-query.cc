@@ -103,7 +103,7 @@ int64_key_cmp (DB *db UU(), const DBT *a, const DBT *b) {
 static void
 test_prefetch_read(int fd, FT_HANDLE UU(brt), FT brt_h) {
     int r;
-    brt_h->compare_fun = int64_key_cmp;    
+    brt_h->key_ops.keycmp = int64_key_cmp;    
     FT_CURSOR XMALLOC(cursor);
     FTNODE dn = NULL;
     PAIR_ATTR attr;
@@ -250,7 +250,7 @@ test_prefetch_read(int fd, FT_HANDLE UU(brt), FT brt_h) {
 static void
 test_subset_read(int fd, FT_HANDLE UU(brt), FT brt_h) {
     int r;
-    brt_h->compare_fun = int64_key_cmp;    
+    brt_h->key_ops.keycmp = int64_key_cmp;    
     FT_CURSOR XMALLOC(cursor);
     FTNODE dn = NULL;
     FTNODE_DISK_DATA ndd = NULL;
@@ -394,9 +394,9 @@ test_prefetching(void) {
     BP_STATE(&sn,0) = PT_AVAIL;
     BP_STATE(&sn,1) = PT_AVAIL;
     BP_STATE(&sn,2) = PT_AVAIL;
-    set_BNC(&sn, 0, toku_create_empty_nl());
-    set_BNC(&sn, 1, toku_create_empty_nl());
-    set_BNC(&sn, 2, toku_create_empty_nl());
+    set_BNC(&sn, 0, toku_create_empty_nl(nullptr));
+    set_BNC(&sn, 1, toku_create_empty_nl(nullptr));
+    set_BNC(&sn, 2, toku_create_empty_nl(nullptr));
     //Create XIDS
     XIDS xids_0 = xids_get_root_xids();
     XIDS xids_123;

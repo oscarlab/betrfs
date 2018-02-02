@@ -120,7 +120,10 @@ static void open_ft_and_ct (bool unlink_old) {
     if (unlink_old) unlink(fname);
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
     r = toku_open_ft_handle(fname, 1, &t, 1<<12, 1<<9, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);   assert(r==0);
-    toku_ft_set_bt_compare(t, dont_allow_prefix);
+    struct toku_db_key_operations key_ops;
+    memset(&key_ops, 0, sizeof(key_ops));
+    key_ops.keycmp = dont_allow_prefix;
+    toku_ft_set_key_ops(t, &key_ops);
 }
 
 static void test_4115 (void) {

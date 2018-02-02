@@ -356,13 +356,16 @@ static void run_test(void)
 {
     int r;
     const char *env_dir = TOKU_TEST_FILENAME; // the default env_dir.
+    struct toku_db_key_operations key_ops;
+    memset(&key_ops, 0, sizeof(key_ops));
+    key_ops.keycmp = uint_dbt_cmp;
     pre_setup();
     toku_os_recursive_delete(env_dir);    
 
     r = toku_os_mkdir(env_dir, S_IRWXU+S_IRWXG+S_IRWXO);                                                      CKERR(r);
 
     r = db_env_create(&env, 0);                                                                               CKERR(r);
-    r = env->set_default_bt_compare(env, uint_dbt_cmp);                                                       CKERR(r);
+    r = env->set_key_ops(env, &key_ops); CKERR(r);
 //    r = env->set_default_dup_compare(env, uint_dbt_cmp);                                                      CKERR(r);
 //    if ( verbose ) printf("CACHESIZE = %d MB\n", CACHESIZE);
 //    r = env->set_cachesize(env, CACHESIZE / 1024, (CACHESIZE % 1024)*1024*1024, 1);                           CKERR(r);

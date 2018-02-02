@@ -26,17 +26,17 @@ ftfs-objs := \
 	toku_engine_status.o \
 	toku_checkpoint.o \
 	toku_flusher.o \
+	toku_dump_node.o \
 	toku_memleak_detect.o \
 	toku_zlib.o \
 	libftindex.o \
-	ftfs_toku_lock.o \
-	ftfs_profile.o
+	ftfs_toku_lock.o
 
-KBUILD_CFLAGS += -DFTFS_SHORT_BLOCK
-#KBUILD_CFLAGS += -DFTFS_PROFILE_UNLINK
-#KBUILD_CFLAGS += -DFTFS_PROFILE_RMDIR
-KBUILD_CFLAGS += -DFTFS_PROFILE_EVICT
-#KBUILD_CFLAGS += -DFTFS_PROFILE_DESTROY
+#KBUILD_CFLAGS += -DFTFS_CIRCLE
+KBUILD_CFLAGS += -DFTFS_RANGE_RENAME
+KBUILD_CFLAGS += -DFTFS_LIFTING
+#KBUILD_CFLAGS += -DFTFS_PFSPLIT
+KBUILD_CFLAGS += -DFTFS_NO_PRINT
 #KBUILD_CFLAGS += -DFTFS_DEBUG #-DSOUTHBOUND_DEBUG #-DFTFS_MEM_DEBUG # -DFTFS_DEBUG_PTRS
 #include $(PWD)/.turnoff-opts.mkinclude
 
@@ -103,6 +103,7 @@ libft/ule.cc.o \
 libft/x1764.cc.o \
 libft/xids.cc.o \
 libft/ybt.cc.o \
+libft/ft-slice.cc.o \
 libft/log_code.cc.o \
 libft/log_print.cc.o
 

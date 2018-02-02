@@ -156,7 +156,10 @@ test_reverse_compare (int n) {
     DB_ENV *env;
     r = db_env_create(&env, 0); assert(r == 0);
 #ifdef TOKUDB
-    r = env->set_default_bt_compare(env, reverse_compare);
+    struct toku_db_key_operations key_ops;
+    memset(&key_ops, 0, sizeof(key_ops));
+    key_ops.keycmp = reverse_compare;
+    r = env->set_key_ops(env, &key_ops);
     CKERR(r);
 #endif
     r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL, 0); assert(r == 0);

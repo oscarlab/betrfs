@@ -130,7 +130,12 @@ PATENT RIGHTS GRANT:
 // LE_CLEAN means that there is a single committed value in a format that saves disk space
 // LE_MVCC means that there may be multiple committed values or there are provisional values
 //
-enum { LE_CLEAN = 0, LE_MVCC = 1 };
+enum {
+    LE_CLEAN = 0,
+    LE_MVCC = 1,
+    LE_MVCC_INNER_DEL = 2,
+    LE_MVCC_END = 3
+};
 
 // This is an on-disk format.  static_asserts verify everything is packed and aligned correctly.
 struct leafentry {
@@ -253,6 +258,9 @@ toku_le_apply_msg(FT_MSG   msg,
                   int64_t * numbytes_delta_p);
 
 bool toku_le_worth_running_garbage_collection(LEAFENTRY le, TXNID oldest_referenced_xid_known);
+bool toku_le_innermost_is_delete(LEAFENTRY le, TXNID oldest_referenced_xid_known);
+
+int toku_le_unbound_count(LEAFENTRY);
 
 int toku_le_unbound_count(LEAFENTRY);
 

@@ -18,4 +18,4 @@ mkdir -p $mntpnt
 modprobe zlib
 insmod $module sb_dev=$sb_dev sb_fstype=ext4
 mount -t ftfs $dummy_dev $mntpnt
-chown -R ftfs:ftfs $mntpnt
+chown -R betrfs:betrfs $mntpnt

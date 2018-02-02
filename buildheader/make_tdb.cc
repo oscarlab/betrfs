@@ -372,6 +372,16 @@ static void print_defines (void) {
 }
 
 static void print_db_env_struct (void) {
+    printf("struct toku_db_key_operations {\n");
+    printf("    int (*keycmp) (DB *, const DBT *, const DBT *);\n");
+    printf("    int (*keypfsplit) (DB *, const DBT *, const DBT *, void (*set_key)(const DBT *new_key, void *set_extra), void *extra);\n");
+    printf("    int (*keyrename) (const DBT *old_prefix, const DBT *new_prefix, const DBT *, void (*set_key)(const DBT *new_key, void *set_extra), void *set_extra);\n");
+    printf("    void (*keyprint) (const DBT *key, bool is_tracable_print);\n");
+    printf("    int (*keylift) (const DBT *lpivot, const DBT *rpivot, void (*set_lift)(const DBT *lift, void *set_extra), void *set_extra);\n");
+    printf("    int (*keyliftkey) (const DBT *key, const DBT *lifted, void (*set_key)(const DBT *new_key, void *set_extra), void *set_extra);\n");
+    printf("    int (*keyunliftkey) (const DBT *key, const DBT *lifted, void (*set_key)(const DBT *new_key, void *set_extra), void *set_extra);\n");
+    printf("};\n");
+
     field_counter=0;
     STRUCT_SETUP(DB_ENV, api1_internal,   "void *%s"); /* Used for C++ hacking. */
     STRUCT_SETUP(DB_ENV, app_private, "void *%s");
@@ -424,7 +434,6 @@ static void print_db_env_struct (void) {
                              "int (*checkpointing_resume)                 (DB_ENV*) /* Alert tokudb 'postpone' is no longer necessary */",
                              "int (*checkpointing_begin_atomic_operation) (DB_ENV*) /* Begin a set of operations (that must be atomic as far as checkpoints are concerned). i.e. inserting into every index in one table */",
                              "int (*checkpointing_end_atomic_operation)   (DB_ENV*) /* End   a set of operations (that must be atomic as far as checkpoints are concerned). */",
-                             "int (*set_default_bt_compare)               (DB_ENV*,int (*bt_compare) (DB *, const DBT *, const DBT *)) /* Set default (key) comparison function for all DBs in this environment.  Required for RECOVERY since you cannot open the DBs manually. */",
                              "int (*get_engine_status_num_rows)           (DB_ENV*, uint64_t*)  /* return number of rows in engine status */",
                              "int (*get_engine_status)                    (DB_ENV*, TOKU_ENGINE_STATUS_ROW, uint64_t, uint64_t*, fs_redzone_state*, uint64_t*, char*, int, toku_engine_status_include_type) /* Fill in status struct and redzone state, possibly env panic string */",
                              "int (*get_engine_status_text)               (DB_ENV*, char*, int)     /* Fill in status text */",
@@ -450,6 +459,7 @@ static void print_db_env_struct (void) {
                              "int (*set_redzone)                          (DB_ENV *env, int redzone) /* set the redzone limit in percent of total space */",
                              "int (*set_lk_max_memory)                    (DB_ENV *env, uint64_t max)",
                              "int (*get_lk_max_memory)                    (DB_ENV *env, uint64_t *max)",
+                             "int (*set_key_ops)                          (DB_ENV *env, struct toku_db_key_operations *key_ops)",
                              "void (*set_update)                          (DB_ENV *env, int (*update_function)(DB *, const DBT *key, const DBT *old_val, const DBT *extra, void (*set_val)(const DBT *new_val, void *set_extra), void *set_extra))",
                              "int (*set_lock_timeout)                     (DB_ENV *env, uint64_t lock_wait_time_msec, uint64_t (*get_lock_wait_time_cb)(uint64_t default_lock_wait_time))",
                              "int (*get_lock_timeout)                     (DB_ENV *env, uint64_t *lock_wait_time_msec)",
@@ -503,6 +513,7 @@ static void print_db_struct (void) {
     STRUCT_SETUP(DB, dbenv,          "DB_ENV *%s");
     STRUCT_SETUP(DB, del,            "int (*%s) (DB *, DB_TXN *, DBT *, uint32_t)");
     STRUCT_SETUP(DB, del_multi,            "int (*%s) (DB *, DB_TXN *, DBT *, DBT *, bool, uint32_t)");
+    STRUCT_SETUP(DB, rename,         "int (*%s) (DB *, DB_TXN *, DBT *, DBT *, DBT *, DBT *, uint32_t)"); 
     STRUCT_SETUP(DB, fd,             "int (*%s) (DB *, int *)");
     STRUCT_SETUP(DB, get,            "int (*%s) (DB *, DB_TXN *, DBT *, DBT *, uint32_t)");
 #if DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 3
@@ -533,6 +544,7 @@ static void print_db_struct (void) {
 			 "int (*getf_set)(DB*, DB_TXN*, uint32_t, DBT*, YDB_CALLBACK_FUNCTION, void*) /* same as DBC->c_getf_set without a persistent cursor) */",
 			 "int (*optimize)(DB*) /* Run garbage collecion and promote all transactions older than oldest. Amortized (happens during flattening) */",
 			 "int (*hot_optimize)(DB*, DBT*, DBT*, int (*progress_callback)(void *progress_extra, float progress), void *progress_extra, uint64_t* loops_run)",
+			 "int (*dump_ftnode)(DB *db, int64_t b)",
 			 "int (*get_fragmentation)(DB*,TOKU_DB_FRAGMENTATION)",
 			 "int (*change_pagesize)(DB*,uint32_t)",
 			 "int (*change_readpagesize)(DB*,uint32_t)",

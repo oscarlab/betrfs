@@ -116,9 +116,6 @@ PATENT RIGHTS GRANT:
 #include <util/rwlock.h>
 #include <util/status.h>
 #include "ft/ule.h"
-
-extern TOKULOGGER global_logger;
-
 ///////////////////////////////////////////////////////////////////////////////////
 // Engine status
 //
@@ -269,6 +266,11 @@ void remove_background_job_from_cf(CACHEFILE cf)
     bjm_remove_background_job(cf->bjm);
 }
 
+void cachetable_rr_kibbutz_enq(CACHETABLE ct, void (*f)(void *), void *extra)
+{
+    toku_kibbutz_enq(ct->rr_kibbutz, f, extra);
+}
+
 // FIXME global with no toku prefix
 void cachefile_kibbutz_enq (CACHEFILE cf, void (*f)(void*), void *extra)
 // The function f must call remove_background_job_from_cf when it completes
@@ -340,10 +342,11 @@ void toku_cachetable_create(CACHETABLE *result, long size_limit, LSN UU(initial_
     ct->cf_list.init();
 
     int num_processors = toku_os_get_number_active_processors();
-    ct->client_kibbutz = toku_kibbutz_create_debug(num_processors, "ct_client_kibbutz_thread");
-    ct->ct_kibbutz = toku_kibbutz_create_debug(2*num_processors, "ct_kibbutz_thread");
+    ct->client_kibbutz = toku_kibbutz_create_debug(num_processors, "toku_ct_cli");
+    ct->ct_kibbutz = toku_kibbutz_create_debug(2*num_processors, "toku_ct");
     int checkpointing_nworkers = (num_processors/4) ? num_processors/4 : 1;
-    ct->checkpointing_kibbutz = toku_kibbutz_create_debug(checkpointing_nworkers, "checkpoint_kibbutz_thread");
+    ct->checkpointing_kibbutz = toku_kibbutz_create_debug(checkpointing_nworkers, "toku_fckpt");
+    ct->rr_kibbutz = toku_kibbutz_create_debug(2, "toku_rr");
     // must be done after creating ct_kibbutz
     ct->ev.init(size_limit, &ct->list, &ct->cf_list, ct->ct_kibbutz, EVICTION_PERIOD);
     ct->cp.init(&ct->list, logger, &ct->ev, &ct->cf_list);
@@ -740,7 +743,7 @@ static void cachetable_only_write_locked_data(
     // Luckily, old_attr here is only used for some test applications,
     // so inaccurate non-size fields are ok.
     if (is_clone) {
-        old_attr = make_pair_attr_with_type(p->cloned_value_size, p->attr.is_tree_node);
+        old_attr = make_pair_attr(p->cloned_value_size);
     }
     else {
         old_attr = p->attr;
@@ -1082,7 +1085,6 @@ write_locked_pair_for_checkpoint(CACHETABLE ct, PAIR p, bool checkpoint_pending)
         }
     }
 }
-
 
 // On entry and exit: hold the pair's mutex (p->mutex)
 // Method:   take write lock
@@ -4569,7 +4571,7 @@ void checkpointer::init(pair_list *_pl,
     m_ev = _ev;
     m_cf_list = files;
     bjm_init(&m_checkpoint_clones_bjm);
-    m_chkpt_kibbutz = toku_kibbutz_create_debug(2*num_processors, "chkpt_kibbutz_thread");
+    m_chkpt_kibbutz = toku_kibbutz_create_debug(2*num_processors, "toku_ckpt");
     // Default is no checkpointing.
     toku_minicron_setup_debug(&m_checkpointer_cron, 0, checkpoint_thread, this, "checkpointer");
 }
@@ -4827,36 +4829,6 @@ void checkpointer::turn_on_pending_bits_partial() {
         //     we may end up clearing the pending bit before the
         //     current lock is ever released.
         p->checkpoint_pending = true;
-
-///////////////////////////////////////////
-        FTNODE node = (FTNODE) p->value_data;
-        PAIR_ATTR attr = p->attr;
-        if (p->dirty == false && attr.is_tree_node &&  node != NULL && node->unbound_insert_count > 0 && node->height == 0) {
-            printf("skip the pair=%p, unbound=%u, height=%d\n", p, node->unbound_insert_count, node->height);
-            for (int ii=0; ii<node->n_children; ii++) {
-                 if(BP_STATE(node,ii) != PT_AVAIL) {
-                    printf("partition ii=%d is not in memory\n", ii);
-                    continue;
-                 }
-                 toku_list *unbound_msgs;
-                 if (node->height > 0) {
-                     unbound_msgs = &BNC(node,ii)->unbound_inserts;
-                 } else {
-                     unbound_msgs = &BLB(node,ii)->unbound_inserts;
-                 }
-                struct toku_list *list = unbound_msgs->next;
-                while(list!=unbound_msgs) {
-                     struct unbound_insert_entry *entry = toku_list_struct(list, struct unbound_insert_entry, node_list);
-                     paranoid_invariant(entry->state == UBI_UNBOUND);
-                     toku_mutex_lock(&global_logger->ubi_lock);
-                     toku_list_remove(&entry->in_or_out);
-                     toku_mutex_unlock(&global_logger->ubi_lock);
-                     list = list->next;
-                }
-            }
-        }
-///////////////////////////////////////////
-
         if (m_list->m_pending_head) {
             m_list->m_pending_head->pending_prev = p;
         }
@@ -4894,35 +4866,6 @@ void checkpointer::turn_on_pending_bits() {
         //     we may end up clearing the pending bit before the
         //     current lock is ever released.
         p->checkpoint_pending = true;
-
-///////////////////////////////////////////
-        FTNODE node = (FTNODE) p->value_data;
-        PAIR_ATTR attr = p->attr;
-        if (p->dirty == false && attr.is_tree_node && node != NULL && node->unbound_insert_count > 0 && node->height == 0) {
-            printf("skip the pair=%p, unbound=%u, height=%d\n", p, node->unbound_insert_count, node->height);
-            for (int ii=0; ii<node->n_children; ii++) {
-                 if(BP_STATE(node,ii) != PT_AVAIL) {
-                    printf("partition ii=%d is not in memory\n", ii);
-                    continue;
-                 }
-                 toku_list *unbound_msgs;
-                 if (node->height > 0) {
-                     unbound_msgs = &BNC(node,ii)->unbound_inserts;
-                 } else {
-                     unbound_msgs = &BLB(node,ii)->unbound_inserts;
-                 }
-                 struct toku_list *list = unbound_msgs->next;
-                 while(list!=unbound_msgs) {
-                     struct unbound_insert_entry *entry = toku_list_struct(list, struct unbound_insert_entry, node_list);
-                     paranoid_invariant(entry->state == UBI_UNBOUND);
-                     toku_mutex_lock(&global_logger->ubi_lock);
-                     toku_list_remove(&entry->in_or_out);
-                     toku_mutex_unlock(&global_logger->ubi_lock);
-                     list = list->next;
-                 }
-            }
-        }
-///////////////////////////////////////////
         if (m_list->m_pending_head) {
             m_list->m_pending_head->pending_prev = p;
         }
@@ -5400,6 +5343,8 @@ void cachefile_list::free_stale_data(evictor* ev) {
         evict_pair_from_cachefile(p);
         ev->remove_pair_attr(p->attr);
         cachetable_free_pair(p);
+        
+        // now that we have evicted something,
         // let's check if the cachefile is needed anymore
         if (m_stale_tail->cf_head == NULL) {
             CACHEFILE cf_to_destroy = m_stale_tail;

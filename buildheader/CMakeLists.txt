@@ -1,5 +1,7 @@
 set_directory_properties(PROPERTIES INCLUDE_DIRECTORIES "")
 
+#add_compile_options(-mcmodel=small)
+
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/runcat.sh" "#!/bin/bash
 out=$1; shift
 exec \"$@\" >$out")

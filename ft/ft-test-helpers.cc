@@ -121,7 +121,11 @@ next_dummymsn(void) {
     ++(dummymsn.msn);
     return dummymsn;
 }
-
+#if 1
+MSN get_last_dummymsn(void) {
+    return dummymsn;
+}
+#endif
 static LSN
 next_dummylsn(void) {
     ++(dummylsn.lsn);
@@ -238,11 +242,8 @@ int toku_testsetup_insert_to_leaf (FT_HANDLE brt, BLOCKNUM blocknum, const char 
                                                     cmd.msn, &keydbt);
     	toku_logger_append_unbound_insert_entry(test_logger,entry); 
  }
-    static size_t zero_flow_deltas[] = { 0, 0 };
     toku_ft_node_put_cmd (
         brt->ft,
-        brt->ft->compare_fun,
-        brt->ft->update_fun,
         &brt->ft->cmp_descriptor,
         entry,
         node,
@@ -250,7 +251,6 @@ int toku_testsetup_insert_to_leaf (FT_HANDLE brt, BLOCKNUM blocknum, const char 
         &cmd,
         true,
         make_gc_info(true),
-        zero_flow_deltas,
         NULL
         );
 
@@ -368,7 +368,7 @@ int toku_testsetup_insert_to_nonleaf (FT_HANDLE brt, BLOCKNUM blocknum, enum ft_
     DBT k;
     int childnum = toku_ftnode_which_child(node,
                                             toku_fill_dbt(&k, key, keylen),
-                                            &brt->ft->cmp_descriptor, brt->ft->compare_fun);
+                                            &brt->ft->cmp_descriptor, brt->ft->key_ops.keycmp);
 
     XIDS xids_0 = xids_get_root_xids();
     MSN msn = next_dummymsn();
@@ -431,8 +431,8 @@ int toku_testsetup_insert_to_nonleaf (FT_HANDLE ft_handle, BLOCKNUM blocknum, en
 
     //ok,we are just literally repeating the logic of get_child_bounds_for_msg_put -JYM
     DBT k;
-    int start_idx = toku_ftnode_which_child(node, toku_fill_dbt(&k, key, keylen), &ft_handle->ft->cmp_descriptor, ft_handle->ft->compare_fun);
-    int end_idx = toku_ftnode_which_child(node, toku_fill_dbt(&k, max_key, max_keylen), &ft_handle->ft->cmp_descriptor, ft_handle->ft->compare_fun);
+    int start_idx = toku_ftnode_which_child(node, toku_fill_dbt(&k, key, keylen), &ft_handle->ft->cmp_descriptor, ft_handle->ft->key_ops.keycmp);
+    int end_idx = toku_ftnode_which_child(node, toku_fill_dbt(&k, max_key, max_keylen), &ft_handle->ft->cmp_descriptor, ft_handle->ft->key_ops.keycmp);
      
     XIDS xids_0 = xids_get_root_xids();
     MSN msn = next_dummymsn();

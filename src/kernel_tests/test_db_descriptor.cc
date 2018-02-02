@@ -241,7 +241,10 @@ close_db(int which) {
 static void
 setup_data(void) {
     int r = db_env_create(&env, 0);                                           CKERR(r);
-    r = env->set_default_bt_compare(env, verify_int_cmp);                     CKERR(r);
+    struct toku_db_key_operations key_ops;
+    memset(&key_ops, 0, sizeof(key_ops));
+    key_ops.keycmp = verify_int_cmp;
+    r = env->set_key_ops(env, &key_ops); CKERR(r);
     const int envflags = DB_CREATE|DB_INIT_MPOOL|DB_INIT_TXN|DB_INIT_LOCK |DB_THREAD |DB_PRIVATE;
     r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);        CKERR(r);
     int i;

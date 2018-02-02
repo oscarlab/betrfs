@@ -14,7 +14,7 @@ set -x
 # mkfs -t ext4 $sb_dev
 mkfs -t ext4 -E lazy_itable_init=0,lazy_journal_init=0 $sb_dev &&
 # mount the file system
-mkdir -p $mntpnt && 
+mkdir -p $mntpnt &&
 mount -t ext4 $sb_dev $mntpnt &&
-chown -R ftfs:ftfs $mntpnt
+chown -R betrfs:betrfs $mntpnt
 exit $?

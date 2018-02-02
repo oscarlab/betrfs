@@ -190,7 +190,7 @@ test_serialize_leaf(int valsize, int nelts, double entropy) {
                  TOKU_DEFAULT_COMPRESSION_METHOD);
     brt->ft = brt_h;
     
-    brt_h->compare_fun = long_key_cmp;
+    brt_h->key_ops.keycmp = long_key_cmp;
     toku_blocktable_create_new(&brt_h->blocktable);
     { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
     //Want to use block #20
@@ -275,7 +275,7 @@ test_serialize_nonleaf(int valsize, int nelts, double entropy) {
     for (int i = 0; i < sn.n_children; ++i) {
         BP_BLOCKNUM(&sn, i).b = 30 + (i*5);
         BP_STATE(&sn,i) = PT_AVAIL;
-        set_BNC(&sn, i, toku_create_empty_nl());
+        set_BNC(&sn, i, toku_create_empty_nl(nullptr));
     }
     //Create XIDS
     XIDS xids_0 = xids_get_root_xids();
@@ -325,7 +325,7 @@ test_serialize_nonleaf(int valsize, int nelts, double entropy) {
                  TOKU_DEFAULT_COMPRESSION_METHOD);
     brt->ft = brt_h;
     
-    brt_h->compare_fun = long_key_cmp;
+    brt_h->key_ops.keycmp = long_key_cmp;
     toku_blocktable_create_new(&brt_h->blocktable);
     { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
     //Want to use block #20

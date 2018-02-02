@@ -237,8 +237,11 @@ setup_dbs (void) {
     r = db_env_create(&dbenv, 0);
         CKERR(r);
 #ifdef TOKUDB
-    r = dbenv->set_default_bt_compare(dbenv, int_dbt_cmp);
-        CKERR(r);
+    struct toku_db_key_operations key_ops;
+    memset(&key_ops, 0, sizeof(key_ops));
+    key_ops.keycmp = int_dbt_cmp;
+    r = dbenv->set_key_ops(dbenv, &key_ops);
+    CKERR(r);
 #endif
     uint32_t env_txn_flags  = DB_INIT_TXN | DB_INIT_LOCK;
     uint32_t env_open_flags = DB_CREATE | DB_PRIVATE | DB_INIT_MPOOL;

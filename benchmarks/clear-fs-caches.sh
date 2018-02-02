@@ -21,10 +21,15 @@ if [[ $fstype == "ext4" || $fstype == "btrfs" || $fstype == "xfs" ]]
 then
     umount $mntpnt
     mount -t $fstype $sb_dev $mntpnt
+elif [[ $fstype == "nilfs2" ]]
+then
+    nilfs-clean -q
+    umount $mntpnt
+    mount -t $fstype $sb_dev $mntpnt
 elif [[ $fstype == "zfs" ]]
 then
-    echo "what do we do with zfs?"
-    exit 0
+    zfs umount $mntpnt
+    zfs mount datastore/files
 elif [[ $fstype == "ftfs" ]]
 then
     echo "removing $module and mounting/unmounting ftfs file system"

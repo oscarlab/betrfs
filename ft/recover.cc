@@ -184,7 +184,7 @@ struct recover_env {
     CACHETABLE ct;
     TOKULOGGER logger;
     CHECKPOINTER cp;
-    ft_compare_func bt_compare;
+    struct toku_db_key_operations key_ops;
     ft_update_func update_function;
     generate_row_for_put_func generate_row_for_put;
     generate_row_for_del_func generate_row_for_del;
@@ -279,7 +279,7 @@ static int recover_env_init (RECOVER_ENV renv,
                              prepared_txn_callback_t    prepared_txn_callback,
                              keep_cachetable_callback_t keep_cachetable_callback,
                              TOKULOGGER logger,
-                             ft_compare_func bt_compare,
+                             struct toku_db_key_operations *key_ops,
                              ft_update_func update_function,
                              generate_row_for_put_func generate_row_for_put,
                              generate_row_for_del_func generate_row_for_del,
@@ -302,7 +302,7 @@ static int recover_env_init (RECOVER_ENV renv,
     renv->env                      = env;
     renv->prepared_txn_callback    = prepared_txn_callback;
     renv->keep_cachetable_callback = keep_cachetable_callback;
-    renv->bt_compare               = bt_compare;
+    memcpy(&renv->key_ops, key_ops, sizeof(*key_ops));
     renv->update_function          = update_function;
     renv->generate_row_for_put     = generate_row_for_put;
     renv->generate_row_for_del     = generate_row_for_del;
@@ -369,8 +369,8 @@ static int internal_recover_fopen_or_fcreate (RECOVER_ENV renv, bool must_create
     }
 
     // set the key compare functions
-    if (!(treeflags & TOKU_DB_KEYCMP_BUILTIN) && renv->bt_compare) {
-        toku_ft_set_bt_compare(brt, renv->bt_compare);
+    if (!(treeflags & TOKU_DB_KEYCMP_BUILTIN) && renv->key_ops.keycmp) {
+        toku_ft_set_key_ops(brt, &renv->key_ops);
     }
 
     if (renv->update_function) {
@@ -1091,6 +1091,59 @@ static int toku_recover_backward_enq_delete_multi (struct logtype_enq_delete_mul
     // nothing
     return 0;
 }
+
+static int toku_recover_enq_rename (struct logtype_enq_rename *l, RECOVER_ENV UU(renv)) {
+    int r;
+    TOKUTXN txn = NULL;
+    toku_txnid2txn(renv->logger, l->xid, &txn);
+    assert(txn!=NULL);
+    struct file_map_tuple *tuple = NULL;
+    r = file_map_find(&renv->fmap, l->filenum, &tuple);
+    if (r==0) {
+        //Maybe do the deletion if we found the cachefile.
+
+        DBT minkeydbt;
+        toku_fill_dbt(&minkeydbt, l->min_key.data, l->min_key.len);
+        DBT maxkeydbt;
+        toku_fill_dbt(&maxkeydbt, l->max_key.data, l->max_key.len);
+        DBT oldprefixdbt;
+        toku_fill_dbt(&oldprefixdbt, l->old_prefix.data, l->old_prefix.len);
+        DBT newprefixdbt;
+        toku_fill_dbt(&newprefixdbt, l->new_prefix.data, l->new_prefix.len);
+
+        DBT new_minkeydbt;
+        toku_init_dbt(&new_minkeydbt);
+        r = toku_ft_transform_prefix(&renv->key_ops,
+                                     &oldprefixdbt, &newprefixdbt, &minkeydbt, &new_minkeydbt);
+        assert(r != 0);
+        DBT new_maxkeydbt;
+        toku_init_dbt(&new_maxkeydbt);
+        r = toku_ft_transform_prefix(&renv->key_ops,
+                                     &oldprefixdbt, &newprefixdbt, &maxkeydbt, &new_maxkeydbt);
+        assert(r != 0);
+
+        toku_ft_maybe_rename(tuple->ft_handle,
+                             &minkeydbt,
+                             &maxkeydbt,
+                             &new_minkeydbt,
+                             &new_maxkeydbt,
+                             &oldprefixdbt,
+                             &newprefixdbt,
+                             txn,
+                             true,
+                             l->lsn,
+                             false,
+                             l->is_resetting_op);
+        toku_destroy_dbt(&new_minkeydbt);
+        toku_destroy_dbt(&new_maxkeydbt);
+    }
+    return 0;
+}
+
+static int toku_recover_backward_enq_rename (struct logtype_enq_rename *UU(l), RECOVER_ENV UU(renv)) {
+    // nothing
+    return 0;
+}
 static int toku_recover_enq_insert_multiple (struct logtype_enq_insert_multiple *l, RECOVER_ENV renv) {
     int r;
     TOKUTXN txn = NULL;
@@ -1677,7 +1730,7 @@ int tokudb_recover(DB_ENV *env,
                    keep_cachetable_callback_t keep_cachetable_callback,
                    TOKULOGGER logger,
                    const char *env_dir, const char *log_dir,
-                   ft_compare_func bt_compare,
+                   struct toku_db_key_operations *key_ops,
                    ft_update_func update_function,
                    generate_row_for_put_func generate_row_for_put,
                    generate_row_for_del_func generate_row_for_del,
@@ -1698,7 +1751,7 @@ int tokudb_recover(DB_ENV *env,
                              prepared_txn_callback,
                              keep_cachetable_callback,
                              logger,
-                             bt_compare,
+                             key_ops,
                              update_function,
                              generate_row_for_put,
                              generate_row_for_del,

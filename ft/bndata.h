@@ -90,7 +90,7 @@ PATENT RIGHTS GRANT:
 
 
 #pragma once
-
+#include "ybt.h"
 #include <util/omt.h>
 #include "leafentry.h"
 #include <util/mempool.h>
@@ -217,10 +217,11 @@ public:
     int fetch_le_key_and_len(uint32_t idx, uint32_t *len, void** key);
 
     // Interact with another bn_data
-    void move_leafentries_to(BN_DATA dest_bd,
-                                      uint32_t lbi, //lower bound inclusive
-                                      uint32_t ube //upper bound exclusive
-                                      );
+    void move_leafentries_to(
+                             BN_DATA dest_bd,
+                             uint32_t lbi, //lower bound inclusive
+                             uint32_t ube //upper bound exclusive
+                            );
 
     void destroy(void);
 
@@ -241,6 +242,18 @@ public:
         uint32_t keylen,
         uint32_t old_le_size
         );
+
+    void move_leafentries_to_through_kupsert(
+        struct toku_db_key_operations *key_ops,
+        BN_DATA dest_bd,
+        FT_MSG cmd,
+        int32_t lbi, //lower bound inclusive
+        int32_t ube //upper bound exclusive
+        );
+
+    void relift_leafentries(BN_DATA dest_db, FT ft,
+                            DBT *old_lifted, DBT *new_lifted);
+
     void get_space_for_overwrite(uint32_t idx, const void* keyp, uint32_t keylen, uint32_t old_size, uint32_t new_size, LEAFENTRY* new_le_space);
     void get_space_for_insert(uint32_t idx, const void* keyp, uint32_t keylen, size_t size, LEAFENTRY* new_le_space);
 private:

@@ -110,6 +110,8 @@ DBT *toku_fill_dbt(DBT *dbt, bytevec k, ITEMLEN len);
 
 DBT *toku_memdup_dbt(DBT *dbt, const void *k, size_t len);
 
+void toku_cleanup_dbt(DBT *dbt);
+
 DBT *toku_copyref_dbt(DBT *dst, const DBT src);
 
 DBT *toku_copy_dbt(DBT *dst, const DBT &src);

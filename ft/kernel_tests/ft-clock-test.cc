@@ -140,7 +140,7 @@ static void
 test1(int fd, FT brt_h, FTNODE *dn) {
     int r;
     struct ftnode_fetch_extra bfe_all;
-    brt_h->compare_fun = string_key_cmp;
+    brt_h->key_ops.keycmp = string_key_cmp;
     fill_bfe_for_full_read(&bfe_all, brt_h);
     FTNODE_DISK_DATA ndd = NULL;
     r = toku_deserialize_ftnode_from(fd, make_blocknum(20), 0/*pass zero for hash*/, dn, &ndd, &bfe_all);
@@ -219,7 +219,7 @@ test2(int fd, FT brt_h, FTNODE *dn) {
     memset(&right, 0, sizeof(right));
     ft_search_t search_t;
     
-    brt_h->compare_fun = string_key_cmp;
+    brt_h->key_ops.keycmp = string_key_cmp;
     fill_bfe_for_subset_read(
         &bfe_subset,
         brt_h,
@@ -278,7 +278,7 @@ test3_leaf(int fd, FT brt_h, FTNODE *dn) {
     memset(&left, 0, sizeof(left));
     memset(&right, 0, sizeof(right));
     
-    brt_h->compare_fun = string_key_cmp;
+    brt_h->key_ops.keycmp = string_key_cmp;
     fill_bfe_for_min_read(
         &bfe_min,
         brt_h
@@ -327,8 +327,8 @@ test_serialize_nonleaf(void) {
     BP_BLOCKNUM(&sn, 1).b = 35;
     BP_STATE(&sn,0) = PT_AVAIL;
     BP_STATE(&sn,1) = PT_AVAIL;
-    set_BNC(&sn, 0, toku_create_empty_nl());
-    set_BNC(&sn, 1, toku_create_empty_nl());
+    set_BNC(&sn, 0, toku_create_empty_nl(nullptr));
+    set_BNC(&sn, 1, toku_create_empty_nl(nullptr));
     //Create XIDS
     XIDS xids_0 = xids_get_root_xids();
     XIDS xids_123;

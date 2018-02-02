@@ -238,6 +238,7 @@ static int dump_nonleaf(FT_MSG msg, bool UU(is_fresh), void * UU(args)) {
         printf("    msn=%" PRIu64 " (0x%" PRIx64 ") ", msn.msn, msn.msn);
         printf("    TYPE=");
         switch ((enum ft_msg_type)typ) {
+ 	case FT_KUPSERT_BROADCAST_ALL: printf("KUPSERT"); goto ok;
         case FT_NONE: printf("NONE"); goto ok;
         case FT_INSERT: printf("INSERT"); goto ok;
         case FT_UNBOUND_INSERT: printf("UNBOUND INSERT"); goto ok;

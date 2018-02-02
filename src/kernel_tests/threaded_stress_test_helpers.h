@@ -1976,13 +1976,16 @@ static int create_tables(DB_ENV **env_res, DB **db_res, int num_DBs,
     int r;
     struct env_args env_args = cli_args->env_args;
     toku_os_recursive_delete(env_args.envdir);
+    struct toku_db_key_operations key_ops;
+    memset(&key_ops, 0, sizeof(key_ops));
+    key_ops.keycmp = bt_compare;
     r = toku_os_mkdir(env_args.envdir, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
 
     DB_ENV *env;
     db_env_set_num_bucket_mutexes(env_args.num_bucket_mutexes);
     r = db_env_create(&env, 0); assert(r == 0);
     r = env->set_redzone(env, 0); CKERR(r);
-    r = env->set_default_bt_compare(env, bt_compare); CKERR(r);
+    r = env->set_key_ops(env, &key_ops); CKERR(r);
     r = env->set_lk_max_memory(env, env_args.lk_max_memory); CKERR(r);
     r = env->set_cachesize(env, env_args.cachetable_size / (1 << 30), env_args.cachetable_size % (1 << 30), 1); CKERR(r);
     r = env->set_lg_bsize(env, env_args.rollback_node_size); CKERR(r);
@@ -2174,12 +2177,15 @@ static int open_tables(DB_ENV **env_res, DB **db_res, int num_DBs,
                       struct cli_args *cli_args) {
     int r;
     struct env_args env_args = cli_args->env_args;
+    struct toku_db_key_operations key_ops;
+    memset(&key_ops, 0, sizeof(key_ops));
+    key_ops.keycmp = bt_compare;
 
     DB_ENV *env;
     db_env_set_num_bucket_mutexes(env_args.num_bucket_mutexes);
     r = db_env_create(&env, 0); assert(r == 0);
     r = env->set_redzone(env, 0); CKERR(r);
-    r = env->set_default_bt_compare(env, bt_compare); CKERR(r);
+    r = env->set_key_ops(env, &key_ops); CKERR(r);
     r = env->set_lk_max_memory(env, env_args.lk_max_memory); CKERR(r);
     env->set_update(env, env_args.update_function);
     r = env->set_cachesize(env, env_args.cachetable_size / (1 << 30), env_args.cachetable_size % (1 << 30), 1); CKERR(r);

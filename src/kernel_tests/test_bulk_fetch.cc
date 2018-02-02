@@ -187,7 +187,10 @@ test_bulk_fetch (uint64_t n, bool prelock, bool disable_prefetching) {
     /* create the dup database file */
     DB_ENV *env;
     r = db_env_create(&env, 0); assert(r == 0);
-    r=env->set_default_bt_compare(env, int64_dbt_cmp); CKERR(r);
+    struct toku_db_key_operations key_ops;
+    memset(&key_ops, 0, sizeof(key_ops));
+    key_ops.keycmp = int64_dbt_cmp;
+    r = env->set_key_ops(env, &key_ops); CKERR(r);
     // arbitrarily have cachetable size be 4*n
     // goal is to make it small enough such that all of data 
     // does not fit in cachetable, but not so small that we get thrashing

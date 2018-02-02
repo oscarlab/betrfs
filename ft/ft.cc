@@ -90,7 +90,7 @@ PATENT RIGHTS GRANT:
 #ident "The technology is licensed by the Massachusetts Institute of Technology, Rutgers State University of New Jersey, and the Research Foundation of State University of New York at Stony Brook under United States of America Serial No. 11/760379 and to the patents and/or patent applications resulting from it."
 
 #include "ft.h"
-#include "ft-internal.h"
+#include <ft/ft-internal.h>
 #include "ft-cachetable-wrappers.h"
 #include "log-internal.h"
 
@@ -384,7 +384,7 @@ static void ft_init(FT ft, FT_OPTIONS options, CACHEFILE cf) {
 
     toku_list_init(&ft->live_ft_handles);
 
-    ft->compare_fun = options->compare_fun;
+    memcpy(&ft->key_ops, &options->key_ops, sizeof(options->key_ops));
     ft->update_fun = options->update_fun;
 
     if (ft->cf != NULL) {
@@ -475,7 +475,7 @@ int toku_read_ft_and_store_in_cachefile (FT_HANDLE brt, CACHEFILE cf, LSN max_ac
         if ((h = (FT) toku_cachefile_get_userdata(cf))!=0) {
             *header = h;
             assert(brt->options.update_fun == h->update_fun);
-            assert(brt->options.compare_fun == h->compare_fun);
+            assert(memcmp(&brt->options.key_ops, &h->key_ops, sizeof(h->key_ops)) == 0);
             return 0;
         }
     }
@@ -493,7 +493,7 @@ int toku_read_ft_and_store_in_cachefile (FT_HANDLE brt, CACHEFILE cf, LSN max_ac
     // GCC 4.8 seems to get confused by the gotos in the deserialize code and think h is maybe uninitialized.
     invariant_notnull(h);
     h->cf = cf;
-    h->compare_fun = brt->options.compare_fun;
+    memcpy(&h->key_ops, &brt->options.key_ops, sizeof(h->key_ops));
     h->update_fun = brt->options.update_fun;
     toku_cachefile_set_userdata(cf,
                                 (void*)h,
@@ -609,14 +609,11 @@ toku_ft_init(FT ft,
              enum toku_compression_method compression_method)
 {
     memset(ft, 0, sizeof *ft);
-    struct ft_options options = {
-        .nodesize = target_nodesize,
-        .basementnodesize = target_basementnodesize,
-        .compression_method = compression_method,
-        .flags = 0,
-        .compare_fun = NULL,
-        .update_fun = NULL
-    };
+    struct ft_options options;
+    memset(&options, 0, sizeof(options));
+    options.nodesize = target_nodesize;
+    options.basementnodesize = target_basementnodesize;
+    options.compression_method = compression_method;
     ft->h = ft_header_create(&options, root_blocknum_on_disk, root_xid_that_created);
     ft->h->checkpoint_count = 1;
     ft->h->checkpoint_lsn   = checkpoint_lsn;
@@ -628,7 +625,7 @@ ft_handle_open_for_redirect(FT_HANDLE *new_ftp, const char *fname_in_env, TOKUTX
     FT_HANDLE t;
     assert(old_h->dict_id.dictid != DICTIONARY_ID_NONE.dictid);
     toku_ft_handle_create(&t);
-    toku_ft_set_bt_compare(t, old_h->compare_fun);
+    toku_ft_set_key_ops(t, &old_h->key_ops);
     toku_ft_set_update(t, old_h->update_fun);
     toku_ft_handle_set_nodesize(t, old_h->h->nodesize);
     toku_ft_handle_set_basementnodesize(t, old_h->h->basementnodesize);

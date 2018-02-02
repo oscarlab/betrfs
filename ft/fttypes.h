@@ -101,7 +101,8 @@ PATENT RIGHTS GRANT:
 #include "toku_assert.h"
 #include <db.h>
 #include <inttypes.h>
-
+#include <string.h>
+#include "memory.h"
 // Use the C++ bool and constants (true false), rather than BOOL, TRUE, and FALSE.
 
 typedef struct ft_handle *FT_HANDLE;
@@ -162,7 +163,6 @@ typedef struct pair_attr_s {
     long rollback_size; // size of PAIR is a rollback node, 0 otherwise, used only for engine status
     long cache_pressure_size; // amount PAIR contributes to cache pressure, is sum of buffer sizes and workdone counts
     bool is_valid;
-    bool is_tree_node; // This pair is for tree
 } PAIR_ATTR;
 
 static inline PAIR_ATTR make_pair_attr(long size) { 
@@ -172,21 +172,7 @@ static inline PAIR_ATTR make_pair_attr(long size) {
         .leaf_size = 0, 
         .rollback_size = 0, 
         .cache_pressure_size = 0,
-        .is_valid = true,
-        .is_tree_node = false
-    }; 
-    return result; 
-}
-
-static inline PAIR_ATTR make_pair_attr_with_type(long size, bool type) { 
-    PAIR_ATTR result={
-        .size = size, 
-        .nonleaf_size = 0, 
-        .leaf_size = 0, 
-        .rollback_size = 0, 
-        .cache_pressure_size = 0,
-        .is_valid = true,
-        .is_tree_node = type
+        .is_valid = true
     }; 
     return result; 
 }
@@ -272,7 +258,9 @@ enum ft_msg_type {
     FT_COMMIT_MULTICAST_TXN = 17, // txn commit for multicasts
     FT_COMMIT_MULTICAST_ALL = 18, // multicast that commits all leafentries (like FT_COMMIT_BROADCAST_ALL)
     FT_ABORT_MULTICAST_TXN = 19, // multicast that aborts
-    FT_UNBOUND_INSERT = 20 //large sequentail IO (part of a stream of consecutive keys)
+    FT_UNBOUND_INSERT = 20, //large sequentail IO (part of a stream of consecutive keys)
+// kupsert msg
+    FT_KUPSERT_BROADCAST_ALL = 21 //Kuprsert to all leafentries.
 };
 
 static inline ft_msg_type
@@ -365,6 +353,7 @@ ft_msg_type_applies_once(enum ft_msg_type type)
     case FT_COMMIT_MULTICAST_ALL:
     case FT_ABORT_MULTICAST_TXN:
     case FT_NONE:
+    case FT_KUPSERT_BROADCAST_ALL:
         ret_val = false;
         break;
     default:
@@ -397,6 +386,7 @@ ft_msg_type_applies_multiple(enum ft_msg_type type)
     case FT_DELETE_MULTICAST:
     case FT_COMMIT_MULTICAST_TXN:
     case FT_COMMIT_MULTICAST_ALL:
+    case FT_KUPSERT_BROADCAST_ALL:
     case FT_ABORT_MULTICAST_TXN:
         ret_val = true;
         break;
@@ -425,6 +415,7 @@ ft_msg_type_is_multicast(enum ft_msg_type type)
     case FT_OPTIMIZE:
     case FT_OPTIMIZE_FOR_UPGRADE:
     case FT_UPDATE_BROADCAST_ALL:
+    case FT_KUPSERT_BROADCAST_ALL:
         ret_val = false;
         break;
     case FT_DELETE_MULTICAST:
@@ -450,14 +441,24 @@ typedef struct xids_t *XIDS;
 typedef struct fifo_msg_t *FIFO_MSG;
 /* tree commands */
 
-
 //blindwrite
 enum pacman_status {
 	PM_UNCOMMITTED=0,
 	PM_COMMITTED, //the txn commited, but there are live txns that may see the msgs/basements wrt MVCC rules
 	PM_GRANTED   //the txn committed, and there are no other live txns whatsoever
 };
+struct range_delete_extra {
+	bool  is_right_excl;
+	enum  pacman_status pm_status;
+};
 
+struct kupsert_extra {
+	BYTESTRING old_prefix;
+	BYTESTRING new_prefix;
+//	DBT * forward(char * old_prefix, char * new_prefix, DBT * old_key);
+//	DBT * backward(char * old_prefix, char * new_prefix DBT * new_key);
+};
+/* tree commands */
 struct ft_msg {
     enum ft_msg_type type;
     MSN          msn;          // message sequence number
@@ -465,9 +466,11 @@ struct ft_msg {
     const DBT *        key;
     const DBT *        max_key;
     const DBT *        val;
-    bool         is_right_excl;
-    enum pacman_status pm_status;
-    #if 0
+    union {
+          struct kupsert_extra k_extra;
+          struct range_delete_extra rd_extra; //for now just extra for range delete.
+    } u;   
+#if 0
       union {
         /* insert or delete */
         struct ft_cmd_insert_delete {
@@ -484,14 +487,22 @@ typedef struct ft_msg *FT_MSG;
 static inline bool
 ft_msg_is_multicast_rightexcl(struct ft_msg * msg) {
     assert(ft_msg_type_is_multicast((enum ft_msg_type)(unsigned char)msg->type));
-    return msg->is_right_excl;
+    return msg->u.rd_extra.is_right_excl;
 }
 
 static inline enum pacman_status
 ft_msg_multicast_pm_status(struct ft_msg * msg) {
     assert(FT_DELETE_MULTICAST == (enum ft_msg_type)(unsigned char)msg->type);
-    return msg->pm_status;
+    return msg->u.rd_extra.pm_status;
 }
+
+static inline void ft_print_key(struct toku_db_key_operations *key_ops, const DBT *key)
+{
+    key_ops->keyprint(key, true);
+}
+
+int ft_msg_kupsert_forward_transform(struct toku_db_key_operations *key_ops, FT_MSG k_msg, DBT *old_key, DBT *new_key);
+
 typedef int (*ft_compare_func)(DB *, const DBT *, const DBT *);
 typedef void (*setval_func)(const DBT *, void *);
 typedef int (*ft_update_func)(DB *, const DBT *, const DBT *, const DBT *, setval_func, void *);

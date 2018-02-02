@@ -1,3 +1,4 @@
+sudo dovecot stop
 cd ~/ft-index/benchmarks/
 sudo ./cleanup-fs.sh
 sudo ./setup-ftfs.sh

@@ -183,10 +183,13 @@ dir_create(const char *envdir) {
 static void  UU()
 env_startup(const char *envdir, int64_t bytes, int recovery_flags) {
     int r;
+    struct toku_db_key_operations key_ops;
+    memset(&key_ops, 0, sizeof(key_ops));
+    key_ops.keycmp = int64_dbt_cmp;
     r = db_env_create(&env, 0);
         CKERR(r);
     r = env->set_redzone(env, 0); CKERR(r);
-    r = env->set_default_bt_compare(env, int64_dbt_cmp);
+    r = env->set_key_ops(env, &key_ops);
         CKERR(r);
     if (bytes) {
 	r = env->set_cachesize(env, bytes >> 30, bytes % (1<<30), 1);

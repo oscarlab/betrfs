@@ -105,7 +105,7 @@ enum {
 };
 
 //these are just for bill to debug
-void swap_inbuf_outbuf (TOKULOGGER logger);
+void swap_inbuf_outbuf (TOKULOGGER logger, unsigned int *n);
 void write_outbuf_to_logfile (TOKULOGGER logger, LSN *fsynced_lsn, unsigned int n);
 void release_output (TOKULOGGER logger, LSN fsynced_lsn);
 

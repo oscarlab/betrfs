@@ -161,7 +161,7 @@ static inline void wbuf_nocrc_int (struct wbuf *w, int32_t i) {
     wbuf_nocrc_char(w, i>>8);
     wbuf_nocrc_char(w, i>>0);
 #else
-    assert(w->ndone + 4 <= w->size);
+   assert(w->ndone + 4 <= w->size);
  #if 0
     w->buf[w->ndone+0] = i>>24;
     w->buf[w->ndone+1] = i>>16;

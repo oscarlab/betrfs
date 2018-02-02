@@ -118,12 +118,16 @@ extern "C" int ftfs_get_errno(void);
 extern "C" void ftfs_set_errno(int);
 extern "C" int __trace_printk(unsigned long ip, const char *fmt, ...);
 
+#define TOKU_TRACE_PRINTK 0
+#if TOKU_TRACE_PRINTK 
 #define toku_trace_printk(fmt, ...)                          \
 do {                                                    \
                  __trace_printk(0, fmt, ##__VA_ARGS__);    \
 } while (0)
-
-
+#else
+#define toku_trace_printk(fmt, ...)                          \
+((void)1)
+#endif
 static inline int
 get_maybe_error_errno(int r)
 {
@@ -139,19 +143,7 @@ set_errno(int new_errno)
  //   bogus_errno = new_errno;
     ftfs_set_errno(new_errno);
 }
-#else
 
-static inline int
-get_maybe_error_errno(void)
-{
-    return errno;
-}
-
-static inline void
-set_errno(int new_errno)
-{
-    errno = new_errno;
-}
 #endif
 
 void toku_assert_init(void) __attribute__((constructor));

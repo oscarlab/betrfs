@@ -291,7 +291,7 @@ int opendir_helper(const char *name, int flags)
 	struct inode * inode;
 	SOUTHBOUND_VARS;
 
-	flags |= __O_KERNFS;
+	//flags |= __O_KERNFS;
 
 	fd = ftfs_get_unused_fd_flags(flags);
 	if(fd < 0)

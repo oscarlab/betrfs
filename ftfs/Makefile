@@ -403,6 +403,7 @@ libsrc/test/test_restrict.cc.o \
 libsrc/test/test_update_stress.cc.o \
 libsrc/test/test_db_env_strdup_null.cc.o \
 libsrc/test/seqwrites-no-txn.cc.o \
+libsrc/test/rename-simple.cc.o \
 libsrc/test/bench.cc.o \
 #libsrc/indexer-undo-do.cc.o \
 #libsrc/toku_patent.cc.o \
@@ -429,6 +430,7 @@ libft/ft-serialize.cc.o \
 libft/ft-test-helpers.cc.o \
 libft/ft-verify.cc.o \
 libft/key.cc.o \
+libft/ft-slice.cc.o \
 libft/leafentry.cc.o \
 libft/le-cursor.cc.o \
 libft/logcursor.cc.o \
@@ -649,6 +651,17 @@ libft/test/test-ft-overflow.cc.o \
 libft/test/test-range-del.cc.o \
 libft/test/test-range-del2.cc.o \
 libft/test/recovery-range-delete.cc.o \
+libft/test/test-slice-subtree-1.cc.o \
+libft/test/test-slice-subtree-2.cc.o \
+libft/test/test-slice-subtree-3.cc.o \
+libft/test/test-slice-subtree-4.cc.o \
+libft/test/test-relocate-subtree-1.cc.o \
+libft/test/test-relocate-subtree-2.cc.o \
+libft/test/test-relocate-subtree-3.cc.o \
+libft/test/test-relocate-subtree-4.cc.o \
+libft/test/test-relocate-subtree-5.cc.o \
+libft/test/test-relocate-subtree-6.cc.o \
+libft/test/test-relocate-subtree-7.cc.o \
 libft/test/test-ubi-root-chkpt.cc.o
 #libft/test/test_unbound_insert_lists.cc.o
 

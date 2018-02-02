@@ -185,7 +185,7 @@ hot_just_pick_child(FT h,
         childnum = toku_ftnode_hot_next_child(parent,
                                                &flusher->highest_pivot_key,
                                                &h->cmp_descriptor,
-                                               h->compare_fun);
+                                               h->key_ops.keycmp);
     }
 
     return childnum;
@@ -384,7 +384,7 @@ toku_ft_hot_optimize(FT_HANDLE brt, DBT* left, DBT* right,
             // if we have flushed past the bounds set for us,
             // set rightmost_leaf_seen so we exit
             FAKE_DB(db, &brt->ft->cmp_descriptor);
-            int cmp = brt->ft->compare_fun(&db, &flusher.max_current_key, right);
+            int cmp = brt->ft->key_ops.keycmp(&db, &flusher.max_current_key, right);
             if (cmp > 0) {
                 flusher.rightmost_leaf_seen = 1;
             }

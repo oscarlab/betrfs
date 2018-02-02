@@ -172,6 +172,12 @@ size_t toku_ft_msg_memsize_in_fifo(FT_MSG msg) {
 	if(FT_DELETE_MULTICAST == (enum ft_msg_type)(unsigned char)ft_msg_get_type(msg)) { 
 		ret+=sizeof(bool)+sizeof(enum pacman_status);
     	}
+    } else if(FT_KUPSERT_BROADCAST_ALL == (enum ft_msg_type) (unsigned char)
+                  ft_msg_get_type(msg)){
+        uint32_t old_prefix_len = ft_msg_get_kupsert_old_prefix_len(msg);
+        uint32_t new_prefix_len = ft_msg_get_kupsert_new_prefix_len(msg);
+        ret += sizeof(old_prefix_len) + old_prefix_len+
+                sizeof(new_prefix_len) + new_prefix_len;
     }
     return ret;
 }
@@ -209,7 +215,7 @@ int toku_fifo_enq(FIFO fifo, FT_MSG msg, bool is_fresh, int32_t *dest) {
     memcpy(e_key + keylen, data, datalen);
     char * pos = (char *) (e_key + keylen) + datalen;
     if(ft_msg_type_is_multicast((enum ft_msg_type)entry->type))
-        {
+    {
             uint32_t max_keylen = ft_msg_get_max_keylen(msg);
     	    paranoid_invariant(max_keylen>0);
 	    memcpy(pos, &max_keylen, sizeof(max_keylen));
@@ -227,7 +233,25 @@ int toku_fifo_enq(FIFO fifo, FT_MSG msg, bool is_fresh, int32_t *dest) {
 		pos += sizeof(pm_status);
 		}
 	
-        }
+    } else if(FT_KUPSERT_BROADCAST_ALL == (enum ft_msg_type)(char) entry->type) {
+        assert(entry->keylen == 0);
+        assert(entry->vallen == 0);
+        uint32_t old_prefix_len = ft_msg_get_kupsert_old_prefix_len(msg);
+        memcpy(pos, &old_prefix_len, sizeof(old_prefix_len));
+        pos += sizeof(old_prefix_len);
+        void * old_prefix = ft_msg_get_kupsert_old_prefix(msg);
+        memcpy(pos, old_prefix, old_prefix_len);
+        pos += old_prefix_len;
+        
+        uint32_t new_prefix_len = ft_msg_get_kupsert_new_prefix_len(msg);
+        memcpy(pos, &new_prefix_len, sizeof(new_prefix_len));
+        pos += sizeof(new_prefix_len);
+        void * new_prefix = ft_msg_get_kupsert_new_prefix(msg);
+        memcpy(pos, new_prefix, new_prefix_len);
+        pos += new_prefix_len;
+        
+    }
+   
     if (dest) {
         *dest = fifo->memory_used;
     }
@@ -237,11 +261,14 @@ int toku_fifo_enq(FIFO fifo, FT_MSG msg, bool is_fresh, int32_t *dest) {
     return 0;
 }
 
+#pragma GCC push_options
+#pragma GCC optimize ("O0")
 static int toku_fifo_iterate_internal_start(FIFO UU(fifo)) { return 0; }
 static int toku_fifo_iterate_internal_has_more(FIFO fifo, int off) { return off < fifo->memory_used; }
 static int toku_fifo_iterate_internal_next(FT_MSG msg, int off) {
-    return off + toku_ft_msg_memsize_in_fifo(msg); 
+    return off + toku_ft_msg_memsize_in_fifo(msg);
 }
+#pragma GCC pop_options
 struct fifo_entry * toku_fifo_iterate_internal_get_entry(FIFO fifo, int off) {
     return (struct fifo_entry *)(fifo->memory + off);
 }
@@ -285,42 +312,67 @@ void fifo_entry_get_msg(FT_MSG ft_msg, struct fifo_entry * entry, DBT *k, DBT* v
 	    pm_status
             );
         return;
+    }  else if(type == FT_KUPSERT_BROADCAST_ALL) {
+        char * pos = (char *) val + vallen;
+        uint32_t old_prefix_len = * (uint32_t *) pos;
+        pos += sizeof(old_prefix_len);
+        void * old_prefix = pos;
+        pos = (char *) old_prefix + old_prefix_len;
+
+        uint32_t new_prefix_len = * (uint32_t *) pos;
+        pos += sizeof(new_prefix_len);
+        void * new_prefix = pos;
+        pos = (char *) new_prefix + new_prefix_len;
+        BYTESTRING old_prefix_str = {.len=old_prefix_len, .data=(char *)old_prefix};
+        BYTESTRING new_prefix_str = {.len=new_prefix_len, .data=(char *)new_prefix};
+        ft_msg_kupsert_init(ft_msg, type, msn, xids, old_prefix_str,
+                            new_prefix_str);  
+        return;
     }
+
     memset(m, 0, sizeof(*m));
     ft_msg_init(ft_msg, type, msn, xids,    
                 toku_fill_dbt(k, key, keylen),
                 toku_fill_dbt(v, val, vallen)
                ); 
 }
-//this iterate exposes the fifo entry to the caller 
-int toku_fifo_iterate_pacman (FIFO fifo, int(*f)(struct fifo_entry *e, void*, FT_MSG &), void *arg) { 
+//this iterate exposes the fifo entry to the caller
+int toku_fifo_iterate_pacman(FIFO fifo,
+                             int (*f)(struct fifo_entry *e, void *, FT_MSG &),
+                             void *arg)
+{
     int fifo_iterate_off;
     int r = 0;
-    for (fifo_iterate_off = toku_fifo_iterate_internal_start(fifo);                                     
-       toku_fifo_iterate_internal_has_more(fifo, fifo_iterate_off);                                       
-       ) {                      
-        struct fifo_entry *e = toku_fifo_iterate_internal_get_entry(fifo, fifo_iterate_off);                
-        FT_MSG msg;     
-	r = f(e, arg, msg);
-        if(r) break;
+    for (fifo_iterate_off = toku_fifo_iterate_internal_start(fifo);
+         toku_fifo_iterate_internal_has_more(fifo, fifo_iterate_off);)
+    {
+        struct fifo_entry *e = toku_fifo_iterate_internal_get_entry(fifo, fifo_iterate_off);
+        FT_MSG msg;
+        r = f(e, arg, msg);
+        if (r) break;
         fifo_iterate_off = toku_fifo_iterate_internal_next(msg, fifo_iterate_off);
     }
     return r;
 }
-int toku_fifo_iterate (FIFO fifo, int(*f)(FT_MSG msg, bool is_fresh, void*), void *arg) { 
+
+
+int toku_fifo_iterate(FIFO fifo,
+                      int (*f)(FT_MSG msg, bool is_fresh, void *),
+                      void *arg)
+{
     int fifo_iterate_off;
     int r = 0;
-    for (fifo_iterate_off = toku_fifo_iterate_internal_start(fifo);                                     
-       toku_fifo_iterate_internal_has_more(fifo, fifo_iterate_off);                                       
-       ) {                      
-        struct fifo_entry *e = toku_fifo_iterate_internal_get_entry(fifo, fifo_iterate_off);                
-        DBT key,  val,  max_key;    
-        FT_MSG_S msg; 
-        fifo_entry_get_msg(&msg, e, &key, &val, &max_key); 
+    for (fifo_iterate_off = toku_fifo_iterate_internal_start(fifo);
+         toku_fifo_iterate_internal_has_more(fifo, fifo_iterate_off);)
+    {
+        struct fifo_entry *e = toku_fifo_iterate_internal_get_entry(fifo, fifo_iterate_off);
+        DBT key, val, max_key;
+        FT_MSG_S msg;
+        fifo_entry_get_msg(&msg, e, &key, &val, &max_key);
         fifo_iterate_off = toku_fifo_iterate_internal_next(&msg, fifo_iterate_off);
-        bool is_fresh = e->is_fresh;        
-        r = f(&msg,is_fresh, arg);
-        if(r) break;
+        bool is_fresh = e->is_fresh;
+        r = f(&msg, is_fresh, arg);
+        if (r) break;
     }
     return r;
 }

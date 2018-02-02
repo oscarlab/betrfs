@@ -434,8 +434,8 @@ int
 toku_db_open_iname(DB * db, DB_TXN * txn, const char *iname_in_env, uint32_t flags, int mode) {
     //Set comparison functions if not yet set.
     HANDLE_READ_ONLY_TXN(txn);
-    if (!db->i->key_compare_was_set && db->dbenv->i->bt_compare) {
-        toku_ft_set_bt_compare(db->i->ft_handle, db->dbenv->i->bt_compare);
+    if (!db->i->key_compare_was_set && db->dbenv->i->key_ops.keycmp) {
+        toku_ft_set_key_ops(db->i->ft_handle, &db->dbenv->i->key_ops);
         db->i->key_compare_was_set = true;
     }
     if (db->dbenv->i->update_function) {
@@ -899,6 +899,14 @@ toku_db_optimize(DB *db) {
 }
 
 static int
+toku_db_dump_ftnode(DB *db, int64_t b)
+{
+    HANDLE_PANICKED_DB(db);
+    int r = 0;
+    r = toku_ft_dump_ftnode(db->i->ft_handle, {b});
+    return r;
+}
+static int
 toku_db_hot_optimize(DB *db, DBT* left, DBT* right,
                      int (*progress_callback)(void *extra, float progress),
                      void *progress_extra, uint64_t* loops_run)
@@ -1048,6 +1056,7 @@ toku_db_create(DB ** db, DB_ENV * env, uint32_t flags) {
     USDB(keys_range64);
     USDB(get_key_after_bytes);
     USDB(hot_optimize);
+    USDB(dump_ftnode);
     USDB(stat64);
     USDB(get_fractal_tree_info64);
     USDB(iterate_fractal_tree_block_map);
@@ -1061,6 +1070,7 @@ toku_db_create(DB ** db, DB_ENV * env, uint32_t flags) {
     result->get_indexer = db_get_indexer;
     result->del = autotxn_db_del;
     result->del_multi = autotxn_db_del_multi;
+    result->rename = autotxn_db_rename;
     result->put = autotxn_db_put;
     result->seq_put = autotxn_db_seq_put;
     result->update = autotxn_db_update;

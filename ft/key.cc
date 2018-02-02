@@ -187,3 +187,47 @@ int
 toku_builtin_compare_fun (DB *db __attribute__((__unused__)), const DBT *a, const DBT*b) {
     return toku_keycompare(a->data, a->size, b->data, b->size);
 }
+
+int toku_builtin_rename_fun(const DBT *old_prefix, const DBT *new_prefix, const DBT *old_key,
+        void (*set_key)(const DBT *new_key, void *set_extra), void *set_extra)
+{
+    DBT new_key_dbt;
+    size_t new_len;
+    void *new_key;
+
+    if (old_prefix->size > old_key->size)
+        return -EINVAL;
+
+    if (memcmp(old_prefix->data, old_key->data, old_key->size) != 0)
+        return -EINVAL;
+
+    new_len = old_key->size - old_prefix->size + new_prefix->size;
+    new_key = toku_malloc(new_len);
+    if (new_key == NULL)
+        return -EINVAL;
+
+    memcpy(new_key, new_prefix->data, new_prefix->size);
+    memcpy((char *)new_key + new_prefix->size, (char *)old_key->data + old_prefix->size,
+           old_key->size - old_prefix->size);
+    toku_fill_dbt(&new_key_dbt, new_key, new_len);
+    set_key(&new_key_dbt, set_extra);
+    toku_destroy_dbt(&new_key_dbt);
+
+    return 0;
+}
+
+void toku_builtin_print_fun(const DBT *key, bool UU(is_traceable_print))
+{
+    printf("%s\n", (char *)key->data);
+}
+
+struct toku_db_key_operations toku_builtin_key_ops {
+    .keycmp       = toku_builtin_compare_fun,
+    .keypfsplit   = NULL,
+    .keyrename    = toku_builtin_rename_fun,
+    .keyprint     = toku_builtin_print_fun,
+    .keylift      = NULL,
+    .keyliftkey   = NULL,
+    .keyunliftkey = NULL,
+};
+
