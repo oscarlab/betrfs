@@ -2675,6 +2675,7 @@ void toku_cachetable_close (CACHETABLE *ctp) {
     toku_kibbutz_destroy(ct->client_kibbutz);
     toku_kibbutz_destroy(ct->ct_kibbutz);
     toku_kibbutz_destroy(ct->checkpointing_kibbutz);
+    toku_kibbutz_destroy(ct->rr_kibbutz);
     toku_free(ct->env_dir);
     toku_free(ct);
     *ctp = 0;
