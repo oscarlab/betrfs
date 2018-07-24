@@ -40,7 +40,7 @@ if __name__ == "__main__":
     command = "whoami"
     ret = subprocess.call(command, shell=True)
 
-    command = "ls -laR /proc"
+    command = "ls -la /proc"
     ret = subprocess.call(command, shell=True)
         
     command = "lsmod"
