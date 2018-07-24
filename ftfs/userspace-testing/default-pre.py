@@ -37,11 +37,22 @@ if __name__ == "__main__":
         print "cat /proc/meminfo returning: {0}. exiting...".format(ret)
         exit(ret)
 
+    command = "whoami"
+    ret = subprocess.call(command, shell=True)
+
+    command = "ls -laR /proc"
+    ret = subprocess.call(command, shell=True)
+        
+    command = "lsmod"
+    ret = subprocess.call(command, shell=True)
+        
     command = "insmod ftfs.ko sb_dev=/dev/vdb sb_fstype=ext4"
     ret = subprocess.call(command, shell=True)
     if ret != 0 :
         print "ERROR!"
         print "command \"{0}\" returning: {1}. exiting...".format(command, ret)
+        command = "dmesg"
+        ret = subprocess.call(command, shell=True)
         exit(ret)
 
     exit(ret)
