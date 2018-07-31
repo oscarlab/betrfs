@@ -651,17 +651,6 @@ libft/test/test-ft-overflow.cc.o \
 libft/test/test-range-del.cc.o \
 libft/test/test-range-del2.cc.o \
 libft/test/recovery-range-delete.cc.o \
-libft/test/test-slice-subtree-1.cc.o \
-libft/test/test-slice-subtree-2.cc.o \
-libft/test/test-slice-subtree-3.cc.o \
-libft/test/test-slice-subtree-4.cc.o \
-libft/test/test-relocate-subtree-1.cc.o \
-libft/test/test-relocate-subtree-2.cc.o \
-libft/test/test-relocate-subtree-3.cc.o \
-libft/test/test-relocate-subtree-4.cc.o \
-libft/test/test-relocate-subtree-5.cc.o \
-libft/test/test-relocate-subtree-6.cc.o \
-libft/test/test-relocate-subtree-7.cc.o \
 libft/test/test-ubi-root-chkpt.cc.o
 #libft/test/test_unbound_insert_lists.cc.o
 

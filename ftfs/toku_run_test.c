@@ -615,17 +615,6 @@ extern int test_xid_lsn_independent(void);
 extern int test_verify_misrouted_msgs(void);
 extern int test_test_db_env_strdup_null(void);
 extern int test_seqwrite_no_txn(void);
-extern int test_slice_subtree_1(void);
-extern int test_slice_subtree_2(void);
-extern int test_slice_subtree_3(void);
-extern int test_slice_subtree_4(void);
-extern int test_relocate_subtree_1(void);
-extern int test_relocate_subtree_2(void);
-extern int test_relocate_subtree_3(void);
-extern int test_relocate_subtree_4(void);
-extern int test_relocate_subtree_5(void);
-extern int test_relocate_subtree_6(void);
-extern int test_relocate_subtree_7(void);
 extern int test_rename_simple(void);
 /* large IO tests */
 //extern int logger_test_tables(void);
@@ -1249,17 +1238,6 @@ struct {
 	{"range-del2",test_range_del2, 5},
 	{"range-del2",test_range_del2, 5},
 	{"rename-simple",test_rename_simple, 5},
-	{"slice-subtree-1",test_slice_subtree_1, 5},
-	{"slice-subtree-2",test_slice_subtree_2, 5},
-	{"slice-subtree-3",test_slice_subtree_3, 5},
-	{"slice-subtree-4",test_slice_subtree_4, 5},
-	{"relocate-subtree-1",test_relocate_subtree_1, 5},
-	{"relocate-subtree-2",test_relocate_subtree_2, 5},
-	{"relocate-subtree-3",test_relocate_subtree_3, 5},
-	{"relocate-subtree-4",test_relocate_subtree_4, 5},
-	{"relocate-subtree-5",test_relocate_subtree_5, 5},
-	{"relocate-subtree-6",test_relocate_subtree_6, 5},
-	{"relocate-subtree-7",test_relocate_subtree_7, 5},
 	{"recovery-range-delete",test_recovery_range_delete, 5}
 };
 
