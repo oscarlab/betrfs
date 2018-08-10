@@ -52,7 +52,7 @@ pipeline {
 					sh '''
 				    cd ftfs/userspace-testing/
 				    sudo ln -s ../ftfs.ko ftfs.ko
-				    sudo ./run-tests.py simple.tests
+				    sudo ./run-tests.py all.tests
                     '''
 				}
 			}
