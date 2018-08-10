@@ -1,0 +1,74 @@
+#!/usr/bin/env groovy
+
+pipeline {
+    agent none
+
+    stages {
+        stage('Prepare VM') {
+            steps {
+				node("master") {
+					sh '''
+					virsh -c qemu:///system snapshot-revert betrfs-dev --current --running
+					# Wait for snapshot to start
+                    sleep 60
+                    '''
+				}
+			}
+		}
+	    stage('Source') {
+            steps {
+				node("betrfs-dev") {
+					git([url: 'https://github.com/oscarlab/betrfs.git', branch: 'master', credentialsId: 'Jenkins bot to post on GitHub PRs'])
+					
+					sh '''
+					# Needed to build
+					sudo ln -s /usr/src/linux-source-3.11.10-ftfs linux-3.11.10
+                    '''
+				}
+			}
+		}
+        stage('Build') {
+            steps {
+				node("betrfs-dev") {
+					sh '''
+					mkdir build
+					cp cmake-ft.sh build/
+					cd build
+					./cmake-ft.sh
+					cd ../ftfs
+					make
+					sudo mkfs -t ext4 -F /dev/sdb
+					# to test loading moule outside of unit tests
+					#sudo insmod ftfs.ko sb_dev=/dev/sdb sb_fstype=ext4
+					# Needed for testing
+					sudo ln -s /dev/sdb /dev/vdb
+                    '''
+				}
+			}
+		}
+	    stage('Unit Testing') {
+            steps {
+				node("betrfs-dev") {
+					sh '''
+				    cd ftfs/userspace-testing/
+				    sudo ln -s ../ftfs.ko ftfs.ko
+				    sudo ./run-tests.py simple.tests
+                    '''
+				}
+			}
+		}
+    }
+    post { 
+        always { 
+            node("betrfs-dev") {
+				node("master") {
+					sh '''
+					virsh -c qemu:///system destroy betrfs-dev
+				    # Wait for Jenkins to take slave VM offline
+                    sleep 60
+                    '''
+				}
+            }
+        }
+    }
+}
