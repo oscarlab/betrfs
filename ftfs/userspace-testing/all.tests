@@ -140,7 +140,6 @@ msnfilter
 cpu-frequency
 cpu-frequency-openlimit
 hugepage
-fsync-directory
 flock
 fsync-files
 fgetc
