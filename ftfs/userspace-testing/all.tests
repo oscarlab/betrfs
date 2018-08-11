@@ -73,7 +73,6 @@ test-log2
 test-log3
 test-log2-abort
 test-log3-abort
-seqinsert
 test_update_broadcast_changes_values
 test_update_broadcast_indexer
 update-multiple-data-diagonal
