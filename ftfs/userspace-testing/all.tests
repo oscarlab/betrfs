@@ -33,7 +33,6 @@ test_update_txn_snapshot_works_concurrently
 test_iterate_pending_lock_requests
 test_cursor_nonleaf_expand
 test_mostly_seq
-test_db_descriptor
 test_db_already_exists
 test_cursor_db_current
 test_db_set_flags
