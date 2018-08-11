@@ -3,7 +3,6 @@ inflate
 test_db_env_strdup_null
 test_simple_read_txn
 inflate2
-test_db_txn_locks_read_uncommitted
 test_txn_cursor_last
 test_5015
 test_large_update_broadcast_small_cachetable
