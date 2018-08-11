@@ -21,7 +21,6 @@ test_log9
 test_log10
 test-update
 test_db_change_xxx
-test_db_txn_locks_nonheaviside
 test_log5
 test_log7
 test_log6_abort
