@@ -11,7 +11,6 @@ test_4657
 test_db_env_set_lg_dir
 test_cursor_DB_NEXT_no_dup
 test_db_dbt_mem_behavior
-test_update_broadcast_stress
 test_log4_abort
 test_log6
 test_db_env_set_tmp_dir
