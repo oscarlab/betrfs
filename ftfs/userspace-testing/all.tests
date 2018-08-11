@@ -5,7 +5,6 @@ test_simple_read_txn
 inflate2
 test_txn_cursor_last
 test_5015
-test_large_update_broadcast_small_cachetable
 test_cursor_with_read_txn
 test_db_close_no_open
 test_4657
