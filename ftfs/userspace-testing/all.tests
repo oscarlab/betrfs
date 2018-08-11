@@ -84,7 +84,6 @@ test_txn_nested1
 test_txn_nested5
 test_txn_nested4
 test_txn_nested3
-test_txn_nested2
 last-verify-time
 manyfiles
 test-db-delete
