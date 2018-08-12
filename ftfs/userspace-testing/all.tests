@@ -182,7 +182,6 @@ write
 readlink
 f-all
 f-all
-bug1381
 cursor-step-over-delete
 x1764-test
 isolation-test
