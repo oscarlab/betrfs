@@ -45,7 +45,6 @@ test_4015
 test_789
 test_rollinclude
 test4573_logtrim
-test_5138
 test_weakxaction
 transactional_fileops
 test5092
