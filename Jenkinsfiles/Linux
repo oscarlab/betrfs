@@ -64,6 +64,8 @@ pipeline {
 				node("master") {
 					sh '''
 					virsh -c qemu:///system destroy betrfs-dev
+					# Dump console
+					cat /var/log/betrfs-dev.log
 				    # Wait for Jenkins to take slave VM offline
                     sleep 60
                     '''
