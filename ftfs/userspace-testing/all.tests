@@ -311,7 +311,6 @@ cachetable-unpin
 cachetable-cleaner-thread-nothing-needs-flushing
 bjm
 ft-serialize-sub-block
-ft-test-cursor
 ft-test-cursor-2
 ft-test-header
 ybt-test
