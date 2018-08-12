@@ -306,7 +306,6 @@ ft-test5
 block-allocator
 cachetable-prefetch-checkpoint
 cachetable-cleaner-thread-same-fullhash
-ft-clock
 cachetable-unpin-and-remove
 cachetable-unpin
 cachetable-cleaner-thread-nothing-needs-flushing
