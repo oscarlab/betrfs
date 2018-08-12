@@ -303,7 +303,6 @@ test-cursor-flags
 ft-test3
 ft-test4
 ft-test5
-ft-test
 block-allocator
 cachetable-prefetch-checkpoint
 cachetable-cleaner-thread-same-fullhash
