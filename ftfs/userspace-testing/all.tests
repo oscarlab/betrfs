@@ -239,7 +239,6 @@ cachetable-4357
 cachetable-5978
 cachetable-5978-2
 cachetable-put
-cachetable-put-checkpoint
 cachetable-checkpoint-prefetched-nodes
 cachetable-pin-nonblocking-checkpoint-clean
 cachetable-checkpoint-pinned-nodes
