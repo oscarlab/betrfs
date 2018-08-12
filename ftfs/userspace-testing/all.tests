@@ -200,7 +200,6 @@ test_locktree_escalation
 mem-status
 test_key
 test-cachesize
-keyrange
 progress-test
 checkpoint1-test
 test_log
