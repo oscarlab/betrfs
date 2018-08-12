@@ -277,7 +277,6 @@ cachetable-clone-pin-nonblocking
 cachetable-create
 cachetable-clone-partial-fetch
 cachetable-thread-empty
-cachetable-simplereadpin
 cachetable-prefetch-close
 cachetable-clock-eviction
 cachetable-clock-eviction2
