@@ -103,7 +103,6 @@ put-del-multiple-array-indexing
 test-abort2
 test-abort3
 test-abort5
-test-abort-delete-first
 list-files
 list-tests
 mempool
