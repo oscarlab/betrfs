@@ -267,7 +267,6 @@ logcursor_test
 ft-test0
 bnc-insert-benchmark
 maybe-trim
-test-update-single-key
 pqueue-test
 cachetable-5097
 cachetable
