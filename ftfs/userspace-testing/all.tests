@@ -343,7 +343,6 @@ cachetable-cleaner-checkpoint
 cachetable-kibbutz-and-flush-cachefile
 cachetable-cleaner-thread-everything-pinned
 cachetable-prefetch-close-leak-test
-recovery-cbegin-cend-hello
 verify-bad-pivots
 recovery-cbegin-cend
 recovery-no-log
