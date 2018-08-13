@@ -320,7 +320,6 @@ le-cursor-provdel
 subblock-test-compression
 test-4244
 test-4115
-test-3884
 test-1308a
 subblock-test-checksum
 subblock-test-size
