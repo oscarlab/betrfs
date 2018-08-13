@@ -330,7 +330,6 @@ checkpoint-during-merge
 checkpoint-during-flush
 checkpoint-during-rebalance
 toku-malloc-plain-free
-recovery-datadir-is-file
 txn-child-manager
 oldest-referenced-xid-flush
 block-allocator-merge
