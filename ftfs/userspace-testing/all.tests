@@ -329,7 +329,6 @@ flushes-on-cleaner
 checkpoint-during-merge
 checkpoint-during-flush
 checkpoint-during-rebalance
-merges-on-cleaner
 toku-malloc-plain-free
 recovery-datadir-is-file
 txn-child-manager
