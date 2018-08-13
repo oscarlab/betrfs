@@ -324,7 +324,6 @@ test-1308a
 subblock-test-checksum
 subblock-test-size
 subblock-test-index
-ft-bfe-query
 dirty-flushes-on-cleaner
 flushes-on-cleaner
 checkpoint-during-merge
