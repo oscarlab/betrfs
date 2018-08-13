@@ -335,7 +335,6 @@ oldest-referenced-xid-flush
 block-allocator-merge
 del-inorder
 recovery-no-logdir
-recovery-lsn-error-during-forward-scan
 hot-with-bounds
 inc-split
 pick-child-to-flush
