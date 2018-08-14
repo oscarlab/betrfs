@@ -344,7 +344,6 @@ cachetable-kibbutz-and-flush-cachefile
 cachetable-cleaner-thread-everything-pinned
 cachetable-prefetch-close-leak-test
 verify-bad-pivots
-recovery-cend-cbegin
 recovery-empty
 verify-unsorted-pivots
 recovery-hello
