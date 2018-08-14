@@ -345,7 +345,6 @@ cachetable-cleaner-thread-everything-pinned
 cachetable-prefetch-close-leak-test
 verify-bad-pivots
 verify-unsorted-pivots
-recovery-hello
 verify-bad-msn
 cachetable-clock-all-pinned
 cachetable-pin-checkpoint
