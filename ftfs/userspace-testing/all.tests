@@ -349,7 +349,6 @@ verify-bad-msn
 cachetable-clock-all-pinned
 cachetable-fetch-inducing-evictor
 cachetable-prefetch2
-recovery-test5123
 le-cursor-walk
 le-nested
 le-child-txn
