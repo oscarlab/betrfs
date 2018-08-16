@@ -385,7 +385,6 @@ cursor-set-range-rmw
 cursor-set-del-rmw
 env-loader-memory
 test-txn-nested-abort
-test_bug1381
 preload-db
 simple
 multiprocess
