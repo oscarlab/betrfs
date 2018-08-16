@@ -351,7 +351,6 @@ cachetable-fetch-inducing-evictor
 cachetable-prefetch2
 le-nested
 le-child-txn
-test_recovery_bad_last_entry
 le-cursor-right
 cachetable-clone-partial-fetch-pinned-node
 test-quicklz
