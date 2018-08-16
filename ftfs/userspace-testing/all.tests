@@ -383,7 +383,6 @@ checkpoint-fairness
 directory-lock
 cursor-set-range-rmw
 cursor-set-del-rmw
-checkpoint-stress
 env-loader-memory
 test-txn-nested-abort
 test_bug1381
