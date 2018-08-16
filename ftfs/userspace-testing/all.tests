@@ -414,7 +414,6 @@ test_txn_recover3
 openlimit17
 openlimit17-metafiles
 openlimit17-locktree
-test_unused_memory_crash
 test_update_abort_works
 test_update_broadcast_abort_works
 test_update_broadcast_calls_back
