@@ -427,7 +427,6 @@ env-put-multiple
 medium-nested-commit-commit
 test-xopen-eclose
 test-stress0
-test-stress6
 test-stress7
 test-stress-openclose
 test-stress-with-verify
