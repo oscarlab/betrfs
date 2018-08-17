@@ -443,7 +443,6 @@ perf-iibench
 perf-ptquery
 perf-ptquery2
 perf-read-write
-stress-test
 stress-gc
 stress-gc2
 transactional-descriptor
