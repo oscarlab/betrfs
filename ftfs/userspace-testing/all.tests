@@ -428,7 +428,6 @@ medium-nested-commit-commit
 test-xopen-eclose
 test-stress0
 test-stress-openclose
-test-stress-with-verify
 perf-child-txn
 perf-rangequery
 perf-read-txn
