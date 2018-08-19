@@ -479,7 +479,6 @@ test-get-zeroed-dbt
 test-groupcommit-count
 test-locking-with-read-txn
 test-lock-timeout-callback
-test-locktree-close
 test_update_can_delete_elements
 test_update_changes_values
 test_update_nested_updates
