@@ -511,7 +511,6 @@ root-fifo-1
 root-fifo-2
 test-multiple-checkpoints-block-commit
 test-rand-insert
-test-set-func-malloc
 test-nested-xopen-eclose
 print_engine_status
 xid-lsn-independent
