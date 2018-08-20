@@ -485,7 +485,6 @@ test_update_nested_updates
 test_update_nonexistent_keys
 test_update_previously_deleted
 test-blobs-leaf-split
-test-bulk-fetch
 test-cmp-descriptor
 test-compression-methods
 test-cursor-3
