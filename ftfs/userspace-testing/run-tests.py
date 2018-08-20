@@ -73,7 +73,7 @@ def run_test_set(test_array):
 
     print "Successes: {0}".format(success)
     print "Failures:  {0}".format(failure)
-    return 0
+    return ret
 
 def scripts_exist(test_line) :
     return (os.path.exists(test_line[1]) and os.path.exists(test_line[2]) \
