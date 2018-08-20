@@ -502,7 +502,6 @@ test_xopen_eclose
 test-logmax
 test-log1-abort
 replace-into-write-lock
-test-query
 test-nested
 test-nodup-set
 test_3645
