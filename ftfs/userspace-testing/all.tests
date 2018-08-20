@@ -489,7 +489,6 @@ test-cmp-descriptor
 test-compression-methods
 test-cursor-3
 test-cursor-stickyness
-test-cursor-delete2
 test-logflush
 test_update_stress
 test_zero_length_keys
