@@ -513,7 +513,6 @@ test-multiple-checkpoints-block-commit
 test-rand-insert
 test-nested-xopen-eclose
 print_engine_status
-xid-lsn-independent
 verify-misrouted-msgs
 queries_with_deletes
 seqwrite_no_txn
