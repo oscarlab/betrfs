@@ -514,4 +514,3 @@ test-rand-insert
 test-nested-xopen-eclose
 print_engine_status
 verify-misrouted-msgs
-seqwrite_no_txn
