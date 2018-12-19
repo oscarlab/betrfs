@@ -8,17 +8,6 @@ pipeline {
     }
 
     stages {
-        stage('Prepare VM') {
-            steps {
-				node("master") {
-					sh '''
-					virsh -c qemu:///system snapshot-revert betrfs-dev --current --running
-					# Wait for snapshot to start
-                    sleep 60
-                    '''
-				}
-			}
-		}
 	    stage('Source') {
             steps {
 				node("betrfs-dev") {
@@ -67,12 +56,9 @@ pipeline {
             node("betrfs-dev") {
 				node("master") {
 					sh '''
-					virsh -c qemu:///system destroy betrfs-dev
 					# Dump console
 					cat /var/log/betrfs-dev.log
-				    # Wait for Jenkins to take slave VM offline
-                    sleep 60
-                    '''
+                    			'''
 				}
             }
         }
