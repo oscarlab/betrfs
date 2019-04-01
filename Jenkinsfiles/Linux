@@ -1,80 +1,55 @@
 #!/usr/bin/env groovy
 
+def SLAVE_NODE = ''
+
 pipeline {
-    agent none
+  agent {
+    label 'betrfs'
+  }
 
-    options {
-      timeout(time: 2, unit: 'HOURS') 
-    }
+  stages {
+    stage('Build') {
+      steps {
 
-    stages {
-        stage('Prepare VM') {
-            steps {
-				node("master") {
-					sh '''
-					virsh -c qemu:///system snapshot-revert betrfs-dev --current --running
-					# Wait for snapshot to start
-                    sleep 60
-                    '''
-				}
-			}
-		}
-	    stage('Source') {
-            steps {
-				node("betrfs-dev") {
-					git([url: 'https://github.com/oscarlab/betrfs.git', branch: 'master', credentialsId: 'Jenkins bot to post on GitHub PRs'])
-					
-					sh '''
-					# Needed to build
-					sudo ln -s /usr/src/linux-source-3.11.10-ftfs linux-3.11.10
-                    '''
-				}
-			}
-		}
-        stage('Build') {
-            steps {
-				node("betrfs-dev") {
-					sh '''
-					mkdir build
-					cp cmake-ft.sh build/
-					cd build
-					./cmake-ft.sh
-					cd ../ftfs
-					make
-					sudo mkfs -t ext4 -F /dev/sdb
-					# to test loading moule outside of unit tests
-					#sudo insmod ftfs.ko sb_dev=/dev/sdb sb_fstype=ext4
-					# Needed for testing
-					sudo ln -s /dev/sdb /dev/vdb
-                    '''
-				}
-			}
-		}
-	    stage('Unit Testing') {
-            steps {
-				node("betrfs-dev") {
-					sh '''
-				    cd ftfs/userspace-testing/
-				    sudo ln -s ../ftfs.ko ftfs.ko
-				    sudo ./run-tests.py all.tests
-                    '''
-				}
-			}
-		}
-    }
-    post { 
-        always { 
-            node("betrfs-dev") {
-				node("master") {
-					sh '''
-					virsh -c qemu:///system destroy betrfs-dev
-					# Dump console
-					cat /var/log/betrfs-dev.log
-				    # Wait for Jenkins to take slave VM offline
-                    sleep 60
-                    '''
-				}
-            }
+        script {
+          SLAVE_NODE = sh(script: 'hostname -s', returnStdout: true).trim()
         }
+
+        sh '''
+	# Need link to source or build fails
+	sudo ln -s /usr/src/linux-source-3.11.10-ftfs linux-3.11.10
+        mkdir -p build
+        cp cmake-ft.sh build/
+        cd build
+        ./cmake-ft.sh
+        cd ../ftfs
+        make
+        '''
+      }
     }
-}
+
+    stage('Unit Testing') {
+      steps {
+        timeout(time: 3, unit: 'HOURS'){
+          sh '''
+          cd ftfs/userspace-testing/
+	  sudo ln -s ../ftfs.ko ftfs.ko
+          sudo ./run-tests.py all.tests
+          '''
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      node("master") {
+        sh """
+        cd ~jenkins/scripts
+        sudo ./dump-console.sh ${SLAVE_NODE}
+        sudo ./clean-vm.sh ${SLAVE_NODE}
+        """
+      }
+    }
+  }
+} 
