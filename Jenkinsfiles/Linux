@@ -17,7 +17,10 @@ pipeline {
 
         sh '''
 	# Need link to source or build fails
-	sudo ln -s /usr/src/linux-source-3.11.10-ftfs linux-3.11.10
+	wget https://auku.cs.unc.edu/depot/linux-source-3.11.10-ftfs_20180618.00_all.deb
+	sudo dpkg -i linux-source-3.11.10-ftfs_20180618.00_all.deb
+	sudo tar -xvf /usr/src/linux-source-3.11.10-ftfs.tar.bz2
+	sudo mv linux-source-3.11.10-ftfs linux-3.11.10
         mkdir -p build
         cp cmake-ft.sh build/
         cd build
