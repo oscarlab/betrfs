@@ -696,23 +696,21 @@ int test_mkdir(void)
 	int err;
 	err = mkdir("/test_mkdir/", 0755);
 	if (err)
-		ftfs_error(__func__, "mkdir failed for err: %d", err);
+		ftfs_error(__func__, "LINE=%d mkdir failed for err: %d", __LINE__, err);
 	err = mkdir("/test_mkdir/1", 0755);
 	if (err)
-		ftfs_error(__func__, "mkdir failed for err: %d", err);
+		ftfs_error(__func__, "LINE=%d mkdir failed for err: %d", __LINE__, err);
 	err = mkdir("/test_mkdir/1/2", 0755);
 	if (err)
-		ftfs_error(__func__, "mkdir failed for err: %d", err);
+		ftfs_error(__func__, "LINE=%d mkdir failed for err: %d", __LINE__, err);
 	err = mkdir("/test_mkdir/1/2/3", 0755);
 	if (err)
-		ftfs_error(__func__, "mkdir failed for err: %d", err);
+		ftfs_error(__func__, "LINE=%d mkdir failed for err: %d", __LINE__, err);
 	err = mkdir("/test_mkdir/1/2/3/4", 0755);
 	if (err)
-		ftfs_error(__func__, "mkdir failed for err: %d", err);
+		ftfs_error(__func__, "LINE=%d mkdir failed for err: %d", __LINE__, err);
 
-	printk(KERN_ALERT "mkdir test finished\n");
-	set_errno(err);
-	perror("test_mkdir");
+	printk(KERN_ALERT "mkdir test finished: err=%d\n", err);
 
 	return err;
 }
@@ -722,27 +720,33 @@ int test_rmdir(void)
 	int err;
 	err = rmdir("/test_mkdir/1/2/3/4");
 	if (err)
-		ftfs_error(__func__, "rmdir failed for err: %d", err);
+		ftfs_error(__func__, "LINE=%d rmdir failed for err: %d", __LINE__, err);
 	err = rmdir("/test_mkdir/1/2/3");
 	if (err)
-		ftfs_error(__func__, "rmdir failed for err: %d", err);
+		ftfs_error(__func__, "LINE=%d rmdir failed for err: %d", __LINE__, err);
 	err = rmdir("/test_mkdir/1/2");
 	if (err)
-		ftfs_error(__func__, "rmdir failed for err: %d", err);
+		ftfs_error(__func__, "LINE=%d rmdir failed for err: %d", __LINE__, err);
 	err = rmdir("/test_mkdir/1");
 	if (err)
-		ftfs_error(__func__, "rmdir failed for err: %d", err);
+		ftfs_error(__func__, "LINE=%d rmdir failed for err: %d", __LINE__, err);
 	err = rmdir("/test_mkdir");
 	if (err)
-		ftfs_error(__func__, "rmdir failed for err: %d", err);
+		ftfs_error(__func__, "LINE=%d rmdir failed for err: %d", __LINE__, err);
 
-	printk(KERN_ALERT "rmdir test finished\n");
+	printk(KERN_ALERT "rmdir test finished: err=%d\n", err);
 	return err;
 }
 
 int test_mkrmdir(void)
 {
 	int i=0, err = 0;
+	err = recursive_delete("/test_mkdir");
+	if (err != 0 && err != -ENOENT) {
+		ftfs_error(__func__, "Make sure recursive deletion work: err=%d\n", err);
+		return err;
+	}
+
 	for (i=0; i<10; i++) {
 		err = test_mkdir();
 		if (err) break;
@@ -750,8 +754,7 @@ int test_mkrmdir(void)
 		err = test_rmdir();
 		if (err) break;
  	}
-
-	printk(KERN_ALERT "mkrmdir test finished\n");
+	printk(KERN_ALERT "mkrmdir test finished: err=%d\n", err);
 	return err;
 }
 

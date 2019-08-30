@@ -369,12 +369,17 @@ err_out:
 	return err;
 }
 
+
+int list_open_southbound_files(void);
+
 /* must hold ftfs_southbound lock */
 int __ftfs_private_umount(void)
 {
 	if (may_umount_tree(ftfs_vfs)) {
 		kern_unmount(ftfs_vfs);
 		return 0;
+	} else {
+		list_open_southbound_files();
 	}
 	return -EBUSY;
 }
