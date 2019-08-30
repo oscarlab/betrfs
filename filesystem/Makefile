@@ -35,7 +35,7 @@ ftfs-objs := \
 #KBUILD_CFLAGS += -DFTFS_CIRCLE
 KBUILD_CFLAGS += -DFTFS_RANGE_RENAME
 KBUILD_CFLAGS += -DFTFS_LIFTING
-#KBUILD_CFLAGS += -DFTFS_PFSPLIT
+KBUILD_CFLAGS += -DFTFS_PFSPLIT
 KBUILD_CFLAGS += -DFTFS_NO_PRINT
 #KBUILD_CFLAGS += -DFTFS_DEBUG #-DSOUTHBOUND_DEBUG #-DFTFS_MEM_DEBUG # -DFTFS_DEBUG_PTRS
 #include $(PWD)/.turnoff-opts.mkinclude
@@ -207,7 +207,7 @@ LIBLZMA-OBJS = \
 	liblzma/liblzma_la-block_util.o \
 
 all: libftindex.o
-	make -C  /lib/modules/$(KDIR)/build M=$(PWD) modules
+	make -C $(MOD_KERN_SOURCE) M=$(PWD) modules
 
 libftindex.o: $(LIBPORTABILITY-OBJS) $(LIBFT-OBJS) $(LIBUTIL-OBJS) $(LIBLOCKTREE-OBJS) $(LIBSRC-OBJS) $(LIBLZMA-OBJS)
 	ld -r $^ -o $@

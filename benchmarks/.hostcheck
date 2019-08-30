@@ -1,4 +1,4 @@
-if [[ `hostname` != beaker* ]]
+if [[ `hostname` != beaker* && `hostname` != betrfs-dev* ]]
 then
     echo "Be careful. This script formats disk partitions."
     echo "It should only be run on a properly configured crash box!!"
