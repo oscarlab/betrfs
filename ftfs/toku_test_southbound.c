@@ -817,16 +817,19 @@ static int create_files(void)
 	ret = open64("/test/1", O_CREAT|O_RDWR, 0755);
 	if (ret < 0)
 		goto err;
+	close(ret);
 
 	num = 2;
 	ret = open64("/test/2", O_CREAT|O_RDWR, 0755);
 	if (ret < 0)
 		goto err;
+	close(ret);
 
 	num = 3;
 	ret = open64("/test/3", O_CREAT|O_RDWR, 0755);
 	if (ret < 0)
 		goto err;
+	close(ret);
 
 	return 0;
 
