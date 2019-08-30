@@ -152,13 +152,15 @@ run_test(void) {
             break;
         // run recovery
 	DBG;
+        struct toku_db_key_operations dummy_ftfs_key_ops;
+        memset(&dummy_ftfs_key_ops, 0, sizeof(dummy_ftfs_key_ops));
 
         r = tokudb_recover(NULL,
 			   NULL_prepared_txn_callback,
 			   NULL_keep_cachetable_callback,
 			   NULL_logger,
 			   TOKU_TEST_FILENAME, 
-                           TOKU_TEST_FILENAME, 0, 0, 0, NULL, 0); 
+                           TOKU_TEST_FILENAME, &dummy_ftfs_key_ops, 0, 0, NULL, 0); 
 	DBG;
         assert(r == 0);
         
