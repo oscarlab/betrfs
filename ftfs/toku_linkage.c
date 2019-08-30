@@ -209,7 +209,11 @@ int isprint(int c) { return (unsigned)c-0x20 < 0x5f; }
 /* I think we can get rid of this call by setting the #define MMAP_THRESHOLD
    to false in toku_config, as we will not mmap memory in kernel. */
 /* void mallopt(void) { BUG(); } */
-
+#ifdef FTFS_DEBUG
+void toku_dump_hex(const char *str, void *buf, int len) {
+	print_hex_dump(KERN_ALERT, str, DUMP_PREFIX_ADDRESS, 16, 1, buf, len, 1);
+}
+#endif
 void toku_dump_stack(void) {dump_stack();}
 uint32_t (ntohl)(uint32_t netlong) { return ntohl(netlong); }
 unsigned int sleep(unsigned int seconds) { ssleep(seconds); return 0; }

@@ -7281,23 +7281,22 @@ ft_search_child(FT_HANDLE brt, FTNODE node, int childnum, ft_search_t *search,
     lifted = &BNC(node, childnum)->lifted;
     toku_init_dbt(&lifted_k);
     if (lifted->size == 0) {
-        if (search->pivot_bound.data != NULL) {
-            ft_search_init(&next_search, search->compare, search->direction,
-                           &search->pivot_bound, search->context);
-        } else {
-            ft_search_init(&next_search, search->compare, search->direction,
-                           search->k, search->context);
+        ft_search_init(&next_search, search->compare, search->direction,
+                       search->k, search->context);
+        if (search->pivot_bound.data) {
+            toku_copy_dbt(&next_search.pivot_bound, search->pivot_bound);
         }
     } else {
         int r;
-        if (search->pivot_bound.data != NULL) {
-            r = toku_ft_lift_key_no_alloc(brt->ft, &lifted_k, &search->pivot_bound, lifted);
-        } else {
-            r = toku_ft_lift_key_no_alloc(brt->ft, &lifted_k, search->k, lifted);
-        }
+        r = toku_ft_lift_key_no_alloc(brt->ft, &lifted_k, search->k, lifted);
         assert_zero(r);
         ft_search_init(&next_search, search->compare, search->direction,
                        &lifted_k, search->context);
+        if (search->pivot_bound.data) {
+            r = toku_ft_lift_key_no_alloc(brt->ft, &next_search.pivot_bound,
+                                          &search->pivot_bound, lifted);
+            assert_zero(r);
+        }
     }
     struct ancestors kupsert_ancestors;
     if (BNC(node, childnum)->kupsert_list.size() > 0) {
@@ -7356,15 +7355,19 @@ ft_search_child(FT_HANDLE brt, FTNODE node, int childnum, ft_search_t *search,
     if (r == DB_NOTFOUND) {
         // if DB_NOTFOUND, the leaf must updates pivot_bound,
         // pivot_bound.data == NULL means we reach left/right extreme
-        toku_destroy_dbt(&search->pivot_bound);
-        if (next_search.pivot_bound.data != NULL) {
+        if (!ancestors) {
+            toku_cleanup_dbt(&search->pivot_bound);
+        } else {
+            toku_init_dbt(&search->pivot_bound);
+        }
+        if (next_search.pivot_bound.data) {
             if (lifted->size == 0) {
                 toku_copy_dbt(&search->pivot_bound, next_search.pivot_bound);
             } else {
                 int rr = toku_ft_unlift_key(brt->ft, &search->pivot_bound,
                                             &next_search.pivot_bound, lifted);
                 assert_zero(rr);
-                toku_destroy_dbt(&next_search.pivot_bound);
+                toku_cleanup_dbt(&next_search.pivot_bound);
             }
         }
     }
@@ -7588,13 +7591,20 @@ ft_search_node(
 
     // NOTFOUND, we may need to look at another leaf, save info to search
     if (node->height == 0 && r == DB_NOTFOUND) {
-        toku_destroy_dbt(&search->pivot_bound);
-        if (search->direction == FT_SEARCH_LEFT) {
-            if (next_bounds.upper_bound_inclusive != NULL)
-                toku_clone_dbt(&search->pivot_bound, *next_bounds.upper_bound_inclusive);
+        if (!ancestors) {
+            // all pivot_bound in next_search are not alloc'ed
+            toku_cleanup_dbt(&search->pivot_bound);
         } else {
-            if (next_bounds.lower_bound_exclusive != NULL)
+            toku_init_dbt(&search->pivot_bound);
+        }
+        if (search->direction == FT_SEARCH_LEFT) {
+            if (next_bounds.upper_bound_inclusive) {
+                toku_clone_dbt(&search->pivot_bound, *next_bounds.upper_bound_inclusive);
+            }
+        } else {
+            if (next_bounds.lower_bound_exclusive) {
                 toku_clone_dbt(&search->pivot_bound, *next_bounds.lower_bound_exclusive);
+            }
         }
     }
 
@@ -7840,8 +7850,6 @@ try_again:
             r = getf(search->pivot_bound.size, search->pivot_bound.data, 0,
                      nullptr, getf_v, true);
             if (r == 0) {
-                if (search->compare == ft_cursor_compare_set_range)
-                    search->compare = ft_cursor_compare_next;
                 r = TOKUDB_TRY_AGAIN;
             }
         }
