@@ -3316,6 +3316,10 @@ void get_child_bounds_for_msg_put(ft_compare_func cmp, DESCRIPTOR desc, FTNODE n
         paranoid_invariant(*start <= *end);
     }
 }
+
+static bool is_dbt_empty_or_size_zero(const DBT * dbt) {
+	return (is_dbt_empty(dbt) || dbt->size == 0);
+}
 static void
 ft_nonleaf_cmd_multiple(
     FT ft,
@@ -3342,7 +3346,7 @@ ft_nonleaf_cmd_multiple(
         DBT lifted_key, lifted_max_key;
         int r;
         if (bnc->lifted.size != 0) {
-            if (!is_dbt_empty(cmd->key)) {
+            if (!is_dbt_empty_or_size_zero(cmd->key)) {
                 if (i == start) {
                     r = toku_ft_lift_key_no_alloc(ft, &lifted_key, old_key, &bnc->lifted);
                 } else {
@@ -3351,7 +3355,7 @@ ft_nonleaf_cmd_multiple(
                 assert_zero(r);
                 cmd->key = &lifted_key;
             }
-            if (!is_dbt_empty(cmd->max_key)) {
+            if (!is_dbt_empty_or_size_zero(cmd->max_key)) {
                 if (i == end) {
                     r = toku_ft_lift_key_no_alloc(ft, &lifted_max_key, old_max_key, &bnc->lifted);
                 } else {
@@ -3361,14 +3365,14 @@ ft_nonleaf_cmd_multiple(
                 cmd->max_key = &lifted_max_key;
             }
         } else {
-            if (!is_dbt_empty(cmd->key)) {
+            if (!is_dbt_empty_or_size_zero(cmd->key)) {
                 if (i == start) {
                     cmd->key = old_key;
                 } else {
                     cmd->key = &node->childkeys[i - 1];
                 }
             }
-            if (!is_dbt_empty(cmd->key)) {
+            if (!is_dbt_empty_or_size_zero(cmd->key)) {
                 if (i == end) {
                     cmd->max_key = old_max_key;
                 } else {
