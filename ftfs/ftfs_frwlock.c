@@ -7,11 +7,24 @@
 #include <linux/export.h>
 #include <linux/rwsem.h>
 #include <linux/atomic.h>
-
-void __sched ftfs_down_read(struct rw_semaphore *sem)
+//Rename LOCK_CONTENDED to LOCK_CONTENDED2 to avoid name clash with kernel.
+//LOCK_CONTENDED2 takes 2 params as opposed to LOCK_CONTENDED
+#define LOCK_CONTENDED2(_sem, _mux,  try, lock)			\
+do {								\
+	if (!try(_sem)) {					\
+		lock_contended(&(_sem)->dep_map, _RET_IP_);	\
+		lock(_sem, _mux);					\
+	}							\
+	lock_acquired(&(_sem)->dep_map, _RET_IP_);			\
+} while (0)
+//Now the mutex used to protect the frwlock at the user level is passed down
+//to the kernel along with rwsem. rwsem makes sure the mutex is only unlocked
+//after it is queued into the waitqueue, which (hopefully) guarantees the
+//integrity of num_*(num_users/num_readers, etc) at the user level
+void __sched ftfs_down_read(struct rw_semaphore *sem, pthread_mutex_t * mux)
 {
 	might_sleep();
-	LOCK_CONTENDED(sem, __ftfs_down_read_trylock, __ftfs_down_read);
+	LOCK_CONTENDED2(sem, mux,  __ftfs_down_read_trylock, __ftfs_down_read);
 }
 
 
@@ -27,10 +40,10 @@ int ftfs_down_read_trylock(struct rw_semaphore *sem)
 /*
  * lock for writing
  */
-void __sched ftfs_down_write(struct rw_semaphore *sem)
+void __sched ftfs_down_write(struct rw_semaphore *sem, pthread_mutex_t * mux)
 {
 	might_sleep();
-	LOCK_CONTENDED(sem, __ftfs_down_write_trylock, __ftfs_down_write);
+	LOCK_CONTENDED2(sem, mux, __ftfs_down_write_trylock, __ftfs_down_write);
 }
 
 

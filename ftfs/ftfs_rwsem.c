@@ -164,7 +164,7 @@ __rwsem_do_wake(struct rw_semaphore *sem, int wake_type)
  * wait for a lock to be granted
  */
 static struct rw_semaphore __sched *
-ftfs_rwsem_down_failed_common(struct rw_semaphore *sem,
+ftfs_rwsem_down_failed_common(struct rw_semaphore *sem, pthread_mutex_t * mux,
 			 unsigned int flags, signed long adjustment)
 {
 	struct rwsem_waiter waiter;
@@ -199,7 +199,8 @@ ftfs_rwsem_down_failed_common(struct rw_semaphore *sem,
 		sem = __rwsem_do_wake(sem, FTFS_RWSEM_WAKE_READ_OWNED);
 
 	raw_spin_unlock_irq(&sem->wait_lock);
-
+	if(mux) pthread_mutex_unlock(mux);
+        //This can be called by unfair rw locks, which do not provide a mux.
 	/* wait to be given the lock */
 	for (;;) {
 		if (!waiter.task)
@@ -207,7 +208,7 @@ ftfs_rwsem_down_failed_common(struct rw_semaphore *sem,
 		schedule();
 		set_task_state(tsk, TASK_UNINTERRUPTIBLE);
 	}
-
+        if(mux) pthread_mutex_lock(mux);
 	tsk->state = TASK_RUNNING;
 
 	return sem;
@@ -216,18 +217,18 @@ ftfs_rwsem_down_failed_common(struct rw_semaphore *sem,
 /*
  * wait for the read lock to be granted
  */
-struct rw_semaphore __sched *ftfs_rwsem_down_read_failed(struct rw_semaphore *sem)
+struct rw_semaphore __sched *ftfs_rwsem_down_read_failed(struct rw_semaphore *sem, pthread_mutex_t * mux)
 {
-	return ftfs_rwsem_down_failed_common(sem, FTFS_RWSEM_WAITING_FOR_READ,
+	return ftfs_rwsem_down_failed_common(sem, mux, FTFS_RWSEM_WAITING_FOR_READ,
 					-FTFS_RWSEM_ACTIVE_READ_BIAS);
 }
 
 /*
  * wait for the write lock to be granted
  */
-struct rw_semaphore __sched * ftfs_rwsem_down_write_failed(struct rw_semaphore *sem)
+struct rw_semaphore __sched * ftfs_rwsem_down_write_failed(struct rw_semaphore *sem, pthread_mutex_t * mux)
 {
-	return ftfs_rwsem_down_failed_common(sem, FTFS_RWSEM_WAITING_FOR_WRITE,
+	return ftfs_rwsem_down_failed_common(sem, mux, FTFS_RWSEM_WAITING_FOR_WRITE,
 					-FTFS_RWSEM_ACTIVE_WRITE_BIAS);
 }
 
