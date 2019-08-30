@@ -742,15 +742,17 @@ int test_rmdir(void)
 
 int test_mkrmdir(void)
 {
-	int i=0;
+	int i=0, err = 0;
 	for (i=0; i<10; i++) {
-		test_mkdir();
+		err = test_mkdir();
+		if (err) break;
 		usleep(1000);
-		test_rmdir();
+		err = test_rmdir();
+		if (err) break;
  	}
 
 	printk(KERN_ALERT "mkrmdir test finished\n");
-	return 0;
+	return err;
 }
 
 int test_unlink(void)
@@ -1010,7 +1012,7 @@ int test_remove(void)
 		set_errno(ret);
 		perror("test_remove /test/");
 	}
-	
+
 	return ret;
 
 }
@@ -1097,7 +1099,7 @@ int test_slab(void)
 	ftfs_error(__func__, "kmalloc(0): %p\n", p);
 	if (p)
 		kfree(p);
-		
+
 	return 0;
 }
 
