@@ -379,6 +379,11 @@ test_prefetching(void) {
     sn.n_children = 3;
     sn.dirty = 1;
     sn.oldest_referenced_xid_known = TXNID_NONE;
+    // Initialize the bound so that the serialization code can
+    // calculate the size node info correctly.
+    // Check serialize_ftnode_info for more details.
+    sn.bound_l.size = 0;
+    sn.bound_r.size = 0;
 
     uint64_t key1 = 100;
     uint64_t key2 = 200;
