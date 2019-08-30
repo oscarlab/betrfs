@@ -22,79 +22,118 @@ pipeline {
           steps {
             sh "hostname"
             timeout(time: 1, unit: 'HOURS'){
-            sh '''
+              sh '''
               cd Jenkinsfiles
               sudo chmod +x test1.sh
               ./test1.sh
               '''
+            }
+          }
+          post {
+            always {
+              sh '''
+              cd Jenkinsfiles
+              vagrant destroy -f
+              '''
+            }
+          }
+        }
+        
+        stage('Test Group 2') {
+          steps {
+            sh "hostname"
+            timeout(time: 1, unit: 'HOURS'){
+              sh '''
+              sleep 10
+              cd Jenkinsfiles
+              sudo chmod +x test2.sh
+              ./test2.sh
+              '''
+            }
+          } 
+          post {
+            always {
+              sh '''
+              cd Jenkinsfiles
+              vagrant destroy -f
+              '''
+            }
+          }
+        }
+      
+        stage('Test Group 3') {
+          steps {
+            sh "hostname"
+            timeout(time: 1, unit: 'HOURS'){
+              sh '''
+              sleep 20
+              cd Jenkinsfiles
+              sudo chmod +x test3.sh
+              ./test3.sh
+              '''
+            }
+          }
+          post {
+            always {
+              sh '''
+              cd Jenkinsfiles
+              vagrant destroy -f
+              '''
+            }
+          }
+        }
+        
+        stage('Test Group 4') {
+          steps {
+            sh "hostname"
+            timeout(time: 3, unit: 'HOURS'){
+              sh '''
+              sleep 30
+              cd Jenkinsfiles
+              sudo chmod +x test4.sh
+              ./test4.sh
+              '''
+            }
+          }
+          post {
+            always {
+              sh '''
+              cd Jenkinsfiles
+              vagrant destroy -f
+              '''
               }
             }
           }
-          
-          stage('Test Group 2') {
+        
+          stage('Test Group 5') {
             steps {
               sh "hostname"
-                timeout(time: 1, unit: 'HOURS'){
-                  sh '''
-                  sleep 10
-                  cd Jenkinsfiles
-                  sudo chmod +x test2.sh
-                  ./test2.sh
-                  '''
-                }
+              timeout(time: 2, unit: 'HOURS'){
+                sh '''
+                sleep 40
+                cd Jenkinsfiles
+                sudo chmod +x test5.sh
+                ./test5.sh
+                '''
               }
             }
-        
-            stage('Test Group 3') {
-              steps {
-                sh "hostname"
-                timeout(time: 1, unit: 'HOURS'){
-                  sh '''
-                  sleep 20
-                  cd Jenkinsfiles
-                  sudo chmod +x test3.sh
-                  ./test3.sh
-                  '''
-                }
-              }
+            post {
+              always {
+                sh '''
+                cd Jenkinsfiles
+                vagrant destroy -f
+                '''
             }
-        
-            stage('Test Group 4') {
-              steps {
-                sh "hostname"
-                timeout(time: 3, unit: 'HOURS'){
-                  sh '''
-                  sleep 30
-                  cd Jenkinsfiles
-                  sudo chmod +x test4.sh
-                  ./test4.sh
-                  '''
-                }
-              }
-            }
-        
-            stage('Test Group 5') {
-              steps {
-                sh "hostname"
-                timeout(time: 2, unit: 'HOURS'){
-                  sh '''
-                  sleep 40
-                  cd Jenkinsfiles
-                  sudo chmod +x test5.sh
-                  ./test5.sh
-                  '''
-                }
-             }
-           }
+          }
         }
-     }
+      }
+    }
   }
 
   post {
     always {
       sh '''
       cd Jenkinsfiles
-      
       '''
     }
   }
