@@ -43,6 +43,14 @@ if __name__ == "__main__":
         print "command \"{0}\" returning: {1}. exiting...".format(command, ret)
         exit(ret)
 
+    # Check for umount errors from ftfs
+    command = "dmesg | grep \"ftfs_private_umount ret: -\""
+    ret = subprocess.call(command, shell=True)
+    if ret != 1 :
+        print "ERROR!"
+        print "command \"{0}\" returning: {1}. exiting...".format(command, ret)
+        exit(-1)
+
     print "removed module, printing /proc/meminfo"
     command = "cat /proc/meminfo"
     ret = subprocess.call(command, shell=True)
@@ -52,4 +60,3 @@ if __name__ == "__main__":
         exit(ret)
 
     exit(ret)
-
