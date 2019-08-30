@@ -1,0 +1,4 @@
+SIZE=small
+export MKFS_OPTIONS="-O ^extents,^flex_bg,^uninit_bg,^64bit,^metadata_csum,^huge_file,^dir_nlink,^extra_isize"
+export EXT_MOUNT_OPTIONS="nodelalloc"
+TESTNAME="Ext4 4k block emulating ext3"

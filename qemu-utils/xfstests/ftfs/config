@@ -1,0 +1,75 @@
+#
+# Configuration file for ext4
+#
+
+DEFAULT_MKFS_OPTIONS=""
+
+function check_filesystem()
+{
+    local dev="$1"
+    local ret
+
+    /sbin/e2fsck -fy "$dev"
+    ret="$?"
+    echo e2fsck exited with status "$ret"
+    return "$ret"
+}
+
+function format_filesystem()
+{
+    local dev="$1"
+    local opts="$2"
+    local ret
+    local tmpdir="/ramses"
+
+    /sbin/mke2fs -F -E lazy_itable_init=0,lazy_journal_init=0 -q -t ext4 $opts "$dev"
+    ret="$?"
+
+    # XXX: Do better error checking here
+    mkdir $tmpdir
+    mount $dev $tmpdir
+    cd $tmpdir; mkdir db; mkdir dev; touch dev/null; mkdir tmp; chmod 1777 tmp; cd -;
+
+    sleep 1
+
+    umount $tmpdir
+
+    return "$ret"
+}
+
+function setup_mount_opts()
+{
+    if test -n "$MNTOPTS" ; then
+	FTFS_MOUNT_OPTIONS="-o $MNTOPTS"
+	MOUNT_OPTIONS="-o $MNTOPTS"
+    fi
+}
+
+function get_mkfs_opts()
+{
+    echo "$MKFS_OPTIONS"
+}
+
+function show_mkfs_opts()
+{
+    echo MKFS_OPTIONS: "$MKFS_OPTIONS"
+}
+
+function show_mount_opts()
+{
+    echo FTFS_MOUNT_OPTIONS: "$FTFS_MOUNT_OPTIONS"
+}
+
+function test_name_alias()
+{
+    case "$1" in
+	default)	echo "4k" ;;
+	*)		echo "$1" ;;
+    esac
+}
+
+function reset_vars()
+{
+    unset FTFS_MOUNT_OPTIONS
+    unset MKFS_OPTIONS
+}

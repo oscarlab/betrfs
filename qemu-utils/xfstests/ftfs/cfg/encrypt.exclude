@@ -1,0 +1,16 @@
+ext4/004	# dump/restore doesn't handle quotas
+
+# encryption doesn't play well with quota
+generic/082
+generic/219
+generic/230
+generic/231
+generic/232
+generic/233
+generic/235
+generic/270
+
+# generic/204 tests ENOSPC handling; it doesn't correctly
+# anticipate the external extended attribute required when
+# using a 1k block size
+generic/204

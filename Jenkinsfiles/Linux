@@ -1,58 +1,101 @@
 #!/usr/bin/env groovy
 
-def SLAVE_NODE = ''
-
 pipeline {
   agent {
-    label 'betrfs'
+    label 'betrfs-dev'
   }
 
   stages {
     stage('Build') {
       steps {
-
-        script {
-          SLAVE_NODE = sh(script: 'hostname -s', returnStdout: true).trim()
-        }
-
         sh '''
-	# Need link to source or build fails
-	wget https://auku.cs.unc.edu/depot/linux-source-3.11.10-ftfs_20180618.00_all.deb
-	sudo dpkg -i linux-source-3.11.10-ftfs_20180618.00_all.deb
-	sudo tar -xvf /usr/src/linux-source-3.11.10-ftfs.tar.bz2
-	sudo mv linux-source-3.11.10-ftfs linux-3.11.10
-        mkdir -p build
-        cp cmake-ft.sh build/
-        cd build
-        ./cmake-ft.sh
-        cd ../ftfs
-        make
+        cd Jenkinsfiles
+        sudo chmod +x build.sh
+        ./build.sh
         '''
       }
     }
-
+    
     stage('Unit Testing') {
-      steps {
-        timeout(time: 3, unit: 'HOURS'){
-          sh '''
-          cd ftfs/userspace-testing/
-	  sudo ln -s ../ftfs.ko ftfs.ko
-          sudo ./run-tests.py all.tests
-          '''
+      parallel {
+        stage('Test Group 1') {
+          steps {
+            sh "hostname"
+            timeout(time: 1, unit: 'HOURS'){
+            sh '''
+              cd Jenkinsfiles
+              sudo chmod +x test1.sh
+              ./test1.sh
+              '''
+              }
+            }
+          }
+          
+          stage('Test Group 2') {
+            steps {
+              sh "hostname"
+                timeout(time: 1, unit: 'HOURS'){
+                  sh '''
+                  sleep 10
+                  cd Jenkinsfiles
+                  sudo chmod +x test2.sh
+                  ./test2.sh
+                  '''
+                }
+              }
+            }
+        
+            stage('Test Group 3') {
+              steps {
+                sh "hostname"
+                timeout(time: 1, unit: 'HOURS'){
+                  sh '''
+                  sleep 20
+                  cd Jenkinsfiles
+                  sudo chmod +x test3.sh
+                  ./test3.sh
+                  '''
+                }
+              }
+            }
+        
+            stage('Test Group 4') {
+              steps {
+                sh "hostname"
+                timeout(time: 3, unit: 'HOURS'){
+                  sh '''
+                  sleep 30
+                  cd Jenkinsfiles
+                  sudo chmod +x test4.sh
+                  ./test4.sh
+                  '''
+                }
+              }
+            }
+        
+            stage('Test Group 5') {
+              steps {
+                sh "hostname"
+                timeout(time: 2, unit: 'HOURS'){
+                  sh '''
+                  sleep 40
+                  cd Jenkinsfiles
+                  sudo chmod +x test5.sh
+                  ./test5.sh
+                  '''
+                }
+             }
+           }
         }
-      }
-    }
+     }
   }
 
   post {
     always {
-      node("master") {
-        sh """
-        cd ~jenkins/scripts
-        sudo ./dump-console.sh ${SLAVE_NODE}
-        sudo ./clean-vm.sh ${SLAVE_NODE}
-        """
-      }
+      sh '''
+      cd Jenkinsfiles
+      
+      '''
     }
   }
-} 
+}

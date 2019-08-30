@@ -1,0 +1,5 @@
+SIZE=small
+export MKFS_OPTIONS=""
+export EXT_MOUNT_OPTIONS="test_dummy_encryption"
+REQUIRE_FEATURE=encryption
+TESTNAME="Ext4 encryption"

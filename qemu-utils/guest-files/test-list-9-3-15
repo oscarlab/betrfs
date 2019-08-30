@@ -51,7 +51,6 @@ test_4015
 test_789
 test_rollinclude
 test4573_logtrim
-test_3755
 test_5138
 test_weakxaction
 transactional_fileops
@@ -141,6 +140,7 @@ cpu-frequency
 cpu-frequency-openlimit
 hugepage
 fsync-directory
+flock
 fsync-files
 fgetc
 toku-malloc
@@ -180,11 +180,7 @@ posix-memalign
 dio
 realloc
 mkrmdir
-recovery-cbegin
-recovery-no-log
-recovery-empty
 verify-unsorted-leaf
-recovery-hello
 unlink
 getdents64
 openclose
@@ -195,6 +191,7 @@ readwrite
 pwrite
 write
 readlink
+f-all
 f-all
 bug1381
 cursor-step-over-delete
@@ -255,7 +252,7 @@ cachetable-4357
 cachetable-5978
 cachetable-5978-2
 cachetable-put
-#cachetable-put-checkpoint
+cachetable-put-checkpoint
 cachetable-checkpoint-prefetched-nodes
 cachetable-pin-nonblocking-checkpoint-clean
 cachetable-checkpoint-pinned-nodes
@@ -280,7 +277,6 @@ cachetable-prefetch-flowcontrol-test
 cachetable-rwlock
 cachetable-all-write
 cachetable-clone-checkpoint
-compress-test
 logcursor_test
 ft-test0
 bnc-insert-benchmark
@@ -324,10 +320,8 @@ ft-test3
 ft-test4
 ft-test5
 ft-test
-block-allocator
 cachetable-prefetch-checkpoint
 cachetable-cleaner-thread-same-fullhash
-ft-clock
 cachetable-unpin-and-remove
 cachetable-unpin
 cachetable-cleaner-thread-nothing-needs-flushing
@@ -375,14 +369,17 @@ cachetable-cleaner-checkpoint
 cachetable-kibbutz-and-flush-cachefile
 cachetable-cleaner-thread-everything-pinned
 cachetable-prefetch-close-leak-test
+recovery-cbegin
 recovery-cbegin-cend-hello
 verify-bad-pivots
 recovery-cbegin-cend
+recovery-no-log
 recovery-cend-cbegin
+recovery-empty
 verify-unsorted-pivots
+recovery-hello
 verify-bad-msn
 cachetable-clock-all-pinned
-cachetable-pin-checkpoint
 cachetable-fetch-inducing-evictor
 cachetable-prefetch2
 recovery-test5123
@@ -391,7 +388,6 @@ le-nested
 le-child-txn
 test_recovery_fopen_missing_file
 test_recovery_bad_last_entry
-le-cursor-right
 cachetable-clone-partial-fetch-pinned-node
 test-quicklz
 ft-overflow
@@ -423,7 +419,6 @@ checkpoint-fairness
 directory-lock
 cursor-set-range-rmw
 cursor-set-del-rmw
-checkpoint-stress
 env-loader-memory
 test-txn-nested-abort
 test_bug1381
@@ -469,10 +464,9 @@ dump-env
 env-put-multiple
 medium-nested-commit-commit
 test-xopen-eclose
-#test-stress0
+test-stress0
 test-stress1
 test-stress2
-test-stress3
 test-stress4
 test-stress6
 test-stress7
@@ -482,7 +476,6 @@ perf-child-txn
 perf-rangequery
 perf-read-txn
 perf-read-txn-single-thread
-perf-txn-single-thread
 perf-nop
 perf-checkpoint-var
 perf-malloc-free
@@ -519,8 +512,7 @@ test3039
 test3219
 test3522
 test3522b
-# This test takes too long (and is not currently linked into ftfs)
-#test3529
+test3529
 test_3529_insert_2
 test_3529_table_lock
 env-close-flags
@@ -542,7 +534,6 @@ test_update_previously_deleted
 test-blobs-leaf-split
 test-bulk-fetch
 test-cmp-descriptor
-test-compression-methods
 test-cursor-3
 test-cursor-stickyness
 test-cursor-delete2
@@ -572,6 +563,6 @@ test-rand-insert
 test-nested-xopen-eclose
 print_engine_status
 xid-lsn-independent
-seqwrite_no_txn
 verify-misrouted-msgs
 queries_with_deletes
+seqwrite_no_txn
