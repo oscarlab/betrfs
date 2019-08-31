@@ -426,14 +426,14 @@ flush_to_internal(FT_HANDLE t) {
     r = xids_create_child(xids_0, &xids_234, (TXNID)234);
     CKERR(r);
 
-    NONLEAF_CHILDINFO child_bnc = toku_create_empty_nl(nullptr);
+    NONLEAF_CHILDINFO child_bnc = toku_create_empty_nl();
     int i;
     for (i = 0; toku_bnc_memory_used(child_bnc) < 128*1024; ++i) {
         insert_random_message(child_bnc, &child_messages[i], &child_messages_is_fresh[i], xids_123, 0);
     }
     int num_child_messages = i;
 
-    NONLEAF_CHILDINFO parent_bnc = toku_create_empty_nl(nullptr);
+    NONLEAF_CHILDINFO parent_bnc = toku_create_empty_nl();
     for (i = 0; toku_bnc_memory_used(parent_bnc) < 128*1024; ++i) {
         insert_random_message(parent_bnc, &parent_messages[i], &parent_messages_is_fresh[i], xids_234, 0);
     }
@@ -578,7 +578,7 @@ flush_to_internal_multiple(FT_HANDLE t) {
     FT_MSG childkeys[7];
     int i;
     for (i = 0; i < 8; ++i) {
-        child_bncs[i] = toku_create_empty_nl(nullptr);
+        child_bncs[i] = toku_create_empty_nl();
         if (i < 7) {
             childkeys[i] = NULL;
         }
@@ -596,7 +596,7 @@ flush_to_internal_multiple(FT_HANDLE t) {
     }
     int num_child_messages = i;
 
-    NONLEAF_CHILDINFO parent_bnc = toku_create_empty_nl(nullptr);
+    NONLEAF_CHILDINFO parent_bnc = toku_create_empty_nl();
     for (i = 0; toku_bnc_memory_used(parent_bnc) < 128*1024; ++i) {
         insert_random_message(parent_bnc, &parent_messages[i], &parent_messages_is_fresh[i], xids_234, 0);
     }
@@ -759,7 +759,7 @@ flush_to_leaf(FT_HANDLE t, bool make_leaf_up_to_date, bool use_flush) {
         int num_stale = random() % 2000;
         memset(&parent_messages_is_fresh[num_stale], true, (4096 - num_stale) * (sizeof parent_messages_is_fresh[0]));
     }
-    NONLEAF_CHILDINFO parent_bnc = toku_create_empty_nl(nullptr);
+    NONLEAF_CHILDINFO parent_bnc = toku_create_empty_nl();
     MSN max_parent_msn = MIN_MSN;
     for (i = 0; toku_bnc_memory_used(parent_bnc) < 128*1024; ++i) {
         insert_random_update_message(parent_bnc, &parent_messages[i], parent_messages_is_fresh[i], xids_234, i%8, &parent_messages_applied[i], &max_parent_msn);
@@ -1026,7 +1026,7 @@ flush_to_leaf_with_keyrange(FT_HANDLE t, bool make_leaf_up_to_date) {
         int num_stale = random() % 2000;
         memset(&parent_messages_is_fresh[num_stale], true, (4096 - num_stale) * (sizeof parent_messages_is_fresh[0]));
     }
-    NONLEAF_CHILDINFO parent_bnc = toku_create_empty_nl(nullptr);
+    NONLEAF_CHILDINFO parent_bnc = toku_create_empty_nl();
     MSN max_parent_msn = MIN_MSN;
     for (i = 0; toku_bnc_memory_used(parent_bnc) < 128*1024; ++i) {
         insert_random_update_message(parent_bnc, &parent_messages[i], parent_messages_is_fresh[i], xids_234, i%8, &parent_messages_applied[i], &max_parent_msn);
@@ -1215,7 +1215,7 @@ compare_apply_and_flush(FT_HANDLE t, bool make_leaf_up_to_date) {
         int num_stale = random() % 2000;
         memset(&parent_messages_is_fresh[num_stale], true, (4096 - num_stale) * (sizeof parent_messages_is_fresh[0]));
     }
-    NONLEAF_CHILDINFO parent_bnc = toku_create_empty_nl(nullptr);
+    NONLEAF_CHILDINFO parent_bnc = toku_create_empty_nl();
     MSN max_parent_msn = MIN_MSN;
     for (i = 0; toku_bnc_memory_used(parent_bnc) < 128*1024; ++i) {
         insert_random_update_message(parent_bnc, &parent_messages[i], parent_messages_is_fresh[i], xids_234, i%8, &parent_messages_applied[i], &max_parent_msn);
@@ -1337,11 +1337,12 @@ int test_orthopush_flush(void) {
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
     
-    fname = TOKU_TEST_FILENAME;
+    fname = TOKU_TEST_FILENAME_DATA;
     int r;
     CACHETABLE ct;
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);//unlink(fname);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r == 0);
     FT_HANDLE t;
     r = toku_open_ft_handle(fname, 1, &t, 128*1024, 4096, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun); assert(r==0);
     toku_ft_set_update(t, orthopush_flush_update_fun);

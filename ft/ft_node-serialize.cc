@@ -319,8 +319,6 @@ serialize_ftnode_partition_size (FTNODE node, int i)
     paranoid_invariant(node->bp[i].state == PT_AVAIL);
     result++; // Byte that states what the partition is
     if (node->height > 0) {
-        result += 4; // size of lifted
-        result += BNC(node, i)->lifted.size;
         result += 4; // size of bytes in buffer table
         result += toku_bnc_nbytesinbuf(BNC(node, i));
     }
@@ -344,12 +342,6 @@ serialize_nonleaf_childinfo(NONLEAF_CHILDINFO bnc, struct wbuf *wb)
 {
     unsigned char ch = FTNODE_PARTITION_FIFO_MSG;
     wbuf_nocrc_char(wb, ch);
-    // serialize lifted
-    if (bnc->lifted.size == 0) {
-        wbuf_nocrc_uint(wb, 0);
-    } else {
-        wbuf_nocrc_bytes(wb, bnc->lifted.data, bnc->lifted.size);
-    }
     // serialize the FIFO, first the number of entries, then the elements
     wbuf_nocrc_int(wb, toku_bnc_n_entries(bnc));
     toku_fifo_iterate(bnc->buffer, serialize_msg_fn, wb);
@@ -474,6 +466,10 @@ serialize_ftnode_info_size(FTNODE node)
     retval += (node->n_children + 1) * 4; // encode length of each pivot and bound
     if (node->height > 0) {
         retval += node->n_children*8; // child blocknum's
+        // lift
+        for (int i = 0; i < node->n_children; i++) {
+            retval += 4 + BP_LIFT(node, i).size;
+        }
     }
     retval += 4; // checksum
     return retval;
@@ -517,6 +513,11 @@ static void serialize_ftnode_info(FTNODE node,
     if (node->height > 0) {
         for (int i = 0; i < node->n_children; i++) {
             wbuf_nocrc_BLOCKNUM(&wb, BP_BLOCKNUM(node,i));
+            if (BP_LIFT(node, i).size) {
+                wbuf_nocrc_bytes(&wb, BP_LIFT(node, i).data, BP_LIFT(node, i).size);
+            } else {
+                wbuf_nocrc_uint(&wb, 0);
+            }
         }
     }
 
@@ -1194,15 +1195,7 @@ deserialize_child_buffer(NONLEAF_CHILDINFO bnc, struct rbuf *rbuf,
     int32_t *broadcast_offsets = NULL, *kupsert_offsets=NULL;
     int nfresh = 0, nstale = 0;
     int nbroadcast_offsets = 0, nkupsert_offsets=0;
-    uint32_t lifted_len;
 
-    lifted_len = rbuf_int(rbuf);
-    if (lifted_len != 0) {
-        bytevec lifted;
-        rbuf_literal_bytes(rbuf, &lifted, lifted_len);
-        toku_memdup_dbt(&bnc->lifted, lifted, lifted_len);
-    } else
-        toku_init_dbt(&bnc->lifted);
     n_in_this_buffer = rbuf_int(rbuf);
     if (cmp) {
         XMALLOC_N(n_in_this_buffer, stale_offsets);
@@ -1355,7 +1348,7 @@ BASEMENTNODE toku_create_empty_bn_no_buffer(void) {
     return bn;
 }
 
-NONLEAF_CHILDINFO toku_create_empty_nl(NONLEAF_CHILDINFO orig)
+NONLEAF_CHILDINFO toku_create_empty_nl(void)
 {
     NONLEAF_CHILDINFO XMALLOC(cn);
     int r = toku_fifo_create(&cn->buffer); assert_zero(r);
@@ -1365,12 +1358,6 @@ NONLEAF_CHILDINFO toku_create_empty_nl(NONLEAF_CHILDINFO orig)
     cn->kupsert_list.create();
     cn->unbound_insert_count = 0;
     toku_list_init(&cn->unbound_inserts);
-    if (orig != nullptr) {
-        toku_copy_dbt(&cn->lifted, orig->lifted);
-        toku_init_dbt(&orig->lifted);
-    } else {
-        toku_init_dbt(&cn->lifted);
-    }
     return cn;
 }
 
@@ -1392,11 +1379,6 @@ NONLEAF_CHILDINFO toku_clone_nl(NONLEAF_CHILDINFO orig_childinfo) {
 	paranoid_invariant(orig_childinfo->unbound_insert_count == 0);
         toku_list_init(&cn->unbound_inserts);
     }
-
-    if (orig_childinfo->lifted.size == 0)
-        toku_init_dbt(&cn->lifted);
-    else
-        toku_clone_dbt(&cn->lifted, orig_childinfo->lifted);
 
     return cn;
 }
@@ -1449,10 +1431,6 @@ void destroy_nonleaf_childinfo (NONLEAF_CHILDINFO nl)
     nl->kupsert_list.destroy();
     paranoid_invariant(nl->unbound_insert_count == 0);
     paranoid_invariant(toku_list_empty(&nl->unbound_inserts));
-    if (nl->lifted.size != 0) {
-        paranoid_invariant(nl->lifted.data != NULL);
-        toku_free(nl->lifted.data);
-    }
     toku_free(nl);
 }
 
@@ -1647,6 +1625,18 @@ deserialize_ftnode_info(struct sub_block *sb, FTNODE node)
         for (int i = 0; i < node->n_children; i++) {
             BP_BLOCKNUM(node,i) = rbuf_blocknum(&rb);
             BP_WORKDONE(node, i) = 0;
+            uint32_t len = rbuf_int(&rb);
+            if (len) {
+                bytevec lift;
+                rbuf_literal_bytes(&rb, &lift, len);
+                toku_memdup_dbt(&BP_LIFT(node, i), lift, len);
+            } else {
+                toku_init_dbt(&BP_LIFT(node, i));
+            }
+        }
+    } else {
+        for (int i = 0; i < node->n_children; i++) {
+            toku_init_dbt(&BP_LIFT(node, i));
         }
     }
 
@@ -1665,7 +1655,7 @@ void setup_available_ftnode_partition(FTNODE node, int i)
         set_BLB(node, i, toku_create_empty_bn());
         BLB_MAX_MSN_APPLIED(node, i) = node->max_msn_applied_to_node_on_disk;
     } else {
-        set_BNC(node, i, toku_create_empty_nl(nullptr));
+        set_BNC(node, i, toku_create_empty_nl());
     }
 }
 

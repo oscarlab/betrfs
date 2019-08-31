@@ -156,6 +156,8 @@ setup_ftnode_header(struct ftnode *node)
     node->dirty = 1;
     node->totalchildkeylens = 0;
     node->oldest_referenced_xid_known = TXNID_NONE;
+    toku_init_dbt(&node->bound_l);
+    toku_init_dbt(&node->bound_r);
 }
 
 static void
@@ -169,12 +171,8 @@ setup_ftnode_partitions(struct ftnode *node, int n_children, const MSN msn, size
         BP_STATE(node, bn) = PT_AVAIL;
         set_BLB(node, bn, toku_create_empty_bn());
         BLB_MAX_MSN_APPLIED(node, bn) = msn;
+        toku_init_dbt(&BP_LIFT(node, bn));
     }
-    // Initialize the bound so that the serialization code can
-    // calculate the size node info correctly.
-    // Check serialize_ftnode_info for more details.
-    node->bound_l.size = 0;
-    node->bound_r.size = 0;
 }
 
 static void
