@@ -1,8 +1,11 @@
 /* -*- mode: C++; c-basic-offset: 8; indent-tabs-mode: t -*- */
 // vim: set tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab:
-
+#include <linux/slab.h>
+#include <asm/uaccess.h>
 #include <linux/random.h>
 #include "ftfs_random.h"
+struct mutex lock_random_generator;
+DEFINE_MUTEX(lock_random_generator);
 
 #if 0
 void srandom(unsigned int seed)
@@ -123,7 +126,7 @@ char *setstate(char *state) {
 
 long random(void) {
 	long k;
-
+	mutex_lock(&lock_random_generator);
 
 	if (n == 0) {
 		k = x[0] = lcg31(x[0]);
@@ -137,6 +140,7 @@ long random(void) {
 		j = 0;
 end:
 
+	mutex_unlock(&lock_random_generator);
 	return k;
 }
 

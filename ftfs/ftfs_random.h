@@ -4,6 +4,9 @@
 #ifndef FTFS_RANDOM_H
 #define FTFS_RANDOM_H
 
+#include <linux/spinlock.h>
+#include <linux/spinlock_types.h>
+
 struct random_data {
 	int32_t *fptr;              /* Front pointer.  */
 	int32_t *rptr;              /* Rear pointer.  */
