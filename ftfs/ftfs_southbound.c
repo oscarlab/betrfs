@@ -369,8 +369,7 @@ err_out:
 	return err;
 }
 
-
-int list_open_southbound_files(void);
+int __list_open_southbound_files(struct super_block *sb);
 
 /* must hold ftfs_southbound lock */
 int __ftfs_private_umount(void)
@@ -379,9 +378,12 @@ int __ftfs_private_umount(void)
 		kern_unmount(ftfs_vfs);
 		return 0;
 	} else {
-		list_open_southbound_files();
+		int cnt;
+		BUG_ON(!ftfs_vfs);
+		cnt = __list_open_southbound_files(ftfs_vfs->mnt_sb);
+		ftfs_error(__func__, "%d files are open\n", cnt);
+		return -EBUSY;
 	}
-	return -EBUSY;
 }
 
 /* takes and releases ftfs_southbound lock */
@@ -395,7 +397,6 @@ int ftfs_private_umount(void)
 	err = __ftfs_private_umount();
 	mutex_unlock(&ftfs_southbound_lock);
 
-    printk(KERN_ALERT "%s ret: %d\n", __func__, err);
 	return err;
 }
 
@@ -468,7 +469,7 @@ int __list_open_southbound_files(struct super_block *sb)
 
 	do_file_list_for_each_entry(sb, f) {
 		count++;
-		ftfs_log(__func__, "%s is still open",
+		ftfs_error(__func__, "%s is still open",
 			 f->f_path.dentry->d_name.name);
 	} while_file_list_for_each_entry;
 
