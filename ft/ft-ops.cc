@@ -5326,6 +5326,16 @@ int toku_ft_lift_key_no_alloc(FT ft, DBT *lifted_key, const DBT *key, const DBT 
     assert(lifted->data != NULL);
     assert(ft->key_ops.keyliftkey != NULL);
 
+    char *key_buf = (char*)key->data;
+    if (key_buf[0] == 'm' && key->size <= lifted->size &&
+        key_buf[key->size-1] == 0x00 && key_buf[key->size-2] == 0x01) {
+        lifted_key->data = &key_buf[key->size-2];
+        lifted_key->size = 2;
+        lifted_key->ulen = 0;
+        lifted_key->flags = DB_DBT_MALLOC;
+        return 0;
+    }
+
     if (key->size <= lifted->size || memcmp(key->data, lifted->data, lifted->size) != 0)
         return -EINVAL;
     lifted_key->data = (void *)(((char *)key->data) + lifted->size);
@@ -5752,11 +5762,15 @@ ft_handle_open(FT_HANDLE ft_h, const char *fname_in_env, int is_create, int only
         assert(txn);
         toku_txn_maybe_note_ft(txn, ft);
     }
+#ifndef USE_SFS
     //Opening a brt may restore to previous checkpoint.         Truncate if necessary.
     {
         int fd = toku_cachefile_get_fd (ft->cf);
         toku_maybe_truncate_file_on_open(ft->blocktable, fd);
     }
+#else
+    // YZJ: No need to truncate db file when it it just opened 	
+#endif
 
     r = 0;
 exit:
