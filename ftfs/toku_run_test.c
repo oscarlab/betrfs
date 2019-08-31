@@ -846,7 +846,7 @@ struct {
 	{ "write", test_write, 5},
 	{ "readlink", test_readlink, 5},
 	{ "f-all", test_f_all, 5},
-	{ "f-all", test_shortcut, 5},
+	{ "shortcut", test_shortcut, 5},
 	{ "bug1381", test_bug1381, 5},
 	{ "cursor-step-over-delete", test_cursor_step_over_delete, 5},
 	{ "x1764-test", test_x1764, 5},

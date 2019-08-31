@@ -1097,10 +1097,22 @@ int fclose(FILE * stream) {
 			return EOF;
 		}
 	}
-	/*  If reading, sync position, per POSIX */
-	if (stream->rpos < stream->rend)
-		__fseek(stream, stream->rpos-stream->rend, SEEK_CUR);
 
+	/* YZJ: We don't believe this code should be here, but
+	 *  leaving it commented in case something breaks.
+         *  Date: May 20, 2019.
+	 */
+#if 0
+	/*  If reading, sync position, per POSIX */
+	if (stream->rpos < stream->rend) {
+		ret = __fseek(stream, 0, SEEK_CUR);
+	}
+
+	if (ret) {
+		ftfs_error(__func__, "stream->rpos < stream->rend, ret=%d\n", ret);
+		return ret;
+	}
+#endif
 	/*  Clear read and write modes */
 	stream->wpos = stream->wbase = stream->wend = 0;
 	stream->rpos = stream->rend = 0;
