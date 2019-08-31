@@ -104,7 +104,7 @@ extern int ftfs_get_errno(void);
 static TOKUTXN const null_txn = 0;
 static DB * const null_db = 0;
 
-enum { NODESIZE = 1024, KSIZE=NODESIZE-100, TOKU_PSIZE=20 };
+enum { NODESIZE = 1124, KSIZE=NODESIZE-100, TOKU_PSIZE=20 };
 
 static CACHETABLE ct;
 static FT_HANDLE t;
@@ -167,20 +167,12 @@ static int doit (void) {
     BLOCKNUM node_leaf[2];
     int r;
    
-    STR(fname);   
-
-    if(fname == NULL)  fname = __FILE__;	
+    assert(fname != NULL);
 
     toku_cachetable_create(&ct, 500*1024*1024, ZERO_LSN, NULL_LOGGER);
-    r = unlink(fname);
-    if (r < 0) {
-       printf("%s: fname=%s, r=%d\n", __func__, fname, r);
-       if (r != -ENOENT) {
-           toku_cachetable_close(&ct);
-           return r;
-       }
-    }
-    
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);
+    assert(r==0);
+
     r = toku_open_ft_handle(fname, 1, &t, NODESIZE, NODESIZE/2, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
     assert(r==0);
 
@@ -322,7 +314,10 @@ static int doit (void) {
     toku_pin_node_with_min_bfe(&node, node_internal, t);
     assert(node->dirty); // nothing was flushed, but since we were trying to flush to a leaf, both become dirty
     toku_assert_entire_node_in_memory(node);
-    assert(node->n_children == 2);
+    if (node->n_children != 2) {
+        printf("node->n_children=%d\n", node->n_children);
+        assert(false);
+    }
     // both buffers should be empty now
     assert(toku_bnc_n_entries(node->bp[0].ptr.u.nonleaf) == 0);
     assert(toku_bnc_n_entries(node->bp[1].ptr.u.nonleaf) == 0);
@@ -416,10 +411,9 @@ int test_pick_child_to_flush(void)
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
  
-    fname = TOKU_TEST_FILENAME;
+    fname = TOKU_TEST_FILENAME_DATA;
     int r = doit();
     sleep(1);
-    
     toku_ft_layer_destroy();
     return r;
 }
