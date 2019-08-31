@@ -162,8 +162,7 @@ static bool always_flush(FTNODE UU(child), void* UU(extra)) {
 }
 
 
-static void
-doit (void) {
+static int doit (void) {
     BLOCKNUM node_internal, node_root;
     BLOCKNUM node_leaf[2];
     int r;
@@ -173,11 +172,13 @@ doit (void) {
     if(fname == NULL)  fname = __FILE__;	
 
     toku_cachetable_create(&ct, 500*1024*1024, ZERO_LSN, NULL_LOGGER);
-    r = unlink(fname); 
-
-    if(r < 0) {
-    toku_cachetable_close(&ct);
-    return;
+    r = unlink(fname);
+    if (r < 0) {
+       printf("%s: fname=%s, r=%d\n", __func__, fname, r);
+       if (r != -ENOENT) {
+           toku_cachetable_close(&ct);
+           return r;
+       }
     }
     
     r = toku_open_ft_handle(fname, 1, &t, NODESIZE, NODESIZE/2, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
@@ -404,6 +405,7 @@ doit (void) {
 
     toku_free( filler );
     toku_free(pivots[0]);
+    return 0;
 }
 
 extern "C" int test_pick_child_to_flush(void);
@@ -415,9 +417,9 @@ int test_pick_child_to_flush(void)
     CKERR(rinit);
  
     fname = TOKU_TEST_FILENAME;
-    doit();
+    int r = doit();
     sleep(1);
     
     toku_ft_layer_destroy();
-    return 0;
+    return r;
 }
