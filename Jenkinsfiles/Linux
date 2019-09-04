@@ -15,7 +15,7 @@ pipeline {
         '''
       }
     }
-    
+
     stage('Unit Testing') {
       parallel {
         stage('Test Group 1') {
@@ -38,7 +38,7 @@ pipeline {
             }
           }
         }
-        
+
         stage('Test Group 2') {
           steps {
             sh "hostname"
@@ -50,7 +50,7 @@ pipeline {
               ./test2.sh
               '''
             }
-          } 
+          }
           post {
             always {
               sh '''
@@ -60,11 +60,11 @@ pipeline {
             }
           }
         }
-      
+
         stage('Test Group 3') {
           steps {
             sh "hostname"
-            timeout(time: 1, unit: 'HOURS'){
+            timeout(time: 2, unit: 'HOURS'){
               sh '''
               sleep 20
               cd Jenkinsfiles
@@ -82,7 +82,7 @@ pipeline {
             }
           }
         }
-        
+
         stage('Test Group 4') {
           steps {
             sh "hostname"
@@ -104,7 +104,7 @@ pipeline {
               }
             }
           }
-        
+
           stage('Test Group 5') {
             steps {
               sh "hostname"
