@@ -27,19 +27,11 @@ if __name__ == "__main__":
             usage()
         elif opt == "--test" :
             test = arg
-        elif opt in ("s", "--sfs"):	
-            use_sfs = True 
+        elif opt in ("s", "--sfs"):
+            use_sfs = True
 
     if test != "" :
         print "\n\npre-test {0}.".format(test)
-
-    print "printing /proc/meminfo"
-    command = "cat /proc/meminfo"
-    ret = subprocess.call(command, shell=True)
-    if ret != 0 :
-        print "ERROR!"
-        print "cat /proc/meminfo returning: {0}. exiting...".format(ret)
-        exit(ret)
 
     print "Check dmesg"
     command = "tail -n 50 /var/log/syslog"
@@ -60,4 +52,3 @@ if __name__ == "__main__":
         exit(ret)
 
     exit(ret)
-    

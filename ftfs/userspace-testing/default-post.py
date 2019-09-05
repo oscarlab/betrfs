@@ -29,13 +29,6 @@ if __name__ == "__main__":
     if test != "" :
         print "\npost-test {0}.".format(test)
 
-    command = "cat /proc/meminfo"
-    ret = subprocess.call(command, shell=True)
-    if ret != 0 :
-        print "ERROR!"
-        print "cat /proc/meminfo returning: {0}. exiting...".format(ret)
-        exit(ret)
-
     command = "rmmod ftfs.ko"
     ret = subprocess.call(command, shell=True)
     if ret != 0 :
