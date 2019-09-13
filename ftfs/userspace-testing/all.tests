@@ -369,7 +369,7 @@ recovery-no-datadir
 recovery-lsn-error-during-forward-scan
 hot-with-bounds
 inc-split
-#pick-child-to-flush
+pick-child-to-flush
 oexcl
 cachetable-cleaner-checkpoint
 cachetable-kibbutz-and-flush-cachefile

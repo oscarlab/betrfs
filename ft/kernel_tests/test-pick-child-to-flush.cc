@@ -104,7 +104,7 @@ extern int ftfs_get_errno(void);
 static TOKUTXN const null_txn = 0;
 static DB * const null_db = 0;
 
-enum { NODESIZE = 1124, KSIZE=NODESIZE-100, TOKU_PSIZE=20 };
+enum { NODESIZE = 1024, KSIZE=NODESIZE-100, TOKU_PSIZE=20 };
 
 static CACHETABLE ct;
 static FT_HANDLE t;
