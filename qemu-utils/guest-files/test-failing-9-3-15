@@ -1,0 +1,11 @@
+compress-test
+test-compression-methods
+cachetable-pin-checkpoint
+le-cursor-right
+perf-txn-single-thread
+checkpoint-stress
+test_3755
+block-allocator
+ft-clock
+test-stress3
+test-set-func-malloc // remove permanently

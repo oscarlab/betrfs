@@ -189,6 +189,12 @@ pthread_rwlock_init(pthread_rwlock_t *rwlock,
 	return 0;
 }
 
+int 
+pthread_rwlock_set_mutex(pthread_rwlock_t *rwlock,
+			pthread_mutex_t * mutex){
+      rwlock->mutex = mutex;
+      return 0;
+}
 int
 pthread_rwlock_destroy(pthread_rwlock_t *rwlock) {
 	return 0;
@@ -218,7 +224,7 @@ int
 pthread_rwlock_rdlock(pthread_rwlock_t *rwlock) {
 	FTFS_DEBUG_ON(rwlock->init != PTHREAD_INIT_MAGIC);
 	debug_nested_semaphore(rwlock);
-	ftfs_down_read(&rwlock->lock);
+	ftfs_down_read(&rwlock->lock, rwlock->mutex);
 	debug_add_semaphore_owner(rwlock);
 	return 0;
 }
@@ -227,7 +233,7 @@ int
 pthread_rwlock_wrlock(pthread_rwlock_t *rwlock) {
 	FTFS_DEBUG_ON(rwlock->init != PTHREAD_INIT_MAGIC);
 	debug_nested_semaphore(rwlock);
-	ftfs_down_write(&rwlock->lock);
+	ftfs_down_write(&rwlock->lock, rwlock->mutex);
 	debug_add_semaphore_owner(rwlock);
 	return 0;
 }

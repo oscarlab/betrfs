@@ -325,58 +325,56 @@ ft_slice_update_parent(FT ft,
                        DBT **affected_keys, int n_affected_keys)
 {
     NONLEAF_CHILDINFO old_bnc = BNC(parent, nodenum);
-    NONLEAF_CHILDINFO new_bnc = toku_create_empty_nl(nullptr);
+    NONLEAF_CHILDINFO new_bnc = toku_create_empty_nl();
     paranoid_invariant(toku_bnc_nbytesinbuf(old_bnc) == 0);
-    DBT unlifted_pivot;
+    DBT unlifted_pivot, lift_l, lift_r;
     int r;
+    toku_init_dbt(&lift_l);
+    toku_init_dbt(&lift_r);
     if (ft->key_ops.keylift != NULL) {
-        DBT new_lifted, *bound;
+        DBT *bound;
         int relifted[n_affected_keys];
         memset(relifted, 0, sizeof(relifted));
-        if (old_bnc->lifted.size != 0) {
+        if (BP_LIFT(parent, nodenum).size) {
             toku_init_dbt(&unlifted_pivot);
-            r = toku_ft_unlift_key(ft, &unlifted_pivot, pivot, &old_bnc->lifted);
+            r = toku_ft_unlift_key(ft, &unlifted_pivot, pivot, &BP_LIFT(parent, nodenum));
             assert_zero(r);
         } else {
             toku_memdup_dbt(&unlifted_pivot, pivot->data, pivot->size);
         }
         bound = (nodenum == parent->n_children - 1) ?
                 &parent->bound_r : &parent->childkeys[nodenum];
-        toku_init_dbt(&new_lifted);
-        r = toku_ft_lift(ft, &new_lifted, &unlifted_pivot, bound);
+        r = toku_ft_lift(ft, &lift_r, &unlifted_pivot, bound);
         assert_zero(r);
-        r = toku_ft_node_relift(ft, sib, &old_bnc->lifted, &new_lifted);
+        r = toku_ft_node_relift(ft, sib, &BP_LIFT(parent, nodenum), &lift_r);
         assert_zero(r);
-        if (old_bnc->lifted.size != 0 || new_lifted.size != 0) {
+        if (BP_LIFT(parent, nodenum).size || lift_r.size) {
             for (int i = 0; i < n_affected_keys; i++) {
                 if (ft_slice_compare(ft, affected_keys[i], pivot) > 0) {
                     r = toku_ft_relift_key(ft, affected_keys[i],
-                                           &old_bnc->lifted, &new_lifted);
+                                           &BP_LIFT(parent, nodenum), &lift_r);
                     assert_zero(r);
                     relifted[i] = 1;
                 }
             }
         }
-        toku_copy_dbt(&new_bnc->lifted, new_lifted);
         bound = (nodenum == 0) ?
                 &parent->bound_l : &parent->childkeys[nodenum - 1];
-        toku_init_dbt(&new_lifted);
-        r = toku_ft_lift(ft, &new_lifted, bound, &unlifted_pivot);
+        r = toku_ft_lift(ft, &lift_l, bound, &unlifted_pivot);
         assert_zero(r);
-        r = toku_ft_node_relift(ft, node, &old_bnc->lifted, &new_lifted);
+        r = toku_ft_node_relift(ft, node, &BP_LIFT(parent, nodenum), &lift_l);
         assert_zero(r);
-        if (old_bnc->lifted.size != 0 || new_lifted.size != 0) {
+        if (BP_LIFT(parent, nodenum).size || lift_l.size) {
             for (int i = 0; i < n_affected_keys; i++) {
                 if (!relifted[i] && ft_slice_compare(ft, affected_keys[i], pivot) < 0) {
                     r = toku_ft_relift_key(ft, affected_keys[i],
-                                           &old_bnc->lifted, &new_lifted);
+                                           &BP_LIFT(parent, nodenum), &lift_l);
                     assert_zero(r);
                 }
             }
         }
-        if (old_bnc->lifted.size != 0)
-            toku_destroy_dbt(&old_bnc->lifted);
-        toku_copy_dbt(&old_bnc->lifted, new_lifted);
+        toku_cleanup_dbt(&BP_LIFT(parent, nodenum));
+        toku_copy_dbt(&BP_LIFT(parent, nodenum), lift_l);
     } else {
         toku_memdup_dbt(&unlifted_pivot, pivot->data, pivot->size);
     }
@@ -394,6 +392,7 @@ ft_slice_update_parent(FT ft,
     BP_BLOCKNUM(parent, nodenum + 1) = sib->thisnodename;
     BP_WORKDONE(parent, nodenum + 1) = 0;
     BP_STATE(parent, nodenum + 1) = PT_AVAIL;
+    toku_copy_dbt(&BP_LIFT(parent, nodenum + 1), lift_r);
     set_BNC(parent, nodenum + 1, new_bnc);
 
     toku_copy_dbt(&parent->childkeys[nodenum], unlifted_pivot);
@@ -947,27 +946,23 @@ ft_slice_above_LCA_quadruple(FT ft, enum ft_slice_lock_order lock_order,
     old_sr = src_slice->r_key;
     old_dl = dst_slice->l_key;
     old_dr = dst_slice->r_key;
-    NONLEAF_CHILDINFO bnc = BNC(src_l_node, src_l_childnum);
-    if (bnc->lifted.size != 0) {
-        r = toku_ft_lift_key_no_alloc(ft, &new_sl, src_slice->l_key, &bnc->lifted);
+    if (BP_LIFT(src_l_node, src_l_childnum).size) {
+        r = toku_ft_lift_key_no_alloc(ft, &new_sl, src_slice->l_key, &BP_LIFT(src_l_node, src_l_childnum));
         assert_zero(r);
         src_slice->l_key = &new_sl;
     }
-    bnc = BNC(src_r_node, src_r_childnum);
-    if (bnc->lifted.size != 0) {
-        r = toku_ft_lift_key_no_alloc(ft, &new_sr, src_slice->r_key, &bnc->lifted);
+    if (BP_LIFT(src_r_node, src_r_childnum).size) {
+        r = toku_ft_lift_key_no_alloc(ft, &new_sr, src_slice->r_key, &BP_LIFT(src_r_node, src_r_childnum));
         assert_zero(r);
         src_slice->r_key = &new_sr;
     }
-    bnc = BNC(dst_l_node, dst_l_childnum);
-    if (bnc->lifted.size != 0) {
-        r = toku_ft_lift_key_no_alloc(ft, &new_dl, dst_slice->l_key, &bnc->lifted);
+    if (BP_LIFT(dst_l_node, dst_l_childnum).size) {
+        r = toku_ft_lift_key_no_alloc(ft, &new_dl, dst_slice->l_key, &BP_LIFT(dst_l_node, dst_l_childnum));
         assert_zero(r);
         dst_slice->l_key = &new_dl;
     }
-    bnc = BNC(dst_r_node, dst_r_childnum);
-    if (bnc->lifted.size != 0) {
-        r = toku_ft_lift_key_no_alloc(ft, &new_dr, dst_slice->r_key, &bnc->lifted);
+    if (BP_LIFT(dst_r_node, dst_r_childnum).size) {
+        r = toku_ft_lift_key_no_alloc(ft, &new_dr, dst_slice->r_key, &BP_LIFT(dst_r_node, dst_r_childnum));
         assert_zero(r);
         dst_slice->r_key = &new_dr;
     }
@@ -1048,20 +1043,18 @@ ft_slice_locate_LCA_quadruple(FT ft, enum ft_slice_lock_order lock_order,
     old_sr = src_slice->r_key;
     old_dl = dst_slice->l_key;
     old_dr = dst_slice->r_key;
-    NONLEAF_CHILDINFO bnc = BNC(src_node, src_childnum);
-    if (bnc->lifted.size != 0) {
-        r = toku_ft_lift_key_no_alloc(ft, &new_sl, src_slice->l_key, &bnc->lifted);
+    if (BP_LIFT(src_node, src_childnum).size) {
+        r = toku_ft_lift_key_no_alloc(ft, &new_sl, src_slice->l_key, &BP_LIFT(src_node, src_childnum));
         assert_zero(r);
-        r = toku_ft_lift_key_no_alloc(ft, &new_sr, src_slice->r_key, &bnc->lifted);
+        r = toku_ft_lift_key_no_alloc(ft, &new_sr, src_slice->r_key, &BP_LIFT(src_node, src_childnum));
         assert_zero(r);
         src_slice->l_key = &new_sl;
         src_slice->r_key = &new_sr;
     }
-    bnc = BNC(dst_node, dst_childnum);
-    if (bnc->lifted.size != 0) {
-        r = toku_ft_lift_key_no_alloc(ft, &new_dl, dst_slice->l_key, &bnc->lifted);
+    if (BP_LIFT(dst_node, dst_childnum).size) {
+        r = toku_ft_lift_key_no_alloc(ft, &new_dl, dst_slice->l_key, &BP_LIFT(dst_node, dst_childnum));
         assert_zero(r);
-        r = toku_ft_lift_key_no_alloc(ft, &new_dr, dst_slice->r_key, &bnc->lifted);
+        r = toku_ft_lift_key_no_alloc(ft, &new_dr, dst_slice->r_key, &BP_LIFT(dst_node, dst_childnum));
         assert_zero(r);
         dst_slice->l_key = &new_dl;
         dst_slice->r_key = &new_dr;

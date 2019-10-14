@@ -94,7 +94,7 @@ PATENT RIGHTS GRANT:
 #include "checkpoint.h"
 #include "helper.h"
 
-static int 
+static int
 run_test(void) {
     // leave this many bytes in file
     const int magic_begin_end_checkpoint_sz =
@@ -141,8 +141,6 @@ run_test(void) {
         char fname[TOKU_PATH_MAX+1];
         sprintf(fname, "%s/%s%d", TOKU_TEST_FILENAME, "log000000000000.tokulog", TOKU_LOG_VERSION);
 
-	DBG;
-
         r = toku_stat(fname, &st); assert(r==0);
         if ( st.st_size - trim > magic_begin_end_checkpoint_sz ) {
             r = truncate(fname, st.st_size - trim);
@@ -151,17 +149,17 @@ run_test(void) {
         else
             break;
         // run recovery
-	DBG;
+        struct toku_db_key_operations dummy_ftfs_key_ops;
+        memset(&dummy_ftfs_key_ops, 0, sizeof(dummy_ftfs_key_ops));
 
         r = tokudb_recover(NULL,
 			   NULL_prepared_txn_callback,
 			   NULL_keep_cachetable_callback,
 			   NULL_logger,
-			   TOKU_TEST_FILENAME, 
-                           TOKU_TEST_FILENAME, 0, 0, 0, NULL, 0); 
-	DBG;
+			   TOKU_TEST_FILENAME,
+                           TOKU_TEST_FILENAME, &dummy_ftfs_key_ops, 0, 0, NULL, 0);
         assert(r == 0);
-        
+
         trim += 1;
     }
     toku_os_recursive_delete(TOKU_TEST_FILENAME);
@@ -175,7 +173,7 @@ int recovery_bad_last_entry(void){
     initialize_dummymsn();
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
- 
+
     r = run_test();
     toku_ft_layer_destroy();
     return r;

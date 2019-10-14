@@ -129,9 +129,12 @@ ssize_t toku_write_proc(struct file *file, const char __user *buffer,
 	buf[count] = '\0';
 
 	//last_result = run_test(buf);
-	thread_run_test(buf);
+	ret = thread_run_test(buf);
 
 	kfree(buf);
+
+	// If the test failed, return an error code
+	if (ret < 0) return ret;
 
 	return count;
 }

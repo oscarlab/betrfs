@@ -17,9 +17,9 @@ do {                                                            \
          __ftfs_init_rwsem((sem), #sem);                      \
 } while (0)
 
-void __sched ftfs_down_read(struct rw_semaphore *sem);
+void __sched ftfs_down_read(struct rw_semaphore *sem, pthread_mutex_t * mux);
 int ftfs_down_read_trylock(struct rw_semaphore *sem);
-void __sched ftfs_down_write(struct rw_semaphore *sem);
+void __sched ftfs_down_write(struct rw_semaphore *sem, pthread_mutex_t * mux);
 int ftfs_down_write_trylock(struct rw_semaphore *sem);
 void ftfs_up_read(struct rw_semaphore *sem);
 void ftfs_up_write(struct rw_semaphore *sem);

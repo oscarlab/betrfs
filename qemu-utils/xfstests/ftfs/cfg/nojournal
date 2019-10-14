@@ -1,0 +1,4 @@
+SIZE=small
+export MKFS_OPTIONS=""
+export EXT_MOUNT_OPTIONS="noload"
+TESTNAME="Ext4 4k block w/ no journal"

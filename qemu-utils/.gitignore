@@ -1,0 +1,13 @@
+#don't include virtual disks
+linuxdisk.raw
+ftfs-southbound.raw
+rootfs.raw
+device.raw
+
+#qemu logs
+*.log
+*.log.last
+kvm.pid
+
+#temp files
+*~

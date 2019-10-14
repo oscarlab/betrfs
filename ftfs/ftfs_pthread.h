@@ -62,6 +62,7 @@ typedef struct pthread_mutex_t {
 
 typedef struct pthread_rwlock_t {
 	struct rw_semaphore lock;
+        struct pthread_mutex_t* mutex;
 #if defined (DEBUG_NESTED_SEMAPHORES)
 	struct list_head holders; //struct true_pthread_struct *owner;
 	struct spinlock list_lock;
@@ -106,6 +107,9 @@ extern int pthread_rwlockattr_init(pthread_rwlockattr_t *);
 extern int pthread_rwlockattr_setkind_np(pthread_rwlockattr_t *, int *);
 extern int
 pthread_rwlock_init(pthread_rwlock_t *, const pthread_rwlockattr_t *);
+
+extern int 
+pthread_rwlock_set_mutex(pthread_rwlock_t *rwlock, pthread_mutex_t * mutex);
 extern int pthread_rwlock_destroy(pthread_rwlock_t *);
 extern int pthread_rwlock_rdlock(pthread_rwlock_t *);
 extern int pthread_rwlock_unlock(pthread_rwlock_t *);

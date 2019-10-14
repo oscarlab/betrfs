@@ -1,0 +1,4 @@
+SIZE=small
+export MKFS_OPTIONS="-O quota"
+export EXT_MOUNT_OPTIONS=""
+TESTNAME="Ext4 with quota feature"

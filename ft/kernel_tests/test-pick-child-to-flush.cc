@@ -162,24 +162,17 @@ static bool always_flush(FTNODE UU(child), void* UU(extra)) {
 }
 
 
-static void
-doit (void) {
+static int doit (void) {
     BLOCKNUM node_internal, node_root;
     BLOCKNUM node_leaf[2];
     int r;
-   
-    STR(fname);   
 
-    if(fname == NULL)  fname = __FILE__;	
+    assert(fname != NULL);
 
     toku_cachetable_create(&ct, 500*1024*1024, ZERO_LSN, NULL_LOGGER);
-    r = unlink(fname); 
+    r = unlink(fname);
+    assert(r==0);
 
-    if(r < 0) {
-    toku_cachetable_close(&ct);
-    return;
-    }
-    
     r = toku_open_ft_handle(fname, 1, &t, NODESIZE, NODESIZE/2, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
     assert(r==0);
 
@@ -206,21 +199,21 @@ doit (void) {
     memset(filler, 0, VALSIZE);
     // now we insert filler data so that a merge does not happen
     r = toku_testsetup_insert_to_leaf (
-        t, 
-        node_leaf[0], 
+        t,
+        node_leaf[0],
         "b", // key
         2, // keylen
-        filler, 
+        filler,
         VALSIZE,
 	FT_INSERT
         );
     assert(r==0);
     r = toku_testsetup_insert_to_leaf (
-        t, 
-        node_leaf[1], 
+        t,
+        node_leaf[1],
         "y", // key
         2, // keylen
-        filler, 
+        filler,
         VALSIZE,
 	FT_INSERT
         );
@@ -228,9 +221,9 @@ doit (void) {
 
     // make buffers in internal node non-empty
     r = toku_testsetup_insert_to_nonleaf(
-        t, 
-        node_internal, 
-        FT_INSERT, 
+        t,
+        node_internal,
+        FT_INSERT,
         "a",
         2,
         NULL,
@@ -238,16 +231,16 @@ doit (void) {
         );
     assert_zero(r);
     r = toku_testsetup_insert_to_nonleaf(
-        t, 
-        node_internal, 
-        FT_INSERT, 
+        t,
+        node_internal,
+        FT_INSERT,
         "z",
         2,
         NULL,
         0
         );
     assert_zero(r);
-    
+
     //
     // now run a checkpoint to get everything clean
     //
@@ -292,14 +285,14 @@ doit (void) {
     assert(toku_bnc_n_entries(node->bp[1].ptr.u.nonleaf) > 0);
     toku_unpin_ftnode(t->ft, node);
     r = toku_checkpoint(cp, NULL, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, false);
-    assert_zero(r);    
+    assert_zero(r);
     toku_pin_node_with_min_bfe(&node, node_internal, t);
     assert(!node->dirty);
     curr_child_to_flush = 1;
     num_flushes_called = 0;
     toku_ft_flush_some_child(t->ft, node, &fa);
     assert(num_flushes_called == 1);
-    
+
     toku_pin_node_with_min_bfe(&node, node_internal, t);
     assert(node->dirty);
     toku_assert_entire_node_in_memory(node);
@@ -310,7 +303,7 @@ doit (void) {
     // now let's do a flush with an empty buffer, make sure it is ok
     toku_unpin_ftnode(t->ft, node);
     r = toku_checkpoint(cp, NULL, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, false);
-    assert_zero(r);    
+    assert_zero(r);
     toku_pin_node_with_min_bfe(&node, node_internal, t);
     assert(!node->dirty);
     curr_child_to_flush = 0;
@@ -321,13 +314,16 @@ doit (void) {
     toku_pin_node_with_min_bfe(&node, node_internal, t);
     assert(node->dirty); // nothing was flushed, but since we were trying to flush to a leaf, both become dirty
     toku_assert_entire_node_in_memory(node);
-    assert(node->n_children == 2);
+    if (node->n_children != 2) {
+        printf("node->n_children=%d\n", node->n_children);
+        assert(false);
+    }
     // both buffers should be empty now
     assert(toku_bnc_n_entries(node->bp[0].ptr.u.nonleaf) == 0);
     assert(toku_bnc_n_entries(node->bp[1].ptr.u.nonleaf) == 0);
     toku_unpin_ftnode(t->ft, node);
 
-    // now let's start a flush from the root, that always recursively flushes    
+    // now let's start a flush from the root, that always recursively flushes
     flusher_advice_init(
         &fa,
         child_to_flush,
@@ -346,7 +342,7 @@ doit (void) {
         num_flushes_called = 0;
         toku_ft_flush_some_child(t->ft, node, &fa);
         assert(num_flushes_called == 2);
-    
+
         toku_pin_node_with_min_bfe(&node, node_internal, t);
         assert(node->dirty);
         toku_unpin_ftnode(t->ft, node);
@@ -368,12 +364,12 @@ doit (void) {
     // and child is not fully in memory, we used to crash
     // so, to make sure that is fixed, let's get internal to not
     // be fully in memory, and make sure the above test works
-    
+
     // a hack to get internal compressed
     r = toku_testsetup_insert_to_nonleaf(
-        t, 
-        node_internal, 
-        FT_INSERT, 
+        t,
+        node_internal,
+        FT_INSERT,
         "c",
         2,
         NULL,
@@ -381,7 +377,7 @@ doit (void) {
         );
     assert_zero(r);
     r = toku_checkpoint(cp, NULL, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, false);
-    assert_zero(r);    
+    assert_zero(r);
     toku_pin_node_with_min_bfe(&node, node_internal, t);
     for (int i = 0; i < 20; i++) {
         PAIR_ATTR attr;
@@ -397,13 +393,14 @@ doit (void) {
     num_flushes_called = 0;
     toku_ft_flush_some_child(t->ft, node, &fa);
     assert(num_flushes_called == 2);
-    
+
     r = toku_close_ft_handle_nolsn(t, 0);    assert(r==0);
     toku_cachetable_close(&ct);
 
 
     toku_free( filler );
     toku_free(pivots[0]);
+    return 0;
 }
 
 extern "C" int test_pick_child_to_flush(void);
@@ -413,11 +410,10 @@ int test_pick_child_to_flush(void)
     initialize_dummymsn();
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
- 
+
     fname = TOKU_TEST_FILENAME;
-    doit();
+    int r = doit();
     sleep(1);
-    
     toku_ft_layer_destroy();
-    return 0;
+    return r;
 }

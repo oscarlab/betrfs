@@ -7,6 +7,14 @@ DEF_PRE="default-pre.py"
 DEF_POST="default-post.py"
 procfile="/proc/toku_test"
 
+def format_sfs():
+    print "Format SFS"
+    command = "./mkfs-sfs.sh /dev/sdb ${PWD}/../../simplefs/tmp"
+    ret = subprocess.call(command, shell=True)
+    if ret != 0 :
+        print "ERROR! Failed to format SFS"
+        exit(ret)
+
 def run_one_test(test, interp, pre, post):
     """ the main testing worker
     1. run any pre-test scripts (pre)
@@ -15,7 +23,7 @@ def run_one_test(test, interp, pre, post):
     4. run any post-test scripts to cleanup state (post)
 
     """
-    
+
     # run pre-test script
     command = "./{0} --test={1}".format(pre, test)
     ret = subprocess.call(command, shell=True)
@@ -63,17 +71,19 @@ def run_test_set(test_array):
             ret = run_one_test(test[0], DEF_INTERP, DEF_PRE, DEF_POST)
         else :
             ret = run_one_test(test[0], test[1], test[2], test[3])
-        
+
         if (ret) :
             print "Test failed: " + test[0]
             failure = failure + 1
+            # In our current testing environment, there is no reason to keep going if a test fails
+            break
         else :
             print "Test passed: " + test[0]
             success = success + 1
 
     print "Successes: {0}".format(success)
     print "Failures:  {0}".format(failure)
-    return ret
+    return failure
 
 def scripts_exist(test_line) :
     return (os.path.exists(test_line[1]) and os.path.exists(test_line[2]) \
@@ -96,6 +106,9 @@ def run_all_tests(test_file, shuffle) :
     test_array = []
     testf = open(test_file, "r")
     for line in testf:
+        # implement comments
+        if line.startswith("#"):
+            continue
         test_line = string.split(line)
         if (validate_testline(test_line)):
             test_array.append(test_line)
@@ -115,23 +128,30 @@ def run_all_tests(test_file, shuffle) :
 ##################
 
 def help() :
-    print "Arguments: <testfile> [-s (optional, shuffles tests)]"
+    print "Arguments: <testfile> [fstype] [-s (optional, shuffles tests)]"
 
 try:
     if (len(sys.argv) <= 1):
-        print "run-tests.py : No suffcient number of arguments." 
+        print "run-tests.py : No suffcient number of arguments."
         help()
-        exit()
-
+        exit(-1)
     shuffle = False
+    use_sfs = False
     print "Running tests:", sys.argv
     print "----"
 
     test_file = sys.argv[1]
-    if (len(sys.argv) == 3) :
-        shuffle = True;
+    for x in sys.argv[2:]:
+       if x == "sfs":
+          use_sfs = True
+       if x == "-s":
+          shuffle = True;
+    
+    if use_sfs:
+       format_sfs() 
 
-    run_all_tests(test_file, shuffle)
+    ret = run_all_tests(test_file, shuffle)
+    sys.exit(ret)
 
 except OSError, Argument:
     print Argument;

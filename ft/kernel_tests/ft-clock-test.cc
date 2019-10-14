@@ -308,6 +308,8 @@ test_serialize_nonleaf(void) {
 
     //    source_ft.fd=fd;
     sn.max_msn_applied_to_node_on_disk.msn = 0;
+    toku_init_dbt(&sn.bound_l);
+    toku_init_dbt(&sn.bound_r);
     char *hello_string;
     sn.flags = 0x11223344;
     sn.thisnodename.b = 20;
@@ -327,8 +329,10 @@ test_serialize_nonleaf(void) {
     BP_BLOCKNUM(&sn, 1).b = 35;
     BP_STATE(&sn,0) = PT_AVAIL;
     BP_STATE(&sn,1) = PT_AVAIL;
-    set_BNC(&sn, 0, toku_create_empty_nl(nullptr));
-    set_BNC(&sn, 1, toku_create_empty_nl(nullptr));
+    set_BNC(&sn, 0, toku_create_empty_nl());
+    set_BNC(&sn, 1, toku_create_empty_nl());
+    toku_init_dbt(&BP_LIFT(&sn, 0));
+    toku_init_dbt(&BP_LIFT(&sn, 1));
     //Create XIDS
     XIDS xids_0 = xids_get_root_xids();
     XIDS xids_123;
@@ -424,6 +428,8 @@ test_serialize_leaf(void) {
     int r;
 
     sn.max_msn_applied_to_node_on_disk.msn = 0;
+    toku_init_dbt(&sn.bound_l);
+    toku_init_dbt(&sn.bound_r);
     sn.flags = 0x11223344;
     sn.thisnodename.b = 20;
     sn.layout_version = FT_LAYOUT_VERSION;
@@ -441,6 +447,8 @@ test_serialize_leaf(void) {
     BP_STATE(&sn,1) = PT_AVAIL;
     set_BLB(&sn, 0, toku_create_empty_bn());
     set_BLB(&sn, 1, toku_create_empty_bn());
+    toku_init_dbt(&BP_LIFT(&sn, 0));
+    toku_init_dbt(&BP_LIFT(&sn, 1));
     le_malloc(BLB_DATA(&sn, 0), 0, "a", "aval");
     le_malloc(BLB_DATA(&sn, 0), 1, "b", "bval");
     le_malloc(BLB_DATA(&sn, 1), 0, "x", "xval");

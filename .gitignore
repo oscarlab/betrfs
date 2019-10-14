@@ -1,0 +1,53 @@
+# Compiled Object files
+*.slo
+*.lo
+*.o
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+
+# Libraries
+*.lib
+
+# Shared objects (inc. Windows DLLs)
+*.dll
+*.so.*
+
+# Executables
+*.exe
+*.out
+*.app
+
+*.py[cod]
+
+# Tags
+GPATH
+GRTAGS
+GTAGS
+TAGS
+tags
+
+# Common symlinks used in compiling
+third_party/jemalloc
+
+# build dir
+build
+ft-install
+linux-3.11.10
+
+#cscope
+cscope.*
+
+# backups
+*~
+*.swp
+*#*
+
+#log files
+*.log

@@ -118,11 +118,14 @@ run_test(void) {
     r = toku_dup2(devnul, fileno(stderr)); 	    assert(r==fileno(stderr));
     r = close(devnul);                      assert(r==0);
 #endif
+    struct toku_db_key_operations dummy_ftfs_key_ops;
+    memset(&dummy_ftfs_key_ops, 0, sizeof(dummy_ftfs_key_ops));
+
     // run recovery
     r = tokudb_recover(NULL,
 		       NULL_prepared_txn_callback,
 		       NULL_keep_cachetable_callback,
-		       NULL_logger, "/junk", TOKU_TEST_FILENAME, 0, 0, 0, NULL, 0); 
+		       NULL_logger, "/junk", TOKU_TEST_FILENAME, &dummy_ftfs_key_ops, 0, 0, NULL, 0); 
 /*
     r = tokudb_recover(NULL,
 		       NULL_prepared_txn_callback,

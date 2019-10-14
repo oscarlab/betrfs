@@ -14,19 +14,20 @@
 
 #include <linux/rwsem.h>
 #include <linux/sched.h>
+#include "ftfs_pthread.h"
 /*
  * lock for reading
  */
 
-struct rw_semaphore __sched *ftfs_rwsem_down_read_failed(struct rw_semaphore *sem);
-struct rw_semaphore __sched *ftfs_rwsem_down_write_failed(struct rw_semaphore *sem);
+struct rw_semaphore __sched *ftfs_rwsem_down_read_failed(struct rw_semaphore *sem, pthread_mutex_t * mux);
+struct rw_semaphore __sched *ftfs_rwsem_down_write_failed(struct rw_semaphore *sem, pthread_mutex_t * mux);
 struct rw_semaphore *ftfs_rwsem_wake(struct rw_semaphore *sem);
 void __ftfs_init_rwsem(struct rw_semaphore *sem, const char *name);
 
-static inline void __ftfs_down_read(struct rw_semaphore *sem)
+static inline void __ftfs_down_read(struct rw_semaphore *sem, pthread_mutex_t * mux)
 {
 	if (unlikely(atomic_long_inc_return((atomic_long_t *)&sem->count) <= 0))
-            ftfs_rwsem_down_read_failed(sem);
+            ftfs_rwsem_down_read_failed(sem, mux);
 }
 
 /*
@@ -48,7 +49,7 @@ static inline int __ftfs_down_read_trylock(struct rw_semaphore *sem)
 /*
  * lock for writing
  */
-static inline void __ftfs_down_write_nested(struct rw_semaphore *sem, int subclass)
+static inline void __ftfs_down_write_nested(struct rw_semaphore *sem,  pthread_mutex_t * mux, int subclass)
 {
 
 
@@ -56,12 +57,12 @@ static inline void __ftfs_down_write_nested(struct rw_semaphore *sem, int subcla
       tmp = atomic_long_add_return(FTFS_RWSEM_ACTIVE_WRITE_BIAS,
                                       (atomic_long_t *)&sem->count);
       if (unlikely(tmp != FTFS_RWSEM_ACTIVE_WRITE_BIAS))
-      ftfs_rwsem_down_write_failed(sem);
+      ftfs_rwsem_down_write_failed(sem, mux);
 }
 
-static inline void __ftfs_down_write(struct rw_semaphore *sem)
+static inline void __ftfs_down_write(struct rw_semaphore *sem, pthread_mutex_t * mux)
 {
-	__ftfs_down_write_nested(sem, 0);
+	__ftfs_down_write_nested(sem, mux, 0);
 }
 
 /*

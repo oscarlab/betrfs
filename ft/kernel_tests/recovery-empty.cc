@@ -118,10 +118,13 @@ run_test(void) {
 #endif
 
     // run recovery
+    struct toku_db_key_operations dummy_ftfs_key_ops;
+    memset(&dummy_ftfs_key_ops, 0, sizeof(dummy_ftfs_key_ops));	
+
     r = tokudb_recover(NULL,
 		       NULL_prepared_txn_callback,
 		       NULL_keep_cachetable_callback,
-		       NULL_logger, TOKU_TEST_FILENAME, TOKU_TEST_FILENAME, 0, 0, 0, NULL, 0); 
+		       NULL_logger, TOKU_TEST_FILENAME, TOKU_TEST_FILENAME, &dummy_ftfs_key_ops, 0, 0, NULL, 0);
     assert(r == DB_RUNRECOVERY);
 
     toku_os_recursive_delete(TOKU_TEST_FILENAME);
