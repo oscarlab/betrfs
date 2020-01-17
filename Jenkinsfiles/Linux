@@ -31,10 +31,14 @@ pipeline {
           }
           post {
             always {
-              sh '''
-              cd Jenkinsfiles
-              vagrant destroy -f
-              '''
+              timeout(time: 10, unit: 'MINUTES') {
+                sh '''
+                cd Jenkinsfiles
+                vagrant ssh -c "/bin/dmesg"
+                result=$?
+                vagrant destroy -f
+                '''
+              }
             }
           }
         }
@@ -53,10 +57,14 @@ pipeline {
           }
           post {
             always {
-              sh '''
-              cd Jenkinsfiles
-              vagrant destroy -f
-              '''
+              timeout(time: 10, unit: 'MINUTES') {
+                sh '''
+                cd Jenkinsfiles
+                vagrant ssh -c "/bin/dmesg"
+                result=$?
+                vagrant destroy -f
+                '''
+              }
             }
           }
         }
@@ -75,10 +83,14 @@ pipeline {
           }
           post {
             always {
-              sh '''
-              cd Jenkinsfiles
-              vagrant destroy -f
-              '''
+              timeout(time: 10, unit: 'MINUTES') {
+                sh '''
+                cd Jenkinsfiles
+                vagrant ssh -c "/bin/dmesg"
+                result=$?
+                vagrant destroy -f
+                '''
+              }
             }
           }
         }
@@ -97,32 +109,40 @@ pipeline {
           }
           post {
             always {
-              sh '''
-              cd Jenkinsfiles
-              vagrant destroy -f
-              '''
+              timeout(time: 10, unit: 'MINUTES') {
+                sh '''
+                cd Jenkinsfiles
+                vagrant ssh -c "/bin/dmesg"
+                result=$?
+                vagrant destroy -f
+                '''
               }
             }
           }
+        }
 
-          stage('Test Group 5') {
-            steps {
-              sh "hostname"
-              timeout(time: 2, unit: 'HOURS'){
-                sh '''
-                sleep 40
-                cd Jenkinsfiles
-                sudo chmod +x test5.sh
-                ./test5.sh
-                '''
-              }
+        stage('Test Group 5') {
+          steps {
+            sh "hostname"
+            timeout(time: 2, unit: 'HOURS'){
+              sh '''
+              sleep 40
+              cd Jenkinsfiles
+              sudo chmod +x test5.sh
+              ./test5.sh
+              '''
             }
-            post {
-              always {
+          }
+          post {
+            always {
+              timeout(time: 10, unit: 'MINUTES') {
                 sh '''
                 cd Jenkinsfiles
+                vagrant ssh -c "/bin/dmesg"
+                result=$?
                 vagrant destroy -f
                 '''
+              }
             }
           }
         }
