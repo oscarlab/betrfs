@@ -83,7 +83,7 @@ pipeline {
           }
           post {
             always {
-              timeout(time: 10, unit: 'MINUTES') {
+              timeout(time: 20, unit: 'MINUTES') {
                 sh '''
                 cd Jenkinsfiles
                 vagrant ssh -c "/bin/dmesg"
