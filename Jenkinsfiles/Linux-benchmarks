@@ -22,6 +22,7 @@ pipeline {
         timeout(time: 5, unit: 'HOURS'){
           sh '''
           cd Jenkinsfiles
+          vagrant up
           vagrant ssh -c "cd /oscar/betrfs/benchmarks/; sudo REPO=betrfs CUR_MNTPNT=/oscar ./run-benchmark.sh perf_tests"
           result=\$?
           '''
