@@ -1,0 +1,14 @@
+application/git
+./run-all.sh
+application/tar
+./run-tar.sh
+application/rsync
+./run-rsync.sh
+micro/recursive-grep
+./recur-grep.sh
+micro/recursive-scan-find
+./recur-find.sh
+micro/recursive-dir-delete
+./recur-del.sh
+micro/large-file
+./run_automation.sh
