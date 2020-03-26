@@ -10,8 +10,8 @@ pipeline {
       steps {
         sh '''
         cd Jenkinsfiles
-        sudo chmod +x build.sh
-        ./build.sh
+        sudo chmod +x build-bench.sh
+        ./build-bench.sh
         result=\$?
         '''
       }
