@@ -7,6 +7,12 @@ if [[ ! -d "$DIR" ]]; then DIR="$PWD"; fi
 
 fstype=`grep "[[:space:]]$mntpnt[[:space:]]" /proc/mounts | cut -d' ' -f3`
 
+if [ -z $fstype ]
+then
+    # no FS currently mounted
+    exit 0
+fi
+
 echo "unmounting $fstype"
 
 if [[ $fstype == "ext4" || $fstype == "btrfs" || $fstype == "xfs" ]]
@@ -18,11 +24,20 @@ then
     sudo nilfs-clean -q
     umount $mntpnt
     exit 0
+elif [[ $fstype == "f2fs" ]]
+then
+    umount $mntpnt
+    exit 0
 elif [[ $fstype == "ftfs" ]]
 then
     umount $mntpnt
     rmmod $module
-    losetup -d /dev/loop0
+    ## YZJ: Just to make sure everything can be cleared up in SFS
+    if [[ $use_sfs == "true" ]]
+    then
+        losetup -d $dummy_dev
+        rmmod simplefs
+    fi
     exit 0
 elif [[ $fstype == "zfs" ]]
 then
