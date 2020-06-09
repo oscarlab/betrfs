@@ -1,9 +1,14 @@
 #!/bin/bash
+set -x
 
 . ../../fs-info.sh
 . ../../.ismounted
-support=$HOME/$repo/benchmarks/support-files
 
+support=${FT_HOMEDIR}/benchmarks/support-files
+
+##################################
+#### Clone the repo if not exist #
+##################################
 if [ ! -e $support/$clone_repo ] ; then
     cd $support; git clone https://github.com/torvalds/linux.git; cd -
 fi
@@ -16,4 +21,7 @@ fi
 
 sudo ../../clear-fs-caches.sh
 
-cd $mntpnt; time git clone $support/$clone_repo
+cd $mntpnt;
+/usr/bin/time -p git clone $support/$clone_repo
+cd -
+

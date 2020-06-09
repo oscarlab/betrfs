@@ -3,7 +3,7 @@
 . ../../fs-info.sh
 . ../../.ismounted
 
-support=$HOME/$repo/benchmarks/support-files
+support=${FT_HOMEDIR}/benchmarks/support-files
 
 if [ ! -e $mntpnt/$clone_repo ]; then
     if [ ! -e $support/$clone_repo ] ; then
@@ -15,6 +15,5 @@ fi
 sudo ../../clear-fs-caches.sh
 
 cd $mntpnt/$clone_repo
-result=/usr/bin/time -f '%e' git diff --patch v4.7 v4.14 > patch
-
-echo "$1 diff $result" >> $2
+/usr/bin/time -p git diff --patch v4.7 v4.14 > patch
+cd -
