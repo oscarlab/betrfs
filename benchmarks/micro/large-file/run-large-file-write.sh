@@ -1,6 +1,7 @@
 #!/bin/bash
 
 . params.sh
+. ../../fs-info.sh
 
 exe="./sequential_write"
 
@@ -14,10 +15,39 @@ if [ -e $mnt/$input ] ; then
 	rm $mnt/$input
 fi
 
+if [ "$#" -ne 1 ] && [ "$#" -ne 2 ] ; then
+	echo "Need fstype file as argument!"
+	exit 1
+fi
+
+FS=$1
+TIME=`date +"%d-%m-%Y-%H-%M-%S"`
+FILE="$1-seq-write-${TIME}"
+
+if [ "$#" -eq 2 ] ; then
+	FILE=$2
+fi
+
+echo "clearing cache"
+
 echo "a" > $mnt/zzz
-sudo ../../clear-fs-caches.sh
-#iostat -p
-echo "beginning sequential write test..." 
-$exe -o$mnt/$input -b$io_size -n$random_buffers -s$f_size
+sudo -E ../../clear-fs-caches.sh
+
+echo "beginning sequential write test..."
+
+cmd="$exe -o$mnt/$input -b$io_size -n$random_buffers -s$f_size"
+
+echo $cmd
+(
+    $cmd
+) | tee -a ${resultdir}/${FILE}.csv
+
+
+if [ $? != 0 ] ; then
+    echo "got error $?"
+    exit $?
+fi
+
+sed -i '$ s/^/result.'${FS}', /'  ${resultdir}/${FILE}.csv
+
 echo "done!"
-#iostat -p

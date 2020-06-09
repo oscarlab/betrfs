@@ -1,18 +1,29 @@
 #!/bin/bash
-set -x
-FT_HOMEDIR=/home/betrfs/ft-index
-. $FT_HOMEDIR/benchmarks/fs-info.sh
-#. $FT_HOMEDIR/benchmarks/.rootcheck
+
+# DEP: Since this is used in CI now, quit if a command fails and propagate out the error
+set -e
+#echo "**************************************************"
+
+. ../../fs-info.sh
+
+#echo "&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&"
+
 if [ -d $mntpnt/linux-3.11.10 ]; then
 :
-else 
+else
 . $FT_HOMEDIR/benchmarks/micro/prepare-support-file.sh
 fi
-(cd $FT_HOMEDIR/benchmarks/; sudo ./clear-fs-caches.sh)
-if [ "$1" = "" ] 
+
+#echo "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
+
+
+sudo -E ../../clear-fs-caches.sh
+
+if [ "$1" = "" ]
 then
 keyword=cpu_to_be64
 else
 keyword=$1
 fi
-time grep -r $keyword $mntpnt/linux-3.11.10>/dev/null 2>&1
+
+/usr/bin/time -p grep -r $keyword $mntpnt/linux-3.11.10 > /dev/null

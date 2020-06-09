@@ -1,22 +1,31 @@
 #!/bin/bash
 
+# DEP: Since this is used in CI now, quit if a command fails and propagate out the error
+set -e
+
 . ../../fs-info.sh
 . ../../.ismounted
 
-support=$HOME/$repo/benchmarks/support-files
+support=$FT_HOMEDIR/benchmarks/support-files
 src=linux-3.11.10.tar.xz
 dst=linux-3.11.10.tar.xz
+
+echo "starting $support"
 
 if [ ! -e $mntpnt/$dst ]; then
     cp $support/$src $mntpnt/$dst
 fi
 
-sudo ../../clear-fs-caches.sh
+sudo -E ../../clear-fs-caches.sh
 
-cd $mntpnt; time tar -xf $dst
-
+cd $mntpnt;
+/usr/bin/time -p  tar -xf $dst
 cd -
 
-sudo ../../clear-fs-caches.sh
+sudo -E ../../clear-fs-caches.sh
 
-cd $mntpnt; time tar -zcvf ./linux.tar.gz ./linux-3.11.10/ > /dev/null
+cd $mntpnt;
+/usr/bin/time  -p tar -zcvf ./linux.tar.gz ./linux-3.11.10/ > /dev/null
+cd -
+
+
