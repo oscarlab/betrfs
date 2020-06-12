@@ -4,7 +4,14 @@
 set -e
 #echo "**************************************************"
 
+printenv
+echo "Setting fs info"
+
 . ../../fs-info.sh
+
+printenv
+
+print "About to check for linux under mntpnt: $mntpnt"
 
 #echo "&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&"
 
