@@ -13,14 +13,14 @@ if [ ! -e $support/$src ]; then
     cd $support; tar -xf $src.tar.xz; cd -
 fi
 
-sudo ../../clear-fs-caches.sh
+sudo -E ../../clear-fs-caches.sh
 #echo 'Copy from home to benchmark partition'
 #sudo perf record -g -- rsync --stats -r -t -S -h $support/$src $mntpnt/$dst
 #strace -c -T rsync --stats -r -t -S -h $support/$src $mntpnt/$dst 2&> strace.txt
 rsync --stats -r -t -S  $support/$src $mntpnt/$dst
 #rsync --stats -r -t -W -h --inplace $support/$src $mntpnt/$dst
 
-sudo ../../clear-fs-caches.sh
+sudo -E ../../clear-fs-caches.sh
 
 if [ -e $mntpnt/$dst2 ]; then
     cd $mntpnt; rm -r $dst2; cd -

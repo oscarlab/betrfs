@@ -24,16 +24,14 @@ outfile="fs-threaded"
 
 echo "Running benchmarks on $mnt"
 for num_threads in $thread_counts ; do
-    sudo ../../clear-fs-caches.sh
+    sudo -E ../../clear-fs-caches.sh
     dir="microfile-bucket.$(date +%s)"
     cmd="./benchmark-fs-threaded --files $num_files -d $max_fanout --iosize $iosize --operations $operations --pwrite --serial --threads $num_threads --dir $mnt/$dir"
     echo $cmd
     (
-        $cmd 
+        $cmd
     ) | tee -a $outfile-$num_threads.results
     if [ $? != 0 ] ; then
         echo "got error $?"
     fi
 done
-
-

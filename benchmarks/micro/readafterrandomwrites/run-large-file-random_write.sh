@@ -15,11 +15,11 @@ if [ ! -e $mnt/$input ] ; then
 #    exit 1
 fi
 
-sudo ../../clear-fs-caches.sh
+sudo -E ../../clear-fs-caches.sh
 
 echo "beginning random write test..."
 #sudo blktrace -d /dev/sda4 -b 4096 &
 $exe  -f $mnt/$input -s$f_size
-#sleep 10 
+#sleep 10
 #sudo pkill -15 blktrace
 echo "done!"
