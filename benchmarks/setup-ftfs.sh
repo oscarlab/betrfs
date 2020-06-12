@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# DEP: Since this is used in CI now, quit if a command fails and propagate out the error
+set -e
+
 DIR="${BASH_SOURCE%/*}"
 if [[ ! -d "$DIR" ]]; then DIR="$PWD"; fi
 
@@ -16,7 +19,7 @@ sh -c 'echo "7" > /proc/sys/kernel/printk'
 # prep file system
 $DIR/mkfs.ftfs $sb_dev
 touch $DIR/$dummy_file
-losetup $dummy_dev $DIR/$dummy_file 
+losetup $dummy_dev $DIR/$dummy_file
 
 sudo sh -c "echo 7 > /proc/sys/kernel/printk"
 

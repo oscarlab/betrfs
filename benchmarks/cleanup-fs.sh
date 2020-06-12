@@ -1,4 +1,7 @@
 #!/bin/bash
+# DEP: Since this is used in CI now, quit if a command fails and propagate out the error
+set -e
+
 DIR="${BASH_SOURCE%/*}"
 if [[ ! -d "$DIR" ]]; then DIR="$PWD"; fi
 
@@ -37,7 +40,9 @@ then
     then
         rmmod simplefs
     else
+	echo "Deleting the dummy dev"
 	losetup -d $dummy_dev
+	echo "Deleted like a strong bad email"
     fi
     exit 0
 elif [[ $fstype == "zfs" ]]
