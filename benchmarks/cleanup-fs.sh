@@ -39,11 +39,8 @@ then
     if [[ $use_sfs == "true" ]]
     then
         rmmod simplefs
-    else
-	echo "Deleting the dummy dev"
-	losetup -d $dummy_dev
-	echo "Deleted like a strong bad email"
     fi
+    losetup -d $dummy_dev
     exit 0
 elif [[ $fstype == "zfs" ]]
 then
