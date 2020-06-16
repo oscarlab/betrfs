@@ -30,18 +30,18 @@ main_dir=$FT_HOMEDIR/benchmarks
 # executes each test
 while read -r line || [[ -n "$line" ]]; do
     if [[ ${line:0:1} == "#" ]]; then
-	# ignore comments
-	continue
+        # ignore comments
+        continue
     elif [[ ${line:0:1} == "." ]]; then
-	# Run the script, assuming it starts with a dot
-	/bin/bash $line
-	cd $main_dir
+        # Run the script, assuming it starts with a dot
+        /bin/bash $line
+        cd $main_dir
     else
-	# Do the cleanup since the last test, and reset the fs state
-	yes | sudo -E /bin/bash ./cleanup-fs.sh
-	sudo -E ./setup-ftfs.sh
-	# Change to the working directory for the next test
-	cd $line
+        # Do the cleanup since the last test, and reset the fs state
+        yes | sudo -E /bin/bash ./cleanup-fs.sh
+        sudo -E ./setup-ftfs.sh
+        # Change to the working directory for the next test
+        cd $line
     fi
 
 done < $1
