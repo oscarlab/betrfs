@@ -1,18 +1,25 @@
 #!/bin/bash
+
+# DEP: Since this is used in CI now, quit if a command fails and propagate out the error
+set -e
+
+. ../../fs-info.sh
+
 set -x
-FT_HOMEDIR=/home/betrfs/ft-index
 . $FT_HOMEDIR/benchmarks/fs-info.sh
-#. $FT_HOMEDIR/benchmarks/.rootcheck
 if [ -d $mntpnt/linux-3.11.10 ]; then
 :
-else 
+else
 . $FT_HOMEDIR/benchmarks/micro/prepare-support-file.sh
 fi
-(cd $FT_HOMEDIR/benchmarks/; sudo ./clear-fs-caches.sh)
-if [ "$1" = "" ] 
+sudo -E ../../clear-fs-caches.sh
+
+if [ "$1" = "" ]
 then
 filename='wait.c'
 else
 filename=$1
 fi
-time find $mntpnt/linux-3.11.10 -name $filename>/dev/null 2>&1
+
+
+/usr/bin/time -p find $mntpnt/linux-3.11.10 -name $filename>/dev/null

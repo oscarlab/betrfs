@@ -8,7 +8,7 @@ if [ -d $mntpnt/linux-3.11.10 ]; then
 else
 . $FT_HOMEDIR/benchmarks/micro/prepare-support-file.sh
 fi
-(cd $FT_HOMEDIR/benchmarks/; sudo ./clear-fs-caches.sh)
+(cd $FT_HOMEDIR/benchmarks/; sudo -E ./clear-fs-caches.sh)
 if [ "$1" = "" ]
 then
 keyword=cpu_to_be64
@@ -36,7 +36,7 @@ function recursive_traverse() {
 					fi
 				done
 				index=0
-			fi 
+			fi
         		recursive_traverse "${file}" stack[@]
     		fi
 	done
@@ -45,5 +45,3 @@ function recursive_traverse() {
 recursive_traverse "$mntpnt/linux-3.11.10" stack[@]
 cd $FT_HOMEDIR/benchmarks/; sudo ./clear-fs-caches.sh
 time grep -r $keyword $mntpnt/linux-3.11.10>/dev/null 2>&1
-
-

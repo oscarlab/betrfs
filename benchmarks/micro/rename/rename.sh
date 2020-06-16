@@ -4,11 +4,11 @@ FT_HOMEDIR=/home/betrfs/ft-index
 . $FT_HOMEDIR/benchmarks/fs-info.sh
 if [ -d $mntpnt/linux-3.11.10 ]; then
 :
-else 
+else
 . $FT_HOMEDIR/benchmarks/micro/prepare-support-file.sh
 fi
-(cd $FT_HOMEDIR/benchmarks/; sudo ./clear-fs-caches.sh)
-if [ "$1" = "" ] 
+(cd $FT_HOMEDIR/benchmarks/; sudo -E ./clear-fs-caches.sh)
+if [ "$1" = "" ]
 then
 copydir=copydir
 else

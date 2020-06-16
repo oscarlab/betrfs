@@ -1,0 +1,47 @@
+#!/usr/bin/env groovy
+
+pipeline {
+  agent {
+    label 'betrfs-dev'
+  }
+
+  stages {
+    stage('Build') {
+      steps {
+        sh '''
+        cd Jenkinsfiles
+        touch console.out
+        sudo chown libvirt-qemu console.out
+        vagrant up
+        sudo chmod +x build-bench.sh
+        ./build-bench.sh
+        result=\$?
+        '''
+      }
+    }
+
+    stage('Benchmarks') {
+      steps {
+        timeout(time: 5, unit: 'HOURS'){
+          sh '''
+          cd Jenkinsfiles
+          vagrant ssh -c "cd /oscar/betrfs/benchmarks/; sudo REPO=betrfs CUR_MNTPNT=/oscar ./run-benchmark.sh perf_tests"
+          result=\$?
+          '''
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      sh '''
+      cd Jenkinsfiles
+      vagrant destroy -f
+      cat console.out
+      '''
+      findText regexp: 'The.*ceiling.*is.*the.*roof', alsoCheckConsoleOutput: true, succeedIfFound: true
+      //findText regexp: 'ftfs\\serror', alsoCheckConsoleOutput: true, unstableIfFound: true
+    }
+  }
+}
