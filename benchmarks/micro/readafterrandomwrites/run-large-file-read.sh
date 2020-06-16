@@ -16,7 +16,7 @@ if [ ! -e $mnt/$input ]; then
     echo "done generating input file."
 fi
 
-sudo -E../../clear-fs-caches.sh
+sudo -E ../../clear-fs-caches.sh
 
 ## -d <device> -b <buffer-size> -o <base-output-filename>
 #sudo blktrace -d /dev/sda4 -b 2048 -o ${1}-read &

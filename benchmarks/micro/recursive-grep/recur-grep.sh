@@ -2,20 +2,14 @@
 
 # DEP: Since this is used in CI now, quit if a command fails and propagate out the error
 set -e
-#echo "**************************************************"
 
 . ../../fs-info.sh
-
-#echo "&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&"
 
 if [ -d $mntpnt/linux-3.11.10 ]; then
 :
 else
 . $FT_HOMEDIR/benchmarks/micro/prepare-support-file.sh
 fi
-
-#echo "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@"
-
 
 sudo -E ../../clear-fs-caches.sh
 

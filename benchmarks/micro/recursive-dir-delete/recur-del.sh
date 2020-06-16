@@ -6,9 +6,7 @@ set -e
 . ../../fs-info.sh
 
 set -x
-#FT_HOMEDIR=../../..
 . $FT_HOMEDIR/benchmarks/fs-info.sh
-#. $FT_HOMEDIR/benchmarks/.rootcheck
 . $FT_HOMEDIR/benchmarks/micro/prepare-support-file.sh --big
 sudo -E ../../clear-fs-caches.sh
 

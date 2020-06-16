@@ -6,9 +6,7 @@ set -e
 . ../../fs-info.sh
 
 set -x
-#FT_HOMEDIR=/home/betrfs/ft-index
 . $FT_HOMEDIR/benchmarks/fs-info.sh
-#. $FT_HOMEDIR/benchmarks/.rootcheck
 if [ -d $mntpnt/linux-3.11.10 ]; then
 :
 else
