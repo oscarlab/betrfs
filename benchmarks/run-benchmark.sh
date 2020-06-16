@@ -24,7 +24,7 @@ cd ../benchmarks
 sudo rm -rf  results
 mkdir results
 
-main_dir=$FT_HOMEDIR/benchmarks
+main_dir=${FT_HOMEDIR}/benchmarks
 
 # This loop reads the input file (e.g., perf_tests) and
 # executes each test

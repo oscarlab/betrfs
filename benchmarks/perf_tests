@@ -1,7 +1,6 @@
 # This file lists a set of tests to run.  Each test needs two lines:
 # First, a line that indicates the subdirectory where the test script is
 # Second, a line that indicates the script to run
-
 application/git
 ./run-all.sh
 application/tar
