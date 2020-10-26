@@ -1,15 +1,12 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
-"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
-
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
 
 <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <title>BetrFS</title>
-
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/2.2.2/css/bootstrap.min.css" />
-
+    <link rel="stylesheet"
+        href="https://maxcdn.bootstrapcdn.com/bootstrap/2.2.2/css/bootstrap.min.css" />
     <style type="text/css">
         body {
             display: block;
@@ -19,266 +16,359 @@
             line-height: 24px;
             background-color: #333;
         }
+
         .container {
             max-width: 1000px;
             background-color: #fff;
             padding: 25px 50px;
             margin: 20px auto;
-            border-radius:10px;
+            border-radius: 10px;
         }
-        #pic { width: 50%; margin-right: auto; margin-left: auto; padding-bottom: 30px; }
-        h3 {font-size: 18px; color: #36393D}
-        p { text-align: justify;}
-        a { color: #4096EE; text-decoration: none; border-bottom: 0px; }
-        a:hover { border-bottom: 1px dotted #3086DE; }
-        .span3 ul { list-style-type: none; margin:0px; padding-top: 10px; padding-bottom: 10px; }
-        #objective { width: 95%; margin-left: auto; margin-right: auto; padding-top: 10px; padding-bottom: 10px; column-count: 1;}
-        #objective p { font-family: Georgia, Serif; font-style: plain; color: #666; }
-        li span{ position }
-        .row-fluid {border-bottom: 1px solid black;}
+
+        #pic {
+            width: 50%;
+            margin-right: auto;
+            margin-left: auto;
+            padding-bottom: 30px;
+        }
+
+        h3 {
+            font-size: 18px;
+            color: #36393D
+        }
+
+        p {
+            text-align: justify;
+        }
+
+        a {
+            color: #4096EE;
+            text-decoration: none;
+            border-bottom: 0px;
+        }
+
+        a:hover {
+            border-bottom: 1px dotted #3086DE;
+        }
+
+        .span3 ul {
+            list-style-type: none;
+            margin: 0px;
+            padding-top: 10px;
+            padding-bottom: 10px;
+        }
+
+        #objective {
+            width: 95%;
+            margin-left: auto;
+            margin-right: auto;
+            padding-top: 10px;
+            padding-bottom: 10px;
+            column-count: 1;
+        }
+
+        #objective p {
+            font-family: Georgia, Serif;
+            font-style: plain;
+            color: #666;
+        }
+
+        .row-fluid {
+            border-bottom: 1px solid black;
+        }
+
         .span9 {
             padding-top: 15px;
             padding-bottom: 10px;
         }
-        .row-fluid2 {border-bottom: 1px solid gray;}
-        .navbar {max-width: 1040px; margin-right: auto; margin-left: auto;}
-        .navbar a:hover {border:none;}
-        .navbar li sup {color: #FF0084}
-        li sup {font-size: smaller;}
+
+        .row-fluid2 {
+            border-bottom: 1px solid gray;
+        }
+
+        .navbar {
+            max-width: 1040px;
+            margin-right: auto;
+            margin-left: auto;
+        }
+
+        .navbar a:hover {
+            border: none;
+        }
+
+        .navbar li sup {
+            color: #FF0084
+        }
+
+        li sup {
+            font-size: smaller;
+        }
     </style>
 </head>
 
 <body>
     <div class="masthead">
-            <div class="navbar">
-                <div class="navbar-inner">
-                    <ul class="nav">
-                        <li class="active"><a href="index.html">Home</a></li>
-                        <li><a href="https://github.com/oscarlab/betrfs" target="_blank">Get the Source</a></li>
-                        <li><a href="https://github.com/oscarlab/betrfs/blob/master/README.md">Quick Start Guide</a></li>
-                        <li><a href="https://github.com/oscarlab/betrfs/wiki">Documentation</a></li>
-                        <li><a href="faq.html">FAQ</a></li>
-                    </ul>
-                </div>
-            </div><!-- /.navbar -->
+        <div class="navbar">
+            <div class="navbar-inner">
+                <ul class="nav">
+                    <li class="active"><a href="index.html">Home</a></li>
+                    <li><a href="https://github.com/oscarlab/betrfs" target="_blank">Get the
+                            Source</a></li>
+                    <li><a href="https://github.com/oscarlab/betrfs/blob/master/README.md">Quick
+                            Start Guide</a></li>
+                    <li><a href="https://github.com/oscarlab/betrfs/wiki">Documentation</a></li>
+                    <li><a href="faq.html">FAQ</a></li>
+                </ul>
+            </div>
         </div>
+        <!-- /.navbar -->
+    </div>
     <div class="container">
-
         <header class="row-fluid">
-        <a href="http://www.betrfs.org">
-        <center><img src="images/betrfs.png" alt="Betrfs" id="pic" /></center>
-        </a>
+            <a href="http://www.betrfs.org">
+                <center><img src="images/betrfs.png" alt="Betrfs" id="pic" /></center>
+            </a>
         </header>
-
         <article class="row-fluid">
-        <div id="objective">
-            <b>What is BetrFS?</b>
-            <p>The B<sup>ε</sup>-tree File System, or BetrFS, is an
-            in-kernel file system that uses B<sup>ε</sup> trees
-            to organize on-disk storage.  B<sup>ε</sup> trees are a
-            write-optimized dictionary, and offer the same
-            asymptotic behavior for sequential I/O and point queries
-            as a B-tree.  The advantage of a B<sup>ε</sup> tree is
-            that it can also ingest small, random writes 1-2 orders of
-            magnitude faster than B-trees and other standard on-disk
-            data structures. </p>
-
-            <p>The goal of BetrFS is to realize performance that <i>strictly dominates</i> the performance of current, general-purpose file systems.</p>
-
-            <b>What is a Write-Optimized Dictionary?</b>
-            <p>Write-Optimized Dictionaries include B<sup>ε</sup>
-            trees, Log-Structured Merge Trees (LSM Trees), and COLAs.
-            Speaking generally, a WOD is a hierarchical structure with
-            logarithmic search complexity (e.g., a tree), but the
-            upper levels of the hierarchy include a log for making
-            small, random writes durable quickly. Unlike a purely
-            log-structured file system, the log is merged into the
-            tree structure in a timely and organized way; these costs
-            are included in the asymptotic analysis, and have good
-            upper bounds. </p>
-
-            <p>BetrFS is an in-kernel file system, based on the
-            opensource <a href="https://github.com/Tokutek/ft-index">
-            fractal tree</a> implementation
-            from <a href="http://www.tokutek.com/">Tokutek Inc. </a>A
-            fractal tree is a specialized variant of a B<sup>ε</sup>
-            tree.</p>
-
-            <p>Find out more on our <a href="faq.html">FAQ</a> page.</p>
-
-        </div>
-        </article>
-
-        <article class="row-fluid">
-            <header class="span3">
-            <h3>Quick Start Guide</h3>
-            </header>
-            <div class="span9">
-            For instructions on how to setup BetrFS, follow our <a href="https://github.com/oscarlab/betrfs/blob/master/README.md">Quick Start Guide</a>.
+            <div id="objective">
+                <b>What is BetrFS?</b>
+                <p>The B<sup>ε</sup>-tree File System, or BetrFS, is an in-kernel file system that
+                    uses B<sup>ε</sup> trees to organize on-disk storage. B<sup>ε</sup> trees are a
+                    write-optimized dictionary, and offer the same asymptotic behavior for
+                    sequential I/O and point queries as a B-tree. The advantage of a B <sup>ε</sup>
+                    tree is that it can also ingest small, random writes 1-2 orders of magnitude
+                    faster than B-trees and other standard on-disk data structures. </p>
+                <p>The goal of BetrFS is to realize performance that <i>strictly dominates</i> the
+                    performance of current, general-purpose file systems.</p>
+                <b>What is a Write-Optimized Dictionary?</b>
+                <p>Write-Optimized Dictionaries include B<sup>ε</sup> trees, Log-Structured Merge
+                    Trees (LSM Trees), and COLAs. Speaking generally, a WOD is a hierarchical
+                    structure with logarithmic search complexity (e.g., a tree), but the upper
+                    levels of the hierarchy include a log for making small, random writes durable
+                    quickly. Unlike a purely log-structured file system, the log is merged into the
+                    tree structure in a timely and organized way; these costs are included in the
+                    asymptotic analysis, and have good upper bounds. </p>
+                <p>BetrFS is an in-kernel file system, based on the opensource <a
+                        href="https://github.com/Tokutek/ft-index"> fractal tree</a> implementation
+                    from <a href="http://www.tokutek.com/">Tokutek Inc. </a>A fractal tree is a
+                    specialized variant of a B <sup>ε</sup> tree.</p>
+                <p>Find out more on our <a href="faq.html">FAQ</a> page.</p>
             </div>
         </article>
-
         <article class="row-fluid">
             <header class="span3">
-            <h3>Software</h3>
+                <h3>Quick Start Guide</h3>
             </header>
-            <div class="span9">
-		    Grab the code from <a href="https://github.com/oscarlab/betrfs">github</a> (licensed under GPL V2). <br />
-            </div>
+            <div class="span9"> For instructions on how to setup BetrFS, follow our <a
+                    href="https://github.com/oscarlab/betrfs/blob/master/README.md">Quick Start
+                    Guide</a>. </div>
         </article>
-
-	<article class="row-fluid">
+        <article class="row-fluid">
             <header class="span3">
-            <h3>Benchmarks</h3>
+                <h3>Software</h3>
             </header>
-            <div class="span9">
-		    For instructions on how to age your filesystem by running through a git repository, check out our <a href="https://github.com/aineshbakshi/Git-Benchmark/blob/master/README.md">git benchmark</a>.
+            <div class="span9"> Grab the code from <a
+                    href="https://github.com/oscarlab/betrfs">github</a> (licensed under GPL V2).
+                <br />
             </div>
         </article>
-
+        <article class="row-fluid">
+            <header class="span3">
+                <h3>Benchmarks</h3>
+            </header>
+            <div class="span9"> For instructions on how to age your filesystem by running through a
+                git repository, check out our <a
+                    href="https://github.com/aineshbakshi/Git-Benchmark/blob/master/README.md">git
+                    benchmark</a>. </div>
+        </article>
         <article class="row-fluid">
             <header class="span3">
                 <h3>People - Current</h3>
             </header>
-			<div class="span9"><a href="images/healdsburg.jpeg">Here's </a>a picture of us at our recent retreat.</div>
+            <div class="span9"><a href="images/healdsburg.jpeg">Here's </a>a picture of us at our
+                recent retreat.</div>
             <div class="span3">
                 <ul>
-                <li><a href="http://www3.cs.stonybrook.edu/~bender/">Michael Bender</a></li>
-                <li><a href="https://ajhconway.com/">Alex Conway</a></li>
-                <li><a href="http://www.cs.rutgers.edu/~farach/">Martin Farach-Colton</a></li>
-                <li><a href="http://www3.cs.stonybrook.edu/~wjannen/">William Jannen</a></li>
+                    <li><a href="http://www3.cs.stonybrook.edu/~bender/">Michael Bender</a></li>
+                    <li><a href="https://ajhconway.com/">Alex Conway</a></li>
+                    <li><a href="http://www.cs.rutgers.edu/~farach/">Martin Farach-Colton</a></li>
+                    <li><a href="http://cs.williams.edu/~jannen/">William Jannen</a></li>
                 </ul>
             </div>
             <div class="span3">
                 <ul>
-                <li><a href="http://www3.cs.stonybrook.edu/~yjiao/">Yizheng Jiao</a></li>
-                <li><a href="http://www3.cs.stonybrook.edu/~rob/">Rob Johnson</a></li>
-                <li>Eric Knorr</li>
-                <li><a href="http://people.csail.mit.edu/bradley/">Bradley C. Kuszmaul</a></li>
+                    <li><a href="http://www3.cs.stonybrook.edu/~yjiao/">Yizheng Jiao</a></li>
+                    <li><a href="https://research.vmware.com/researchers/rob-johnson/">Rob
+                            Johnson</a></li>
+                    <li>Eric Knorr</li>
+                    <li><a href="http://people.csail.mit.edu/bradley/">Bradley C. Kuszmaul</a></li>
                 </ul>
             </div>
             <div class="span3">
                 <ul>
-                <li><a href="http://www.cs.unc.edu/~porter/">Donald E. Porter</a></li>
-                <li><a href="http://www3.cs.stonybrook.edu/~junyuan/">Jun Yuan</a></li>
-                <li><a href="http://www.cs.unc.edu/~yzhan/">Yang Zhan</a></li>
+                    <li><a href="http://www.cs.unc.edu/~porter/">Donald E. Porter</a></li>
+                    <li><a href="http://www3.cs.stonybrook.edu/~junyuan/">Jun Yuan</a></li>
+                    <li><a href="http://www.cs.unc.edu/~yzhan/">Yang Zhan</a></li>
                 </ul>
             </div>
         </article>
-
         <article class="row-fluid">
             <header class="span3">
                 <h3>People - Alumni</h3>
             </header>
             <div class="span3">
                 <ul>
-                <li><a href="http://aakshintala.com">Amogh Akshintala</a></li>
-                <li><a href="https://www.linkedin.com/in/kumaramit27">Kumar Amit</a></li>
-                <li><a href="https://www.aineshbakshi.com">Ainesh Bakshi</a></li>
-                <li><a href="https://in.linkedin.com/pub/kanchan-chandnani/77/156/a08">Kanchan Chandnani</a></li>
+                    <li><a href="http://aakshintala.com">Amogh Akshintala</a></li>
+                    <li><a href="https://www.linkedin.com/in/kumaramit27">Kumar Amit</a></li>
+                    <li><a href="https://www.aineshbakshi.com">Ainesh Bakshi</a></li>
+                    <li><a href="https://in.linkedin.com/pub/kanchan-chandnani/77/156/a08">Kanchan
+                            Chandnani</a></li>
                 </ul>
             </div>
             <div class="span3">
                 <ul>
-                <li><a href="https://www.linkedin.com/in/poojadeo91">Pooja Deo</a></li>
-                <li><a href="https://www.linkedin.com/in/amitkhandelwal90">Amit Khandelwal</a></li>
-                <li><a href="https://www.linkedin.com/in/nmandliwala">Nafisa Mandliwala</a></li>
-                <li><a href="https://www.linkedin.com/in/ankurmittal1989">Ankur Mittal</a></li>
+                    <li><a href="https://www.linkedin.com/in/poojadeo91">Pooja Deo</a></li>
+                    <li><a href="https://www.linkedin.com/in/amitkhandelwal90">Amit Khandelwal</a>
+                    </li>
+                    <li><a href="https://www.linkedin.com/in/nmandliwala">Nafisa Mandliwala</a></li>
+                    <li><a href="https://www.linkedin.com/in/ankurmittal1989">Ankur Mittal</a></li>
                 </ul>
             </div>
             <div class="span3">
                 <ul>
-                <li><a href="https://www3.cs.stonybrook.edu/~ppandey">Prashant Pandey</a></li>
-                <li><a href="https://www.linkedin.com/pub/phaneendra-reddy/15/34a/63a">Phaneendra Reddy</a></li>
-                <li><a href="https://www.linkedin.com/in/geet-sethi-74758a9b">Geet Sethi</a></li>
-                <li><a href="http://leifwalsh.com/">Leif Walsh</a></li>
+                    <li><a href="https://www3.cs.stonybrook.edu/~ppandey">Prashant Pandey</a></li>
+                    <li><a href="https://www.linkedin.com/pub/phaneendra-reddy/15/34a/63a">Phaneendra
+                            Reddy</a></li>
+                    <li><a href="https://www.linkedin.com/in/geet-sethi-74758a9b">Geet Sethi</a>
+                    </li>
+                    <li><a href="http://leifwalsh.com/">Leif Walsh</a></li>
                 </ul>
             </div>
         </article>
-
         <article class="row-fluid">
             <div class="span3">
-            <h3>Publications</h3>
+                <h3>Publications</h3>
             </div>
             <div class="span9">
-              <p>
-                <b>The Full Path to Full-Path Indexing</b>
-                [<a href="https://www.usenix.org/conference/fast18/presentation/zhan">USENIX</a>]
-                [<a href="https://oscarlab.github.io/papers/fast18-betrfs.pdf">PDF</a>]
-                <br>
-                In Proceedings of the 16th USENIX Conference on File and Storage Technologies (<a href="https://www.usenix.org/conference/fast18">FAST '18</a>), Oakland, CA, February 2018.
-              </p>
-              <p>
-              <b>How to Age Your File System</b>
-              [<a href="https://www.usenix.org/publications/login/summer2017/conway">USENIX</a>]
-              <br />
-              <i>In ;login: magazine, Volume 42, Number 2, pages 6--11, Summber 2017.</i>
-              </p>
-              <p>
-              <b>Writes Wrought Right, and Other Adventures in File System Optimization</b> [<a href="http://dl.acm.org/citation.cfm?id=3032969">ACM</a>] [<a href="http://www.cs.unc.edu/~porter/pubs/a3-yuan.pdf">PDF</a>]
-              <br />
-              <i>ACM Transactions on Storage, Volume 13, No 1, Article 3, March 2017</i>
-              </p>
-              <p>
-              <b>File Systems Fated for Senescence? Nonsense, Says Science!</b> [<a href="https://www.usenix.org/conference/fast17/technical-sessions/presentation/conway">USENIX</a>]
-              <br .>
-              <i>The 15th USENIX Conference on File and Storage Technologies (<a href="https://www.usenix.org/conference/fast17">FAST '17</a>), Santa Clara, CA, February 2017.</i>
-              </p>
-              <p>
-              <b>Optimizing Every Operation in a Write-Optimized File System</b> [<a href="https://www.usenix.org/conference/fast16/technical-sessions/presentation/yuan">USENIX</a>] [<a href="http://www3.cs.stonybrook.edu/~porter/pubs/fast16-final.pdf">PDF</a>]
-              <br />
-              <i>The 14th USENIX Conference on File and Storage Technologies (<a href="https://www.usenix.org/conference/fast16">FAST '16</a>), Santa Clara, CA, February 2016.</i>
-              </p>
-              <p>
-              <b>BetrFS: Write-Optimization in a Kernel File System</b> [<a href="http://dl.acm.org/citation.cfm?id=2798729">ACM</a>] [<a href="http://www3.cs.stonybrook.edu/~porter/pubs/a18-jannen.pdf">PDF</a>]
-              <br />
-              <i>ACM Transactions on Storage, Volume 11, No 4, Article 18, October 2015.</i>
-              </p>
-              <p>
-              <b>An Introduction to Bε-Trees and Write-Optimization</b>
-              [<a href="https://www.usenix.org/publications/login/oct15/bender">USENIX</a>]
-              <br />
-              <i>In ;login: magazine, Volume 40, Number 5, pages 22--28, October 2015.</i>
-              </p>
-              <p>
-              <b>BetrFS: A Right-Optimized Write-Optimized File System</b> [<a href="https://www.usenix.org/conference/fast15/technical-sessions/presentation/jannen">USENIX</a>] [<a href="https://www.usenix.org/sites/default/files/conference/protected-files/fast15_slides_jannen.pdf">Slides</a>] [<a href="http://www3.cs.stonybrook.edu/~porter/pubs/fast15-final.pdf">PDF</a>]
-              <br />
-              <i>The 13th USENIX Conference on File and Storage Technologies (<a href="https://www.usenix.org/conference/fast15">FAST '15</a>), Santa Clara, CA, February 2015.</i>
-              </p>
+                <p>
+                    <b>How to Copy Files</b>
+                    [<a href="https://www.cs.unc.edu/~porter/pubs/fast20-zhan.pdf">USENIX</a>]
+                    [<a href="https://www.cs.unc.edu/~porter/pubs/fast20-zhan.pdf">PDF</a>]
+                    <br />
+                    <i>Proceedings of the 18th USENIX Conference on File and Storage Technologies
+                        (FAST '20), Santa Clara,
+                        CA, February 2020.</i>
+                </p>
+                <p>
+                    <b>Filesystem Aging: It’s more Usage than Fullness</b>
+                    [<a
+                        href="https://www.usenix.org/conference/fast20/presentation/zhan">USENIX</a>]
+                    [<a
+                        href="https://www.cs.unc.edu/~porter/pubs/hotstorage19-paper-conway.pdf">PDF</a>]
+                    <br />
+                    <i> Proceedings of the 11th USENIX Workshop on Hot Topics in Storage and File
+                        Systems (HotStorage '19), Renton, WA, July 2019. </i>
+                </p>
+                <p>
+                    <b>Refinements to the DAM Can Have Big Consequences for Data-Structure
+                        Design</b>
+                    <br />
+                    [<a
+                        href="https://dl.acm.org/doi/10.1145/3323165.3323210?cid=81100437540">ACM</a>]
+                    [<a href="https://www.cs.unc.edu/~porter/pubs/spaa19.pdf">PDF</a>]
+                    <br />
+                    <i> Proceedings of the 31st ACM Symposium on Parallelism in Algorithms and
+                        Architectures (SPAA '19), Phoenix, AZ, June 2019. </i>
+                </p>
+                <p>
+                    <b>Efficient Directory Mutations in a Full-Path-Indexed File System</b>
+                    [<a href="https://www.cs.unc.edu/~porter/pubs/tos18.pdf">PDF</a>]
+                    [<a href="https://dl.acm.org/doi/pdf/10.1145/3241061">ACM</a>]
+                    <br />
+                    <i>ACM Transactions on Storage, Volume 14, No 3, Article 22, November 2018.</i>
+                </p>
+                <p>
+                    <b>The Full Path to Full-Path Indexing</b>
+                    [<a
+                        href="https://www.usenix.org/conference/fast18/presentation/zhan">USENIX</a>]
+                    [ <a href="https://oscarlab.github.io/papers/fast18-betrfs.pdf">PDF</a>]
+                    <br />
+                    <i>In
+                        Proceedings of the 16th USENIX Conference on File and Storage Technologies,
+                        Oakland, CA, February 2018. </i>
+                </p>
+                <p>
+                    <b>How to Fragment Your File System</b> [<a
+                        href="https://www.usenix.org/publications/login/summer2017/conway">USENIX</a>]
+                    <br />
+                    <i>In ;login: magazine, Volume 42, Number 2, pages 6--11, Summber 2017.</i>
+                </p>
+                <p>
+                    <b>Writes Wrought Right, and Other Adventures in File System Optimization</b> [
+                    <a href="http://dl.acm.org/citation.cfm?id=3032969">ACM</a>] [<a
+                        href="http://www.cs.unc.edu/~porter/pubs/a3-yuan.pdf">PDF</a>] <br />
+                    <i>ACM Transactions on Storage, Volume 13, No 1, Article 3, March 2017</i>
+                </p>
+                <p>
+                    <b>File Systems Fated for Senescence? Nonsense, Says Science!</b> [<a
+                        href="https://www.usenix.org/conference/fast17/technical-sessions/presentation/conway">USENIX</a>]
+                    <br .>
+                    <i>The 15th USENIX Conference on File and Storage Technologies (<a
+                            href="https://www.usenix.org/conference/fast17">FAST '17</a>), Santa
+                        Clara, CA, February 2017.</i>
+                </p>
+                <p>
+                    <b>Optimizing Every Operation in a Write-Optimized File System</b> [<a
+                        href="https://www.usenix.org/conference/fast16/technical-sessions/presentation/yuan">USENIX</a>]
+                    [ <a href="https://www.cs.unc.edu/~porter/pubs/fast16-final.pdf">PDF</a>]
+                    <br />
+                    <i>The 14th USENIX Conference on File and Storage Technologies (<a
+                            href="https://www.usenix.org/conference/fast16">FAST '16</a>), Santa
+                        Clara, CA, February 2016.</i>
+                </p>
+                <p>
+                    <b>BetrFS: Write-Optimization in a Kernel File System</b> [<a
+                        href="http://dl.acm.org/citation.cfm?id=2798729">ACM</a>] [<a
+                        href="https://www.cs.unc.edu/~porter/pubs/a18-jannen.pdf">PDF</a>]
+                    <br />
+                    <i>ACM Transactions on Storage, Volume 11, No 4, Article 18, October 2015.</i>
+                </p>
+                <p>
+                    <b>An Introduction to Bε-Trees and Write-Optimization</b> [<a
+                        href="https://www.usenix.org/publications/login/oct15/bender">USENIX</a>]
+                    <br />
+                    <i>In ;login: magazine, Volume 40, Number 5, pages 22--28, October 2015.</i>
+                </p>
+                <p>
+                    <b>BetrFS: A Right-Optimized Write-Optimized File System</b> [<a
+                        href="https://www.usenix.org/conference/fast15/technical-sessions/presentation/jannen">USENIX</a>]
+                    [ <a
+                        href="https://www.usenix.org/sites/default/files/conference/protected-files/fast15_slides_jannen.pdf">Slides</a>]
+                    [ <a href="https://www.cs.unc.edu/~porter/pubs/fast15-final.pdf">PDF</a>]
+                    <br />
+                    <i>The 13th USENIX Conference on File and Storage Technologies (<a
+                            href="https://www.usenix.org/conference/fast15">FAST '15</a>), Santa
+                        Clara, CA, February 2015.</i>
+                </p>
             </div>
         </article>
-
-        <!-- <article class="row-fluid"> -->
-        <!--     <header class="span3"> -->
-        <!--     <h3>Documentation</h3> -->
-        <!--     </header> -->
-        <!--     <div class="span9"> -->
-        <!--     Coming Soon! -->
-        <!--     </div> -->
-        <!-- </article> -->
-
         <article class="row-fluid">
             <header class="span3">
-            <h3>Contact Us</h3>
+                <h3>Contact Us</h3>
             </header>
-            <div class="span9">
-            Drop us an <a href="mailto:betrfs@googlegroups.com" target="_top">email</a>.
-            </div>
+            <div class="span9"> Drop us an <a href="mailto:betrfs@googlegroups.com"
+                    target="_top">email</a>. </div>
         </article>
-
         <article class="row-fluid">
             <header class="span3">
-            <h3>Sponsors</h3>
+                <h3>Sponsors</h3>
             </header>
-            <div class="span9">
-             This material is based upon work supported by the
-             National Science Foundation under Grants CNS-1408695,
-             CNS-1408782, and CNS-1409238.<br/>
-
-	     Any opinions, findings, and conclusions or recommendations expressed in this material are those of the author(s) and do not necessarily reflect the views of the National Science Foundation.
-            </div>
+            <div class="span9"> This material is based upon work supported by the National Science
+                Foundation under Grants CNS-1408695, CNS-1408782, and CNS-1409238.<br /> Any
+                opinions, findings, and conclusions or recommendations expressed in this material
+                are those of the author(s) and do not necessarily reflect the views of the National
+                Science Foundation. </div>
         </article>
-
     </div>
 </body>
 
