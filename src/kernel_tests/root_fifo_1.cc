@@ -108,7 +108,7 @@ static void root_fifo_verify(DB_ENV *env, int n) {
 
     DB *db = null_db;
     r = db_create(&db, env, 0); assert(r == 0); assert(db != NULL);
-    r = db->open(db, txn, "test.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); 
+    r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); 
     assert(r == 0);
 
     DBC *cursor = null_cursor;
@@ -141,13 +141,13 @@ static void root_fifo_1(int n, int create_outside) {
     int r;
 
     // create the env
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
 
     DB_ENV *env = null_env;
     r = db_env_create(&env, 0); assert(r == 0); assert(env != NULL);
     r = env->open(env, 
-                  TOKU_TEST_FILENAME, 
+                  TOKU_TEST_ENV_DIR_NAME, 
                   DB_INIT_MPOOL+DB_INIT_LOG+DB_INIT_LOCK+DB_INIT_TXN+DB_PRIVATE+DB_CREATE, 
                   S_IRWXU+S_IRWXG+S_IRWXO); 
     assert(r == 0);
@@ -157,7 +157,7 @@ static void root_fifo_1(int n, int create_outside) {
         r = env->txn_begin(env, null_txn, &txn_open, 0); assert(r == 0); assert(txn_open != NULL);
         DB *db_open = null_db;
         r = db_create(&db_open, env, 0); assert(r == 0); assert(db_open != NULL);
-        r = db_open->open(db_open, txn_open, "test.db", 0, DB_BTREE, DB_CREATE|DB_EXCL, S_IRWXU+S_IRWXG+S_IRWXO); 
+        r = db_open->open(db_open, txn_open, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE|DB_EXCL, S_IRWXU+S_IRWXG+S_IRWXO); 
         assert(r == 0);
         r = db_open->close(db_open, 0); assert(r == 0); db_open = null_db;
         r = txn_open->commit(txn_open, 0); assert(r == 0); txn_open = null_txn;
@@ -173,7 +173,7 @@ static void root_fifo_1(int n, int create_outside) {
         DB *db = null_db;
         r = db_create(&db, env, 0); assert(r == 0); assert(db != NULL);
 
-        r = db->open(db, txn, "test.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); 
+        r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); 
         assert(r == 0);
 
         DBT key, val;

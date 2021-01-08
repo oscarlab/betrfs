@@ -365,9 +365,9 @@ test_prefetching(void) {
     //    struct ft_handle source_ft;
     struct ftnode sn;
 
-    int fd = open(TOKU_TEST_FILENAME, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
-    int r;
+    int fd = open(TOKU_TEST_FILENAME_DATA, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
 
     //    source_ft.fd=fd;
     sn.max_msn_applied_to_node_on_disk.msn = 0;
@@ -402,6 +402,9 @@ test_prefetching(void) {
     toku_init_dbt(&BP_LIFT(&sn, 0));
     toku_init_dbt(&BP_LIFT(&sn, 1));
     toku_init_dbt(&BP_LIFT(&sn, 2));
+    toku_init_dbt(&BP_NOT_LIFTED(&sn, 0));
+    toku_init_dbt(&BP_NOT_LIFTED(&sn, 1));
+    toku_init_dbt(&BP_NOT_LIFTED(&sn, 2));
     //Create XIDS
     XIDS xids_0 = xids_get_root_xids();
     XIDS xids_123;
@@ -428,7 +431,10 @@ test_prefetching(void) {
                  TOKU_DEFAULT_COMPRESSION_METHOD);
     brt->ft = brt_h;
     toku_blocktable_create_new(&brt_h->blocktable);
-    { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
+
+    // YZJ: we are confident that the blocktable has nothing allocated
+    // because the file is just created
+
     //Want to use block #20
     BLOCKNUM b = make_blocknum(0);
     while (b.b < 20) {
@@ -447,7 +453,7 @@ test_prefetching(void) {
         assert(size   == 100);
     }
     FTNODE_DISK_DATA ndd = NULL;
-    r = toku_serialize_ftnode_to(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false, &offset, &size);
+    r = toku_serialize_ftnode_to(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false, &offset, &size, true);
     assert(r==0);
 
     test_prefetch_read(fd, brt, brt_h);

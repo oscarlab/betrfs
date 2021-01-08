@@ -91,8 +91,6 @@ PATENT RIGHTS GRANT:
 
 #include "test.h"
 #include <sys/resource.h>
-// try to open N databases when N > open file limit.  should fail gracefully.
-extern "C" int ftfs_get_errno(void);
 
 extern "C" int test_openlimit17(void);
 int test_openlimit17(void) {
@@ -105,17 +103,16 @@ int test_openlimit17(void) {
     r = setrlimit(RLIMIT_NOFILE, &nofile_limit);
     //assert(r == 0); // valgrind does not like this
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
     assert(r == 0);
 
     DB_ENV *env;
     r = db_env_create(&env, 0);
     assert(r == 0);
 
-    r = env->open(env, TOKU_TEST_FILENAME, DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_TXN|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_TXN|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO);
     assert(r == 0);
-  
+
    // DB **dbs = new DB *[N];
     DB ** dbs = (DB **) toku_xmalloc(sizeof(DB*) * N);
     for (int i = 0; i < N; i++) {

@@ -112,9 +112,9 @@ static void insert(DB *db, DB_TXN *txn, int k, int val_size) {
 }
 extern "C" int test_test_blobs_leaf_split(void);
 int test_test_blobs_leaf_split(void) {
-    const char *db_env_dir = "dir.blobs.leafsplit.env.tdb";
+    const char *db_env_dir = TOKU_TEST_ENV_DIR_NAME;
     int db_env_open_flags = DB_CREATE | DB_PRIVATE | DB_INIT_MPOOL | DB_INIT_TXN | DB_INIT_LOCK | DB_INIT_LOG;
-    const char *db_filename = "blobs.db";
+    const char *db_filename = TOKU_TEST_DATA_DB_NAME;
     int do_txn = 1;
     uint64_t cachesize = 4096;
     uint32_t pagesize = 40 * 4096;
@@ -148,8 +148,7 @@ int test_test_blobs_leaf_split(void) {
     }
 */
     int r;   
-    toku_os_recursive_delete(db_env_dir);    
-    r = toku_os_mkdir(db_env_dir, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH); assert_zero(r);
+    r = toku_fs_reset(db_env_dir, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH); assert_zero(r);
 
     // create and open the env
     DB_ENV *db_env = NULL;

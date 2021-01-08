@@ -110,30 +110,34 @@ PATENT RIGHTS GRANT:
 
 
 //Types of transaction records.
-enum uxr_type {XR_INSERT      = 1,
-      XR_DELETE      = 2,
-      XR_PLACEHOLDER = 3,
-      XR_UNBOUND_INSERT =4 };
+enum uxr_type {
+    XR_INSERT         = 1,
+    XR_DELETE         = 2,
+    XR_PLACEHOLDER    = 3,
+    XR_UNBOUND_INSERT = 4
+};
 
-typedef struct uxr {     // unpacked transaction record
-    uint8_t   type;     // delete/insert/placeholder
-    uint32_t  vallen;   // number of bytes in value
-    void *    valp;     // pointer to value  (Where is value really stored?)
-    TXNID     xid;      // transaction id
+typedef struct uxr {  // unpacked transaction record
+    uint8_t   type;   // delete/insert/placeholder
+    uint32_t  vallen; // number of bytes in value
+    void *    valp;   // pointer to value  (Where is value really stored?)
+    TXNID     xid;    // transaction id
     // Note: when packing ule into a new leafentry, will need
     //       to copy actual data from valp to new leafentry
 } UXR_S, *UXR;
 
 
 
-// Unpacked Leaf Entry is of fixed size because it's just on the 
+// Unpacked Leaf Entry is of fixed size because it's just on the
 // stack and we care about ease of access more than the memory footprint.
-typedef struct ule {     // unpacked leaf entry
+typedef struct ule {       // unpacked leaf entry
     uint32_t  num_puxrs;   // how many of uxrs[] are provisional
     uint32_t  num_cuxrs;   // how many of uxrs[] are committed
-    UXR_S     uxrs_static[MAX_TRANSACTION_RECORDS*2];    // uxrs[0] is oldest committed (txn commit time, not txn start time), uxrs[num_cuxrs] is outermost provisional value (if any exist/num_puxrs > 0)
-    UXR       uxrs;                                      //If num_cuxrs < MAX_TRANSACTION_RECORDS then &uxrs_static[0].
-                                                         //Otherwise we use a dynamically allocated array of size num_cuxrs + 1 + MAX_TRANSATION_RECORD.
+    UXR_S     uxrs_static[MAX_TRANSACTION_RECORDS * 2];
+                           // uxrs[0] is oldest committed (txn commit time, not txn start time),
+                           // uxrs[num_cuxrs] is outermost provisional value (if any exist/num_puxrs > 0)
+    UXR       uxrs;        // If num_cuxrs < MAX_TRANSACTION_RECORDS then &uxrs_static[0].
+                           // Otherwise we use a dynamically allocated array of size num_cuxrs + 1 + MAX_TRANSATION_RECORD.
 } ULE_S, *ULE;
 
 
@@ -146,12 +150,12 @@ void test_msg_modify_ule(ULE ule, FT_MSG msg);
 void le_unpack(ULE ule,  LEAFENTRY le);
 int
 le_pack(ULE ule, // data to be packed into new leafentry
-        bn_data* data_buffer,
+        bn_data *data_buffer,
         uint32_t idx,
-        void* keyp,
+        void *keyp,
         uint32_t keylen,
         uint32_t old_le_size,
-        LEAFENTRY * const new_leafentry_p // this is what this function creates
+        LEAFENTRY *const new_leafentry_p // this is what this function creates
         );
 
 

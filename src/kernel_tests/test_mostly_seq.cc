@@ -100,18 +100,18 @@ seqinsert (int n, float p) {
     if (verbose) printf("%s %d %f\n", __FUNCTION__, n, p);
 
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
 
     DB_ENV *env;
     r = db_env_create(&env, 0); assert(r == 0);
 
-    r = env->open(env, TOKU_TEST_FILENAME, DB_INIT_MPOOL + DB_PRIVATE + DB_CREATE, 077); assert(r == 0);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL + DB_PRIVATE + DB_CREATE + DB_INIT_LOG + DB_INIT_TXN, 077); assert(r == 0);
 
     DB *db;
     r = db_create(&db, env, 0); assert(r == 0);
 
-    r = db->open(db, 0, "test.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert(r == 0);
+    r = db->open(db, 0, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert(r == 0);
 
     int i;
     for (i = 2; i <= 2*n; i += 2) {

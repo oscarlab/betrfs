@@ -90,30 +90,28 @@ PATENT RIGHTS GRANT:
 
 #include "log-test3.h"
 
+#include "logsuperblock.h"
+
 // create and close, making sure that everything is deallocated properly.
 
 #define LSIZE 100
+#define WRITE2 2
+#define WRITE1 LSIZE - sizeof(struct log_super_block) - WRITE2
 extern "C" int test_log6(void);
 char logname[PATH_MAX];
 int test_log6(void) {
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU);    assert(r==0);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);    assert(r==0);
     TOKULOGGER logger;
     r = toku_logger_create(&logger);
     assert(r == 0);
-    r = toku_logger_set_lg_max(logger, LSIZE);
-    {
-	uint32_t n;
-	r = toku_logger_get_lg_max(logger, &n);
-	assert(n==LSIZE);
-    }
-    r = toku_logger_open(TOKU_TEST_FILENAME, logger);
+
+    r = toku_logger_open(TOKU_TEST_ENV_DIR_NAME, logger);
     assert(r == 0);
 
     {
 	ml_lock(&logger->input_lock);
-	int lsize=LSIZE-12-2;
+	int lsize=WRITE1;
 	toku_logger_make_space_in_inbuf(logger, lsize);
 	snprintf(logger->inbuf.buf+logger->inbuf.n_in_buf, lsize, "a%*d", lsize-1, 0);
 	logger->inbuf.n_in_buf += lsize;
@@ -124,9 +122,9 @@ int test_log6(void) {
 	
     {
 	ml_lock(&logger->input_lock);
-	toku_logger_make_space_in_inbuf(logger, 2);
-	memcpy(logger->inbuf.buf+logger->inbuf.n_in_buf, "b1", 2);
-	logger->inbuf.n_in_buf += 2;
+	toku_logger_make_space_in_inbuf(logger, WRITE2);
+	memcpy(logger->inbuf.buf+logger->inbuf.n_in_buf, "b1", WRITE2);
+	logger->inbuf.n_in_buf += WRITE2;
 	logger->lsn.lsn++;
 	logger->inbuf.max_lsn_in_buf = logger->lsn;
 	ml_unlock(&logger->input_lock);
@@ -137,13 +135,18 @@ int test_log6(void) {
 
    
     {
-       toku_struct_stat statbuf;
-        sprintf(logname, "%s/log000000000000.tokulog%d", TOKU_TEST_FILENAME, TOKU_LOG_VERSION);
-	r = toku_stat(logname, &statbuf);
-	assert(r==0);
-	assert(statbuf.st_size<=LSIZE);
-    }
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
+        sprintf(logname, "%s/log000000000000.tokulog%d", TOKU_TEST_ENV_DIR_NAME, TOKU_LOG_VERSION);
+        int fd = open(logname, O_RDONLY);
+        assert(fd >= 0);
 
+        uint32_t log_size;
+        r = toku_verify_logmagic_read_log_end(fd, &log_size);
+        assert(r==0);
+        printf("%s: log_size=%u, LSIZE=%d\n", __func__, log_size, LSIZE);
+
+	assert(log_size==LSIZE);
+    }
+
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);    assert(r==0);
     return 0;
 }

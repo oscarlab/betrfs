@@ -99,18 +99,10 @@ PATENT RIGHTS GRANT:
 static int 
 run_test(void) {
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);
     assert_zero(r);
-    char testdir[TOKU_PATH_MAX+1];
-    char testfile[TOKU_PATH_MAX+1];
-    toku_path_join(testdir, 2, TOKU_TEST_FILENAME, "dir");
-    toku_path_join(testfile, 2, TOKU_TEST_FILENAME, "file");
-
-    // setup the test dir
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU); assert(r == 0);
-    r = toku_os_mkdir(testdir, S_IRWXU); assert(r == 0);
+    const char* testdir = TOKU_TEST_ENV_DIR_NAME;
+    const char* testfile =TOKU_TEST_FILENAME_DATA;
 
     // create the log
     TOKULOGGER logger;
@@ -156,8 +148,8 @@ run_test(void) {
 		       testfile, testdir, &dummy_ftfs_key_ops, 0, 0, NULL, 0); 
     assert(r != 0);
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);
+    assert(r==0);
     return 0;
 }
 extern "C" int test_recovery_datadir_is_file(void);

@@ -137,6 +137,7 @@ cachetable_put_empty_node_with_dep_nodes(
         name,
         fullhash,
         toku_node_save_ct_pair);
+    new_node->dirty = 1;
     *result = new_node;
 }
 
@@ -198,120 +199,153 @@ toku_create_new_ftnode (
 // then a PL_WRITE_CHEAP lock is grabbed
 //
 int
-toku_pin_ftnode_batched(
+toku_pin_ftnode_for_search(
     FT_HANDLE brt,
     BLOCKNUM blocknum,
     uint32_t fullhash,
     UNLOCKERS unlockers,
+    bool multipath,
     ANCESTORS ancestors,
-    const PIVOT_BOUNDS bounds,
     FTNODE_FETCH_EXTRA bfe,
-    bool apply_ancestor_messages, // this bool is probably temporary, for #3972, once we know how range query estimates work, will revisit this
+    struct pivot_bounds *bounds,
     FTNODE *node_p,
-    bool* msgs_applied,
-    ANCESTORS kupsert_ancestor)
+    bool *node_changed)
 {
     void *node_v;
-    *msgs_applied = false;
-    FTNODE node = nullptr;
-    MSN max_msn_in_path = ZERO_MSN;
-    bool needs_ancestors_messages = false;
-    // this function assumes that if you want ancestor messages applied,
-    // you are doing a read for a query. This is so we can make some optimizations
-    // below.
-    if (apply_ancestor_messages) {
-        paranoid_invariant(bfe->type == ftnode_fetch_subset);
-    }
+    FTNODE node;
+    int r;
 
-    int r = toku_cachetable_get_and_pin_nonblocking_batched(
-            brt->ft->cf,
-            blocknum,
-            fullhash,
-            &node_v,
-            NULL,
+    r = toku_cachetable_get_and_pin_nonblocking_batched(
+            brt->ft->cf, blocknum, fullhash, &node_v, NULL,
             get_write_callbacks_for_node(brt->ft),
             toku_ftnode_fetch_callback,
             toku_ftnode_pf_req_callback,
             toku_ftnode_pf_callback,
-            PL_READ,
-            bfe, //read_extraargs
-            unlockers);
-    if (r != 0) {
-        assert(r == TOKUDB_TRY_AGAIN); // Any other error and we should bomb out ASAP.
-        goto exit;
+            PL_READ, bfe, unlockers);
+    if (r) {
+        assert(r == TOKUDB_TRY_AGAIN);
+        return r;
     }
+
     node = static_cast<FTNODE>(node_v);
-    if (apply_ancestor_messages && node->height == 0) {
-        needs_ancestors_messages = toku_ft_leaf_needs_ancestors_messages(
-            brt->ft,
-            node,
-            ancestors,
-            bounds,
-            &max_msn_in_path,
-            bfe->child_to_read,
-	    kupsert_ancestor
-            );
-        if (needs_ancestors_messages) {
+    // we only need to apply msgs to leaf nodes.
+    if (node->height > 0) {
+        *node_p = node;
+        return r;
+    }
+
+    MSN max_msn_in_path = ZERO_MSN;
+    bool needs_ancs_msgs = false;
+    if (!multipath) {
+        // Clone branch removed 'bool apply_ancestor_messages' parameter. However in previous master code,
+        // needs_ancs_msgs only apply when type = ftnode_fetch_subset. For toku testcase 'keyrange',
+        // the type is ftnode_fetch_none and assert will happen inside toku_ft_leaf_needs_ancestors_messages()
+        // therefore check the type == ftnode_fetch_subset first
+        if (bfe->type == ftnode_fetch_subset)
+        {
+        // is there any msg in ancestors that is not applied?
+        needs_ancs_msgs = toku_ft_leaf_needs_ancestors_messages(
+                            brt->ft, node, ancestors, bounds,
+                            &max_msn_in_path, bfe->child_to_read);
+        }
+        if (needs_ancs_msgs) {
             toku_unpin_ftnode_read_only(brt->ft, node);
-            int rr = toku_cachetable_get_and_pin_nonblocking_batched(
-                    brt->ft->cf,
-                    blocknum,
-                    fullhash,
-                    &node_v,
-                    NULL,
+            r = toku_cachetable_get_and_pin_nonblocking_batched(
+                    brt->ft->cf, blocknum, fullhash, &node_v, NULL,
                     get_write_callbacks_for_node(brt->ft),
                     toku_ftnode_fetch_callback,
                     toku_ftnode_pf_req_callback,
                     toku_ftnode_pf_callback,
-                    PL_WRITE_CHEAP,
-                    bfe, //read_extraargs
-                    unlockers);
-            if (rr != 0) {
-                assert(rr == TOKUDB_TRY_AGAIN); // Any other error and we should bomb out ASAP.
-                r = TOKUDB_TRY_AGAIN;
-                goto exit;
+                    PL_WRITE_CHEAP, bfe, unlockers);
+            if (r) {
+                assert(r == TOKUDB_TRY_AGAIN);
+                return r;
             }
             node = static_cast<FTNODE>(node_v);
-    	    toku_ft_node_unbound_inserts_validation(node,0, __LINE__);
-	    toku_apply_ancestors_messages_to_node(
-                brt,
-                node,
-                ancestors,
-                bounds,
-                msgs_applied,
-                bfe->child_to_read,
-		kupsert_ancestor
-                );
+
+            toku_apply_ancestors_messages_to_node(
+                brt, node, ancestors, bounds, node_changed, bfe->child_to_read);
         } else {
-            // At this point, we aren't going to run
-            // toku_apply_ancestors_messages_to_node but that doesn't
-            // mean max_msn_applied shouldn't be updated if possible
-            // (this saves the CPU work involved in
-            // toku_ft_leaf_needs_ancestors_messages).
-            //
-            // We still have a read lock, so we have not resolved
-            // checkpointing.  If the node is pending and dirty, we
-            // can't modify anything, including max_msn, until we
-            // resolve checkpointing.  If we do, the node might get
-            // written out that way as part of a checkpoint with a
-            // root that was already written out with a smaller
-            // max_msn.  During recovery, we would then inject a
-            // message based on the root's max_msn, and that message
-            // would get filtered by the leaf because it had too high
-            // a max_msn value. (see #5407)
-            //
-            // So for simplicity we only update the max_msn if the
-            // node is clean.  That way, in order for the node to get
-            // written out, it would have to be dirtied.  That
-            // requires a write lock, and a write lock requires you to
-            // resolve checkpointing.
-            if (!node->dirty) {
-                toku_ft_bn_update_max_msn(node, max_msn_in_path, bfe->child_to_read);
-            }
+            // avoid future checks for msgs earlier than max_msn_in_path
+            toku_ft_bn_update_max_msn(node, max_msn_in_path,
+                                      bfe->child_to_read);
+        }
+
+        *node_p = node;
+
+        return r;
+    }
+
+    // we use the lower bound as the shadow version, so first unlift
+    FTNODE shadow;
+    DBT version, alloc;
+    toku_init_dbt(&alloc);
+    if (!bounds->lk) {
+        toku_init_dbt(&version);
+    } else {
+        toku_copy_dbt(&version, *bounds->lk);
+        toku_ft_recover_key_by_ancs(brt->ft, ancestors, &version, &alloc);
+    }
+    shadow = toku_ft_get_shadow(node, &version);
+
+    if (!shadow || toku_ftnode_pf_req_callback(shadow, bfe)) {
+        // if the shadow doesn't exist, we need to create the shadow
+        // if the shadow doesn't have the right BN, we need to clone from node
+        // either way, we need the write lock
+write_lock:
+        toku_unpin_ftnode_read_only(brt->ft, node);
+        r = toku_cachetable_get_and_pin_nonblocking_batched(
+                brt->ft->cf, blocknum, fullhash, &node_v, NULL,
+                get_write_callbacks_for_node(brt->ft),
+                toku_ftnode_fetch_callback,
+                toku_ftnode_pf_req_callback,
+                toku_ftnode_pf_callback,
+                PL_WRITE_CHEAP, bfe, unlockers);
+        if (r) {
+            assert(r == TOKUDB_TRY_AGAIN);
+            goto out;
+        }
+        node = static_cast<FTNODE>(node_v);
+
+        // now we have write-locked the node
+        shadow = toku_ft_get_shadow(node, &version);
+        if (!shadow) {
+            shadow = ft_create_shadow(node, &version);
+            *node_changed = true;
+        }
+        // clone BNs from node
+        ft_update_shadow(node, shadow, node_changed);
+
+        // do we need ancester messages?
+        if (needs_ancs_msgs ||
+            toku_ft_leaf_needs_ancestors_messages(
+                brt->ft, shadow, ancestors, bounds, &max_msn_in_path,
+                bfe->child_to_read))
+        {
+            toku_apply_ancestors_messages_to_node(
+                brt, shadow, ancestors, bounds, node_changed,
+                bfe->child_to_read);
+        } else {
+            toku_ft_bn_update_max_msn(shadow, max_msn_in_path,
+                                      bfe->child_to_read);
+        }
+    } else {
+        needs_ancs_msgs = toku_ft_leaf_needs_ancestors_messages(
+                            brt->ft, shadow, ancestors, bounds,
+                            &max_msn_in_path, bfe->child_to_read);
+        if (needs_ancs_msgs) {
+            // we need write lock to apply msgs
+            goto write_lock;
+        } else {
+            toku_ft_bn_update_max_msn(shadow, max_msn_in_path,
+                                      bfe->child_to_read);
         }
     }
     *node_p = node;
-exit:
+
+out:
+    toku_cleanup_dbt(&alloc);
+
     return r;
 }
 

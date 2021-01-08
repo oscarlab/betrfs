@@ -152,6 +152,39 @@ int toku_testsetup_leaf(FT_HANDLE brt, BLOCKNUM *blocknum, int n_children, char 
     return 0;
 }
 
+int toku_testsetup_leaf_lifted(FT_HANDLE brt, BLOCKNUM *blocknum, int n_children, char **keys, int *keylens, char * bound_l, int bound_l_length, char * bound_r, int bound_r_length) {
+    FTNODE node;
+    assert(testsetup_initialized);
+    toku_create_new_ftnode(brt, &node, 0, n_children);
+    int i;
+
+    for (i=0; i<n_children; i++) {
+        BP_STATE(node,i) = PT_AVAIL;
+    }
+
+    for (i=0; i+1<n_children; i++) {
+        toku_memdup_dbt(&node->childkeys[i], keys[i], keylens[i]);
+        node->totalchildkeylens += keylens[i];
+    }
+
+    if(bound_l_length > 0) {
+        toku_memdup_dbt(&node->bound_l, bound_l, bound_l_length);
+        node->totalchildkeylens += bound_l_length;
+    } else {
+        toku_init_dbt(&node->bound_l);
+    }
+    if(bound_r_length > 0) {
+        toku_memdup_dbt(&node->bound_r, bound_r, bound_r_length);
+        node->totalchildkeylens += bound_r_length;
+    } else {
+        toku_init_dbt(&node->bound_r);
+    }
+    *blocknum = node->thisnodename;
+    toku_unpin_ftnode(brt->ft, node);
+    return 0;
+}
+
+
 // Don't bother to clean up carefully if something goes wrong.  (E.g., it's OK to have malloced stuff that hasn't been freed.)
 int toku_testsetup_nonleaf (FT_HANDLE brt, int height, BLOCKNUM *blocknum, int n_children, BLOCKNUM *children, char **keys, int *keylens) {
     FTNODE node;
@@ -172,6 +205,39 @@ int toku_testsetup_nonleaf (FT_HANDLE brt, int height, BLOCKNUM *blocknum, int n
     return 0;
 }
 
+int toku_testsetup_nonleaf_lifted (FT_HANDLE brt, int height, BLOCKNUM *blocknum, int n_children, BLOCKNUM *children, char **keys, int *keylens, char ** lifted_data, int* lifted_lens, char *bound_l, int bound_l_len, char * bound_r, int bound_r_len) {
+    FTNODE node;
+    assert(testsetup_initialized);
+    assert(n_children<=FT_FANOUT);
+    toku_create_new_ftnode(brt, &node, height, n_children);
+    int i;
+    for (i=0; i<n_children; i++) {
+        BP_BLOCKNUM(node, i) = children[i];
+        BP_STATE(node,i) = PT_AVAIL;
+    }
+    for (i=0; i+1<n_children; i++) {
+        toku_memdup_dbt(&node->childkeys[i], keys[i], keylens[i]);
+        node->totalchildkeylens += keylens[i];
+    }
+    for (i=0; i<n_children; i++) {
+        toku_memdup_dbt(&BP_LIFT(node, i), lifted_data[i], lifted_lens[i]);
+    }
+    if(bound_l_len > 0) {
+        toku_memdup_dbt(&node->bound_l, bound_l, bound_l_len);
+        node->totalchildkeylens += bound_l_len;
+    } else {
+        toku_init_dbt(&node->bound_l);
+    }
+    if(bound_r_len > 0) {
+        toku_memdup_dbt(&node->bound_r, bound_r, bound_r_len);
+        node->totalchildkeylens += bound_r_len;
+    } else {
+        toku_init_dbt(&node->bound_r);
+    }
+    *blocknum = node->thisnodename;
+    toku_unpin_ftnode(brt->ft, node);
+    return 0;
+}
 int toku_testsetup_root(FT_HANDLE brt, BLOCKNUM blocknum) {
     assert(testsetup_initialized);
     brt->ft->h->root_blocknum = blocknum;
@@ -236,12 +302,11 @@ int toku_testsetup_insert_to_leaf (FT_HANDLE brt, BLOCKNUM blocknum, const char 
                      toku_fill_dbt(&keydbt, key, keylen),
                     toku_fill_dbt(&valdbt, val, vallen) );
 
-    struct unbound_insert_entry * entry = NULL;
-    if(FT_UNBOUND_INSERT == type) {
-	entry = toku_alloc_unbound_insert_entry(UBI_UNBOUND, next_dummylsn(),//ft_h,
-                                                    cmd.msn, &keydbt);
-    	toku_logger_append_unbound_insert_entry(test_logger,entry); 
- }
+    struct ubi_entry *entry = NULL;
+    if (FT_UNBOUND_INSERT == type) {
+        entry = toku_alloc_ubi_entry(UBI_UNBOUND, next_dummylsn(), cmd.msn, &keydbt);
+        toku_logger_append_ubi_entry(test_logger, entry);
+    }
     toku_ft_node_put_cmd (
         brt->ft,
         &brt->ft->cmp_descriptor,
@@ -376,14 +441,13 @@ int toku_testsetup_insert_to_nonleaf (FT_HANDLE brt, BLOCKNUM blocknum, enum ft_
     FT_MSG_S msg;
     DBT kdbt, vdbt;
     toku_fill_dbt(&kdbt, key, keylen);
-    toku_fill_dbt(&vdbt, val, vallen); 
+    toku_fill_dbt(&vdbt, val, vallen);
     ft_msg_init(&msg, cmdtype, msn, xids_0, &kdbt, &vdbt);
-    struct unbound_insert_entry * entry = NULL;
-    if(FT_UNBOUND_INSERT == cmdtype) {
-	entry = toku_alloc_unbound_insert_entry(UBI_UNBOUND, next_dummylsn(),//ft_h,
-                                                    msg.msn, &kdbt);
-    	toku_logger_append_unbound_insert_entry(test_logger,entry); 
- }
+    struct ubi_entry *entry = NULL;
+    if (FT_UNBOUND_INSERT == cmdtype) {
+        entry = toku_alloc_ubi_entry(UBI_UNBOUND, next_dummylsn(), msg.msn, &kdbt);
+        toku_logger_append_ubi_entry(test_logger, entry);
+    }
     toku_bnc_insert_msg(BNC(node, childnum), entry, &msg, true, NULL, testhelper_string_key_cmp);
     // Hack to get the test working. The problem is that this test
     // is directly queueing something in a FIFO instead of 

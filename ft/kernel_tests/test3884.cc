@@ -172,6 +172,9 @@ setup_ftnode_partitions(struct ftnode *node, int n_children, const MSN msn, size
         set_BLB(node, bn, toku_create_empty_bn());
         BLB_MAX_MSN_APPLIED(node, bn) = msn;
         toku_init_dbt(&BP_LIFT(node, bn));
+        BP_PREFETCH_PFN(node,bn)    = NULL;
+        BP_PREFETCH_PFN_CNT(node,bn) = 0;
+        BP_PREFETCH_FLAG(node,bn) = false;
     }
 }
 
@@ -194,9 +197,10 @@ test_split_on_boundary(void)
 {
     struct ftnode sn;
 
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r == 0);
+
     int fd = open(fname, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
 
-    int r;
 
     setup_ftnode_header(&sn);
     const int nelts = 2 * nodesize / eltsize;
@@ -214,7 +218,6 @@ test_split_on_boundary(void)
     }
 
     close(fd);
-    unlink(fname);
     CACHETABLE ct;
     FT_HANDLE brt;
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
@@ -223,7 +226,7 @@ test_split_on_boundary(void)
     FTNODE nodea, nodeb;
     DBT splitk;
     // if we haven't done it right, we should hit the assert in the top of move_leafentries
-    ftleaf_split(brt->ft, &sn, &nodea, &nodeb, &splitk, true, SPLIT_EVENLY, 0, NULL);
+    ft_split_leaf(brt->ft, &sn, &nodea, &nodeb, &splitk, true, SPLIT_EVENLY, 0, NULL);
 
     verify_basement_node_msns(nodea, dummy_msn_3884);
     verify_basement_node_msns(nodeb, dummy_msn_3884);
@@ -237,6 +240,11 @@ test_split_on_boundary(void)
     }
 
     toku_destroy_ftnode_internals(&sn);
+    // toku_destroy_ftnode_internals does not free bounds
+    if (sn.bound_l.size != 0)
+        toku_destroy_dbt(&sn.bound_l);
+    if (sn.bound_r.size != 0)
+        toku_destroy_dbt(&sn.bound_r);
 }
 
 //
@@ -254,9 +262,9 @@ test_split_with_everything_on_the_left(void)
 {
     struct ftnode sn;
 
-    int fd = open(fname, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r == 0);
 
-    int r;
+    int fd = open(fname, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
 
     setup_ftnode_header(&sn);
     const int nelts = 2 * nodesize / eltsize;
@@ -284,7 +292,6 @@ test_split_with_everything_on_the_left(void)
         }
     }
     close(fd);
-    unlink(fname);
     CACHETABLE ct;
     FT_HANDLE brt;
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
@@ -293,7 +300,7 @@ test_split_with_everything_on_the_left(void)
     FTNODE nodea, nodeb;
     DBT splitk;
     // if we haven't done it right, we should hit the assert in the top of move_leafentries
-    ftleaf_split(brt->ft, &sn, &nodea, &nodeb, &splitk, true, SPLIT_EVENLY, 0, NULL);
+    ft_split_leaf(brt->ft, &sn, &nodea, &nodeb, &splitk, true, SPLIT_EVENLY, 0, NULL);
 
     toku_unpin_ftnode(brt->ft, nodeb);
     r = toku_close_ft_handle_nolsn(brt, NULL); assert(r == 0);
@@ -304,6 +311,12 @@ test_split_with_everything_on_the_left(void)
     }
 
     toku_destroy_ftnode_internals(&sn);
+    // toku_destroy_ftnode_internals does not free bounds
+    if (sn.bound_l.size != 0)
+        toku_destroy_dbt(&sn.bound_l);
+    if (sn.bound_r.size != 0)
+        toku_destroy_dbt(&sn.bound_r);
+
 }
 
 //
@@ -321,9 +334,9 @@ test_split_on_boundary_of_last_node(void)
 {
     struct ftnode sn;
 
-    int fd = open(fname, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r == 0);
 
-    int r;
+    int fd = open(fname, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
 
     setup_ftnode_header(&sn);
     const int nelts = 2 * nodesize / eltsize;
@@ -355,7 +368,6 @@ test_split_on_boundary_of_last_node(void)
         }
     }
     close(fd);
-    unlink(fname);
     CACHETABLE ct;
     FT_HANDLE brt;
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
@@ -364,7 +376,7 @@ test_split_on_boundary_of_last_node(void)
     FTNODE nodea, nodeb;
     DBT splitk;
     // if we haven't done it right, we should hit the assert in the top of move_leafentries
-    ftleaf_split(brt->ft, &sn, &nodea, &nodeb, &splitk, true, SPLIT_EVENLY, 0, NULL);
+    ft_split_leaf(brt->ft, &sn, &nodea, &nodeb, &splitk, true, SPLIT_EVENLY, 0, NULL);
 
     toku_unpin_ftnode(brt->ft, nodeb);
     r = toku_close_ft_handle_nolsn(brt, NULL); assert(r == 0);
@@ -375,6 +387,12 @@ test_split_on_boundary_of_last_node(void)
     }
 
     toku_destroy_ftnode_internals(&sn);
+    // toku_destroy_ftnode_internals does not free bounds
+    if (sn.bound_l.size != 0)
+        toku_destroy_dbt(&sn.bound_l);
+    if (sn.bound_r.size != 0)
+        toku_destroy_dbt(&sn.bound_r);
+
 }
 
 static void
@@ -382,9 +400,9 @@ test_split_at_begin(void)
 {
     struct ftnode sn;
 
-    int fd = open(fname, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r == 0);
 
-    int r;
+    int fd = open(fname, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
 
     setup_ftnode_header(&sn);
     const int nelts = 2 * nodesize / eltsize;
@@ -420,7 +438,6 @@ test_split_at_begin(void)
     }
 
     close(fd);
-    unlink(fname);
     CACHETABLE ct;
     FT_HANDLE brt;
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
@@ -429,7 +446,7 @@ test_split_at_begin(void)
     FTNODE nodea, nodeb;
     DBT splitk;
     // if we haven't done it right, we should hit the assert in the top of move_leafentries
-    ftleaf_split(brt->ft, &sn, &nodea, &nodeb, &splitk, true, SPLIT_EVENLY, 0, NULL);
+    ft_split_leaf(brt->ft, &sn, &nodea, &nodeb, &splitk, true, SPLIT_EVENLY, 0, NULL);
 
     toku_unpin_ftnode(brt->ft, nodeb);
     r = toku_close_ft_handle_nolsn(brt, NULL); assert(r == 0);
@@ -440,6 +457,12 @@ test_split_at_begin(void)
     }
 
     toku_destroy_ftnode_internals(&sn);
+    // toku_destroy_ftnode_internals does not free bounds
+    if (sn.bound_l.size != 0)
+        toku_destroy_dbt(&sn.bound_l);
+    if (sn.bound_r.size != 0)
+        toku_destroy_dbt(&sn.bound_r);
+
 }
 
 static void
@@ -447,9 +470,9 @@ test_split_at_end(void)
 {
     struct ftnode sn;
 
-    int fd = open(fname, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r == 0);
 
-    int r;
+    int fd = open(fname, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
 
     setup_ftnode_header(&sn);
     const int nelts = 2 * nodesize / eltsize;
@@ -481,7 +504,6 @@ test_split_at_end(void)
     }
 
     close(fd);
-    unlink(fname);
     CACHETABLE ct;
     FT_HANDLE brt;
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
@@ -490,7 +512,7 @@ test_split_at_end(void)
     FTNODE nodea, nodeb;
     DBT splitk;
     // if we haven't done it right, we should hit the assert in the top of move_leafentries
-    ftleaf_split(brt->ft, &sn, &nodea, &nodeb, &splitk, true, SPLIT_EVENLY, 0, NULL);
+    ft_split_leaf(brt->ft, &sn, &nodea, &nodeb, &splitk, true, SPLIT_EVENLY, 0, NULL);
 
     toku_unpin_ftnode(brt->ft, nodeb);
     r = toku_close_ft_handle_nolsn(brt, NULL); assert(r == 0);
@@ -501,6 +523,12 @@ test_split_at_end(void)
     }
 
     toku_destroy_ftnode_internals(&sn);
+    // toku_destroy_ftnode_internals does not free bounds
+    if (sn.bound_l.size != 0)
+        toku_destroy_dbt(&sn.bound_l);
+    if (sn.bound_r.size != 0)
+        toku_destroy_dbt(&sn.bound_r);
+
 }
 
 // Maximum node size according to the BRT: 1024 (expected node size after split)
@@ -514,10 +542,10 @@ test_split_odd_nodes(void)
 {
     struct ftnode sn;
 
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r == 0);
+
     int fd = open(fname, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO);
     assert(fd >= 0);
-
-    int r;
 
     setup_ftnode_header(&sn);
     // This will give us 9 children.
@@ -536,7 +564,6 @@ test_split_odd_nodes(void)
     }
 
     close(fd);
-    unlink(fname);
     CACHETABLE ct;
     FT_HANDLE brt;
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
@@ -545,7 +572,7 @@ test_split_odd_nodes(void)
     FTNODE nodea, nodeb;
     DBT splitk;
     // if we haven't done it right, we should hit the assert in the top of move_leafentries
-    ftleaf_split(brt->ft, &sn, &nodea, &nodeb, &splitk, true, SPLIT_EVENLY, 0, NULL);
+    ft_split_leaf(brt->ft, &sn, &nodea, &nodeb, &splitk, true, SPLIT_EVENLY, 0, NULL);
 
     verify_basement_node_msns(nodea, dummy_msn_3884);
     verify_basement_node_msns(nodeb, dummy_msn_3884);
@@ -559,6 +586,12 @@ test_split_odd_nodes(void)
     }
 
     toku_destroy_ftnode_internals(&sn);
+    // toku_destroy_ftnode_internals does not free bounds
+    if (sn.bound_l.size != 0)
+        toku_destroy_dbt(&sn.bound_l);
+    if (sn.bound_r.size != 0)
+        toku_destroy_dbt(&sn.bound_r);
+
 }
 
 extern "C" int test_3884(void);
@@ -567,7 +600,7 @@ test_3884 (void) {
     initialize_dummymsn();
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
-    fname = TOKU_TEST_FILENAME;
+    fname = TOKU_TEST_FILENAME_DATA;
 
     test_split_on_boundary();
     test_split_with_everything_on_the_left();
@@ -579,7 +612,7 @@ test_3884 (void) {
     toku_ft_layer_destroy();
 #ifdef __SUPPORT_DIRECT_IO
     printf("\n INFO: direct io is turned on \n");
-#endif 
- 
+#endif
+
     return 0;
 }

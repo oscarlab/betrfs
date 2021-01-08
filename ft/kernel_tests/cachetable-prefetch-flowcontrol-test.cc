@@ -156,8 +156,9 @@ static void cachetable_prefetch_flowcontrol_test (int cachetable_size_limit) {
     toku_cachetable_create(&ct, cachetable_size_limit, ZERO_LSN, NULL_LOGGER);
     evictor_test_helpers::set_hysteresis_limits(&ct->ev, cachetable_size_limit, cachetable_size_limit);
     evictor_test_helpers::disable_ev_thread(&ct->ev);
-    const char *fname1 = TOKU_TEST_FILENAME;
-    unlink(fname1);
+    const char *fname1 = TOKU_TEST_FILENAME_DATA;
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
+
     CACHEFILE f1;
     r = toku_cachetable_openf(&f1, ct, fname1, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO); assert(r == 0);
 

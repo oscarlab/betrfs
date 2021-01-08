@@ -108,16 +108,16 @@ run_test (void) {
 
     DB_ENV * env;
     DB *db;
-    const char * const fname = "test.updates_single_key.ft_handle";
+    const char * const fname = TOKU_TEST_DATA_DB_NAME;
     int r;
 
     r = db_env_create(&env, 0);        assert(r == 0);
     env->set_errfile(env, stderr);
     // no need to run with logging, so DB_INIT_LOG not passed in
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE | DB_PRIVATE | DB_INIT_MPOOL | DB_INIT_TXN | DB_INIT_LOCK | DB_THREAD, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE | DB_PRIVATE | DB_INIT_MPOOL | DB_INIT_LOG | DB_INIT_TXN | DB_INIT_LOCK | DB_THREAD, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r = db_create(&db, env, 0); assert(r == 0);
     db->set_errfile(db,stderr); // Turn off those annoying errors
-    r = db->open(db, NULL, fname, "main", DB_BTREE, DB_CREATE, 0666); assert(r == 0);
+    r = db->open(db, NULL, fname, NULL, DB_BTREE, DB_CREATE, 0666); assert(r == 0);
 
     int i;
     for (i=0; i<1000000; i++) {
@@ -142,9 +142,9 @@ extern "C" int test_test_updates_single_key(void);
 int test_test_updates_single_key(void) {
 
     pre_setup();  
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
-    
+    int r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);    
+
     run_test();
     post_teardown();
 

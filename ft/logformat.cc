@@ -162,18 +162,15 @@ const struct logtype rollbacks[] = {
 			  {"uint32_t", "pm_status", 0},
                           {"bool", "is_resetting_op", 0},
                           NULLFIELD}, LOG_BEGIN_ACTION_NA},
-    {"cmdrename", 'M', FA{
-                          {"FILENUM", "filenum", 0},
-                          {"BYTESTRING", "minkeybs", 0},
-                          {"BYTESTRING", "maxkeybs", 0},
-                          {"BYTESTRING", "newminkeybs", 0},
-			  {"BYTESTRING", "newmaxkeybs",0},
-			  {"BYTESTRING", "oldprefxbs",0},
-			  {"BYTESTRING", "newprefixbs",0},
-		          {"TXNID", "oldest_referenced_xid",0},
-                          {"bool", "is_resetting_op", 0},
-                          {"uint64_t", "msn", 0},
-                          NULLFIELD}, LOG_BEGIN_ACTION_NA},
+    {"cmdclone", 'c', FA{{"FILENUM", "filenum", 0},
+                         {"BYTESTRING", "minkeybs", 0},
+                         {"BYTESTRING", "maxkeybs", 0},
+                         {"BYTESTRING", "newminkeybs", 0},
+                         {"BYTESTRING", "newmaxkeybs", 0},
+                         {"BYTESTRING", "oldprefixbs", 0},
+                         {"BYTESTRING", "newprefixbs", 0},
+                         {"bool", "delete_old", 0},
+                         NULLFIELD}, LOG_BEGIN_ACTION_NA},
     {"rollinclude", 'r', FA{{"TXNID_PAIR",     "xid", 0},
                             {"uint64_t", "num_nodes", 0},
                             {"BLOCKNUM",  "spilled_head", 0},
@@ -307,14 +304,16 @@ const struct logtype logtypes[] = {
 				    {"uint32_t","pm_status",0},
                                     {"bool","is_resetting_op",0},
                                     NULLFIELD}, SHOULD_LOG_BEGIN},
-    {"enq_rename", 'R', FA{{"FILENUM",    "filenum", 0},
-                                    {"TXNID_PAIR",      "xid", 0},
-                                    {"BYTESTRING", "min_key", 0},
-                                    {"BYTESTRING", "max_key", 0},
-                                    {"BYTESTRING","old_prefix",0},
-				    {"BYTESTRING", "new_prefix", 0},
-                                    {"bool","is_resetting_op",0},
-                                    NULLFIELD}, SHOULD_LOG_BEGIN}, 
+    {"enq_clone", 'c', FA{{"FILENUM", "filenum", 0},
+                          {"TXNID_PAIR", "xid", 0},
+                          {"BYTESTRING", "minkeybs", 0},
+                          {"BYTESTRING", "maxkeybs", 0},
+                          {"BYTESTRING", "newminkeybs", 0},
+                          {"BYTESTRING", "newmaxkeybs", 0},
+                          {"BYTESTRING", "oldprefixbs", 0},
+                          {"BYTESTRING", "newprefixbs", 0},
+                          {"bool", "delete_old", 0},
+                          NULLFIELD}, SHOULD_LOG_BEGIN},
     {"enq_unbound_insert", 'G', FA{{"FILENUM",    "filenum", 0},
                                    {"TXNID_PAIR",     "xid", 0},
                                    {"BYTESTRING", "key", 0},
@@ -600,7 +599,11 @@ generate_log_writer (void) {
                         fprintf(cf, "  wbuf_nocrc_int(&wbuf, buflen);\n");
                         fprintf(cf, "  assert(wbuf.ndone==buflen);\n");
                         fprintf(cf, "  logger->inbuf.n_in_buf += buflen;\n");
-                        fprintf(cf, "  toku_logger_maybe_fsync(logger, logger->lsn, do_fsync, true);\n");
+                        if (strcmp(lt->name, "end_checkpoint")) {
+                            fprintf(cf, "  toku_logger_maybe_fsync(logger, logger->lsn, do_fsync, false, true);\n");
+                        } else {
+                            fprintf(cf, "  toku_logger_maybe_fsync(logger, logger->lsn, do_fsync, true, true);\n");
+                        }
                         fprintf(cf, "}\n\n");
                     });
 }
@@ -625,11 +628,39 @@ generate_log_reader (void) {
     fprintf2(cf, hf, "int toku_log_fread (FILE *infile, struct log_entry *le)");
     fprintf(hf, ";\n");
     fprintf(cf, " {\n");
-    fprintf(cf, "  uint32_t len1; int r;\n");
+    fprintf(cf, "  uint32_t len1; uint32_t len2; int fd; int r;\n");
+    fprintf(cf, "  long dst; long pos; long end;\n");
+    fprintf(cf, "  toku_struct_stat tsb;\n");
     fprintf(cf, "  uint32_t ignorelen=0;\n");
     fprintf(cf, "  struct x1764 checksum;\n");
     fprintf(cf, "  x1764_init(&checksum);\n");
+    fprintf(cf, "  // Begin comparison of lengths\n");
+    fprintf(cf, "  // Read the length of this entry as stored at the beginning\n");
     fprintf(cf, "  r = toku_fread_uint32_t(infile, &len1, &checksum, &ignorelen); if (r!=0) return r;\n");
+    fprintf(cf, "  // Conservative sanity check, no log entry should be outside (8, 2GB)\n");
+    fprintf(cf, "  if(len1 >= (uint32_t)1 << 31) return DB_BADFORMAT;\n");
+    fprintf(cf, "  if(len1 <= (uint32_t)8) return DB_BADFORMAT;\n");
+    fprintf(cf, "  // 1 fseek of len1 would take me from the start of len1 in the entry to the end of len2\n");
+    fprintf(cf, "  // I want to go from the end of len1 to the start of len2, thus the -8\n");
+    fprintf(cf, "  dst = (long)(len1 - 8);\n");
+    fprintf(cf, "  pos = ftell(infile);\n");
+    fprintf(cf, "  if (pos<0) return pos;\n");
+    fprintf(cf, "  fd = fileno(infile);\n");
+    fprintf(cf, "  r = toku_fstat(fd, &tsb);\n");
+    fprintf(cf, "  if (r!=0) return r;\n");
+    fprintf(cf, "  end = tsb.st_size;\n");
+    fprintf(cf, "  if (pos + dst >= end) {\n");
+    fprintf(cf, "    r = fseek(infile, pos + dst - end + sizeof(struct log_super_block), SEEK_SET);\n");
+    fprintf(cf, "  } else {\n");
+    fprintf(cf, "    r = fseek(infile, pos + dst, SEEK_SET);\n");
+    fprintf(cf, "  }\n");
+    fprintf(cf, "  if (r!=0) return r;\n");
+    fprintf(cf, "  // Read the length of this entry as stored at the end\n");
+    fprintf(cf, "  r = toku_fread_uint32_t_nocrclen(infile, &len2); if (r!=0) return r;\n");
+    fprintf(cf, "  // If these two lengths don't agree we are reading garbage\n");
+    fprintf(cf, "  if (len1 != len2) return DB_BADFORMAT;\n");
+    fprintf(cf, "  r = fseek(infile, pos, SEEK_SET); if (r!=0) return r;\n");
+    fprintf(cf, "  // End comparison of lengths\n");
     fprintf(cf, "  int cmd=fgetc(infile);\n");
     fprintf(cf, "  if (cmd==EOF) return EOF;\n");
     fprintf(cf, "  char cmdchar = (char)cmd;\n");
@@ -650,35 +681,50 @@ generate_log_reader (void) {
     fprintf(cf, "{\n");
     fprintf(cf, "  memset(le, 0, sizeof(*le));\n");
     fprintf(cf, "  long pos = ftell(infile);\n");
-    fprintf(cf, "  if (pos<=12) return -1;\n");
-    fprintf(cf, "  int r = fseek(infile, -4, SEEK_CUR); \n");//              assert(r==0);\n");
-    fprintf(cf, "#ifdef TOKU_LINUX_MODULE\n");
+    fprintf(cf, "  int r;\n");
+    fprintf(cf, "  if (pos <= sizeof(struct log_super_block) - 4) {\n");
+    fprintf(cf, "    return -1;\n");
+    fprintf(cf, "  } else if (pos < sizeof(struct log_super_block)) {\n");
+    fprintf(cf, "    r = fseek(infile, pos - sizeof(struct log_super_block), SEEK_END);\n");
+    fprintf(cf, "  } else {\n");
+    fprintf(cf, "    r = fseek(infile, -4, SEEK_CUR);\n");
+    fprintf(cf, "  }\n");
+    fprintf(cf, "#ifdef TOKU_LINUX_MODULE\n");//                     assert(r==0);
     fprintf(cf, "  if (r!=0) return get_error_errno(r);\n");
     fprintf(cf, "#else\n");
     fprintf(cf, "  if (r!=0) return get_error_errno();\n");
     fprintf(cf, "#endif\n");
     fprintf(cf, "  uint32_t len;\n");
-    fprintf(cf, "  r = toku_fread_uint32_t_nocrclen(infile, &len); \n");//  assert(r==0);\n");
-    fprintf(cf, "  if (r!=0) return 1;\n");
-    fprintf(cf, "  r = fseek(infile, -(int)len, SEEK_CUR) ;  \n");//         assert(r==0);\n");
-    fprintf(cf, "#ifdef TOKU_LINUX_MODULE\n");
+    fprintf(cf, "  r = toku_fread_uint32_t_nocrclen(infile, &len); \n");
+    fprintf(cf, "  if (r!=0) return 1;\n");//                        assert(r==0);
+    fprintf(cf, "  if (pos - len < (signed long) sizeof(struct log_super_block)) {\n");
+    fprintf(cf, "    r = fseek(infile, -((int)len - (pos - sizeof(struct log_super_block))), SEEK_END);\n");
+    fprintf(cf, "  } else {\n");
+    fprintf(cf, "    r = fseek(infile, -(int)len, SEEK_CUR) ;  \n");
+    fprintf(cf, "  }\n");
+    fprintf(cf, "\n");
+    fprintf(cf, "#ifdef TOKU_LINUX_MODULE\n");//                     assert(r==0);
     fprintf(cf, "  if (r!=0) return get_error_errno(r);\n");
     fprintf(cf, "#else\n");
     fprintf(cf, "  if (r!=0) return get_error_errno();\n");
     fprintf(cf, "#endif\n");
-    fprintf(cf, "  r = toku_log_fread(infile, le); \n");//                   assert(r==0);\n");
-    fprintf(cf, "  if (r!=0) return 1;\n");
+    fprintf(cf, "  r = toku_log_fread(infile, le); \n");
+    fprintf(cf, "  if (r!=0) return 1;\n");//                        assert(r==0);
     fprintf(cf, "  long afterpos = ftell(infile);\n");
     fprintf(cf, "  if (afterpos != pos) return 1;\n");
-    fprintf(cf, "  r = fseek(infile, -(int)len, SEEK_CUR); \n");//           assert(r==0);\n");
-    fprintf(cf, "#ifdef TOKU_LINUX_MODULE\n");
+    fprintf(cf, "  if (pos - len < (signed long) sizeof(struct log_super_block)) {\n");
+    fprintf(cf, "    r = fseek(infile, -((int)len - (pos - sizeof(struct log_super_block))), SEEK_END);\n");
+    fprintf(cf, "  } else {\n");
+    fprintf(cf, "    r = fseek(infile, -(int)len, SEEK_CUR) ;  \n");
+    fprintf(cf, "  }\n");
+    fprintf(cf, "\n");
+    fprintf(cf, "#ifdef TOKU_LINUX_MODULE\n");//                     assert(r==0);
     fprintf(cf, "  if (r!=0) return get_error_errno(r);\n");
     fprintf(cf, "#else\n");
     fprintf(cf, "  if (r!=0) return get_error_errno();\n");
     fprintf(cf, "#endif\n");
     fprintf(cf, "  return 0;\n");
     fprintf(cf, "}\n\n");
-
     DO_LOGTYPES(lt, ({
             fprintf(cf, "static void toku_log_free_log_entry_%s_resources (struct logtype_%s *data", lt->name, lt->name);
             if (!lt->fields->type) fprintf(cf, " __attribute__((__unused__))");
@@ -931,6 +977,7 @@ int main (int argc, const char *const argv[]) {
     fprintf2(cf, pf, "#include <ft/log-internal.h>\n");
     fprintf(hf, "#include <ft/ft-internal.h>\n");
     fprintf(hf, "#include <ft/memarena.h>\n");
+    fprintf(cf, "#include \"logsuperblock.h\"\n");
     generate_enum();
     generate_log_struct();
     generate_dispatch();

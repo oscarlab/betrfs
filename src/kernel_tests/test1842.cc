@@ -133,8 +133,8 @@ length_int_dbt_cmp (DB *db_compare, const DBT *a, const DBT *b) {
 static void
 setup_db (uint32_t dup_mode) {
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
 
     r = db_env_create(&env, 0); CKERR(r);
 #ifdef TOKUDB
@@ -143,7 +143,7 @@ setup_db (uint32_t dup_mode) {
     key_ops.keycmp = int_dbt_cmp;
     r = env->set_key_ops(env, &key_ops); CKERR(r);
 #endif
-    r = env->open(env, TOKU_TEST_FILENAME, DB_INIT_MPOOL | DB_INIT_LOG | DB_INIT_LOCK | DB_INIT_TXN | DB_PRIVATE | DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); 
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL | DB_INIT_LOG | DB_INIT_LOCK | DB_INIT_TXN | DB_PRIVATE | DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); 
     CKERR(r);
 
     {
@@ -155,7 +155,7 @@ setup_db (uint32_t dup_mode) {
         r=db->set_bt_compare(db, int_dbt_cmp); CKERR(r);
 #endif
         r = db->set_flags(db, dup_mode); assert(r == 0); CKERR(r);
-        r = db->open(db, txn, "test.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+        r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
         r = txn->commit(txn, 0); CKERR(r);
     }
 }

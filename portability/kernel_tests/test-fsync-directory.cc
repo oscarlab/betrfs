@@ -101,16 +101,12 @@ extern "C" int test_fsync_directory(void);
 int test_fsync_directory(void) {
     int r;
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
     char * buf = (char *) toku_xmalloc(sizeof(char)*(TOKU_PATH_MAX+1));
     memset(buf,0,TOKU_PATH_MAX+1);
-    r = toku_os_mkdir(toku_path_join(buf, 2, TOKU_TEST_FILENAME, "test"), S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r = toku_fsync_directory(""); CKERR(r);
     r = toku_fsync_directory("."); CKERR(r);
-    r = toku_fsync_directory(toku_path_join(buf, 3, TOKU_TEST_FILENAME, "test", "a")); CKERR(r);
-    r = toku_fsync_directory(toku_path_join(buf, 4, ".", TOKU_TEST_FILENAME, "test", "a")); CKERR(r);
     toku_free(buf);
     return 0;
 }

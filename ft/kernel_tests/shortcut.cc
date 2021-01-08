@@ -92,7 +92,7 @@ under this License.
 
 
 #include "test.h"
-static const char *fname = "toku_test_file";
+static const char *fname = TOKU_TEST_FILENAME_DATA;
 
 static TOKUTXN const null_txn = 0;
 static CACHETABLE ct;
@@ -111,7 +111,8 @@ int test_shortcut (void)
         int rinit = toku_ft_layer_init();
         CKERR(rinit);
  
-	unlink(fname);
+	r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+        assert(r==0);
 
 	toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
 	r = toku_open_ft_handle(fname, 1, &brt, 1<<12, 1<<9, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, test_ft_cursor_keycompare);   assert(r==0);

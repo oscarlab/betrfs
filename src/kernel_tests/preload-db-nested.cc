@@ -339,17 +339,24 @@ void my_nested_insert(DB ** dbs, uint depth,  DB_TXN *parent_txn,
 
 static char *free_me = NULL;
 
+static const char *dbname[5] = {
+    TOKU_TEST_DATA_DB_NAME,
+    TOKU_TEST_META_DB_NAME,
+    TOKU_TEST_ONE_DB_NAME,
+    TOKU_TEST_TWO_DB_NAME,
+    TOKU_TEST_THREE_DB_NAME
+};
+
 static void run_test(void) 
 {
     int r;
-    const char *env_dir = TOKU_TEST_FILENAME; // the default env_dir.
+    const char *env_dir = TOKU_TEST_ENV_DIR_NAME; // the default env_dir.
     struct toku_db_key_operations key_ops;
     memset(&key_ops, 0, sizeof(key_ops));
     key_ops.keycmp = uint_dbt_cmp;
     pre_setup();
-    toku_os_recursive_delete(env_dir);    
 
-    r = toku_os_mkdir(env_dir, S_IRWXU+S_IRWXG+S_IRWXO);                                                      CKERR(r);
+    r = toku_fs_reset(env_dir, S_IRWXU+S_IRWXG+S_IRWXO);                                                      CKERR(r);
 
     r = db_env_create(&env, 0);                                                                               CKERR(r);
     r = env->set_key_ops(env, &key_ops); CKERR(r);
@@ -378,8 +385,8 @@ static void run_test(void)
 	    CKERR(0);	    
 	}
         dbs[i]->app_private = &idx[i];
-        snprintf(name, MAX_NAME * 2 * sizeof(*name), "db_%04x", i);
-        r = dbs[i]->open(dbs[i], NULL, name, NULL, DB_BTREE, DB_CREATE, 0666);                                CKERR(r);
+        assert(i < 5);
+        r = dbs[i]->open(dbs[i], NULL, dbname[i], NULL, DB_BTREE, DB_CREATE, 0666);                                CKERR(r);
         IN_TXN_COMMIT(env, NULL, txn_desc, 0, {
                 { int chk_r = dbs[i]->change_descriptor(dbs[i], txn_desc, &desc, 0); CKERR(chk_r); }
         });
@@ -407,7 +414,8 @@ static void run_test(void)
     toku_free(idx);
     toku_free(name);
 
-    toku_os_recursive_delete(env_dir);    
+    r = toku_fs_reset(env_dir, S_IRWXU+S_IRWXG+S_IRWXO);
+    CKERR(r);
 
     post_teardown();
 }

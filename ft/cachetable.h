@@ -387,13 +387,13 @@ int toku_cachetable_get_and_pin_with_dep_pairs (
 // succeeded, add the memory object to the cachetable with a read lock on it.
 // Returns: 0 if the memory object is in memory, otherwise an error number.
 int toku_cachetable_get_and_pin (
-    CACHEFILE cachefile, 
-    CACHEKEY key, 
-    uint32_t fullhash, 
-    void**value, 
+    CACHEFILE cachefile,
+    CACHEKEY key,
+    uint32_t fullhash,
+    void**value,
     long *sizep,
     CACHETABLE_WRITE_CALLBACK write_callback,
-    CACHETABLE_FETCH_CALLBACK fetch_callback, 
+    CACHETABLE_FETCH_CALLBACK fetch_callback,
     CACHETABLE_PARTIAL_FETCH_REQUIRED_CALLBACK pf_req_callback,
     CACHETABLE_PARTIAL_FETCH_CALLBACK pf_callback,
     bool may_modify_value,
@@ -408,13 +408,13 @@ void toku_cachetable_pf_pinned_pair(
     CACHEFILE cf,
     CACHEKEY key,
     uint32_t fullhash
-    ); 
+    );
 
 struct unlockers {
-    bool       locked;
-    void (*f)(void* extra);
+    bool      locked;
+    void      (*f)(void* extra);
     void      *extra;
-    UNLOCKERS  next;
+    UNLOCKERS next;
 };
 
 // Effect:  If the block is in the cachetable, then return it.
@@ -479,6 +479,9 @@ int toku_cachetable_unpin_and_remove (CACHEFILE, PAIR, CACHETABLE_REMOVE_KEY, vo
 // Effect: Remove an object from the cachetable.  Don't write it back.
 // Requires: The object must be pinned exactly once.
 
+// dec the refc, if the resulting refc is 0, unpin and maybe destroy
+void toku_cachetable_dec_refc_and_unpin(FT, FTNODE);
+
 // test-only wrapper that use CACHEKEY and fullhash
 int toku_test_cachetable_unpin(CACHEFILE, CACHEKEY, uint32_t fullhash, enum cachetable_dirty dirty, PAIR_ATTR size);
 
@@ -499,8 +502,8 @@ int toku_cachefile_prefetch(CACHEFILE cf, CACHEKEY key, uint32_t fullhash,
 // Precondition: The cachetable mutex is NOT held.
 // Postcondition: The cachetable mutex is NOT held.
 // Returns: 0 if success
-// Implement Note: 
-//  1) The pair's rwlock is acquired (for write) (there is not a deadlock here because the rwlock is a pthread_cond_wait using the cachetable mutex).  
+// Implement Note:
+//  1) The pair's rwlock is acquired (for write) (there is not a deadlock here because the rwlock is a pthread_cond_wait using the cachetable mutex).
 //  Case A:  Single-threaded.
 //    A1)  Call cachetable_fetch_pair, which
 //      a) Obtains a readlock on the cachefile's fd (to prevent multipler readers at once)
@@ -619,6 +622,7 @@ char * toku_construct_full_name(int count, ...);
 char * toku_cachetable_get_fname_in_cwd(CACHETABLE ct, const char * fname_in_env);
 
 void cachetable_rr_kibbutz_enq(CACHETABLE ct, void (*f)(void *), void *extra);
+void cachetable_rr_cf_kibbutz_enq(CACHEFILE cf, void (*f)(void *), void *extra);
 void cachefile_kibbutz_enq (CACHEFILE cf, void (*f)(void*), void *extra);
 // Effect: Add a job to the cachetable's collection of work to do.  Note that function f must call remove_background_job_from_cf()
 
@@ -644,4 +648,8 @@ __attribute__((const,nonnull))
 bool toku_ctpair_is_write_locked(PAIR pair);
 void toku_write_lock_ctpair(PAIR pair, bool exp);
 void toku_write_unlock_ctpair(PAIR pair);
+
+void *toku_cachetable_maybe_break_cow(FT ft, PAIR p,
+                                      CACHETABLE_PUT_CALLBACK put_callback);
+
 #endif /* CACHETABLE_H */

@@ -100,13 +100,12 @@ static void
 test_abort_create (void) {
 
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
-
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r == 0);
     DB_ENV *env;
     r = db_env_create(&env, 0); assert(r == 0);
     env->set_errfile(env, stdout);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_INIT_MPOOL + DB_INIT_LOG + DB_INIT_LOCK + DB_INIT_TXN + DB_PRIVATE + DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); 
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL + DB_INIT_LOG + DB_INIT_LOCK + DB_INIT_TXN + DB_PRIVATE + DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); 
     if (r != 0) printf("%s:%d:%d:%s\n", __FILE__, __LINE__, r, db_strerror(r));
     assert(r == 0);
 
@@ -115,14 +114,14 @@ test_abort_create (void) {
 
     DB *db;
     r = db_create(&db, env, 0); assert(r == 0);
-    r = db->open(db, txn, "test.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert(r == 0);
+    r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert(r == 0);
 
     {
         char *filename;
         {
             DBT dname;
             DBT iname;
-            dbt_init(&dname, "test.db", sizeof("test.db"));
+            dbt_init(&dname, TOKU_TEST_DATA_DB_NAME, sizeof(TOKU_TEST_DATA_DB_NAME));
             dbt_init(&iname, NULL, 0);
             iname.flags |= DB_DBT_MALLOC;
             r = env->get_iname(env, &dname, &iname);
@@ -133,7 +132,7 @@ test_abort_create (void) {
 
 	toku_struct_stat statbuf;
         char fullfile[TOKU_PATH_MAX+1];
-	r = toku_stat(toku_path_join(fullfile, 2, TOKU_TEST_FILENAME, filename), &statbuf);
+	r = toku_stat(toku_path_join(fullfile, 2, TOKU_TEST_ENV_DIR_NAME, filename), &statbuf);
 	assert(r==0);
         toku_free(filename);
     }
@@ -155,7 +154,7 @@ test_abort_create (void) {
 
         toku_struct_stat statbuf;
         char fullfile[TOKU_PATH_MAX+1];
-	r = toku_stat(toku_path_join(fullfile, 2, TOKU_TEST_FILENAME, "test.db"), &statbuf);
+	r = toku_stat(toku_path_join(fullfile, 2, TOKU_TEST_ENV_DIR_NAME, "test.db"), &statbuf);
         assert(r!=0);
     }
 

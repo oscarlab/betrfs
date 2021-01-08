@@ -105,7 +105,7 @@ static void test4 (int nodesize, int count) {
     int i;
     CACHETABLE ct;
     gettimeofday(&t0, 0);
-    unlink(fname);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
     r = toku_open_ft_handle(fname, 1, &t, nodesize, nodesize / 8, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun); assert(r==0);
@@ -154,7 +154,7 @@ test_ft_test4 (void) {
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
 
-    fname = TOKU_TEST_FILENAME;
+    fname = TOKU_TEST_FILENAME_DATA;
     ft_blackbox_test();
 
     if (verbose) printf("test ok\n");

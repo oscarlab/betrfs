@@ -115,13 +115,12 @@ run_test(void) {
     const FILENUM fn_name = {0};
      
     // setup the test dir
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU); assert(r == 0);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r == 0);
 
     // create/open the logger
     TOKULOGGER logger;
     r = toku_logger_create(&logger); assert(r == 0);
-    r = toku_logger_open(TOKU_TEST_FILENAME, logger); assert(r == 0);
+    r = toku_logger_open(TOKU_TEST_ENV_DIR_NAME, logger); assert(r == 0);
     
     // create a range of key-value pairs
     BYTESTRING a  = { (uint32_t) strlen("a"), (char *) "a" };
@@ -185,10 +184,10 @@ run_test(void) {
     r = tokudb_recover(NULL,
 		       NULL_prepared_txn_callback,
 		       NULL_keep_cachetable_callback,
-		       NULL_logger, TOKU_TEST_FILENAME, TOKU_TEST_FILENAME, &dummy_ftfs_key_ops, 0, 0, NULL, 0); 
+		       NULL_logger, TOKU_TEST_ENV_DIR_NAME, TOKU_TEST_ENV_DIR_NAME, &dummy_ftfs_key_ops, 0, 0, NULL, 0); 
     assert(r == 0);
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r == 0);
 
     return 0;
 }

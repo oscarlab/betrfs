@@ -119,35 +119,16 @@ static bool check_huge_pages_config_file(const char *fname)
     }
     return huge_pages_enabled;
 }
-#endif
-/* struct mapinfo { */
-/*     void *addr; */
-/*     size_t size; */
-/* }; */
 
-/* static void* map_it(size_t size, struct mapinfo *mi, int *n_maps) { */
-/*     void *r = mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0); */
-/*     if ((long)r==-1) perror("mmap failed"); */
-/*     mi[*n_maps].addr = r; */
-/*     mi[*n_maps].size = size; */
-/*     (*n_maps)++; */
-/*     return r; */
-/* } */
-
-#ifndef TOKU_LINUX_MODULE
 static bool check_huge_pages_in_practice(void)
-#else
-extern bool check_huge_pages_in_practice(void); 
-bool check_huge_pages_in_practice(void)
-#endif
 // Effect: Return true if huge pages appear to be defined in practice.
 {
-#ifdef HAVE_MINCORE    
-#ifdef HAVE_MAP_ANONYMOUS    
+#ifdef HAVE_MINCORE
+#ifdef HAVE_MAP_ANONYMOUS
     const int map_anonymous = MAP_ANONYMOUS;
-#else
+#else /* HAVE_MAP_ANONYMOUS */
     const int map_anonymous = MAP_ANON;
-#endif
+#endif /* HAVE_MAP_ANONYMOUS */
     const size_t TWO_MB = 2UL*1024UL*1024UL;
 
     void *first = mmap(NULL, 2*TWO_MB, PROT_READ|PROT_WRITE, MAP_PRIVATE|map_anonymous, -1, 0);
@@ -194,13 +175,12 @@ bool check_huge_pages_in_practice(void)
     } else {
         return false;
     }
-#else
+#else /* HAVE_MINCORE */
     // No mincore, so no way to check this in practice
     return false;
-#endif
+#endif /* HAVE_MINCORE */
 }
 
-#ifndef TOKU_LINUX_MODULE
 bool complain_and_return_true_if_huge_pages_are_enabled(void)
 // Effect: Return true if huge pages appear to be enabled.  If so, print some diagnostics to stderr.
 //  If environment variable TOKU_HUGE_PAGES_OK is set, then don't complain.
@@ -215,5 +195,11 @@ bool complain_and_return_true_if_huge_pages_are_enabled(void)
         return conf1|conf2|prac;
     }
 }
-#endif
+#else /* TOKU_LINUX_MODULE */
+bool complain_and_return_true_if_huge_pages_are_enabled(void)
+{
+    // Yang 01/02/2019: we dont care about hugepage now
+    return false;
+}
+#endif /* TOKU_LINUX_MODULE */
 }

@@ -100,12 +100,13 @@ extern "C" int test_queries_with_deletes(void);
 int test_queries_with_deletes(void) {
   int r;
 
-  const char *testfile = "query_with_delete";
+  const char *testfile = TOKU_TEST_ENV_DIR_NAME;
 
-    pre_setup();
+  pre_setup();
 
-  toku_os_recursive_delete(testfile);
-  toku_os_mkdir(testfile, S_IRWXU+S_IRWXG+S_IRWXO);
+  r=toku_fs_reset(testfile, S_IRWXU+S_IRWXG+S_IRWXO);
+  assert(r==0);
+
   DB_ENV *env;
   r = db_env_create(&env, 0);                                                         CKERR(r);
   env->set_errfile(env, stderr);
@@ -133,7 +134,7 @@ int test_queries_with_deletes(void) {
     CKERR(r);
     r = db->set_readpagesize(db, 1024);
     CKERR(r);
-    r = db->open(db, txna, "foo.db", NULL, DB_BTREE, DB_CREATE, 0666);              CKERR(r);
+    r = db->open(db, txna, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_CREATE, 0666);              CKERR(r);
 
     r = txna->commit(txna, 0);                                                      CKERR(r);
   }

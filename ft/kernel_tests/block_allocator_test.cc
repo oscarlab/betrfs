@@ -161,29 +161,29 @@ test_ba0 (void) {
     assert(50 *BLOCK_ALIGNMENT==block_allocator_block_size(ba, 100*BLOCK_ALIGNMENT));
 
     uint64_t b2, b3, b4, b5, b6, b7;
-    ba_alloc(ba, 100, &b2);     
-    ba_alloc(ba, 100, &b3);     
-    ba_alloc(ba, 100, &b4);     
-    ba_alloc(ba, 100, &b5);     
-    ba_alloc(ba, 100, &b6);     
-    ba_alloc(ba, 100, &b7);     
+    ba_alloc(ba, 100, &b2);
+    ba_alloc(ba, 100, &b3);
+    ba_alloc(ba, 100, &b4);
+    ba_alloc(ba, 100, &b5);
+    ba_alloc(ba, 100, &b6);
+    ba_alloc(ba, 100, &b7);
     ba_free(ba, b2);
-    ba_alloc(ba, 100, &b2);  
-    ba_free(ba, b4);         
-    ba_free(ba, b6);         
+    ba_alloc(ba, 100, &b2);
+    ba_free(ba, b4);
+    ba_free(ba, b6);
     uint64_t b8, b9;
-    ba_alloc(ba, 100, &b4);    
-    ba_free(ba, b2);           
-    ba_alloc(ba, 100, &b6);    
-    ba_alloc(ba, 100, &b8);    
-    ba_alloc(ba, 100, &b9);    
-    ba_free(ba, b6);           
-    ba_free(ba, b7);           
-    ba_free(ba, b8);           
-    ba_alloc(ba, 100, &b6);    
-    ba_alloc(ba, 100, &b7);    
-    ba_free(ba, b4);           
-    ba_alloc(ba, 100, &b4);    
+    ba_alloc(ba, 100, &b4);
+    ba_free(ba, b2);
+    ba_alloc(ba, 100, &b6);
+    ba_alloc(ba, 100, &b8);
+    ba_alloc(ba, 100, &b9);
+    ba_free(ba, b6);
+    ba_free(ba, b7);
+    ba_free(ba, b8);
+    ba_alloc(ba, 100, &b6);
+    ba_alloc(ba, 100, &b7);
+    ba_free(ba, b4);
+    ba_alloc(ba, 100, &b4);
 
     destroy_block_allocator(&ba);
     assert(ba==0);
@@ -203,7 +203,7 @@ test_ba1 (int n_initial) {
 		ba_alloc(ba, 1, &blocks[n_blocks]);
 		//printf("A[%d]=%ld\n", n_blocks, blocks[n_blocks]);
 		n_blocks++;
-	    } 
+	    }
 	} else {
 	    if (n_blocks>0) {
 		int blocknum = random()%n_blocks;
@@ -214,11 +214,12 @@ test_ba1 (int n_initial) {
 	    }
 	}
     }
-    
+
+    toku_free(blocks);
     destroy_block_allocator(&ba);
     assert(ba==0);
 }
-    
+
 // Check to see if it is first fit or best fit.
 static void
 test_ba2 (void)
@@ -260,7 +261,7 @@ test_ba2 (void)
     ba_check_l    (ba, 5, 6*BSIZE,       100);
     ba_check_l    (ba, 6, 7*BSIZE,       100);
     ba_check_none (ba, 7);
-   
+
     ba_free (ba, 4*BSIZE);
     ba_check_l    (ba, 0, 0, 100);
     ba_check_l    (ba, 1,   BSIZE,       100);
@@ -329,7 +330,7 @@ test_ba2 (void)
     ba_check_l    (ba, 8, 9*BSIZE,       100);
     ba_check_l    (ba, 9, 10*BSIZE,       100);
     ba_check_none (ba, 10);
-    
+
     ba_free(ba, 9*BSIZE);
     ba_free(ba, 7*BSIZE);
     uint64_t b9;
@@ -358,7 +359,7 @@ int test_block_allocator(void)
     initialize_dummymsn();
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
- 
+
 //int
 //test_main (int argc __attribute__((__unused__)), const char *argv[] __attribute__((__unused__))) {
     test_ba0();

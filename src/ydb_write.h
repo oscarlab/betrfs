@@ -119,15 +119,23 @@ typedef struct {
 
 void ydb_write_layer_get_status(YDB_WRITE_LAYER_STATUS statp);
 
-
-int autotxn_db_rename (DB *db, DB_TXN * txn, DBT * min_key, DBT * max_key, DBT * old_prefix, DBT * new_prefix, uint32_t flags);
-int toku_db_rename(DB *db, DB_TXN * txn, DBT * min_key, DBT * max_key, DBT * old_prefix, DBT * new_prefix, uint32_t flags, bool holds_mo_lock);
-int toku_db_del(DB *db, DB_TXN *txn, DBT *key, uint32_t flags, bool holds_mo_lock);
 int toku_db_del_multicast(DB *db, DB_TXN *txn, DBT *key, DBT * max_key, bool is_re, uint32_t flags, bool holds_mo_lock);
+int toku_db_rd(DB *db, DB_TXN *txn, DBT *min_key, DBT *max_key, uint32_t flags,
+               bool holds_mo_lock);
+int toku_db_clone(DB *db, DB_TXN *txn, DBT *min_key, DBT *max_key,
+                  DBT *old_prefix, DBT *new_prefix, uint32_t flags,
+                  bool holds_mo_lock);
+
+int autotxn_db_del_multi(DB* db, DB_TXN* txn, DBT* key, DBT* max_key, bool is_re, uint32_t flags);
+int
+autotxn_db_rd(DB *db, DB_TXN *txn, DBT *min_key, DBT *max_key, uint32_t flags);
+int autotxn_db_clone(DB *db, DB_TXN *txn, DBT *min_key, DBT *max_key,
+                     DBT *old_prefix, DBT *new_prefix, uint32_t flags);
+
+int toku_db_del(DB *db, DB_TXN *txn, DBT *key, uint32_t flags, bool holds_mo_lock);
 int toku_db_put(DB *db, DB_TXN *txn, DBT *key, DBT *val, uint32_t flags, bool holds_mo_lock);
 int toku_db_seq_put(DB *db, DB_TXN *txn, DBT *key, DBT *val, uint32_t flags, bool holds_mo_lock);
 int autotxn_db_del(DB* db, DB_TXN* txn, DBT* key, uint32_t flags);
-int autotxn_db_del_multi(DB* db, DB_TXN* txn, DBT* key, DBT* max_key, bool is_re, uint32_t flags);
 int autotxn_db_put(DB* db, DB_TXN* txn, DBT* key, DBT* data, uint32_t flags);
 int autotxn_db_seq_put(DB* db, DB_TXN* txn, DBT* key, DBT* data, uint32_t flags);
 int autotxn_db_update(DB *db, DB_TXN *txn, const DBT *key, const DBT *update_function_extra, uint32_t flags);

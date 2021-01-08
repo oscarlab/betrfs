@@ -153,12 +153,11 @@ extern "C" int test_cursor_set_range_rmw(void);
 int test_cursor_set_range_rmw(void) {
     int r;
 
-    const char *env_dir = TOKU_TEST_FILENAME;
-    const char *db_filename = "rmwtest";
+    const char *env_dir = TOKU_TEST_ENV_DIR_NAME;
+    const char *db_filename = TOKU_TEST_DATA_DB_NAME;
 
     pre_setup();
-    toku_os_recursive_delete(env_dir);   
-    r = toku_os_mkdir(env_dir, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH); assert_zero(r);
+    r = toku_fs_reset(env_dir, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH); assert_zero(r);
 
     DB_ENV *env = NULL;
     r = db_env_create(&env, 0); assert_zero(r);

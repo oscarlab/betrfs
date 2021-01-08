@@ -253,9 +253,9 @@ static int UU() iibench_put_op(DB_TXN *txn, ARG arg, void *operation_extra, void
         dbt_init(&mult_val_dbt[0].dbts[0], valbuf, sizeof valbuf);
 
         r = env->put_multiple(
-            env, 
+            env,
             dbs[0], // source db.
-            txn, 
+            txn,
             &mult_key_dbt[0].dbts[0], // source db key
             &mult_val_dbt[0].dbts[0], // source db value
             num_dbs, // total number of dbs
@@ -295,7 +295,7 @@ static int iibench_generate_row_for_put(DB *dest_db, DB *src_db, DBT_ARRAY *dest
     invariant(dest_key->flags == DB_DBT_REALLOC);
     // Expand the secondary key data buffer if necessary
     if (dest_key->size != iibench_secondary_key_size) {
-        dest_key->data = toku_xrealloc(dest_key->data, iibench_secondary_key_size);
+        dest_key->data = toku_xrealloc(dest_key->data, dest_key->size, iibench_secondary_key_size);
         dest_key->size = iibench_secondary_key_size;
     }
 
@@ -441,7 +441,7 @@ static int iibench_fill_tables(DB_ENV *env, DB **dbs, struct cli_args *cli_args,
         dbt_init(&key, keybuf, sizeof keybuf);
         dbt_init(&val, valbuf, sizeof valbuf);
       //  r = loader->put(loader, &key, &val); CKERR(r);
-        db->put(db, txn, &key, &val, DB_PRELOCKED_WRITE); 
+        db->put(db, txn, &key, &val, DB_PRELOCKED_WRITE);
         if (verbose && i > 0 && i % 10000 == 0) {
             report_overall_fill_table_progress(cli_args, 10000);
         }

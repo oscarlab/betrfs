@@ -94,6 +94,8 @@ PATENT RIGHTS GRANT:
 #include <limits.h>
 #include <unistd.h>
 
+#include "logsuperblock.h"
+
 enum lc_direction { LC_FORWARD, LC_BACKWARD, LC_FIRST, LC_LAST };
 
 struct toku_logcursor {
@@ -102,6 +104,8 @@ struct toku_logcursor {
     int n_logfiles;
     int cur_logfiles_index;
     FILE *cur_fp;
+    size_t cur_log_end;
+    size_t cur_log_start;
     size_t buffer_size;
     void *buffer;
     bool is_open;
@@ -137,11 +141,43 @@ static int lc_close_cur_logfile(TOKULOGCURSOR lc) {
     return 0;
 }
 
-static toku_off_t lc_file_len(const char *name) {
-   toku_struct_stat buf;
-   int r = toku_stat(name, &buf); 
-   assert(r == 0);
-   return buf.st_size;
+/* SCB: We read the log superblock from the first 20 bytes of the log file
+ * and return the end or the start value, before restoring the cursor.
+ */
+static toku_off_t lc_file_end(FILE *fp) {
+    struct log_super_block *log_sb = NULL;
+    ssize_t r;
+    toku_off_t ret;
+
+    /* seek to the start of log super block */
+    r = fseek(fp, 0, SEEK_SET);
+    assert(r == 0);
+    log_sb = (struct log_super_block *) toku_xmalloc(sizeof(struct log_super_block)); 
+    assert(log_sb != NULL);
+    r = fread(log_sb, sizeof(struct log_super_block), 1, fp);
+    assert(r == 1);
+    r = fseek(fp, 0, SEEK_SET);
+    ret = log_sb->log_end;
+    toku_free(log_sb);
+    return ret;
+}
+
+static toku_off_t lc_file_start(FILE *fp) {
+    struct log_super_block *log_sb = NULL;
+    ssize_t r;
+    toku_off_t ret;
+
+    /* seek to the start of log super block */
+    r = fseek(fp, 0, SEEK_SET);
+    assert(r == 0);
+    log_sb = (struct log_super_block *) toku_xmalloc(sizeof(struct log_super_block)); 
+    assert(log_sb != NULL);
+    r = fread(log_sb, sizeof(struct log_super_block), 1, fp);
+    assert(r == 1);
+    r = fseek(fp, 0, SEEK_SET);
+    ret = log_sb->log_start;
+    toku_free(log_sb);
+    return ret;
 }
 
 // Cat the file and throw away the contents.  This brings the file into the file system cache
@@ -149,11 +185,17 @@ static toku_off_t lc_file_len(const char *name) {
 // file.
 static void lc_catfile(const char *fname, void *buffer, size_t buffer_size) {
     int fd = open(fname, O_RDONLY);
+    uint32_t logend;
+    uint32_t read_bytes = 0;
+    int ret;
+
     if (fd >= 0) {
-        while (1) {
+        ret = toku_verify_logmagic_read_log_end(fd, &logend);
+        while (ret == 0 && read_bytes < logend) {
             ssize_t r = read(fd, buffer, buffer_size);
             if ((int)r <= 0)
                 break;
+            read_bytes += r;
         }
         close(fd);
     }
@@ -165,6 +207,9 @@ static int lc_open_logfile(TOKULOGCURSOR lc, int index) {
     if( index == -1 || index >= lc->n_logfiles) return DB_NOTFOUND;
     lc_catfile(lc->logfiles[index], lc->buffer, lc->buffer_size);
     lc->cur_fp = fopen(lc->logfiles[index], "rb");
+    lc->cur_log_end = lc_file_end(lc->cur_fp);
+    lc->cur_log_start = lc_file_start(lc->cur_fp);
+
     if ( lc->cur_fp == NULL ) 
         return DB_NOTFOUND;
     // debug printf("%s:%d %s %p %u\n", __FUNCTION__, __LINE__, lc->logfiles[index], lc->buffer, (unsigned) lc->buffer_size);
@@ -174,12 +219,16 @@ static int lc_open_logfile(TOKULOGCURSOR lc, int index) {
 #endif
     // position fp past header, ignore 0 length file (t:2384)
     unsigned int version=0;
-    if ( lc_file_len(lc->logfiles[index]) >= 12 ) {
+    if ( lc->cur_log_end >= sizeof(struct log_super_block) ) {
         r = toku_read_logmagic(lc->cur_fp, &version);
         if (r!=0) 
             return DB_BADFORMAT;
         if (version < TOKU_LOG_MIN_SUPPORTED_VERSION || version > TOKU_LOG_VERSION)
             return DB_BADFORMAT;
+    }
+    if ( lc->cur_log_end >= sizeof(struct log_super_block) ) {
+        r = fseek(lc->cur_fp, sizeof(struct log_super_block), SEEK_SET);
+        if (r!=0) return r;
     }
     // mark as open
     lc->is_open = true;
@@ -339,7 +388,8 @@ static int lc_log_read_backward(TOKULOGCURSOR lc)
         if (r!=0) 
             return r;
         // seek to end
-        r = fseek(lc->cur_fp, 0, SEEK_END);
+	assert(lc->cur_log_end >= sizeof(struct log_super_block));
+        r = fseek(lc->cur_fp, lc->cur_log_end, SEEK_SET);
         assert(0==r);
         r = toku_log_fread_backward(lc->cur_fp, &(lc->entry));
     }
@@ -358,6 +408,13 @@ static int lc_log_read_backward(TOKULOGCURSOR lc)
 
 int toku_logcursor_next(TOKULOGCURSOR lc, struct log_entry **le) {
     int r=0;
+    /* SCB (8/27/19): This is mostly for recovery, which expects a DB_NOTFOUND
+     * when it is supposed to stop */
+    if (lc->cur_fp != NULL) {
+        toku_off_t cur_pos = ftell(lc->cur_fp);
+        if (cur_pos == lc->cur_log_end) return DB_NOTFOUND;
+    }
+
     if ( lc->entry_valid ) {
         toku_log_free_log_entry_resources(&(lc->entry));
         lc->entry_valid = false;
@@ -423,8 +480,15 @@ int toku_logcursor_first(TOKULOGCURSOR lc, struct log_entry **le) {
         r = lc_open_logfile(lc, 0);
         if (r!=0) 
             return r;
+        if (lc->cur_log_end == 0) {
+            lc_close_cur_logfile(lc);
+            return DB_NOTFOUND;
+        }
         lc->cur_logfiles_index = 0;
     }
+    // move to "first" entry
+    r = fseek(lc->cur_fp, lc->cur_log_start, SEEK_SET);
+    if (r != 0) return r;
     // read the entry
     r = lc_log_read(lc);
     if (r!=0) return r;
@@ -453,11 +517,17 @@ int toku_logcursor_last(TOKULOGCURSOR lc, struct log_entry **le) {
         r = lc_open_logfile(lc, lc->n_logfiles-1);
         if (r!=0)
             return r;
+        if (lc->cur_log_end == 0 || lc->cur_log_end == sizeof(struct log_super_block)) {
+            lc_close_cur_logfile(lc);
+            return DB_NOTFOUND;
+        }
         lc->cur_logfiles_index = lc->n_logfiles-1;
     }
     while (1) {
         // seek to end
-        r = fseek(lc->cur_fp, 0, SEEK_END);    assert(r==0);
+        if (lc->cur_log_end < sizeof(struct log_super_block))
+            return DB_BADFORMAT;
+        r = fseek(lc->cur_fp, lc->cur_log_end, SEEK_SET);    assert(r==0);
         // read backward
         r = toku_log_fread_backward(lc->cur_fp, &(lc->entry));
         if (r==0) // got a good entry
@@ -518,7 +588,6 @@ static int lc_fix_bad_logfile(TOKULOGCURSOR lc) {
     struct log_entry le;
     unsigned int version=0;
     int r = 0;
-
     r = fseek(lc->cur_fp, 0, SEEK_SET);                
     if ( r!=0 ) 
         return r;
@@ -527,8 +596,10 @@ static int lc_fix_bad_logfile(TOKULOGCURSOR lc) {
         return r;
     if (version != TOKU_LOG_VERSION) 
         return -1;
-    
+    r = fseek(lc->cur_fp, lc->cur_log_start, SEEK_SET);
+    if  (r != 0) return r;
     toku_off_t last_good_pos;
+    toku_off_t temp_pos;
     last_good_pos = ftello(lc->cur_fp);
     while (1) {
         // initialize le 
@@ -538,6 +609,29 @@ static int lc_fix_bad_logfile(TOKULOGCURSOR lc) {
         toku_log_free_log_entry_resources(&le);
         if ( r!=0 ) 
             break;
+        temp_pos = ftello(lc->cur_fp);
+        // SCB (9/13/19): The purpose of this test is to make sure we are only scanning the "logical log".
+        if (lc->cur_log_start < lc->cur_log_end) {
+        /* SCB (9/13/19): Log file looks like this:
+         * [sb|.........st#####################ed.................] (where '#' denotes the "logical log")
+         * So in this case we want to bail out if we are before the start or after the end.
+         */
+            if (temp_pos > lc->cur_log_end || temp_pos < lc->cur_log_start)
+                break;
+        } else if (lc->cur_log_start > lc->cur_log_end) {
+        /* SCB (9/13/19): Log file looks like this:
+         * [sb|#########ed.....................st#################] (where '#' denotes the "logical log")
+         * So in this case we want to bail out if we are after the end and before the start.
+         */
+            if (temp_pos < lc->cur_log_end && temp_pos > lc->cur_log_start)
+                break;
+        } else if (lc->cur_log_start == lc->cur_log_end) {
+        /* SCB (9/13/19): Log file looks like this:
+         * [sb|..............................(st/ed).................] (where '#' denotes the "logical log")
+         * So we should bail out immediately and tell the calling function that there is nothing we can do.
+         */
+            return DB_BADFORMAT;
+        }
         last_good_pos = ftello(lc->cur_fp);
     }
     // now have position of last good entry
@@ -548,13 +642,19 @@ static int lc_fix_bad_logfile(TOKULOGCURSOR lc) {
     r = lc_close_cur_logfile(lc);                                   
     if ( r!=0 ) 
         return r;
-    r = truncate(lc->logfiles[lc->n_logfiles - 1], last_good_pos);  
+    int fd = open(lc->logfiles[lc->n_logfiles - 1], O_RDWR);  
+    assert(fd >= 0);
+    if (last_good_pos == lc->cur_log_start)
+        last_good_pos = 0;
+    r = toku_update_logfile_end(fd, last_good_pos);
+    assert(r==0);
+    close(fd);
     if ( r!=0 ) 
         return r;
-    r = lc_open_logfile(lc, lc->n_logfiles-1);                      
+    r = lc_open_logfile(lc, lc->n_logfiles-1);
     if ( r!=0 ) 
         return r;
-    r = fseek(lc->cur_fp, 0, SEEK_END);                             
+    r = fseek(lc->cur_fp, lc->cur_log_end, SEEK_SET);
     if ( r!=0 ) 
         return r;
     return 0;

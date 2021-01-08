@@ -1,6 +1,5 @@
 set(tokusrc_kernel_srcs
 seq-io
-bench
 big-nested-abort-abort
 big-nested-abort-commit
 big-nested-commit-abort
@@ -26,6 +25,7 @@ cachetable-race
 checkpoint1
 checkpoint_fairness
 checkpoint_stress #(this should be done, but uses a shell script currently)  #phenominally loooong test
+circle-log-overflow
 create-datadir
 cursor-isolation
 cursor-more-than-a-leaf-provdel
@@ -45,7 +45,6 @@ directory_lock
 dump-env # example copies 5902 directory? we might not need this?
 env-put-multiple #loooong test
 env_loader_memory
-env_startup
 filesize #loooong test
 get_key_after_bytes_unit
 #helgrind1 (not going to helgrind in kernel...)
@@ -226,9 +225,9 @@ stat64
 stat64-create-modify-times #loooong test
 stat64-null-txn
 stat64-root-changes
-stress-gc2 
+stress-gc2
 #(we want this test, but we must fix threaded_stress_test_helpers.h first)
-stress-gc 
+stress-gc
 #(we want this test, but we must fix threaded_stress_test_helpers.h first)
 stress-test #(we want this test, but we must fix threaded_stress_test_helpers.h first)
 #test1426 (custom test)
@@ -263,9 +262,6 @@ test_abort3 # we need to figure out how to safely abort
 test_abort4 #for num in {-1 to 19} "-c 0 -1 $num" and "-c 1 -1 $num" #loooong test for 19 0 and 19_1
 test_abort5 # we need to figure out how to safely abort. #loooong test
 test_abort_delete_first # we need to figure out how to safely abort
-test_archive0
-test_archive1 #loooong test
-test_archive2
 test_blobs_leaf_split
 test_bulk_fetch
 test_cachesize
@@ -342,8 +338,8 @@ test_log6a_abort
 test_log6_abort
 test_log6
 test_log7 #(recover_srcs)
-test_log8 
-test_log9 
+test_log8
+test_log9
 test_log10
 test_logflush
 test_logmax #loooong test
@@ -362,13 +358,12 @@ test_redirect_func
 test_restrict
 test_reverse_compare_fun
 test-rollinclude
-test_set_func_malloc
 test_simple_read_txn
-test_stress0 
+test_stress0
 # needs to link with lock_tree. (--num_elements 512, --num_seconds 1000 --join_timeout 600 (we weant this test, but we must fix threaded_stress_test_helpers.h first)
-test_stress1 
+test_stress1
 #(--num_elements 150000 --num_seconds 1000 --join_timeout 600) (we weant this test, but we must fix threaded_stress_test_helpers.h first)
-test_stress2 
+test_stress2
 #(--num_elements 150000 --num_seconds 1000 --join_timeout 600) (we weant this test, but we must fix threaded_stress_test_helpers.h first)
 test_stress3 #(--num_elements 150000 --num_seconds 1000 --join_timeout 600) (we weant this test, but we must fix threaded_stress_test_helpers.h first)
 test_stress4 #(--num_elements 150000 --num_seconds 1000 --join_timeout 600) (we weant this test, but we must fix threaded_stress_test_helpers.h first)
@@ -451,7 +446,6 @@ update-multiple-with-indexer
 #upgrade-test-7 (transparent_upgrade_sources)
 zombie_db
 seqwrites-no-txn
-rename-simple
 )
 add_library(tokusrc_kernel_static STATIC ${tokusrc_kernel_srcs})
 maybe_add_gcov_to_libraries(tokusrc_static_conv)

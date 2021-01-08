@@ -177,7 +177,7 @@ run_test(DB_ENV *env, int ndbs, int do_txn, uint32_t pagesize, uint64_t nrows) {
         if (do_txn) {
             r = env->txn_begin(env, NULL, &txn1, 0); assert_zero(r);
         }
-        char db_filename[32]; sprintf(db_filename, "test%d", i);
+        const char *db_filename = TOKU_TEST_DATA_DB_NAME;
         r = db->open(db, txn1, db_filename, NULL, DB_BTREE, DB_CREATE, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH); assert_zero(r);
         if (do_txn) {
             r = txn1->commit(txn1, 0); assert_zero(r);
@@ -222,7 +222,7 @@ run_test(DB_ENV *env, int ndbs, int do_txn, uint32_t pagesize, uint64_t nrows) {
 extern "C" int test_shutdown_3344(void);
 int test_shutdown_3344(void) {
     pre_setup();
-    const char *env_dir = "dir.shutdown.ca";
+    const char *env_dir = TOKU_TEST_ENV_DIR_NAME;
     int ndbs = 500;
     int do_txn = 1;
     uint32_t pagesize = 1024;
@@ -232,8 +232,7 @@ int test_shutdown_3344(void) {
     verbose = 1;
     // create clean env dir
     int r;
-    toku_os_recursive_delete(env_dir);
-    r = toku_os_mkdir(env_dir, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH); assert_zero(r);
+    r = toku_fs_reset(env_dir, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH); assert_zero(r);
 
     DB_ENV *env = NULL;
     r = db_env_create(&env, 0); assert_zero(r);

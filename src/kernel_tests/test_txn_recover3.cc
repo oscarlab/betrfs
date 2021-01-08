@@ -104,25 +104,23 @@ test_txn_recover3 (int nrows) {
     if (verbose) printf("test_txn_recover1:%d\n", nrows);
 
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
-    char dirname[TOKU_PATH_MAX+1];
-    toku_os_mkdir(toku_path_join(dirname, 2, TOKU_TEST_FILENAME, "t.tokudb"), S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
 
     DB_ENV *env;
     DB *mdb, *sdb;
     DB_TXN * const null_txn = 0;
-    const char * const fname = "t.tokudb/main.ft_handle";
-    const char * const sname = "t.tokudb/status.ft_handle";
+    const char * const fname = TOKU_TEST_DATA_DB_NAME;
+    const char * const sname = TOKU_TEST_META_DB_NAME;
 
     r = db_env_create(&env, 0);        assert(r == 0);
     env->set_errfile(env, stderr);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE|DB_INIT_MPOOL|DB_INIT_TXN|DB_INIT_LOCK|DB_INIT_LOG |DB_THREAD |DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE|DB_INIT_MPOOL|DB_INIT_TXN|DB_INIT_LOCK|DB_INIT_LOG |DB_THREAD |DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r = env->close(env, 0); CKERR(r);
 
     r = db_env_create(&env, 0);        assert(r == 0);
     env->set_errfile(env, stderr);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE|DB_INIT_MPOOL|DB_INIT_TXN|DB_INIT_LOCK|DB_INIT_LOG |DB_THREAD |DB_PRIVATE | DB_RECOVER, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE|DB_INIT_MPOOL|DB_INIT_TXN|DB_INIT_LOCK|DB_INIT_LOG |DB_THREAD |DB_PRIVATE | DB_RECOVER, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
 
     r = db_create(&mdb, env, 0); assert(r == 0);
     mdb->set_errfile(mdb,stderr); // Turn off those annoying errors
@@ -152,11 +150,11 @@ test_txn_recover3 (int nrows) {
         int v = htonl(i);
         DBT key, val;
         r = mdb->put(mdb, txn, dbt_init(&key, &k, sizeof k), dbt_init(&val, &v, sizeof v), 0);
-        assert(r == 0); 
+        assert(r == 0);
         r = sdb->put(sdb, txn, dbt_init(&key, &k, sizeof k), dbt_init(&val, &v, sizeof v), 0);
-        assert(r == 0); 
+        assert(r == 0);
     }
-   
+
     r = txn->commit(txn, 0); assert(r == 0);
 
     r = mdb->close(mdb, 0); assert(r == 0);
@@ -164,19 +162,11 @@ test_txn_recover3 (int nrows) {
 
     r = env->txn_checkpoint(env, 0, 0, 0); assert(r == 0);
 
-    char **names;
-    r = env->log_archive(env, &names, 0); assert(r == 0);
-    if (names) {
-        for (i=0; names[i]; i++)
-            printf("%d:%s\n", i, names[i]);
-        toku_free(names);
-    }
-
     r = env->close(env, 0); assert(r == 0);
 
     r = db_env_create(&env, 0);        assert(r == 0);
     env->set_errfile(env, stderr);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE|DB_INIT_MPOOL|DB_INIT_TXN|DB_INIT_LOCK|DB_INIT_LOG |DB_THREAD |DB_PRIVATE | DB_RECOVER, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE|DB_INIT_MPOOL|DB_INIT_TXN|DB_INIT_LOCK|DB_INIT_LOG |DB_THREAD |DB_PRIVATE | DB_RECOVER, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r = env->close(env, 0); assert(r == 0);
 }
 

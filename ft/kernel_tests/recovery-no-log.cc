@@ -98,16 +98,8 @@ run_test(void) {
     int r;
 
     // setup the test dir
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU); assert(r == 0);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r == 0);
 
-    // redirect stderr
-   #if 0
-    int devnul = open(DEV_NULL_FILE, O_WRONLY);
-    assert(devnul>=0);
-    r = toku_dup2(devnul, fileno(stderr)); 	    assert(r==fileno(stderr));
-    r = close(devnul);                      assert(r==0);
-#endif
     // run recovery
     struct toku_db_key_operations dummy_ftfs_key_ops;
     memset(&dummy_ftfs_key_ops, 0, sizeof(dummy_ftfs_key_ops));
@@ -115,10 +107,10 @@ run_test(void) {
     r = tokudb_recover(NULL,
 		       NULL_prepared_txn_callback,
 		       NULL_keep_cachetable_callback,
-		       NULL_logger, TOKU_TEST_FILENAME, TOKU_TEST_FILENAME, &dummy_ftfs_key_ops, 0, 0, NULL, 0);
-    assert(r != 0);
+		       NULL_logger, TOKU_TEST_ENV_DIR_NAME, TOKU_TEST_ENV_DIR_NAME, &dummy_ftfs_key_ops, 0, 0, NULL, 0);
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
+    assert(r == 0);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r == 0);
 
     return 0;
 }

@@ -113,8 +113,8 @@ PATENT RIGHTS GRANT:
             ALSO good for simplicity (no having to scan packed version)
         key[]
     variable length
-        
-        
+
+
     Memory format of packed dup leaf entry
     CONSTANTS:
         num_uxrs

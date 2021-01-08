@@ -109,7 +109,7 @@ test_env_open_flags (int env_open_flags, int expectr) {
     assert(r == 0);
     env->set_errfile(env, 0);
 
-    r = env->open(env, TOKU_TEST_FILENAME, env_open_flags, 0644);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, env_open_flags, 0644);
     if (r != expectr && verbose) printf("env open flags=%x expectr=%d r=%d\n", env_open_flags, expectr, r);
 
     r = env->close(env, 0);
@@ -120,25 +120,23 @@ extern "C" int test_test_env_open_flags(void);
 int test_test_env_open_flags(void) {
 
     pre_setup(); 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    int r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
 
 #ifdef USE_TDB
     char tracefile[TOKU_PATH_MAX+1];
     toku_set_trace_file(toku_path_join(tracefile, 2, TOKU_TEST_FILENAME, "trace.tktrace"));
 #endif
-
     /* test flags */
     test_env_open_flags(0, ENOENT);
 #ifdef TOKUDB
     // This one segfaults in BDB 4.6.21
     test_env_open_flags(DB_PRIVATE, ENOENT);
 #endif
-    test_env_open_flags(DB_PRIVATE+DB_CREATE, 0);
-    test_env_open_flags(DB_PRIVATE+DB_CREATE+DB_INIT_MPOOL, 0);
-    test_env_open_flags(DB_PRIVATE+DB_RECOVER, EINVAL);
-    test_env_open_flags(DB_PRIVATE+DB_CREATE+DB_INIT_MPOOL+DB_RECOVER, EINVAL);
-
+    test_env_open_flags(DB_PRIVATE+DB_CREATE+DB_INIT_TXN+DB_INIT_LOG, 0);
+    test_env_open_flags(DB_PRIVATE+DB_CREATE+DB_INIT_MPOOL+DB_INIT_TXN+DB_INIT_LOG, 0);
+    test_env_open_flags(DB_PRIVATE+DB_RECOVER+DB_INIT_TXN+DB_INIT_LOG, EINVAL);
+    test_env_open_flags(DB_PRIVATE+DB_CREATE+DB_INIT_MPOOL+DB_RECOVER+DB_INIT_LOG+DB_INIT_TXN, EINVAL);
 #ifdef USE_TDB
     toku_close_trace_file();
 #endif

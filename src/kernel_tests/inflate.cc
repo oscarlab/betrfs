@@ -102,7 +102,7 @@ PATENT RIGHTS GRANT:
 #include "test.h"
 static DB_ENV *env;
 static DB *db;
-static const char dbname[] = "foo.db";
+static const char dbname[] = TOKU_TEST_DATA_DB_NAME;
 static const int envflags = DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_INIT_LOCK|DB_INIT_LOG|DB_PRIVATE|DB_INIT_TXN;
 
 static void
@@ -110,7 +110,7 @@ open_em (void)
 {
     int r;
     r = db_env_create(&env, 0);                                         CKERR(r);
-    r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);      CKERR(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);      CKERR(r);
     r = db_create(&db, env, 0);                                         CKERR(r);
     r = db->open(db, NULL, dbname, NULL, DB_BTREE, DB_CREATE, 0666);    CKERR(r);
 }
@@ -130,16 +130,15 @@ reopen_em (void)
     open_em();
 }
 
-
 static void
 setup(void)
 {
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    CKERR(r);
     r = db_env_create(&env, 0);
     CKERR(r);
-    r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
     r = db_create(&db, env, 0);
     CKERR(r);

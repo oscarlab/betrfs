@@ -117,7 +117,10 @@ static void close_ft_and_ct (void) {
 
 static void open_ft_and_ct (bool unlink_old) {
     int r;
-    if (unlink_old) unlink(fname);
+    if (unlink_old) {
+        r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);
+        assert(r==0);
+    }
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
     r = toku_open_ft_handle(fname, 1, &t, 1<<12, 1<<9, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);   assert(r==0);
     struct toku_db_key_operations key_ops;
@@ -149,7 +152,7 @@ test_ft_4115 (void) {
     initialize_dummymsn();
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
-    fname = TOKU_TEST_FILENAME;
+    fname = TOKU_TEST_FILENAME_DATA;
 
     test_4115();
     if (verbose) printf("test ok\n");

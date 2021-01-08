@@ -114,7 +114,7 @@ le_add_to_bn(bn_data* bn, uint32_t idx, const  char *key, int keylen, const char
     LEAFENTRY r = NULL;
     uint32_t size_needed = LE_CLEAN_MEMSIZE(vallen);
     bn->get_space_for_insert(
-        idx, 
+        idx,
         key,
         keylen,
         size_needed,
@@ -183,7 +183,7 @@ test1(int fd, FT brt_h, FTNODE *dn) {
         else {
             assert(BP_STATE(*dn,i) == PT_ON_DISK);
         }
-    }    
+    }
 
     req = toku_ftnode_pf_req_callback(*dn, &bfe_all);
     assert(req);
@@ -218,16 +218,16 @@ test2(int fd, FT brt_h, FTNODE *dn) {
     memset(&left, 0, sizeof(left));
     memset(&right, 0, sizeof(right));
     ft_search_t search_t;
-    
+
     brt_h->key_ops.keycmp = string_key_cmp;
     fill_bfe_for_subset_read(
         &bfe_subset,
         brt_h,
         ft_search_init(
-            &search_t, 
-            search_cmp, 
-            FT_SEARCH_LEFT, 
-            NULL, 
+            &search_t,
+            search_cmp,
+            FT_SEARCH_LEFT,
+            NULL,
             NULL
             ),
         &left,
@@ -241,7 +241,7 @@ test2(int fd, FT brt_h, FTNODE *dn) {
     int r = toku_deserialize_ftnode_from(fd, make_blocknum(20), 0/*pass zero for hash*/, dn, &ndd, &bfe_subset);
     assert(r==0);
     bool is_leaf = ((*dn)->height == 0);
-    // at this point, although both partitions are available, only the 
+    // at this point, although both partitions are available, only the
     // second basement node should have had its clock
     // touched
     assert(BP_STATE(*dn, 0) == PT_AVAIL);
@@ -277,7 +277,7 @@ test3_leaf(int fd, FT brt_h, FTNODE *dn) {
     memset(&dummy_db, 0, sizeof(dummy_db));
     memset(&left, 0, sizeof(left));
     memset(&right, 0, sizeof(right));
-    
+
     brt_h->key_ops.keycmp = string_key_cmp;
     fill_bfe_for_min_read(
         &bfe_min,
@@ -301,10 +301,11 @@ static void
 test_serialize_nonleaf(void) {
     //    struct ft_handle source_ft;
     struct ftnode sn, *dn;
+    memset(&sn, 0, sizeof(struct ftnode));
 
-    int fd = open(TOKU_TEST_FILENAME, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
-    int r;
+    int fd = open(TOKU_TEST_FILENAME_DATA, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
 
     //    source_ft.fd=fd;
     sn.max_msn_applied_to_node_on_disk.msn = 0;
@@ -333,6 +334,8 @@ test_serialize_nonleaf(void) {
     set_BNC(&sn, 1, toku_create_empty_nl());
     toku_init_dbt(&BP_LIFT(&sn, 0));
     toku_init_dbt(&BP_LIFT(&sn, 1));
+    toku_init_dbt(&BP_NOT_LIFTED(&sn, 0));
+    toku_init_dbt(&BP_NOT_LIFTED(&sn, 1));
     //Create XIDS
     XIDS xids_0 = xids_get_root_xids();
     XIDS xids_123;
@@ -348,13 +351,13 @@ test_serialize_nonleaf(void) {
     toku_fill_dbt(&v, "aval",5);
     ft_msg_init(&msg, FT_NONE, next_dummymsn(), xids_0, &k, &v);
     toku_bnc_insert_msg(BNC(&sn, 0), NULL,  &msg, true, NULL, string_key_cmp);
-    
+
     FT_MSG_S msg2;
     toku_fill_dbt(&k, "b",2);
     toku_fill_dbt(&v, "bval",5);
     ft_msg_init(&msg2, FT_NONE, next_dummymsn(), xids_123, &k, &v);
     toku_bnc_insert_msg(BNC(&sn, 0), NULL, &msg2, false, NULL, string_key_cmp);
-    
+
     FT_MSG_S msg3;
     toku_fill_dbt(&k, "x",2);
     toku_fill_dbt(&v, "xval",5);
@@ -375,9 +378,8 @@ test_serialize_nonleaf(void) {
                  128*1024,
                  TOKU_DEFAULT_COMPRESSION_METHOD);
     brt->ft = brt_h;
-    
+
     toku_blocktable_create_new(&brt_h->blocktable);
-    { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
     //Want to use block #20
     BLOCKNUM b = make_blocknum(0);
     while (b.b < 20) {
@@ -396,7 +398,7 @@ test_serialize_nonleaf(void) {
         assert(size   == 100);
     }
     FTNODE_DISK_DATA ndd = NULL;
-    r = toku_serialize_ftnode_to(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false, &offset, &size);
+    r = toku_serialize_ftnode_to(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false, &offset, &size, true);
     assert(r==0);
 
     test1(fd, brt_h, &dn);
@@ -423,9 +425,10 @@ test_serialize_leaf(void) {
     //    struct ft_handle source_ft;
     struct ftnode sn, *dn;
 
-    int fd = open(TOKU_TEST_FILENAME, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
-    int r;
+    int fd = open(TOKU_TEST_FILENAME_DATA, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
+
 
     sn.max_msn_applied_to_node_on_disk.msn = 0;
     toku_init_dbt(&sn.bound_l);
@@ -447,6 +450,9 @@ test_serialize_leaf(void) {
     BP_STATE(&sn,1) = PT_AVAIL;
     set_BLB(&sn, 0, toku_create_empty_bn());
     set_BLB(&sn, 1, toku_create_empty_bn());
+
+    setup_leaf_prefetch_state(&sn);
+
     toku_init_dbt(&BP_LIFT(&sn, 0));
     toku_init_dbt(&BP_LIFT(&sn, 1));
     le_malloc(BLB_DATA(&sn, 0), 0, "a", "aval");
@@ -463,9 +469,8 @@ test_serialize_leaf(void) {
                  128*1024,
                  TOKU_DEFAULT_COMPRESSION_METHOD);
     brt->ft = brt_h;
-  
+
     toku_blocktable_create_new(&brt_h->blocktable);
-    { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
     //Want to use block #20
     BLOCKNUM b = make_blocknum(0);
     while (b.b < 20) {
@@ -484,7 +489,7 @@ test_serialize_leaf(void) {
         assert(size   == 100);
     }
     FTNODE_DISK_DATA ndd = NULL;
-    r = toku_serialize_ftnode_to(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false, &offset, &size);
+    r = toku_serialize_ftnode_to(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false, &offset, &size, true);
     assert(r==0);
     test1(fd, brt_h, &dn);
     test3_leaf(fd, brt_h,&dn);

@@ -1,43 +1,49 @@
+
 include $(PWD)/.mkinclude
 
 obj-m += ftfs.o
+ccflags-y += -fno-builtin
 
 ftfs-objs := \
 	ftfs_module.o \
-	toku_linkage.o \
-	ftfs_partitioned_counter.o \
-	ftfs_malloc.o \
-	ftfs_random.o \
-	ftfs_error.o \
-	ftfs_rwsem.o \
-	ftfs_frwlock.o \
-	ftfs_pthread.o \
-	ftfs_files.o \
+	sb_linkage.o \
+	sb_partitioned_counter.o \
+	sb_random.o \
+	sb_error.o \
+	sb_rwsem.o \
+	sb_pthread.o \
+	sb_files.o \
+	sb_malloc.o \
 	ftfs_southbound.o \
-	ftfs_dir.o \
-	ftfs_stat.o \
-	ftfs_assert.o \
-	toku_memory.o \
-	ftfs_stdio.o \
-	toku_misc.o \
-	strerror.o \
-	ftfs_super.o \
-	ftfs_bstore.o \
-	toku_engine_status.o \
-	toku_checkpoint.o \
-	toku_flusher.o \
-	toku_dump_node.o \
-	toku_memleak_detect.o \
-	toku_zlib.o \
+	sb_stat.o \
+	sb_assert.o \
+	sb_stdio.o \
+	sb_misc.o \
+	sb_strerror.o \
+	nb_super.o \
+	nb_bstore.o \
+	nb_proc_toku_engine_status.o \
+	nb_proc_toku_checkpoint.o \
+	nb_proc_toku_flusher.o \
+	nb_proc_toku_dump_node.o \
+	nb_proc_toku_memleak_detect.o \
+	sb_zlib.o \
 	libftindex.o \
-	ftfs_toku_lock.o
+	sb_flock.o \
+	sb_sfs_ops.o
 
+#KBUILD_CFLAGS += -DUSE_SFS_DIO
 #KBUILD_CFLAGS += -DFTFS_CIRCLE
-KBUILD_CFLAGS += -DFTFS_RANGE_RENAME
-KBUILD_CFLAGS += -DFTFS_LIFTING
 KBUILD_CFLAGS += -DFTFS_PFSPLIT
 KBUILD_CFLAGS += -DFTFS_NO_PRINT
-#KBUILD_CFLAGS += -DFTFS_DEBUG #-DSOUTHBOUND_DEBUG #-DFTFS_MEM_DEBUG # -DFTFS_DEBUG_PTRS
+#KBUILD_CFLAGS += -DFTFS_DEBUG
+#KBUILD_CFLAGS += -DFTFS_MEM_DEBUG
+#KBUILD_CFLAGS += -DTOKU_MEMLEAK_DETECT
+#KBUILD_CFLAGS += -DTOKU_DEBUG_PTRS
+#KBUILD_CFLAGS += -DSOUTHBOUND_DEBUG
+KBUILD_CFLAGS += -DRMDIR_RANGE_DELETE
+#KBUILD_CFLAGS += -DFTFS_EMPTY_DIR_VERIFY
+
 #include $(PWD)/.turnoff-opts.mkinclude
 
 LIBSRC-OBJS = \
@@ -103,7 +109,6 @@ libft/ule.cc.o \
 libft/x1764.cc.o \
 libft/xids.cc.o \
 libft/ybt.cc.o \
-libft/ft-slice.cc.o \
 libft/log_code.cc.o \
 libft/log_print.cc.o
 
@@ -126,7 +131,6 @@ libutil/threadpool.cc.o
 LIBPORTABILITY-OBJS = \
 libportability/huge_page_detection.cc.o \
 libportability/file.cc.o \
-libportability/os_malloc.cc.o \
 libportability/portability.cc.o \
 libportability/toku_path.cc.o \
 libportability/toku_pthread.cc.o \

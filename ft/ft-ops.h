@@ -100,8 +100,13 @@ PATENT RIGHTS GRANT:
 #include "cachetable.h"
 #include "log.h"
 #include "ft-search.h"
-#include "ft-slice.h"
 #include "compress.h"
+
+#define clone_merge_and_gc_at_dest_before 1
+#define clone_merge_and_gc_at_dest_after  2
+#define clone_found_LCA_at_src            3
+#define clone_smart_pivot_dropped_at_dest 4
+#define clone_finalize_smpvt              5
 
 // A callback function is invoked with the key, and the data.
 // The pointers (to the bytevecs) must not be modified.  The data must be copied out before the callback function returns.
@@ -117,6 +122,7 @@ PATENT RIGHTS GRANT:
 typedef int(*FT_GET_CALLBACK_FUNCTION)(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool lock_only);
 
 int toku_open_ft_handle (const char *fname, int is_create, FT_HANDLE *, int nodesize, int basementnodesize, enum toku_compression_method compression_method, CACHETABLE, TOKUTXN, int(*)(DB *,const DBT*,const DBT*)) __attribute__ ((warn_unused_result));
+int toku_open_ft_handle_key_ops(const char *fname, int is_create, FT_HANDLE *, int nodesize, int basementnodesize, enum toku_compression_method compression_method, CACHETABLE, TOKUTXN, struct toku_db_key_operations *) __attribute__ ((warn_unused_result));
 
 // effect: changes the descriptor for the ft of the given handle.
 // requires: 
@@ -245,33 +251,29 @@ void toku_ft_maybe_delete (FT_HANDLE brt, DBT *k, TOKUTXN txn, bool oplsn_valid,
 
 void toku_ft_maybe_delete_multicast (FT_HANDLE, DBT *, DBT *, bool, enum pacman_status, TOKUTXN, bool, LSN, bool, bool);
 
-void toku_ft_rename(FT_HANDLE brt, DBT * min_key, DBT * max_key, DBT * new_min_key, DBT * new_max_key, DBT * old_prefix, DBT * new_prefix, TOKUTXN txn) ;
+void toku_ft_rd(FT_HANDLE brt, DBT *min_key, DBT *max_key, TOKUTXN txn);
 
-int toku_ft_transform_prefix(struct toku_db_key_operations *key_ops,
-                             const DBT *old_prefix, const DBT *new_prefix, const DBT *old_key, DBT *new_key);
+void toku_ft_clone(FT_HANDLE brt, DBT *min_key, DBT *max_key,
+                   DBT *new_min_key, DBT *new_max_key,
+                   DBT *old_prefix, DBT *new_prefix,
+                   bool delete_old, TOKUTXN txn);
+
+void toku_ft_maybe_clone(FT_HANDLE ft_h, DBT *min_key, DBT *max_key,
+                         DBT *new_min_key, DBT *new_max_key,
+                         DBT *old_prefix, DBT *new_prefix, bool delete_old,
+                         TOKUTXN txn, bool do_logging);
+
 
 int toku_ft_lift(FT ft, DBT *lift, const DBT *lpivot, const DBT *rpivot);
 int toku_ft_lift_key(FT ft, DBT *lifted_key, const DBT *key, const DBT *lifted);
 int toku_ft_lift_key_no_alloc(FT ft, DBT *lifted_key, const DBT *key, const DBT *lifted);
 int toku_ft_unlift_key(FT ft, DBT *key, const DBT *lifted_key, const DBT *lifted);
+// transform_prefix: lift then unlift
+int
+toku_ft_transform_prefix(FT ft, const DBT *old_prefix, const DBT *new_prefix,
+                         const DBT *old_key, DBT *new_key);
 
-void toku_ft_maybe_rename(
-    FT_HANDLE ft_h,
-    DBT *min_key,
-    DBT *max_key,
-    DBT * new_min_key,
-    DBT * new_max_key,
-    DBT * old_prefix,
-    DBT * new_prefix,
-    TOKUTXN txn,
-    bool oplsn_valid,
-    LSN oplsn,
-    bool is_resetting_op,
-    bool do_logging
-    );
-
-
-void toku_ft_send_insert(FT_HANDLE brt, DBT *key, DBT *val, XIDS xids, enum ft_msg_type type, struct unbound_insert_entry *entry, TXNID oldest_referenced_xid, GC_INFO gc_info);
+void toku_ft_send_insert(FT_HANDLE brt, DBT *key, DBT *val, XIDS xids, enum ft_msg_type type, struct ubi_entry *entry, TXNID oldest_referenced_xid, GC_INFO gc_info);
 void toku_ft_send_delete(FT_HANDLE brt, DBT *key, XIDS xids, TXNID oldest_referenced_xid, GC_INFO gc_info);
 void toku_ft_send_commit_any(FT_HANDLE brt, DBT *key, XIDS xids, TXNID oldest_referenced_xids, GC_INFO gc_info);
 
@@ -289,6 +291,7 @@ void toku_ft_cursor_set_leaf_mode(FT_CURSOR);
 // Sets a boolean on the brt cursor that prevents uncessary copying of
 // the cursor duing a one query.
 void toku_ft_cursor_set_temporary(FT_CURSOR);
+void toku_ft_cursor_set_seqread(FT_CURSOR);
 void toku_ft_cursor_remove_restriction(FT_CURSOR);
 int toku_ft_cursor_is_leaf_mode(FT_CURSOR);
 void toku_ft_cursor_set_range_lock(FT_CURSOR, const DBT *, const DBT *, bool, bool, int);
@@ -385,24 +388,32 @@ extern bool garbage_collection_debug;
 
 void toku_ft_set_direct_io(bool direct_io_on);
 
-int
-toku_ft_relocate_start(FT ft,
-                       ft_slice_t *src_slice, ft_slice_t *dst_slice,
-                       FTNODE *src_above_LCA, int *src_LCA_childnum,
-                       FTNODE *dst_above_LCA, int *dst_LCA_childnum
-#if HIDE_LATENCY
-                       , BACKGROUND_JOB_MANAGER bjm
-#endif
-                       );
-
-int toku_ft_relocate_finish(FT ft,
-                            FTNODE src_above_LCA, FTNODE dst_above_LCA,
-                            int src_childnum, int dst_childnum,
-                            FT_MSG src_msg, FT_MSG dst_msg,
-                            TXNID oldest_ref_txnid, bool is_src_empty);
-
 int toku_ft_relocate_abort(FT, FTNODE, FTNODE);
+
+void toku_ft_rd_commit(FT ft, DBT *min_key, DBT *max_key, TOKUTXN txn);
+
+void toku_ft_clone_commit(FT ft, DBT *min_key, DBT *max_key,
+                          DBT *new_min_key, DBT *new_max_key,
+                          bool delete_old, TOKUTXN txn);
+
+void toku_ftnode_cow_clone(FTNODE old_node, FTNODE *new_n,
+                           BLOCKNUM new_b, uint32_t new_h);
+
+void toku_ftnode_inc_child_refc(FT ft, FTNODE node);
+
 
 void ft_search_finish(ft_search_t*);
 
+void toku_clone_thread_set_callback(void (*callback_f)(int, void *, void*), void*);
+
+void toku_ftnode_gc_bncs_and_children(FT ft, FTNODE node);
+
+void
+toku_ft_recover_key_by_ancs(FT ft, ANCESTORS ancs, DBT *key, DBT *alloc_key);
+
+FTNODE ft_create_shadow(FTNODE node, DBT *version);
+
+void ft_update_shadow(FTNODE node, FTNODE shadow, bool *node_changed);
+
+FTNODE toku_ft_get_shadow(FTNODE node, DBT *version);
 #endif

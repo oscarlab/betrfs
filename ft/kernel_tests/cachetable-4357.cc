@@ -117,8 +117,10 @@ static void cachetable_test (void)
 	int r;
 	CACHETABLE ct;
 	toku_cachetable_create(&ct, test_limit, ZERO_LSN, NULL_LOGGER);
-	const char *fname1 = TOKU_TEST_FILENAME;
-	unlink(fname1);
+
+	const char *fname1 = TOKU_TEST_FILENAME_DATA;
+        r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
+
 	r = toku_cachetable_openf(&caheFile, ct, fname1, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO); assert(r == 0);
 
 	void* v1;

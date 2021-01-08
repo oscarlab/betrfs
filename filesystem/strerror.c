@@ -1,1 +1,0 @@
-../ftfs/strerror.c

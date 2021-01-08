@@ -96,12 +96,11 @@ PATENT RIGHTS GRANT:
 
 extern "C" int test_log5(void);
 
-int test_log5 (void) 
+int test_log5 (void)
 {
     int r;
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU);    assert(r==0);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);    assert(r==0);
     printf("I am here0 %lu\n", sizeof(TOKULOGGER));
 
     TOKULOGGER logger;
@@ -110,21 +109,15 @@ int test_log5 (void)
     r = toku_logger_create(&logger);
     assert(r == 0);
 
-    r = toku_logger_set_lg_max(logger, LSIZE);
-    {
-	uint32_t n;
-	r = toku_logger_get_lg_max(logger, &n);
-	assert(n==LSIZE);
-    }
     printf("I am here1\n");
-    r = toku_logger_open(TOKU_TEST_FILENAME, logger);
-    assert(r == 0); 
+    r = toku_logger_open(TOKU_TEST_ENV_DIR_NAME, logger);
+    assert(r == 0);
     int i;
     for (i=0; i<1000; i++) {
 	ml_lock(&logger->input_lock);
 
 	int rand = random();
-	if (rand < 0) 
+	if (rand < 0)
 		rand = -rand;
 
 	int ilen=3+rand%5;
@@ -138,28 +131,11 @@ int test_log5 (void)
 	toku_logger_fsync(logger);
     }
 
-    printf("I am here2\n");  
+    printf("I am here2\n");
     r = toku_logger_close(&logger);
     assert(r == 0);
 
-    {
-	DIR *dir=opendir(TOKU_TEST_FILENAME);
-	assert(dir);
-	struct dirent *dirent;
-	while ((dirent=readdir(dir))) {
-	    if (strncmp(dirent->d_name, "log", 3)!=0) continue;
-	    char fname[TOKU_PATH_MAX];
-
-            toku_path_join(fname, 2, TOKU_TEST_FILENAME, dirent->d_name);    /*
-	    toku_struct_stat statbuf;
-	    r = toku_stat(fname, &statbuf);
-	    assert(r==0);
-	    assert(statbuf.st_size<=LSIZE+10); */
-	}
-	r = closedir(dir);
-	assert(r==0);
-    }
     printf("I am here3\n");
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);    assert(r==0);
     return 0;
 }

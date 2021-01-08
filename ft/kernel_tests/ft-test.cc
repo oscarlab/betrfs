@@ -90,7 +90,6 @@ PATENT RIGHTS GRANT:
 
 
 #include "test_benchmark.h"
-extern "C" int ftfs_get_errno();
 static TOKUTXN const null_txn = 0;
 static DB * const null_db = 0;
 static int verbose = 0;
@@ -102,7 +101,9 @@ static void test_dump_empty_db (void) {
     int r;
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
-    unlink(fname);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
+
     r = toku_open_ft_handle(fname, 1, &t, 1024, 256, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
     assert(r==0);
     if (verbose) { r=toku_dump_ft(stdout, t); assert(r==0); }
@@ -113,18 +114,16 @@ static void test_dump_empty_db (void) {
 
 /* Test running multiple trees in different files */
 static void test_multiple_files_of_size (int size) {
-    char n0[TOKU_PATH_MAX+1];
-    toku_path_join(n0, 2, TOKU_TEST_FILENAME, "test0.dat");
-    char n1[TOKU_PATH_MAX+1];
-    toku_path_join(n1, 2, TOKU_TEST_FILENAME, "test1.dat");
+    const char* n0 = TOKU_TEST_FILENAME_DATA;
+    const char* n1 = TOKU_TEST_FILENAME_META;
+
     CACHETABLE ct;
     FT_HANDLE t0,t1;
     int r,i;
     if (verbose) printf("test_multiple_files_of_size(%d)\n", size);
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
 
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU);
-    if(r !=0 ) printf("\ntoku_os_mkdir failed:\n");
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);
+    if(r !=0 ) printf("\ntoku_fs_reset failed:\n");
     assert(r == 0);
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
@@ -170,7 +169,9 @@ static void test_multiple_files_of_size (int size) {
     r = toku_close_ft_handle_nolsn(t1, 0); assert(r==0);
     toku_cachetable_close(&ct);
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
+
 }
 
 static void test_multiple_files (void) {
@@ -186,7 +187,8 @@ static void test_multiple_ft_handles_one_db_one_file (void) {
     FT_HANDLE trees[MANYN];
     if (verbose) printf("test_multiple_ft_handles_one_db_one_file:");
 
-    unlink(fname);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
     toku_cachetable_create(&ct, 32, ZERO_LSN, NULL_LOGGER);
     for (i=0; i<MANYN; i++) {
 	r = toku_open_ft_handle(fname, (i==0), &trees[i], 1<<12, 1<<9, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
@@ -223,8 +225,8 @@ static void  test_read_what_was_written (void) {
 
     if (verbose) printf("test_read_what_was_written(): "); fflush(stdout);
 
-    unlink(fname);
-
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
     r = toku_open_ft_handle(fname, 1, &brt, 1<<12, 1<<9, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);  assert(r==0);
@@ -349,7 +351,8 @@ static void test_cursor_last_empty(void) {
     FT_CURSOR cursor=0;
     int r;
     if (verbose) printf("%s", __FUNCTION__);
-    unlink(fname);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
 
     //printf("%s:%d %d alloced\n", __FILE__, __LINE__, toku_get_n_items_malloced()); toku_print_malloced_items();
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
@@ -384,8 +387,8 @@ static void test_cursor_next (void) {
     int r;
     DBT kbt, vbt;
 
-    unlink(fname);
-
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
     //printf("%s:%d %d alloced\n", __FILE__, __LINE__, toku_get_n_items_malloced()); toku_print_malloced_items();
     r = toku_open_ft_handle(fname, 1, &brt, 1<<12, 1<<9, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);  assert(r==0);
@@ -451,7 +454,8 @@ static void test_wrongendian_compare (int wrong_p, unsigned int N) {
     int r;
     unsigned int i;
 
-    unlink(fname);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r == 0);
 
 
     {
@@ -560,7 +564,9 @@ static void test_large_kv(int bsize, int ksize, int vsize) {
     if (verbose) printf("test_large_kv: %d %d %d\n", bsize, ksize, vsize);
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
-    unlink(fname);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
+
     r = toku_open_ft_handle(fname, 1, &t, bsize, bsize / 4, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
     assert(r==0);
 
@@ -604,7 +610,8 @@ static void test_ft_delete_empty(void) {
     CACHETABLE ct;
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
-    unlink(fname);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
     r = toku_open_ft_handle(fname, 1, &t, 4096, 1024, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
     assert(r==0);
 
@@ -630,7 +637,9 @@ static void test_ft_delete_present(int n) {
     int i;
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
-    unlink(fname);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
+
     r = toku_open_ft_handle(fname, 1, &t, 4096, 1024, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
     assert(r==0);
 
@@ -693,7 +702,9 @@ static void test_ft_delete_not_present(int n) {
     int i;
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
-    unlink(fname);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
+
     r = toku_open_ft_handle(fname, 1, &t, 4096, 1024, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
     assert(r==0);
 
@@ -737,7 +748,9 @@ static void test_ft_delete_cursor_first(int n) {
     int i;
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
-    unlink(fname);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
+
     r = toku_open_ft_handle(fname, 1, &t, 4096, 1024, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
     assert(r==0);
 
@@ -832,7 +845,9 @@ static void test_insert_delete_lookup(int n) {
     int i;
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
-    unlink(fname);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
+
     r = toku_open_ft_handle(fname, 1, &t, 4096, 1024, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
     assert(r==0);
 
@@ -919,7 +934,9 @@ static void test_new_ft_cursor_first(int n) {
     int i;
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
-    unlink(fname);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
+
     toku_ft_handle_create(&t);
     toku_ft_handle_set_nodesize(t, 4096);
     r = toku_ft_handle_open(t, fname, 1, 1, ct, null_txn); assert(r==0);
@@ -971,7 +988,9 @@ static void test_new_ft_cursor_last(int n) {
     int i;
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
-    unlink(fname);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
+
     toku_ft_handle_create(&t);
     toku_ft_handle_set_nodesize(t, 4096);
     r = toku_ft_handle_open(t, fname, 1, 1, ct, null_txn); assert(r==0);
@@ -1024,7 +1043,10 @@ static void test_new_ft_cursor_next(int n) {
     int i;
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
-    unlink(fname);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
+
+
     toku_ft_handle_create(&t);
     toku_ft_handle_set_nodesize(t, 4096);
     r = toku_ft_handle_open(t, fname, 1, 1, ct, null_txn); assert(r==0);
@@ -1067,7 +1089,9 @@ static void test_new_ft_cursor_prev(int n) {
     int i;
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
-    unlink(fname);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
+
     toku_ft_handle_create(&t);
     toku_ft_handle_set_nodesize(t, 4096);
     r = toku_ft_handle_open(t, fname, 1, 1, ct, null_txn); assert(r==0);
@@ -1110,7 +1134,9 @@ static void test_new_ft_cursor_current(int n) {
     int i;
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
-    unlink(fname);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
+
     toku_ft_handle_create(&t);
     toku_ft_handle_set_nodesize(t, 4096);
     r = toku_ft_handle_open(t, fname, 1, 1, ct, null_txn); assert(r==0);
@@ -1192,7 +1218,9 @@ static void test_new_ft_cursor_set_range(int n) {
     FT_CURSOR cursor=0;
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
-    unlink(fname);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
+
     toku_ft_handle_create(&brt);
     toku_ft_handle_set_nodesize(brt, 4096);
     r = toku_ft_handle_open(brt, fname, 1, 1, ct, null_txn); assert(r==0);
@@ -1250,7 +1278,8 @@ static void test_new_ft_cursor_set(int n, int cursor_op, DB *db) {
     FT_HANDLE brt;
     FT_CURSOR cursor=0;
 
-    unlink(fname);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
 
@@ -1349,12 +1378,12 @@ test_ft_test (void) {
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
 
-    fname = TOKU_TEST_FILENAME;
+    fname = TOKU_TEST_FILENAME_DATA;
     ft_blackbox_test();
     if (verbose) printf("test ok\n");
     toku_ft_layer_destroy();
 #ifdef __SUPPORT_DIRECT_IO
     printf("\n INFO: direct io is turned on \n");
-#endif 
+#endif
     return 0;
 }

@@ -107,15 +107,14 @@ int
 test_logcursor_timestamp (void) {
 
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME); 
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU);    assert(r==0); 
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);    assert(r==0); 
     TOKULOGGER logger;
     LSN lsn = ZERO_LSN;
 
     // log a couple of timestamp log entries
     r = toku_logger_create(&logger);
     assert(r == 0);
-    r = toku_logger_open(TOKU_TEST_FILENAME, logger);
+    r = toku_logger_open(TOKU_TEST_ENV_DIR_NAME, logger);
     assert(r == 0);
     BYTESTRING bs0 = { .len = 5, .data = (char *) "hello" };
     toku_log_comment(logger, &lsn, 0, now(), bs0);
@@ -130,7 +129,7 @@ test_logcursor_timestamp (void) {
     // verify the log forwards
     TOKULOGCURSOR lc = NULL;
     struct log_entry *le;
-    r = toku_logcursor_create(&lc, TOKU_TEST_FILENAME);
+    r = toku_logcursor_create(&lc, TOKU_TEST_ENV_DIR_NAME);
     assert(r == 0 && lc != NULL);
     r = toku_logcursor_next(lc, &le);
     assert(r == 0 && le->cmd == LT_comment);
@@ -151,7 +150,7 @@ test_logcursor_timestamp (void) {
     assert(r == 0 && lc == NULL);
 
     // verify the log backwards
-    r = toku_logcursor_create(&lc, TOKU_TEST_FILENAME);
+    r = toku_logcursor_create(&lc, TOKU_TEST_ENV_DIR_NAME);
     assert(r == 0 && lc != NULL);
 
     r = toku_logcursor_prev(lc, &le);
@@ -172,7 +171,7 @@ test_logcursor_timestamp (void) {
     r = toku_logcursor_destroy(&lc);
     assert(r == 0 && lc == NULL);
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);    assert(r==0); 
 
     return 0;
 }

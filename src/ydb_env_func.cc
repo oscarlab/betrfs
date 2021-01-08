@@ -125,7 +125,7 @@ void db_env_set_func_pwrite (ssize_t (*pwrite_function)(int, const void *, size_
     toku_set_func_pwrite(pwrite_function);
 }
 
-void db_env_set_func_full_pwrite (ssize_t (*pwrite_function)(int, const void *, size_t, toku_off_t)) {
+void db_env_set_func_full_pwrite (ssize_t (*pwrite_function)(int, const void *, size_t, toku_off_t, bool)) {
     toku_set_func_full_pwrite(pwrite_function);
 }
 
@@ -167,7 +167,7 @@ void db_env_set_func_malloc (void *(*f)(size_t)) {
     toku_set_func_malloc(f);
 }
 
-void db_env_set_func_realloc (void *(*f)(void*, size_t)) {
+void db_env_set_func_realloc (void *(*f)(void*, size_t, size_t)) {
     toku_set_func_realloc(f);
 }
 
@@ -177,7 +177,7 @@ void db_env_set_func_free (void (*f)(void*)) {
 
 // For test purposes only.
 // With this interface, all checkpoint users get the same callbacks and the same extras.
-void 
+void
 db_env_set_checkpoint_callback (void (*callback_f)(void*), void* extra) {
     toku_checkpoint_safe_client_lock();
     checkpoint_callback_f = callback_f;
@@ -185,7 +185,7 @@ db_env_set_checkpoint_callback (void (*callback_f)(void*), void* extra) {
     toku_checkpoint_safe_client_unlock();
 }
 
-void 
+void
 db_env_set_checkpoint_callback2 (void (*callback_f)(void*), void* extra) {
     toku_checkpoint_safe_client_lock();
     checkpoint_callback2_f = callback_f;
@@ -193,28 +193,28 @@ db_env_set_checkpoint_callback2 (void (*callback_f)(void*), void* extra) {
     toku_checkpoint_safe_client_unlock();
 }
 
-void 
+void
 db_env_set_recover_callback (void (*callback_f)(void*), void* extra) {
     toku_recover_set_callback(callback_f, extra);
 }
 
-void 
+void
 db_env_set_recover_callback2 (void (*callback_f)(void*), void* extra) {
     toku_recover_set_callback2(callback_f, extra);
 }
 
-void 
+void
 db_env_set_flusher_thread_callback(void (*callback_f)(int, void*), void* extra) {
     toku_flusher_thread_set_callback(callback_f, extra);
 }
 /* Don't need it
-void 
+void
 db_env_set_loader_size_factor (uint32_t factor) {
     toku_ft_loader_set_size_factor(factor);
 }
 */
 
-void 
+void
 db_env_set_mvcc_garbage_collection_verification(uint32_t verification_mode) {
     garbage_collection_debug = (verification_mode != 0);
 }
@@ -234,4 +234,3 @@ void db_env_try_gdb_stack_trace(const char *gdb_path) {
     toku_try_gdb_stack_trace(gdb_path);
 }
 */
-

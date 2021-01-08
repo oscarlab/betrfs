@@ -95,29 +95,28 @@ PATENT RIGHTS GRANT:
 
 
 
-DB_TXN *null_txn=0;
+static DB_TXN *null_txn=0;
 
 static void do_test1753 (int do_create_on_reopen) {
     //if (IS_TDB==0 && DB_VERSION_MAJOR==4 && DB_VERSION_MINOR<7 && do_create_on_reopen==0) {
 //	return; // do_create_on_reopen==0 segfaults in 4.6
 //    }
 
-    int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    int r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
 
     // Create an empty file
     {
 	DB_ENV *env;
 	DB *db;
 	
-	const int envflags = DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_PRIVATE ;
+	const int envflags = DB_INIT_MPOOL|DB_CREATE|DB_THREAD|DB_PRIVATE|DB_INIT_LOG|DB_INIT_TXN;
 
 	r = db_env_create(&env, 0);                                           CKERR(r);
-	r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);        CKERR(r);
+	r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);        CKERR(r);
 
 	r = db_create(&db, env, 0);                                           CKERR(r);
-	r = db->open(db, null_txn, "main", 0,     DB_BTREE, DB_CREATE, 0666); CKERR(r);
+	r = db->open(db, null_txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, 0666); CKERR(r);
 
 	r = db->close(db, 0);                                                 CKERR(r);
 	r = env->close(env, 0);                                               CKERR(r);
@@ -125,12 +124,12 @@ static void do_test1753 (int do_create_on_reopen) {
     // Now open the empty file and insert
     {
 	DB_ENV *env;
-	int envflags = DB_INIT_MPOOL| DB_THREAD |DB_PRIVATE;
+	int envflags = DB_INIT_MPOOL| DB_THREAD |DB_PRIVATE|DB_INIT_LOG|DB_INIT_TXN;
 	if (do_create_on_reopen) envflags |= DB_CREATE;
 	
 	r = db_env_create(&env, 0);                                           CKERR(r);
 	env->set_errfile(env, 0);
-	r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);
+	r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);
 	if (do_create_on_reopen) CKERR(r);
         else CKERR2(r, ENOENT);
 	r = env->close(env, 0);                                               CKERR(r);

@@ -267,8 +267,8 @@ int test_blocking_next_prev(void) {
     uint64_t nrows = 10;
     int nthreads = 2;
     long sleeptime = 100000;
-    const char *db_env_dir = TOKU_TEST_FILENAME;
-    const char *db_filename = "test.db";
+    const char *db_env_dir = TOKU_TEST_ENV_DIR_NAME;
+    const char *db_filename = TOKU_TEST_DATA_DB_NAME;
     int db_env_open_flags = DB_CREATE | DB_PRIVATE | DB_INIT_MPOOL | DB_INIT_TXN | DB_INIT_LOCK | DB_INIT_LOG | DB_THREAD;
 #if 0
     for (int i = 1; i < argc; i++) {
@@ -299,8 +299,7 @@ int test_blocking_next_prev(void) {
     // setup env
     pre_setup();
     int r;
-    toku_os_recursive_delete(db_env_dir);    
-    r = toku_os_mkdir(db_env_dir, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH); assert(r == 0);
+    r = toku_fs_reset(db_env_dir, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH); assert(r == 0);
 
     DB_ENV *db_env = NULL;
     r = db_env_create(&db_env, 0); assert(r == 0);

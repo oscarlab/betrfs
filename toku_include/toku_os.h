@@ -137,6 +137,8 @@ int toku_os_lock_file(const char *name);
 int toku_os_unlock_file(int fildes, const char *name);
 
 int toku_os_mkdir(const char *pathname, mode_t mode) __attribute__((__visibility__("default")));
+int toku_fs_reset(const char *pathname, mode_t mode) __attribute__((__visibility__("default")));
+int toku_update_logfile_end(uint64_t size, int fd) __attribute__((__visibility__("default")));
 
 // Get the current process user and kernel use times
 int toku_os_get_process_times(struct timeval *usertime, struct timeval *kerneltime);
@@ -162,8 +164,6 @@ void toku_fs_get_write_info(time_t *enospc_last_time, uint64_t *enospc_current, 
 // XXX: Adding the logger specific function for fdatasync
 void toku_logger_maybe_sync_internal_no_flags_no_callbacks (int fd);
 
-void toku_fsync_dirfd_without_accounting(DIR *dirp);
-
 int toku_fsync_dir_by_name_without_accounting(const char *dir_name);
 
 // Get the file system free and total space for the file system that contains a path name
@@ -188,6 +188,25 @@ int toku_fstat(int fd, toku_struct_stat *statbuf) __attribute__((__visibility__(
 // Portable linux 'dup2'
 int toku_dup2(int fd, int fd2) __attribute__((__visibility__("default")));
 
+unsigned long get_kernfs_pfn(unsigned long start);
+void sb_wait_read_page(unsigned long pfn);
+void sb_lock_read_page(unsigned long pfn);
+size_t sb_read_pages(int fd, unsigned long *pfn_node, int32_t nr_pages, loff_t pos);
+
+// DIO interface used when the device is SSD
+ssize_t sb_sfs_dio_write(int, const void*, size_t, toku_off_t, void (*)(void*));
+ssize_t sb_sfs_dio_read(int, const void*, size_t, toku_off_t, void (*)(void*));
+int sb_sfs_dio_fsync(int fd);
+char *sb_get_proc_name(void);
+
+// Use in unit tests, e.g test-checkpoint-during-flush.cc
+int fcopy(const char *, const char *, int64_t);
+int fcopy_dio(const char *, const char *, int64_t);
+// Check the device type
+bool ftfs_is_hdd(void);
+
+// Check if it is data db
+bool sb_sfs_is_data_db(int fd);
 } // extern "C"
 
 #endif /* TOKU_OS_H */

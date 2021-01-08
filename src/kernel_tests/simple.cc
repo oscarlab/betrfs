@@ -120,13 +120,12 @@ setup (uint32_t flags) {
     int r;
     if (env)
         test_shutdown();
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r=toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
     r=db_env_create(&env, 0); 
     CKERR(r);
     env->set_errfile(env, stderr);
-    r=env->open(env, TOKU_TEST_FILENAME, flags, mode); 
+    r=env->open(env, TOKU_TEST_ENV_DIR_NAME, flags, mode); 
     CKERR(r);
 }
 

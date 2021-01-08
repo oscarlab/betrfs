@@ -178,13 +178,13 @@ parse_args (int argc, char * const argv[]) {
 }
 
 //#ifdef USE_TDB
-static __attribute__((__unused__)) void 
+static __attribute__((__unused__)) void
 print_engine_status(DB_ENV * UU(env)) {
     if (verbose) {  // verbose declared statically in this file
         uint64_t nrows;
         env->get_engine_status_num_rows(env, &nrows);
         int bufsiz = nrows * 128;   // assume 128 characters per row
-       // char buff[bufsiz];  
+       // char buff[bufsiz];
         char * buff = (char *) toku_xmalloc(sizeof(char)*bufsiz);
         env->get_engine_status_text(env, buff, bufsiz);
         printf("Engine status:\n");
@@ -202,7 +202,7 @@ get_engine_status_val(DB_ENV * UU(env), const char * keyname) {
     uint64_t max_rows;
     env->get_engine_status_num_rows(env, &max_rows);
     //TOKU_ENGINE_STATUS_ROW_S mystat[max_rows]
-    
+
     TOKU_ENGINE_STATUS_ROW_S * mystat = (TOKU_ENGINE_STATUS_ROW_S *)  toku_xmalloc(sizeof(TOKU_ENGINE_STATUS_ROW_S) * max_rows);
     fs_redzone_state redzone_state;
     uint64_t panic;
@@ -325,7 +325,7 @@ random64(void) {
     uint64_t low     = random();
     uint64_t high    = random();
     uint64_t twobits = random();
-    uint64_t ret     = low | (high<<31) | (twobits<<62); 
+    uint64_t ret     = low | (high<<31) | (twobits<<62);
     return ret;
 }
 
@@ -384,7 +384,7 @@ default_parse_args (int argc, char * const argv[]) {
 UU()
 static void copy_dbt(DBT *dest, const DBT *src) {
     assert(dest->flags & DB_DBT_REALLOC);
-    dest->data = toku_xrealloc(dest->data, src->size);
+    dest->data = toku_xrealloc(dest->data, dest->size, src->size);
     dest->size = src->size;
     memcpy(dest->data, src->data, src->size);
 }
@@ -394,9 +394,9 @@ static void copy_dbt(DBT *dest, const DBT *src) {
 UU()
 static int
 env_update_multiple_test_no_array(
-    DB_ENV *env, 
-    DB *src_db, 
-    DB_TXN *txn, 
+    DB_ENV *env,
+    DB *src_db,
+    DB_TXN *txn,
     DBT *old_src_key, DBT *old_src_data,
     DBT *new_src_key, DBT *new_src_data,
     uint32_t num_dbs, DB **db_array, uint32_t* flags_array,
@@ -438,16 +438,16 @@ env_update_multiple_test_no_array(
 
 UU()
 static int env_put_multiple_test_no_array(
-    DB_ENV *env, 
-    DB *src_db, 
-    DB_TXN *txn, 
-    const DBT *src_key, 
-    const DBT *src_val, 
-    uint32_t num_dbs, 
-    DB **db_array, 
+    DB_ENV *env,
+    DB *src_db,
+    DB_TXN *txn,
+    const DBT *src_key,
+    const DBT *src_val,
+    uint32_t num_dbs,
+    DB **db_array,
     DBT *keys,
     DBT *vals,
-    uint32_t *flags_array) 
+    uint32_t *flags_array)
 {
     int r;
     //DBT_ARRAY key_arrays[num_dbs];
@@ -478,15 +478,15 @@ static int env_put_multiple_test_no_array(
 
 UU()
 static int env_del_multiple_test_no_array(
-    DB_ENV *env, 
-    DB *src_db, 
-    DB_TXN *txn, 
-    const DBT *src_key, 
-    const DBT *src_val, 
-    uint32_t num_dbs, 
-    DB **db_array, 
+    DB_ENV *env,
+    DB *src_db,
+    DB_TXN *txn,
+    const DBT *src_key,
+    const DBT *src_val,
+    uint32_t num_dbs,
+    DB **db_array,
     DBT *keys,
-    uint32_t *flags_array) 
+    uint32_t *flags_array)
 {
     int r;
     //DBT_ARRAY key_arrays[num_dbs];
@@ -527,9 +527,9 @@ static int env_del_multiple_test_no_array(
 int test_main (int argc, char * const argv[]);
 int
 #if defined(__cilkplusplus)
-cilk_main(int argc, char *argv[]) 
+cilk_main(int argc, char *argv[])
 #else
-main(int argc, char * const argv[]) 
+main(int argc, char * const argv[])
 #endif
 {
     int r;

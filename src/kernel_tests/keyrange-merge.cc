@@ -136,7 +136,7 @@ run_test(void) {
     r = db_create(&db, env, 0); CKERR(r);
     r = db->set_pagesize(db, db_page_size);
     r = env->txn_begin(env, 0, &txn, 0); CKERR(r);
-    r = db->open(db, txn, "foo.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r = txn->commit(txn, 0);    CKERR(r);
 
     // insert keys 1, 3, 5, ... 2*(nrows-1) + 1
@@ -167,7 +167,7 @@ run_test(void) {
     r = db->close(db, 0);     CKERR(r);
     r = db_create(&db, env, 0); CKERR(r);
     r = env->txn_begin(env, 0, &txn, 0); CKERR(r);
-    r = db->open(db, txn, "foo.db", 0, DB_BTREE, 0, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, 0, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r = txn->commit(txn, 0);    CKERR(r);
 
     // replace the rows with small values.  this should shrink the leaf node and induce merging.
@@ -262,10 +262,9 @@ extern "C" int test_keyrange_merge(void);
 int test_keyrange_merge(void) {
     int r;
     verbose = true;
-    envdir = TOKU_TEST_FILENAME;
+    envdir = TOKU_TEST_ENV_DIR_NAME;
     pre_setup();
-    toku_os_recursive_delete(envdir);
-    r = toku_os_mkdir(envdir, S_IRWXU+S_IRWXG+S_IRWXO);       CKERR(r);
+    r = toku_fs_reset(envdir, S_IRWXU+S_IRWXG+S_IRWXO);       CKERR(r);
 
     run_test();
     post_teardown();

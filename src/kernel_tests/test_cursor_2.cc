@@ -105,17 +105,20 @@ test_cursor (void) {
 
     DB_ENV * env;
     DB *db;
-    DB_TXN * const null_txn = 0;
-    const char * const fname = "test.cursor.ft_handle";
+    DB_TXN *null_txn = 0;
+    const char * const fname = TOKU_TEST_DATA_DB_NAME;
     int r;
 
     /* create the dup database file */
     r = db_env_create(&env, 0);        assert(r == 0);
     env->set_errfile(env, stderr);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE|DB_INIT_MPOOL|DB_THREAD|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE|DB_INIT_MPOOL|DB_THREAD|DB_PRIVATE|DB_INIT_LOG|DB_INIT_TXN, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+
+    r = env->txn_begin(env, NULL, &null_txn, 0); assert_zero(r);
+
     r = db_create(&db, env, 0); assert(r == 0);
     db->set_errfile(db,stderr); // Turn off those annoying errors
-    r = db->open(db, null_txn, fname, "main", DB_BTREE, DB_CREATE, 0666); assert(r == 0);
+    r = db->open(db, null_txn, fname, NULL, DB_BTREE, DB_CREATE, 0666); assert(r == 0);
 
     int i;
     int n = 42;
@@ -161,6 +164,8 @@ test_cursor (void) {
     r = cursor[1]->c_close(cursor[1]); assert(r == 0);
 
     r = db->close(db, 0); assert(r == 0);
+
+    r = null_txn->commit(null_txn, 0); assert_zero(r);
     r = env->close(env, 0); assert(r == 0);
 }
 
@@ -169,9 +174,9 @@ int test_test_cursor_2(void) {
 
   
     pre_setup();
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
-    
+    int r= toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);    
+
     test_cursor();
 
     post_teardown();

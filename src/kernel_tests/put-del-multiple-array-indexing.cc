@@ -98,7 +98,7 @@ static const int max_rows_per_primary = 9;
 static uint32_t
 get_total_secondary_rows(uint32_t num_primary) {
     assert((num_primary % (max_rows_per_primary+1)) == 0);
-    return num_primary / (max_rows_per_primary+1) * 
+    return num_primary / (max_rows_per_primary+1) *
         ( (max_rows_per_primary) * (max_rows_per_primary+1) / 2 );
 }
 
@@ -161,7 +161,7 @@ put_callback(DB *dest_db, DB *src_db, DBT_ARRAY *dest_keys, DBT_ARRAY *dest_vals
         {
             // Memory management
             if (dest_key->ulen < sizeof(uint32_t)) {
-                dest_key->data = toku_xrealloc(dest_key->data, sizeof(uint32_t));
+                dest_key->data = toku_xrealloc(dest_key->data, dest_key->ulen, sizeof(uint32_t));
                 dest_key->ulen = sizeof(uint32_t);
             }
             dest_key->size = sizeof(uint32_t);
@@ -222,7 +222,7 @@ verify_seq_primary(DB_ENV *env, DB *db, int dbnum, int ndbs, int nrows) {
         memcpy(&k, key.data, key.size);
         assert(k == i);
 
-        uint32_t total_rows = get_total_num_keys(i, ndbs); 
+        uint32_t total_rows = get_total_num_keys(i, ndbs);
         assert(val.size == total_rows * sizeof (uint32_t));
         uint32_t v[total_rows]; get_data(v, i, ndbs);
         assert(memcmp(val.data, v, val.size) == 0);
@@ -270,7 +270,7 @@ verify_seq(DB_ENV *env, DB *db, uint8_t dbnum, uint8_t ndbs, uint16_t nrows_prim
 static void
 verify(DB_ENV *env, DB *db[], int ndbs, int nrows) {
     verify_seq_primary(env, db[0], 0, ndbs, nrows);
-    for (int dbnum = 1; dbnum < ndbs; dbnum++) 
+    for (int dbnum = 1; dbnum < ndbs; dbnum++)
         verify_seq(env, db[dbnum], dbnum, ndbs, nrows);
 }
 
@@ -315,7 +315,7 @@ populate(DB_ENV *env, DB *db[], uint8_t ndbs, uint16_t nrows, bool del) {
     }
     // populate
     for (uint16_t i = 0; i < nrows; i++) {
-        uint32_t total_rows = get_total_num_keys(i, ndbs); 
+        uint32_t total_rows = get_total_num_keys(i, ndbs);
         uint16_t k = i;
         uint32_t v[total_rows]; get_data(v, i, ndbs);
         DBT pri_key; dbt_init(&pri_key, &k, sizeof k);
@@ -338,6 +338,15 @@ populate(DB_ENV *env, DB *db[], uint8_t ndbs, uint16_t nrows, bool del) {
     r = txn->commit(txn, 0); assert_zero(r);
 }
 
+const char *sfs_dbname[5] = {
+    TOKU_TEST_DATA_DB_NAME,
+    TOKU_TEST_META_DB_NAME,
+    TOKU_TEST_ONE_DB_NAME,
+    TOKU_TEST_TWO_DB_NAME,
+    TOKU_TEST_THREE_DB_NAME
+};
+
+
 static void
 run_test(int ndbs, int nrows) {
     int r;
@@ -347,20 +356,19 @@ run_test(int ndbs, int nrows) {
     r = env->set_generate_row_callback_for_put(env, put_callback); assert_zero(r);
     r = env->set_generate_row_callback_for_del(env, del_callback); assert_zero(r);
 
-    r = env->open(env, TOKU_TEST_FILENAME, DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_TXN|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_TXN|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
 
     DB *db[ndbs];
     for (uint8_t dbnum = 0; dbnum < ndbs; dbnum++) {
         r = db_create(&db[dbnum], env, 0); assert_zero(r);
 
         DBT dbt_dbnum; dbt_init(&dbt_dbnum, &dbnum, sizeof dbnum);
-
-        char dbname[32]; sprintf(dbname, "%d.tdb", dbnum);
-        r = db[dbnum]->open(db[dbnum], NULL, dbname, NULL, DB_BTREE, DB_AUTO_COMMIT+DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); 
+        assert(ndbs <= 5);
+        r = db[dbnum]->open(db[dbnum], NULL, sfs_dbname[dbnum], NULL, DB_BTREE, DB_AUTO_COMMIT+DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO);
         assert_zero(r);
 
         IN_TXN_COMMIT(env, NULL, txn_desc, 0, {
-                { int chk_r = db[dbnum]->change_descriptor(db[dbnum], txn_desc, &dbt_dbnum, 0); CKERR(chk_r); } 
+                { int chk_r = db[dbnum]->change_descriptor(db[dbnum], txn_desc, &dbt_dbnum, 0); CKERR(chk_r); }
         });
     }
 
@@ -372,7 +380,7 @@ run_test(int ndbs, int nrows) {
 
     verify_del(env, db, ndbs);
 
-    for (int dbnum = 0; dbnum < ndbs; dbnum++) 
+    for (int dbnum = 0; dbnum < ndbs; dbnum++)
         r = db[dbnum]->close(db[dbnum], 0); assert_zero(r);
 
     r = env->close(env, 0); assert_zero(r);
@@ -381,7 +389,7 @@ run_test(int ndbs, int nrows) {
 extern "C" int test_put_del_multiple_array_indexing(void);
 int test_put_del_multiple_array_indexing(void) {
     int r;
-    int ndbs = 16;
+    int ndbs = 5;
     int nrows = 100;
 
     verbose = 1;
@@ -396,12 +404,10 @@ int test_put_del_multiple_array_indexing(void) {
     assert(nrows >= 0);
     assert(nrows < (1<<15));  // Leave plenty of room
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
 
     run_test(ndbs, nrows);
 
     post_teardown();
     return 0;
 }
-

@@ -156,7 +156,7 @@ static struct malloc_pair *find_malloced_pair(const void *p)
 
 void *os_malloc(size_t size) {
     void  *raw_ptr   = malloc(size+16); // allocate 16 extra bytes
-    size_t raw_ptr_i = (size_t) raw_ptr; 
+    size_t raw_ptr_i = (size_t) raw_ptr;
     if (raw_ptr_i%512==0) {
         push_to_malloced_memory(16+(char*)raw_ptr, raw_ptr, size);
         return 16+(char*)raw_ptr;
@@ -166,44 +166,6 @@ void *os_malloc(size_t size) {
     }
 }
 
-void *os_malloc_aligned(size_t alignment, size_t size)
-// Effect: Perform a malloc(size) with the additional property that the returned pointer is a multiple of ALIGNMENT.
-// Requires: alignment is a power of two.
-{
-    void *p;
-    int r = posix_memalign(&p, alignment, size);
-    if (r != 0) {
-        set_errno(r);
-        p = nullptr;
-    }
-    return p;
-    if (alignment%512==0) {
-        void *raw_ptr;
-        int r = posix_memalign(&raw_ptr, alignment, size);
-        if (r != 0) {
-            set_errno(r);
-            return nullptr;
-        }
-        push_to_malloced_memory(raw_ptr, raw_ptr, size);
-        return raw_ptr;
-    } else {
-        // Make sure it isn't 512-byte aligned
-        void *raw_ptr;
-        int r = posix_memalign(&raw_ptr, alignment, size+alignment);
-        if (r != 0) {
-            set_errno(r);
-            return nullptr;
-        }
-        size_t raw_ptr_i = (size_t) raw_ptr;
-        if (raw_ptr_i%512==0) {
-            push_to_malloced_memory(alignment+(char*)raw_ptr, raw_ptr, size);
-            return alignment+(char*)raw_ptr;
-        } else {
-            push_to_malloced_memory(raw_ptr,    raw_ptr, size);
-            return raw_ptr;
-        }
-    }
-}
 
 static size_t min(size_t a, size_t b) {
     if (a<b) return a;
@@ -224,26 +186,6 @@ void *os_realloc(void *p, size_t size) {
     return os_realloc_aligned(alignment, p, size);
 }
 
-void * os_realloc_aligned(size_t alignment, void *p, size_t size)
-// Effect: Perform a realloc(p, size) with the additional property that the returned pointer is a multiple of ALIGNMENT.
-// Requires: alignment is a power of two.
-{
-    if (p==NULL) {
-        return os_malloc_aligned(alignment, size);
-    } else {
-        void *result = os_malloc_aligned(alignment, size);
-        malloc_lock();
-        struct malloc_pair *mp = find_malloced_pair(p);
-        assert(mp);
-        // now copy all the good stuff from p to result
-        memcpy(result, p, min(size, mp->requested_size));
-        malloc_unlock();
-        os_free(p);
-        return result;
-    }
-}
-
-
 void os_free(void* p) {
     malloc_lock();
     struct malloc_pair *mp = find_malloced_pair(p);
@@ -251,15 +193,6 @@ void os_free(void* p) {
     free(mp->true_pointer);
     *mp = malloced_now[--malloced_now_count];
     malloc_unlock();
-}
-
-size_t os_malloc_usable_size(const void *p) {
-    malloc_lock();
-    struct malloc_pair *mp = find_malloced_pair(p);
-    assert(mp);
-    size_t size = mp->requested_size;
-    malloc_unlock();
-    return size;
 }
 
 #else
@@ -270,92 +203,15 @@ os_malloc(size_t size)
     return malloc(size);
 }
 
-void *os_malloc_aligned(size_t alignment, size_t size)
-// Effect: Perform a malloc(size) with the additional property that the returned pointer is a multiple of ALIGNMENT.
-// Requires: alignment is a power of two.
-{
-    void *p;
-    int r = posix_memalign(&p, alignment, size);
-    if (r != 0) {
-        set_errno(r);
-        p = nullptr;
-    }
-    return p;
-}
-
 void *
 os_realloc(void *p, size_t size)
 {
     return realloc(p, size);
 }
 
-void * os_realloc_aligned(size_t alignment, void *p, size_t size)
-// Effect: Perform a realloc(p, size) with the additional property that the returned pointer is a multiple of ALIGNMENT.
-// Requires: alignment is a power of two.
-{
-#if 1
-    if (p==NULL) {
-        return os_malloc_aligned(alignment, size);
-    } else {
-        void *newp = realloc(p, size);
-        if (0!=((long long)newp%alignment)) {
-            // it's not aligned, so align it ourselves.
-            void *newp2 = os_malloc_aligned(alignment, size);
-            memcpy(newp2, newp, size);
-            free(newp);
-            newp = newp2;
-        }
-        return newp;
-    }
-#else
-    // THIS STUFF SEEMS TO FAIL VALGRIND
-    if (p==NULL) {
-        return os_malloc_aligned(alignment, size);
-    } else {
-        size_t ignore;
-        int r = rallocm(&p,        // returned pointer
-                        &ignore,   // actual size of returned object.
-                        size,      // the size we want
-                        0,         // extra bytes to "try" to allocate at the end
-                        ALLOCM_ALIGN(alignment));
-        if (r!=0) return NULL;
-        else return p;
-    }
-#endif
-}
-
-
 void
 os_free(void* p)
 {
     free(p);
-}
-
-#ifndef TOKU_LINUX_MODULE
-typedef size_t (*malloc_usable_size_fun_t)(const void *);
-static malloc_usable_size_fun_t malloc_usable_size_f = NULL;
-#else
-/* DP 2/7/14 - Since we are just using kmalloc everywhere, we can 
- * assume ksize will always work for usable_size
- */
-extern "C" { size_t ftfs_allocsize(const void *objp); }
-#endif
-
-size_t os_malloc_usable_size(const void *p) {
-#ifndef TOKU_LINUX_MODULE
-    if (p==NULL) return 0;
-    if (!malloc_usable_size_f) {
-        malloc_usable_size_f = (malloc_usable_size_fun_t) dlsym(RTLD_DEFAULT, "malloc_usable_size");
-        if (!malloc_usable_size_f) {
-            malloc_usable_size_f = (malloc_usable_size_fun_t) dlsym(RTLD_DEFAULT, "malloc_size"); // darwin
-            if (!malloc_usable_size_f) {
-                abort(); // couldn't find a malloc size function
-            }
-        }
-    }
-    return malloc_usable_size_f(p);
-#else
-    return ftfs_allocsize(p);
-#endif
 }
 #endif

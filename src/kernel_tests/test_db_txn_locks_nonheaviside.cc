@@ -229,8 +229,8 @@ static void
 setup_dbs (void) {
     int r;
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
     dbenv   = NULL;
     db      = NULL;
     /* Open/create primary */
@@ -244,8 +244,8 @@ setup_dbs (void) {
     CKERR(r);
 #endif
     uint32_t env_txn_flags  = DB_INIT_TXN | DB_INIT_LOCK;
-    uint32_t env_open_flags = DB_CREATE | DB_PRIVATE | DB_INIT_MPOOL;
-	r = dbenv->open(dbenv, TOKU_TEST_FILENAME, env_open_flags | env_txn_flags, 0600);
+    uint32_t env_open_flags = DB_INIT_LOG | DB_CREATE | DB_PRIVATE | DB_INIT_MPOOL;
+	r = dbenv->open(dbenv, TOKU_TEST_ENV_DIR_NAME, env_open_flags | env_txn_flags, 0600);
         CKERR(r);
     
     r = db_create(&db, dbenv, 0);
@@ -258,7 +258,7 @@ setup_dbs (void) {
     char a;
     for (a = 'a'; a <= 'z'; a++) init_txn(a);
     init_txn('\0');
-    r = db->open(db, txns[(int)'\0'], "foobar.db", NULL, DB_BTREE, DB_CREATE, 0600);
+    r = db->open(db, txns[(int)'\0'], TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_CREATE, 0600);
         CKERR(r);
     commit_txn('\0');
     for (a = 'a'; a <= 'z'; a++) init_dbc(a);

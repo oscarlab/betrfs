@@ -97,12 +97,10 @@ PATENT RIGHTS GRANT:
 #include <sys/stat.h>
 #include <db.h>
 
-
-
+static DB_TXN *null_txn = 0;
 
 static void
 db_put (DB *db, int k, int v) {
-    DB_TXN * const null_txn = 0;
     DBT key, val;
     int r = db->put(db, null_txn, dbt_init(&key, &k, sizeof k), dbt_init(&val, &v, sizeof v), 0);
     assert(r == 0);
@@ -110,7 +108,6 @@ db_put (DB *db, int k, int v) {
 
 static void
 db_del (DB *db, int k) {
-    DB_TXN * const null_txn = 0;
     DBT key;
     int r = db->del(db, null_txn, dbt_init(&key, &k, sizeof k), 0);
     assert(r == 0);
@@ -118,7 +115,6 @@ db_del (DB *db, int k) {
 
 static void
 expect_db_get (DB *db, int k, int v) {
-    DB_TXN * const null_txn = 0;
     DBT key, val;
     int r = db->get(db, null_txn, dbt_init(&key, &k, sizeof k), dbt_init_malloc(&val), 0);
     assert(r == 0);
@@ -173,23 +169,22 @@ static void
 test_icdi_search (int n, int dup_mode) {
     if (verbose) printf("test_icdi_search:%d %d\n", n, dup_mode);
 
-    DB_TXN * const null_txn = 0;
-    const char * const fname = "test_icdi_search.ft_handle";
+    const char * const fname = TOKU_TEST_DATA_DB_NAME;
     int r;
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
 
     /* create the dup database file */
     DB_ENV *env;
     r = db_env_create(&env, 0); assert(r == 0);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL, 0); assert(r == 0);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL+DB_INIT_LOG+DB_INIT_TXN, 0); assert(r == 0);
+    r = env->txn_begin(env, NULL, &null_txn, 0); assert_zero(r);
 
     DB *db;
     r = db_create(&db, env, 0); assert(r == 0);
     r = db->set_flags(db, dup_mode); assert(r == 0);
     r = db->set_pagesize(db, 4096); assert(r == 0);
-    r = db->open(db, null_txn, fname, "main", DB_BTREE, DB_CREATE, 0666); assert(r == 0);
+    r = db->open(db, null_txn, fname, NULL, DB_BTREE, DB_CREATE, 0666); assert(r == 0);
 
     int i;
     for (i=0; i<n; i++) {
@@ -205,14 +200,14 @@ test_icdi_search (int n, int dup_mode) {
     r = db_create(&db, env, 0); assert(r == 0);
     r = db->set_flags(db, dup_mode); assert(r == 0);
     r = db->set_pagesize(db, 4096); assert(r == 0);
-    r = db->open(db, null_txn, fname, "main", DB_BTREE, 0, 0666); assert(r == 0);
+    r = db->open(db, null_txn, fname, NULL, DB_BTREE, 0, 0666); assert(r == 0);
 
     for (i=0; i<n; i++)
         db_del(db, htonl(i));
 
     {
     DBC *cursor;
-    r = db->cursor(db, 0, &cursor, 0); assert(r == 0);
+    r = db->cursor(db, null_txn, &cursor, 0); assert(r == 0);
     expect_cursor_set(cursor, 0, DB_NOTFOUND);
     r = cursor->c_close(cursor); assert(r == 0);
     }
@@ -223,7 +218,7 @@ test_icdi_search (int n, int dup_mode) {
         db_put(db, k, v);
 
         DBC *cursor;
-        r = db->cursor(db, 0, &cursor, 0); assert(r == 0);
+        r = db->cursor(db, null_txn, &cursor, 0); assert(r == 0);
         expect_cursor_set(cursor, k, 0);
         expect_cursor_get_current(cursor, k, v);
         r = cursor->c_close(cursor); assert(r == 0);
@@ -239,6 +234,7 @@ test_icdi_search (int n, int dup_mode) {
     r = cursor->c_close(cursor); assert(r == 0);
 
     r = db->close(db, 0); assert(r == 0);
+    r = null_txn->commit(null_txn, 0); assert_zero(r);
     r = env->close(env, 0); assert(r == 0);
 }
 
@@ -248,8 +244,8 @@ int test_test_nodup_set(void) {
     int i;
 
     pre_setup();  
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    int r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
 
     for (i=1; i<65537; i *= 2) {
         test_icdi_search(i, 0);

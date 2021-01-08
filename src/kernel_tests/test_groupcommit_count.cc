@@ -137,7 +137,7 @@ test_groupcommit (int nthreads) {
     r=env->open(env, env_path, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE|DB_THREAD, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r=db_create(&db, env, 0); CKERR(r);
     r=env->txn_begin(env, 0, &tid, 0); assert(r==0);
-    r=db->open(db, tid, "foo.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r=db->open(db, tid, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r=tid->commit(tid, 0);    assert(r==0);
 
     int i;
@@ -247,9 +247,8 @@ int test_test_groupcommit_count(void) {
     db_env_set_num_bucket_mutexes(32);
 #endif
 
-    env_path = TOKU_TEST_FILENAME;
-    toku_os_recursive_delete(env_path);
-    { int r=toku_os_mkdir(env_path, S_IRWXU+S_IRWXG+S_IRWXO);       assert(r==0); }
+    env_path = TOKU_TEST_ENV_DIR_NAME;
+    { int r=toku_fs_reset(env_path, S_IRWXU+S_IRWXG+S_IRWXO);       assert(r==0); }
 
     test_groupcommit(1);  printtdiff(1);
     test_groupcommit(2);  printtdiff(2);

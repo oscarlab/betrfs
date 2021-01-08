@@ -131,6 +131,7 @@ PATENT RIGHTS GRANT:
 #include "toku_portability.h"
 #include "toku_os.h"
 #include "toku_time.h"
+#include "toku_path.h"
 #include "memory.h"
 #include <portability/toku_atomic.h>
 #include <util/partitioned_counter.h>
@@ -142,7 +143,7 @@ PATENT RIGHTS GRANT:
 #include <ft/xids.h>
 #include <ft/ule-internal.h>
 
-extern "C" int 
+extern "C" int
 init_ule_cache(size_t size, unsigned long flags, void (*ctor)(void *));
 extern "C" int init_ftfs_kernel_caches(void);
 extern "C" int init_ftfs_kernel_caches(void) {
@@ -266,7 +267,7 @@ toku_os_get_file_size(int fildes, int64_t *fsize) {
 }
 
 int
-toku_os_get_unique_file_id(int fildes, struct fileid *id) { 
+toku_os_get_unique_file_id(int fildes, struct fileid *id) {
     toku_struct_stat statbuf;
     memset(id, 0, sizeof(*id));
     int r=fstat(fildes, &statbuf);
@@ -318,19 +319,87 @@ toku_os_unlock_file(int fildes, const char *name) {
     return r;
 }
 
-#ifndef TOKU_LINUX_MODULE
-int
-toku_os_mkdir(const char *pathname, mode_t mode) {
-    int r = mkdir(pathname, mode);
-    return r;
+#define HEADER_RESET_LENGTH (4096*5)
+
+/* YZJ: return 0 on success; positive errno on failure */
+static int set_file_header_to_zero(const char *name, bool is_log)
+{
+    int fd = open(name, O_RDWR, S_IRUSR | S_IWUSR);
+    if (fd < 0) {
+        printf("%s: open failed ret=%d\n", __func__, fd);
+        return get_error_errno(fd);
+    }
+    char *XMALLOC_N_ALIGNED(4096, HEADER_RESET_LENGTH, buf);
+    assert(buf != NULL);
+    memset(buf, 0, HEADER_RESET_LENGTH);
+
+    ssize_t ret;
+    if (ftfs_is_hdd() || is_log) {
+        ret = toku_os_pwrite(fd, buf, HEADER_RESET_LENGTH, 0);
+        if (ret != 0) {
+            printf("%s: toku_os_pwrite failed, ret=%ld\n", __func__, ret);
+            return ret;
+        }
+        fsync(fd);
+    } else {
+        ret = sb_sfs_dio_write(fd, buf, HEADER_RESET_LENGTH, 0, nullptr);
+        if (ret != HEADER_RESET_LENGTH) {
+            printf("%s: sb_sfs_dio_write failed, ret=%ld\n", __func__, ret);
+            return ret;
+        }
+        ret = 0;
+        sb_sfs_dio_fsync(fd);
+    }
+    toku_free(buf);
+    close(fd);
+    return ret;
 }
-#else
-int
-toku_os_mkdir(const char *pathname, mode_t mode) {
-    int r = mkdir(pathname, mode); 
-    return r;
+
+/* YZJ: return 0 on success; positive errno on failure */
+int toku_fs_reset(const char *pathname, mode_t mode) {
+   (void) pathname;
+   (void) mode;
+   int ret = 0;
+   int line_num = 0;
+
+   ret = set_file_header_to_zero(TOKU_SFS_DATA_FILE, false);
+   if (ret != 0) {line_num = __LINE__; goto out;}
+
+   ret = set_file_header_to_zero(TOKU_SFS_META_FILE, false);
+   if (ret != 0) {line_num = __LINE__; goto out;}
+
+   ret = set_file_header_to_zero(TOKU_SFS_TEST_FILE_1, false);
+   if (ret != 0) {line_num = __LINE__; goto out;}
+
+   ret = set_file_header_to_zero(TOKU_SFS_TEST_FILE_2, false);
+   if (ret != 0) {line_num = __LINE__; goto out;}
+
+   ret = set_file_header_to_zero(TOKU_SFS_TEST_FILE_3, false);
+   if (ret != 0) {line_num = __LINE__; goto out;}
+
+   ret = set_file_header_to_zero(TOKU_SFS_DIR_FILE, false);
+   if (ret != 0) {line_num = __LINE__; goto out;}
+
+   ret = set_file_header_to_zero(TOKU_SFS_ENV_FILE, false);
+   if (ret != 0) {line_num = __LINE__; goto out;}
+
+   ret = set_file_header_to_zero(TOKU_SFS_ROLLBACK_FILE, false);
+   if (ret != 0) {line_num = __LINE__; goto out;}
+
+   ret = set_file_header_to_zero(TOKU_SFS_LOG_FILE, true);
+   if (ret != 0) {line_num = __LINE__; goto out;}
+out:
+   if (ret != 0) {
+       printf("%s: set_file_header_to_zero (line=%d) failed, ret=%d\n", __func__, line_num-1, ret);
+   }
+
+   return ret;
 }
-#endif
+
+int toku_update_logfile_end(uint64_t size, int fd)
+{
+   assert(false && size == 0 && fd == 0);
+}
 
 #ifdef TOKU_LINUX_MODULE
 extern "C" int getrusage_ftfs(int who, struct rusage *ru);
@@ -347,7 +416,7 @@ toku_os_get_process_times(struct timeval *usertime, struct timeval *kerneltime) 
     #endif
     if (r < 0)
         return 1;
-    if (usertime) 
+    if (usertime)
         *usertime = rusage.ru_utime;
     if (kerneltime)
         *kerneltime = rusage.ru_stime;
@@ -397,7 +466,7 @@ toku_stat(const char *name, toku_struct_stat *buf) {
     memset(buf, 0, sizeof(toku_struct_stat));
     return  stat64(name, buf);
 }
-#else 
+#else
 //extern "C" int stat(const char *name, struct stat *buf);
 
 int
@@ -436,38 +505,6 @@ toku_get_processor_frequency_sys(uint64_t *hzret) {
 
 #ifndef TOKU_LINUX_MODULE
 static int
-toku_get_processor_frequency_cpuinfo(uint64_t *hzret) {
-    int r;
-    FILE *fp = fopen("/proc/cpuinfo", "r");
-    if (!fp) {
-        // Can't cast fp to an int :(
-        r = ENOSYS;
-    } else {
-        uint64_t maxhz = 0;
-        char *buf = NULL;
-        size_t n = 0;
-        while (getline(&buf, &n, fp) >= 0) {
-            unsigned int cpu;
-            sscanf(buf, "processor : %u", &cpu);
-            unsigned int ma, mb;
-            if (sscanf(buf, "cpu MHz : %u.%u", &ma, &mb) == 2) {
-                uint64_t hz = ma * 1000000ULL + mb * 1000ULL;
-                if (hz > maxhz)
-                    maxhz = hz;
-            }
-        }
-        if (buf)
-            free(buf);
-        fclose(fp);
-        *hzret = maxhz;
-        r = maxhz == 0 ? ENOENT : 0;;
-    }
-    return r;
-}
-#endif
-
-#ifndef TOKU_LINUX_MODULE
-static int
 toku_get_processor_frequency_sysctl(const char * const cmd, uint64_t *hzret) {
     int r = 0;
     FILE *fp = popen(cmd, "r");
@@ -489,7 +526,7 @@ toku_get_processor_frequency_sysctl(const char * const cmd, uint64_t *hzret) {
 #ifndef TOKU_LINUX_MODULE
 static uint64_t toku_cached_hz; // cache the value of hz so that we avoid opening files to compute it later
 
-int 
+int
 toku_os_get_processor_frequency(uint64_t *hzret) {
     int r;
     if (toku_cached_hz) {
@@ -521,7 +558,7 @@ toku_get_filesystem_sizes(const char *path, uint64_t *avail_size, uint64_t *free
     int r = statvfs64(path, &s);
 #else
     struct statvfs64 s;
-    int r = 0;    
+    int r = 0;
     memset( (void*) &s, 0, sizeof(struct statvfs64));
     r = statvfs64(path, &s);
 #endif
@@ -540,11 +577,11 @@ toku_get_filesystem_sizes(const char *path, uint64_t *avail_size, uint64_t *free
         // convert blocks to bytes
         if (avail_size)
             *avail_size = (uint64_t) s.f_bavail * bsize;
-        if (free_size) 
+        if (free_size)
             *free_size =  (uint64_t) s.f_bfree * bsize;
-        if (total_size) 
+        if (total_size)
             *total_size = (uint64_t) s.f_blocks * bsize;
-    } 
+    }
     return r;
 }
 

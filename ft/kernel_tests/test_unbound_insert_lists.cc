@@ -21,13 +21,6 @@ static int setup_logger(TOKULOGGER *logger_p) {
     r = toku_logger_create(logger_p);
     assert(r == 0);
 
-    r = toku_logger_set_lg_max(*logger_p, LSIZE);
-    {
-	uint32_t n;
-	r = toku_logger_get_lg_max(*logger_p, &n);
-	assert(n==LSIZE);
-    }
-
     r = toku_logger_open(TOKU_TEST_FILENAME, *logger_p);
     return r;
 }

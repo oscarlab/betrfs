@@ -1,0 +1,23 @@
+[Switching to Thread 2]
+
+Breakpoint 7, ftnode_clone_partitions (node=0xffff88016ac6bf00, cloned_node=0xffff880179468f00, move_ubi=true)
+    at /home/ericafu/gold-betrfs/betrfs-private/ft/ft-ops.cc:892
+892     for (int i = 0; i < node->n_children; i++) {
+(gdb) p node->n_children
+$11 = 33
+(gdb) bt
+
+#0  ftnode_clone_partitions (node=0xffff88016ac6bf00, cloned_node=0xffff880179468f00, move_ubi=true)
+    at /home/ericafu/gold-betrfs/betrfs-private/ft/ft-ops.cc:892
+#1  0xffffffffa0057e3f in toku_ftnode_clone_callback (value_data=0xffff88016ac6bf00, cloned_value_data=0xffff88017a57bc50,
+    clone_size=0xffff88016aa43d60, new_attr=0xffff88016aa43d98, for_checkpoint=false, write_extraargs=0xffff88017a560e00)
+    at /home/ericafu/gold-betrfs/betrfs-private/ft/ft-ops.cc:1125
+#2  0xffffffffa001fc61 in clone_pair (ev=0xffff880177d8e9e0, p=0xffff88017a57bc00)
+    at /home/ericafu/gold-betrfs/betrfs-private/ft/cachetable.cc:995
+#3  0xffffffffa00200bf in write_pair_for_checkpoint_thread (ev=0xffff880177d8e9e0, p=0xffff88017a57bc00)
+    at /home/ericafu/gold-betrfs/betrfs-private/ft/cachetable.cc:1102
+#4  0xffffffffa0029353 in _checkpoint_pending_pairs_partial_internal (extra=0xffff88016ab0a880)
+    at /home/ericafu/gold-betrfs/betrfs-private/ft/cachetable.cc:4900
+#5  0xffffffffa00c5461 in work_on_kibbutz (kidv=0xffff880179531618) at /home/ericafu/gold-betrfs/betrfs-private/util/kibbutz.cc:190
+#6  0xffffffffa0000ef8 in kthread_func (arg=0xffff88017a72e840) at /home/ericafu/gold-betrfs/betrfs-private/filesystem/sb_pthread.c:302
+#7  0xffffffff8107838d in kthread ()

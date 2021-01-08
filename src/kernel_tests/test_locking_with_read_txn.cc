@@ -95,9 +95,8 @@ int test_test_locking_with_read_txn(void) {
     DB * db;
     DB_ENV * env;
     pre_setup();
-    const char *db_env_dir = TOKU_TEST_FILENAME;
-    toku_os_recursive_delete(db_env_dir);
-    r = toku_os_mkdir(db_env_dir, 0755); { int chk_r = r; CKERR(chk_r); }
+    const char *db_env_dir = TOKU_TEST_ENV_DIR_NAME;
+    r = toku_fs_reset(db_env_dir, 0755); { int chk_r = r; CKERR(chk_r); }
 
     // set things up
     r = db_env_create(&env, 0); 
@@ -106,7 +105,7 @@ int test_test_locking_with_read_txn(void) {
     CKERR(r);
     r = db_create(&db, env, 0); 
     CKERR(r);
-    r = db->open(db, NULL, "foo.db", NULL, DB_BTREE, DB_CREATE, 0644); 
+    r = db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_CREATE, 0644); 
     CKERR(r);
 
 

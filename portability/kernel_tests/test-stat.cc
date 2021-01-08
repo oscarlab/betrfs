@@ -97,6 +97,7 @@ PATENT RIGHTS GRANT:
 #include <errno.h>
 #include <toku_assert.h>
 #include <toku_portability.h>
+#include <portability/toku_path.h>
 
 
 #define OFFSETOF(type, field) ((unsigned long) &(((type *) 0)->st_##field))
@@ -173,33 +174,17 @@ int test_stat(void)
     test_stat("/", 0, 0);
     test_stat("./", 0, 0);
 
-    toku_os_recursive_delete("/testdir/");
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r == 0);
 
     test_stat("testdir",  -1, ENOENT);
     test_stat("testdir/", -1, ENOENT);
 
 
-    r = toku_os_mkdir("/testdir/", 0777);
-    assert(r == 0);
-
-    test_stat("testdir/foo",  -1, ENOENT);
-    test_stat("testdir/foo/", -1, ENOENT);
-
-    r = toku_os_mkdir("/testdir/foo/", S_IRWXU);
-    assert(r == 0);
-
-    test_stat("testdir/foo",   0, 0);
-    test_stat("testdir/foo/",   0, 0);
-
-    test_stat("testdir",    0, 0);
-    test_stat("./testdir",  0, 0);
-    test_stat("./testdir/", 0, 0);
-
-    int fd = open("/test-fstat", O_CREAT, 0644);
+    int fd = open(TOKU_TEST_FILENAME_DATA, O_CREAT, 0644);
     assert(fd >= 0);
     test_fstat(fd, 0, 0);
     close(fd);    
     return 0;
 }
-
 

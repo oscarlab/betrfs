@@ -108,21 +108,20 @@ static void fill_dbt(DBT *dbt, void *data, size_t size) {
 
 static void setup (bool use_txns) {
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r = db_env_create(&env, 0); CKERR(r);
-    r = env->open(env, TOKU_TEST_FILENAME, 0, 0);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, 0, 0);
     int txnflags = use_txns ? (DB_INIT_LOCK | DB_INIT_LOG | DB_INIT_TXN) : 0;
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE|DB_PRIVATE|txnflags, 0777);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE|DB_PRIVATE|txnflags, 0777);
 
     // create a regular db and a blackhole db
     r = db_create(&db, env, 0); CKERR(r);
     r = db_create(&blackhole_db, env, 0); CKERR(r);
-    r = db->open(db, NULL, "test.db", 0, DB_BTREE,
+    r = db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE,
             DB_CREATE,
             S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
-    r = blackhole_db->open(blackhole_db, NULL, "blackhole.db", 0, DB_BTREE, 
+    r = blackhole_db->open(blackhole_db, NULL, TOKU_TEST_META_DB_NAME, 0, DB_BTREE, 
             DB_CREATE | DB_BLACKHOLE,
             S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
@@ -169,13 +168,6 @@ static void test_blackhole_work(void) {
 }
 extern "C" int test_blackhole(void);
 int test_blackhole(void) {
-	// without txns
-	pre_setup();
-	setup(false);
-	test_blackhole_work();
-	cleanup();
-	post_teardown();
-	
 	pre_setup();
 	// with txns
 	setup(true);

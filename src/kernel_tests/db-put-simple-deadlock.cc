@@ -145,8 +145,8 @@ int test_db_put_simple_deadlock(void) {
     uint32_t pagesize = 0;
     int do_txn = 1;
     int nrows = 1000; // for BDB, insert enough rows to create a tree with more than one page in it.  this avoids a page locking conflict.
-    const char *db_env_dir = TOKU_TEST_FILENAME;
-    const char *db_filename = "simple_deadlock";
+    const char *db_env_dir = TOKU_TEST_ENV_DIR_NAME;
+    const char *db_filename = TOKU_TEST_DATA_DB_NAME;
     int db_env_open_flags = DB_CREATE | DB_PRIVATE | DB_INIT_MPOOL | DB_INIT_TXN | DB_INIT_LOCK | DB_INIT_LOG | DB_THREAD;
 #if 0
     for (int i = 1; i < argc; i++) {
@@ -172,8 +172,7 @@ int test_db_put_simple_deadlock(void) {
   //  snprintf(rm_cmd, sizeof(rm_cmd), "rm -rf %s", db_env_dir);
   //  r = system(rm_cmd); assert(r == 0);
     pre_setup();
-    toku_os_recursive_delete(db_env_dir);
-    r = toku_os_mkdir(db_env_dir, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH); assert(r == 0);
+    r = toku_fs_reset(db_env_dir, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH); assert(r == 0);
 
     DB_ENV *db_env = NULL;
     r = db_env_create(&db_env, 0); assert(r == 0);
@@ -181,6 +180,7 @@ int test_db_put_simple_deadlock(void) {
         const uint64_t gig = 1 << 30;
         r = db_env->set_cachesize(db_env, cachesize / gig, cachesize % gig, 1); assert(r == 0);
     }
+    // YZJ: Can we delete this code since do_txn = 1 ?
     if (!do_txn)
         db_env_open_flags &= ~(DB_INIT_TXN | DB_INIT_LOG);
 
