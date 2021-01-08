@@ -112,14 +112,14 @@ void range_buffer::record_header::init(const DBT *left_key, const DBT *right_key
     if (right_key) {
         right_neg_inf = right_key == toku_dbt_negative_infinity();
         right_pos_inf = right_key == toku_dbt_positive_infinity();
-        right_key_size = toku_dbt_is_infinite(right_key) ? 0 : right_key->size; 
+        right_key_size = toku_dbt_is_infinite(right_key) ? 0 : right_key->size;
     } else {
         right_neg_inf = left_neg_inf;
         right_pos_inf = left_pos_inf;
         right_key_size = 0;
     }
 }
-    
+
 const DBT *range_buffer::iterator::record::get_left_key(void) const {
     if (m_header.left_neg_inf) {
         return toku_dbt_negative_infinity();
@@ -228,7 +228,7 @@ int range_buffer::get_num_ranges(void) const {
 
 void range_buffer::destroy(void) {
     if (m_buf) {
-        toku_free(m_buf);
+        sb_free_sized(m_buf, m_buf_size);
     }
 }
 
@@ -277,6 +277,7 @@ void range_buffer::maybe_grow(size_t size) {
     static const size_t aggressive_growth_threshold = 128 * 1024;
     const size_t needed = m_buf_current + size;
     if (m_buf_size < needed) {
+        size_t old_m_buf_size = m_buf_size;
         if (m_buf_size == 0) {
             m_buf_size = initial_size;
         }
@@ -288,7 +289,9 @@ void range_buffer::maybe_grow(size_t size) {
         while (m_buf_size < needed) {
             m_buf_size += aggressive_growth_threshold;
         }
-        XREALLOC(m_buf, m_buf_size);
+        // XXX: I think we can be smarter here about rounding up to FTFS_VMALLOC_LARGE,
+        //      or perhaps doing a smarter realloc
+        XREALLOC(m_buf, old_m_buf_size, m_buf_size);
     }
 }
 

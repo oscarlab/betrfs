@@ -222,10 +222,10 @@ void toku_mempool_mfree(struct mempool *mp, void *vp, size_t size) {
 
 /* get memory footprint */
 size_t toku_mempool_footprint(struct mempool *mp) {
-    void * base = mp->base;
-    size_t touched = mp->free_offset;
-    size_t rval = toku_memory_footprint(base, touched);
-    return rval;
+    // XXX DEP 11/12/19: I don't see any good reason not to just return mp->size here,
+    //                   and a lot of bad reasons to ask the kernel (namely, insanely high
+    //                   overheads to answer this question).
+    return mp->size;
 }
 
 void toku_mempool_clone(struct mempool* orig_mp, struct mempool* new_mp) {

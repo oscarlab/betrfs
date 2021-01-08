@@ -168,7 +168,7 @@ typedef int64_t toku_off_t;
 #include <stdio.h>
 
 #define static_assert(foo, bar)
-#endif 
+#endif
 
 #if defined(__cplusplus)
 # define cast_to_typeof(v) (decltype(v))
@@ -374,7 +374,7 @@ size_t os_malloc_usable_size(const void *p) __attribute__((__visibility__("defau
 //  look for the jemalloc, libc, or darwin versions of the function for computing memory footprint.
 
 // full_pwrite and full_write performs a pwrite, and checks errors.  It doesn't return unless all the data was written. */
-void toku_os_full_pwrite (int fd, const void *buf, size_t len, toku_off_t off) __attribute__((__visibility__("default")));
+void toku_os_full_pwrite (int fd, const void *buf, size_t len, toku_off_t off, bool is_blocking) __attribute__((__visibility__("default")));
 void toku_os_full_write (int fd, const void *buf, size_t len) __attribute__((__visibility__("default")));
 
 // os_write returns 0 on success, otherwise an errno.
@@ -382,7 +382,7 @@ ssize_t toku_os_pwrite (int fd, const void *buf, size_t len, toku_off_t off) __a
 int toku_os_write (int fd, const void *buf, size_t len) __attribute__((__visibility__("default")));
 
 // wrappers around file system calls
-FILE * toku_os_fdopen(int fildes, const char *mode);    
+FILE * toku_os_fdopen(int fildes, const char *mode);
 FILE * toku_os_fopen(const char *filename, const char *mode);
 int toku_os_open(const char *path, int oflag, int mode);
 int toku_os_open_direct(const char *path, int oflag, int mode);
@@ -402,7 +402,7 @@ void toku_get_fsync_times(uint64_t *fsync_count, uint64_t *fsync_time, uint64_t 
 
 void toku_set_func_fsync (int (*fsync_function)(int));
 void toku_set_func_pwrite (ssize_t (*)(int, const void *, size_t, toku_off_t));
-void toku_set_func_full_pwrite (ssize_t (*)(int, const void *, size_t, toku_off_t));
+void toku_set_func_full_pwrite (ssize_t (*)(int, const void *, size_t, toku_off_t, bool));
 void toku_set_func_write (ssize_t (*)(int, const void *, size_t));
 void toku_set_func_full_write (ssize_t (*)(int, const void *, size_t));
 void toku_set_func_fdopen (FILE * (*)(int, const char *));
@@ -428,6 +428,6 @@ static inline uint64_t roundup_to_multiple(uint64_t alignment, uint64_t v)
     assert(result<v+alignment);            // The result is the smallest such multiple of alignment.
     return result;
 }
-    
+
 
 #endif /* TOKU_PORTABILITY_H */
