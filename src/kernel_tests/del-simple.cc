@@ -144,12 +144,12 @@ test_del(int nrows) {
     DB_ENV *env = NULL;
     r = db_env_create(&env, 0); assert_zero(r);
 
-    r = env->open(env, TOKU_TEST_FILENAME, DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_TXN|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_TXN|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
 
     DB *db = NULL;
     r = db_create(&db, env, 0); assert_zero(r);
 
-    r = db->open(db, NULL, "test.db", NULL, DB_BTREE, DB_AUTO_COMMIT+DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
+    r = db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_AUTO_COMMIT+DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
 
     DB_TXN *txn = NULL;
     r = env->txn_begin(env, NULL, &txn, 0); assert_zero(r);
@@ -194,8 +194,7 @@ int test_del_simple(void) {
     }
 #endif
     pre_setup();
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
 
     test_del(nrows);
     post_teardown();

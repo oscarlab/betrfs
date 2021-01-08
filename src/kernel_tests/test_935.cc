@@ -104,15 +104,14 @@ testit (const int klen, const int vlen, const int n, const int lastvlen) {
     int r;
 
     // setup test directory
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
-
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
     // setup environment
     DB_ENV *env;
     {
         r = db_env_create(&env, 0); assert(r == 0);
         env->set_errfile(env, stdout);
-        r = env->open(env, TOKU_TEST_FILENAME, DB_INIT_MPOOL + DB_PRIVATE + DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); 
+        r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL + DB_PRIVATE + DB_CREATE + DB_INIT_LOG + DB_INIT_TXN, S_IRWXU+S_IRWXG+S_IRWXO); 
         assert(r == 0);
     }
 
@@ -121,7 +120,7 @@ testit (const int klen, const int vlen, const int n, const int lastvlen) {
     {
         DB_TXN *txn = 0;
         r = db_create(&db, env, 0); assert(r == 0);
-        r = db->open(db, txn, "test.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert(r == 0);
+        r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert(r == 0);
     }
 
     // insert to fill up a node

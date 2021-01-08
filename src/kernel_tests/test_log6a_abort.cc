@@ -331,20 +331,20 @@ static void make_db (void) {
     int r;
     int i;
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r=toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);       assert(r==0);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
     r=db_env_create(&env, 0); assert(r==0);
     env->set_errfile(env, stderr);
-    r=env->open(env, TOKU_TEST_FILENAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r=env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r=db_create(&db, env, 0); CKERR(r);
     r=db_create(&pending_i, env, 0); CKERR(r);
     r=db_create(&pending_d, env, 0); CKERR(r);
     r=db_create(&committed, env, 0); CKERR(r);
     r=env->txn_begin(env, 0, &tid, 0); assert(r==0);
-    r=db->open(db, tid, "foo.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
-    r=pending_i->open(pending_i, tid, "pending_i.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
-    r=pending_d->open(pending_d, tid, "pending_d.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
-    r=committed->open(committed, tid, "committed.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r=db->open(db, tid, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r=pending_i->open(pending_i, tid, TOKU_TEST_ONE_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r=pending_d->open(pending_d, tid, TOKU_TEST_TWO_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r=committed->open(committed, tid, TOKU_TEST_THREE_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r=tid->commit(tid, 0);    assert(r==0);
     r=env->txn_begin(env, 0, &tid, 0); assert(r==0);
     r=env->txn_begin(env, 0, &bookx, 0); assert(r==0);

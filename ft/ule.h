@@ -103,7 +103,7 @@ PATENT RIGHTS GRANT:
 #include <util/mempool.h>
 
 // opaque handles used by outside world (i.e. indexer)
-typedef struct ule *ULEHANDLE;	
+typedef struct ule *ULEHANDLE;
 typedef struct uxr *UXRHANDLE;
 
 // create a ULE by copying the contents of the given leafentry
@@ -125,8 +125,8 @@ void *uxr_get_val(UXRHANDLE uxr);
 uint32_t uxr_get_vallen(UXRHANDLE uxr);
 TXNID uxr_get_txnid(UXRHANDLE uxr);
 
-void toku_le_flip_uxr_type(LEAFENTRY leaf_entry, 
-		      bn_data * data_buffer, 
+void toku_le_flip_uxr_type(LEAFENTRY leaf_entry,
+		      bn_data * data_buffer,
         	      uint32_t idx,
 	              void* keyp,
                       uint32_t keylen,

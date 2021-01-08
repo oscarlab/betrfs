@@ -109,10 +109,10 @@ expect_cursor_get (DBC *cursor, int k, int v, int op) {
 }
 
 static DBC *
-new_cursor (DB *db, int k, int v, int op) {
+new_cursor (DB *db, int k, int v, int op, DB_TXN *txn) {
     DBC *cursor;
     int r;
-    r = db->cursor(db, 0, &cursor, 0); assert(r == 0);
+    r = db->cursor(db, txn, &cursor, 0); assert(r == 0);
     expect_cursor_get(cursor, k, v, op);
     return cursor;
 }
@@ -128,8 +128,8 @@ static void
 test_cursor_nonleaf_expand (int n, int reverse) {
     if (verbose) printf("test_cursor_nonleaf_expand:%d %d\n", n, reverse);
 
-    DB_TXN * const null_txn = 0;
-    const char * const fname = "test.insert.ft_handle";
+    DB_TXN *null_txn = 0;
+    const char * const fname = TOKU_TEST_DATA_DB_NAME;
     int r;
 
     // toku_os_recursive_delete(TOKU_TEST_FILENAME);
@@ -138,17 +138,19 @@ test_cursor_nonleaf_expand (int n, int reverse) {
     /* create the dup database file */
     DB_ENV *env;
     r = db_env_create(&env, 0); assert(r == 0);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL, 0); assert(r == 0);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL+DB_INIT_LOG+DB_INIT_TXN, 0); assert(r == 0);
+
+    r = env->txn_begin(env, NULL, &null_txn, 0); assert_zero(r);
 
     DB *db;
     r = db_create(&db, env, 0); assert(r == 0);
     r = db->set_pagesize(db, 4096); assert(r == 0);
-    r = db->open(db, null_txn, fname, "main", DB_BTREE, DB_CREATE, 0666); assert(r == 0);
+    r = db->open(db, null_txn, fname, NULL, DB_BTREE, DB_CREATE, 0666); assert(r == 0);
     
     r = db_put(db, htonl(0), 0); assert(r == 0);
-    DBC *cursor0 = new_cursor(db, htonl(0), 0, DB_FIRST); assert(cursor0);
+    DBC *cursor0 = new_cursor(db, htonl(0), 0, DB_FIRST, null_txn); assert(cursor0);
     r = db_put(db, htonl(n), n); assert(r == 0);
-    DBC *cursorn = new_cursor(db, htonl(n), n, DB_LAST); assert(cursorn);
+    DBC *cursorn = new_cursor(db, htonl(n), n, DB_LAST, null_txn); assert(cursorn);
 
     int i;
     if (reverse) {
@@ -167,6 +169,7 @@ test_cursor_nonleaf_expand (int n, int reverse) {
     r = cursor0->c_close(cursor0); assert(r == 0);
     r = cursorn->c_close(cursorn); assert(r == 0);
     r = db->close(db, 0); assert(r == 0);
+    r = null_txn->commit(null_txn, 0); assert_zero(r);
     r = env->close(env, 0); assert(r == 0);
 }
 
@@ -175,8 +178,7 @@ int test_test_unused_memory_crash(void) {
 
     int r;
     pre_setup();
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r=toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
 
     int i;
     for (i=1; i<=65536; i *= 2) {

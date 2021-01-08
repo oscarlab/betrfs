@@ -98,15 +98,14 @@ int test_test_5138(void) {
     pre_setup();
 
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
 
     DB_ENV *env;
     r = db_env_create(&env, 0);
     CKERR(r);
     env->set_errfile(env, stderr);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_INIT_MPOOL|DB_CREATE|DB_THREAD|DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_TXN|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL|DB_CREATE|DB_THREAD|DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_TXN|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
 
     DB *db;
@@ -117,7 +116,7 @@ int test_test_5138(void) {
     CKERR(r);
     r = db->set_compression_method(db, TOKU_LZMA_METHOD);
     CKERR(r);
-    r = db->open(db, txn, "foo.db", NULL, DB_BTREE, DB_CREATE, 0666);
+    r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_CREATE, 0666);
     CKERR(r);
 
     DBT key, val;

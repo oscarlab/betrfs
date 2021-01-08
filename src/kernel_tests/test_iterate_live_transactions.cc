@@ -135,14 +135,13 @@ int test_test_iterate_live_transactions(void) {
     const int env_flags = DB_INIT_MPOOL | DB_CREATE | DB_THREAD |
         DB_INIT_LOCK | DB_INIT_LOG | DB_INIT_TXN | DB_PRIVATE;
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, 0755); CKERR(r);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0755); CKERR(r);
 
     DB_ENV *env;
     r = db_env_create(&env, 0); CKERR(r);
     r = env->iterate_live_transactions(env, iterate_callback, NULL);
     assert(r == EINVAL);
-    r = env->open(env, TOKU_TEST_FILENAME, env_flags, 0755); CKERR(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, env_flags, 0755); CKERR(r);
 
     r = env->txn_begin(env, NULL, &txn1, 0); CKERR(r);
     txn1->set_client_id(txn1, 0);

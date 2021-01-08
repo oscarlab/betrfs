@@ -95,13 +95,11 @@ extern "C" int test_logcursor_print(void);
 int test_logcursor_print(void) {
     int r;
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);
     assert(r == 0);
 
     TOKULOGCURSOR lc;
-    r = toku_logcursor_create(&lc, TOKU_TEST_FILENAME);
+    r = toku_logcursor_create(&lc, TOKU_TEST_ENV_DIR_NAME);
     assert(r == 0);
 
     toku_logcursor_print(lc);

@@ -95,14 +95,11 @@ PATENT RIGHTS GRANT:
 #include "log-internal.h"
 #include "rollback-ct-callbacks.h"
 
-static void rollback_unpin_remove_callback(CACHEKEY* cachekey, bool for_checkpoint, void* extra) {
+static void
+rollback_unpin_remove_callback(CACHEKEY *cachekey, bool for_checkpoint, void *extra)
+{
     FT CAST_FROM_VOIDP(h, extra);
-    toku_free_blocknum(
-        h->blocktable,
-        cachekey,
-        h,
-        for_checkpoint
-        );
+    toku_blocknum_dec_refc(h->blocktable, cachekey, h, for_checkpoint);
 }
 
 void toku_rollback_log_unpin_and_remove(TOKUTXN txn, ROLLBACK_LOG_NODE log) {

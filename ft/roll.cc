@@ -160,7 +160,6 @@ toku_commit_fdelete (FILENUM    filenum,
     // since this txn has exclusive access to dictionary (by the
     // directory row lock for its dname) and we would not get this
     // far if there were other live handles.
-    toku_cachefile_unlink_on_close(cf);
 done:
     return r;
 }
@@ -276,10 +275,14 @@ done:
 }
 
 
-static int do_multicast_insertion (enum ft_msg_type type, FILENUM filenum, BYTESTRING key, BYTESTRING max_key, bool is_right_excl, enum pacman_status pm_status, BYTESTRING *data, TOKUTXN txn, LSN oplsn,
-                         bool reset_root_xid_that_created) {
+static int
+do_multicast_insertion(enum ft_msg_type type, FILENUM filenum,
+                       BYTESTRING min_key, BYTESTRING max_key,
+                       bool is_right_excl, enum pacman_status pm_status,
+                       BYTESTRING *data, TOKUTXN txn, LSN oplsn,
+                       bool reset_root_xid_that_created)
+{
     int r = 0;
-    //printf("%s:%d committing insert %s %s\n", __FILE__, __LINE__, key.data, data.data);
     FT h;
     h = NULL;
     r = txn->open_fts.find_zero<FILENUM, find_ft_from_filenum>(filenum, &h, NULL);
@@ -288,44 +291,51 @@ static int do_multicast_insertion (enum ft_msg_type type, FILENUM filenum, BYTES
         r = 0;
         goto done;
     }
-    assert(r==0);
+    assert_zero(r);
 
-    if (oplsn.lsn != 0) {  // if we are executing the recovery algorithm
-        LSN treelsn = toku_ft_checkpoint_lsn(h);  
-        if (oplsn.lsn <= treelsn.lsn) {  // if operation was already applied to tree ...
-            r = 0;                       // ... do not apply it again.
+    // if we are excuting recovery
+    if (oplsn.lsn != 0) {
+        LSN treelsn = toku_ft_checkpoint_lsn(h);
+        // if operation wa already applied to tree
+        if (oplsn.lsn <= treelsn.lsn) {
+            r = 0;
             goto done;
         }
     }
 
-    DBT key_dbt,data_dbt, maxkey_dbt;
+    DBT min_kdbt, max_kdbt, vdbt;
     XIDS xids;
     xids = toku_txn_get_xids(txn);
-    {
-        FT_MSG_S ftcmd;
-       ft_msg_multicast_init(&ftcmd, type, ZERO_MSN, xids,
-                            (key.len > 0)
-                            ? toku_fill_dbt(&key_dbt,  key.data,  key.len)
-                            : toku_init_dbt(&key_dbt),
 
-                            (max_key.len > 0)
-                            ? toku_fill_dbt(&maxkey_dbt,  max_key.data,  max_key.len)
-                            : toku_init_dbt(&maxkey_dbt),
-                            data
-                            ? toku_fill_dbt(&data_dbt, data->data, data->len)
-                            : toku_init_dbt(&data_dbt),
-                            is_right_excl,
-			    pm_status);
+    FT_MSG_S ftcmd;
+    if (min_key.len > 0) {
+        toku_fill_dbt(&min_kdbt, min_key.data, min_key.len);
+    } else {
+        toku_init_dbt(&min_kdbt);
+    }
+    if (max_key.len > 0) {
+        toku_fill_dbt(&max_kdbt, max_key.data, max_key.len);
+    } else {
+        toku_init_dbt(&max_kdbt);
+    }
+    if (data) {
+        toku_fill_dbt(&vdbt, data->data, data->len);
+    } else {
+        toku_init_dbt(&vdbt);
+    }
+    ft_msg_multicast_init(&ftcmd, type, ZERO_MSN, xids,
+                          &min_kdbt, &max_kdbt, &vdbt, is_right_excl, pm_status);
+    toku_ft_root_put_cmd(h, &ftcmd, nullptr, txn->oldest_referenced_xid,
+                         make_gc_info(!txn->for_recovery));
 
-       toku_ft_root_put_cmd(h, &ftcmd, nullptr, txn->oldest_referenced_xid, make_gc_info(!txn->for_recovery));
-        if (reset_root_xid_that_created) {
-            TXNID new_root_xid_that_created = xids_get_outermost_xid(xids);
-            toku_reset_root_xid_that_created(h, new_root_xid_that_created);
-        }
+    if (reset_root_xid_that_created) {
+        TXNID new_root_xid_that_created = xids_get_outermost_xid(xids);
+        toku_reset_root_xid_that_created(h, new_root_xid_that_created);
     }
 done:
     return r;
 }
+
 static int do_nothing_with_filenum(TOKUTXN UU(txn), FILENUM UU(filenum)) {
     return 0;
 }
@@ -446,202 +456,62 @@ toku_commit_cmddeletemulti(FILENUM filenum,
 {
     bool reset_root_xid_that_created = (is_resetting_op ? true : false);
     const enum ft_msg_type type = is_resetting_op ? FT_COMMIT_MULTICAST_ALL : FT_COMMIT_MULTICAST_TXN;
-    return do_multicast_insertion(type, filenum, min_key, max_key, is_right_excl, (enum pacman_status) pm_status, NULL, txn, oplsn, reset_root_xid_that_created);
+    return do_multicast_insertion(type, filenum, min_key, max_key,
+                                  is_right_excl, (enum pacman_status)pm_status,
+                                  NULL, txn, oplsn,
+                                  reset_root_xid_that_created);
 }
-
-#if HIDE_LATENCY
-static void toku_memdup_bytestring(BYTESTRING *bs, uint32_t size, char *data)
-{
-    bs->len = size;
-    bs->data = (char *)toku_xmemdup((void *)data, size);
-}
-#endif
-
-static void ft_slice_and_swing(
-    FT ft,
-    BYTESTRING minkeybs,
-    BYTESTRING maxkeybs,
-    BYTESTRING newminkeybs,
-    BYTESTRING newmaxkeybs,
-    BYTESTRING oldprefixbs,
-    BYTESTRING newprefixbs,
-    uint64_t msn,
-    XIDS xids,
-    TXNID oldest_referenced_xid
-#if HIDE_LATENCY
-    , BACKGROUND_JOB_MANAGER rr_bjm
-#endif
-)
-{
-    DBT minkey, maxkey, newminkey, newmaxkey;
-#if HIDE_LATENCY
-    toku_memdup_dbt(&minkey, minkeybs.data, minkeybs.len);
-    toku_memdup_dbt(&maxkey, maxkeybs.data, maxkeybs.len);
-    toku_memdup_dbt(&newminkey, newminkeybs.data, newminkeybs.len);
-    toku_memdup_dbt(&newmaxkey, newmaxkeybs.data, newmaxkeybs.len);
-    BYTESTRING oldprefix_copy, newprefix_copy;
-    if (ft->key_ops.keylift == NULL) {
-        toku_memdup_bytestring(&oldprefix_copy, oldprefixbs.len, oldprefixbs.data);
-        toku_memdup_bytestring(&newprefix_copy, newprefixbs.len, newprefixbs.data);
-    }
-#else
-    toku_fill_dbt(&minkey, minkeybs.data, minkeybs.len);
-    toku_fill_dbt(&maxkey, maxkeybs.data, maxkeybs.len);
-    toku_fill_dbt(&newminkey, newminkeybs.data, newminkeybs.len);
-    toku_fill_dbt(&newmaxkey, newmaxkeybs.data, newmaxkeybs.len);
-#endif
-    ft_slice_t src_slice, dst_slice;
-    ft_slice_init(&src_slice, &minkey, &maxkey);
-    ft_slice_init(&dst_slice, &newminkey, &newmaxkey);
-    FTNODE src_above_LCA, dst_above_LCA;
-    int src_childnum, dst_childnum;
-    int ret = toku_ft_relocate_start(ft, &src_slice, &dst_slice,
-                                     &src_above_LCA, &src_childnum,
-#if HIDE_LATENCY
-                                     &dst_above_LCA, &dst_childnum, rr_bjm
-#else
-                                     &dst_above_LCA, &dst_childnum
-#endif
-                                     );
-    ft_slice_destroy(&src_slice);
-    ft_slice_destroy(&dst_slice);
-    if (ft->key_ops.keylift == NULL) {
-        FT_MSG_S src_msg, dst_msg;
-        ft_msg_kupsert_init(&src_msg, FT_KUPSERT_BROADCAST_ALL, {msn}, xids,
-#if HIDE_LATENCY
-                            newprefix_copy, oldprefix_copy
-#else
-                            newprefixbs, oldprefixbs
-#endif
-                            );
-        ft_msg_kupsert_init(&dst_msg, FT_KUPSERT_BROADCAST_ALL, {msn}, xids,
-#if HIDE_LATENCY
-                            oldprefix_copy, newprefix_copy
-#else
-                            oldprefixbs, newprefixbs
-#endif
-                            );
-        toku_ft_relocate_finish(ft, src_above_LCA, dst_above_LCA,
-                                src_childnum, dst_childnum, &src_msg, &dst_msg,
-                                oldest_referenced_xid, ret ? true : false);
-#if HIDE_LATENCY
-        toku_free(oldprefix_copy.data);
-        toku_free(newprefix_copy.data);
-#endif
-    } else {
-        toku_ft_relocate_finish(ft, src_above_LCA, dst_above_LCA,
-                                src_childnum, dst_childnum, NULL, NULL,
-                                oldest_referenced_xid, ret ? true : false);
-    }
-
-#if HIDE_LATENCY
-    toku_destroy_dbt(&minkey);
-    toku_destroy_dbt(&maxkey);
-    toku_destroy_dbt(&newminkey);
-    toku_destroy_dbt(&newmaxkey);
-#endif
-}
-
-#if HIDE_LATENCY
-struct rr_args {
-    FT ft;
-    BYTESTRING minkeybs;
-    BYTESTRING maxkeybs;
-    BYTESTRING newminkeybs;
-    BYTESTRING newmaxkeybs;
-    BYTESTRING oldprefixbs;
-    BYTESTRING newprefixbs;
-    uint64_t msn;
-    XIDS xids;
-    TXNID oldest_referenced_xid;
-    BACKGROUND_JOB_MANAGER rr_bjm;
-};
-
-static void ft_slice_and_swing_func(void *args)
-{
-    struct rr_args *rr_args = (struct rr_args *)args;
-    ft_slice_and_swing(
-        rr_args->ft,
-        rr_args->minkeybs, rr_args->maxkeybs,
-        rr_args->newminkeybs, rr_args->newmaxkeybs,
-        rr_args->oldprefixbs, rr_args->newprefixbs,
-        rr_args->msn, rr_args->xids, rr_args->oldest_referenced_xid,
-        rr_args->rr_bjm);
-    toku_free(rr_args);
-}
-#endif
 
 int
-toku_commit_cmdrename(FILENUM filenum,
-                      BYTESTRING minkeybs,
-                      BYTESTRING maxkeybs,
-                      BYTESTRING newminkeybs,
-                      BYTESTRING newmaxkeybs,
-                      BYTESTRING oldprefixbs,
-                      BYTESTRING newprefixbs,
-                      TXNID oldest_referenced_xid,
-                      bool is_resetting_op,
-                      uint64_t msn,
-                      TOKUTXN txn,
-                      LSN UU(oplsn))
+toku_commit_cmdclone(FILENUM filenum,
+                     BYTESTRING minkeybs,
+                     BYTESTRING maxkeybs,
+                     BYTESTRING newminkeybs,
+                     BYTESTRING newmaxkeybs,
+                     BYTESTRING UU(oldprefixbs),
+                     BYTESTRING UU(newprefixbs),
+                     bool delete_old,
+                     TOKUTXN txn,
+                     LSN UU(oplsn))
 {
-    assert(is_resetting_op == false);
-
-    CACHEFILE cf;
     int r;
-    r = toku_cachefile_of_filenum(txn->logger->ct, filenum, &cf);
-    if (r == ENOENT) {
-        assert(txn->for_recovery);
-        r = 0;
-        return r;
-    }
-
     FT ft = NULL;
     r = txn->open_fts.find_zero<FILENUM, find_ft_from_filenum>(filenum, &ft, NULL);
-    assert(r == 0);
-
-    XIDS xids = toku_txn_get_xids(txn);
-#if HIDE_LATENCY
-    BACKGROUND_JOB_MANAGER rr_bjm = NULL;
-    bjm_init(&rr_bjm);
-    r = bjm_add_background_job(rr_bjm);
     assert_zero(r);
-    struct rr_args *XMALLOC(args);
-    args->ft = ft;
-    args->minkeybs = minkeybs;
-    args->maxkeybs = maxkeybs;
-    args->newminkeybs = newminkeybs;
-    args->newmaxkeybs = newmaxkeybs;
-    args->oldprefixbs = oldprefixbs;
-    args->newprefixbs = newprefixbs;
-    args->xids = xids;
-    args->msn = msn;
-    args->oldest_referenced_xid = oldest_referenced_xid;
-    args->rr_bjm = rr_bjm;
-    cachetable_rr_kibbutz_enq(txn->logger->ct, ft_slice_and_swing_func, args);
-    bjm_wait_for_jobs_to_finish(rr_bjm);
-    bjm_destroy(rr_bjm);
-#else
-    ft_slice_and_swing(ft, minkeybs, maxkeybs, newminkeybs, newmaxkeybs,
-                       oldprefixbs, newprefixbs, msn, xids,
-                       oldest_referenced_xid);
-#endif
+
+    DBT min_key, max_key;
+    toku_fill_dbt(&min_key, minkeybs.data, minkeybs.len);
+    toku_fill_dbt(&max_key, maxkeybs.data, maxkeybs.len);
+    if (newminkeybs.len) {
+        // this is a 'real' clone
+        DBT new_min_key, new_max_key;
+        toku_fill_dbt(&new_min_key, newminkeybs.data, newminkeybs.len);
+        toku_fill_dbt(&new_max_key, newmaxkeybs.data, newmaxkeybs.len);
+        toku_ft_clone_commit(ft, &min_key, &max_key, &new_min_key, &new_max_key,
+                             delete_old, txn);
+    } else {
+        // this is a range delete
+        assert_zero(newmaxkeybs.len);
+        assert_zero(oldprefixbs.len);
+        assert_zero(newprefixbs.len);
+        assert(!delete_old);
+        toku_ft_rd_commit(ft, &min_key, &max_key, txn);
+    }
+
     return 0;
 }
 
 int
-toku_rollback_cmdrename(FILENUM UU(filenum),
-                        BYTESTRING UU(minkeybs),
-                        BYTESTRING UU(maxkeybs),
-                        BYTESTRING UU(newminkeybs),
-                        BYTESTRING UU(newmaxkeybs),
-                        BYTESTRING UU(oldprefixbs),
-                        BYTESTRING UU(newprefixbs),
-                        TXNID UU(oldest_referenced_xid),
-                        bool UU(is_resetting_op),
-                        uint64_t UU(msn),
-                        TOKUTXN UU(txn),
-                        LSN UU(oplsn))
+toku_rollback_cmdclone(FILENUM UU(filenum),
+                       BYTESTRING UU(minkeybs),
+                       BYTESTRING UU(maxkeybs),
+                       BYTESTRING UU(newminkeybs),
+                       BYTESTRING UU(newmaxkeybs),
+                       BYTESTRING UU(oldprefixbs),
+                       BYTESTRING UU(newprefixbs),
+                       bool UU(delete_old),
+                       TOKUTXN UU(txn),
+                       LSN UU(oplsn))
 {
     return 0;
 }
@@ -656,7 +526,10 @@ toku_rollback_cmddeletemulti(FILENUM filenum,
                              TOKUTXN    txn,
                              LSN oplsn)
 {
-    return do_multicast_insertion(FT_ABORT_MULTICAST_TXN, filenum, min_key, max_key,is_right_excl, (enum pacman_status) pm_status, NULL, txn, oplsn, false);
+    return do_multicast_insertion(FT_ABORT_MULTICAST_TXN, filenum,
+                                  min_key, max_key,
+                                  is_right_excl, (enum pacman_status)pm_status,
+                                  NULL, txn, oplsn, false);
 }
 static int
 toku_apply_rollinclude (TXNID_PAIR      xid,
@@ -803,7 +676,9 @@ toku_rollback_load (FILENUM    UU(old_filenum),
         // It's possible the new iname was never created, so just try to 
         // unlink it if it's there and ignore the error if it's not.
         char *fname_in_cwd = toku_cachetable_get_fname_in_cwd(ct, fname_in_env);
-        r = unlink(fname_in_cwd);
+        // YZJ: Should not happend
+        assert(false);
+
 #ifdef TOKU_LINUX_MODULE
         assert(r == 0 || get_error_errno(r) == ENOENT);
 #else

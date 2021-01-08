@@ -228,7 +228,7 @@ put_callback(DB *dest_db, DB *src_db, DBT_ARRAY *dest_key_arrays, DBT_ARRAY *des
 
         assert(dest_key->flags == DB_DBT_REALLOC);
         if (dest_key->ulen < sizeof(int)) {
-            dest_key->data = toku_xrealloc(dest_key->data, sizeof(int));
+            dest_key->data = toku_xrealloc(dest_key->data, dest_key->ulen, sizeof(int));
             dest_key->ulen = sizeof(int);
         }
         dest_key->size = sizeof(int);
@@ -414,6 +414,14 @@ done:
     r = txn->commit(txn, 0); assert_zero(r);
 }
 
+static const char *dbname[5] = {
+   TOKU_TEST_DATA_DB_NAME,
+   TOKU_TEST_META_DB_NAME,
+   TOKU_TEST_ONE_DB_NAME,
+   TOKU_TEST_TWO_DB_NAME,
+   TOKU_TEST_THREE_DB_NAME
+};
+
 static void
 run_test(int ndbs, int nrows) {
     int r;
@@ -423,16 +431,14 @@ run_test(int ndbs, int nrows) {
     r = env->set_generate_row_callback_for_put(env, put_callback); assert_zero(r);
     r = env->set_generate_row_callback_for_del(env, del_callback); assert_zero(r);
 
-    r = env->open(env, TOKU_TEST_FILENAME, DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_TXN|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_TXN|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
 
     DB *db[ndbs];
     for (int dbnum = 0; dbnum < ndbs; dbnum++) {
         r = db_create(&db[dbnum], env, 0); assert_zero(r);
 
         DBT dbt_dbnum; dbt_init(&dbt_dbnum, &dbnum, sizeof dbnum);
-
-        char dbname[32]; sprintf(dbname, "%d.tdb", dbnum);
-        r = db[dbnum]->open(db[dbnum], NULL, dbname, NULL, DB_BTREE, DB_AUTO_COMMIT+DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
+        r = db[dbnum]->open(db[dbnum], NULL, dbname[dbnum], NULL, DB_BTREE, DB_AUTO_COMMIT+DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
         IN_TXN_COMMIT(env, NULL, txn_desc, 0, {
                 { int chk_r = db[dbnum]->change_descriptor(db[dbnum], txn_desc, &dbt_dbnum, 0); CKERR(chk_r); }
         });
@@ -464,8 +470,8 @@ run_test(int ndbs, int nrows) {
     for (int dbnum = 0; dbnum < ndbs; dbnum++)
         r = db[dbnum]->close(db[dbnum], 0); assert_zero(r);
 
-    env->set_generate_row_callback_for_put(env, NULL); 
-    env->set_generate_row_callback_for_del(env, NULL); 
+    env->set_generate_row_callback_for_put(env, NULL);
+    env->set_generate_row_callback_for_del(env, NULL);
 
     r = env->close(env, 0); assert_zero(r);
 }
@@ -474,7 +480,7 @@ extern "C" int test_update_multiple_with_indexer_array(void);
 int
 test_update_multiple_with_indexer_array(void) {
     int r;
-    int ndbs = 10;
+    int ndbs = 5;
     int nrows = MAX_KEYS*(1<<5)*4;
     pre_setup();
     // parse_args(argc, argv);
@@ -486,11 +492,9 @@ test_update_multiple_with_indexer_array(void) {
         ndbs++;
     }
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
 
     run_test(ndbs, nrows);
     post_teardown();
     return 0;
 }
-

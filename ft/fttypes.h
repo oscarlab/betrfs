@@ -277,8 +277,7 @@ enum ft_msg_type {
     FT_COMMIT_MULTICAST_ALL = 18, // multicast that commits all leafentries (like FT_COMMIT_BROADCAST_ALL)
     FT_ABORT_MULTICAST_TXN = 19, // multicast that aborts
     FT_UNBOUND_INSERT = 20, //large sequentail IO (part of a stream of consecutive keys)
-// kupsert msg
-    FT_KUPSERT_BROADCAST_ALL = 21 //Kuprsert to all leafentries.
+    FT_GOTO = 21, // redirect querries to another place
 };
 
 static inline ft_msg_type
@@ -340,6 +339,12 @@ cast_to_msg_type(int i)
     case 19:
         type = FT_ABORT_MULTICAST_TXN;
         break;
+    case 20:
+        type = FT_UNBOUND_INSERT;
+        break;
+    case 21:
+        type = FT_GOTO;
+        break;
     default:
         type = FT_NONE;
     }
@@ -370,8 +375,8 @@ ft_msg_type_applies_once(enum ft_msg_type type)
     case FT_COMMIT_MULTICAST_TXN:
     case FT_COMMIT_MULTICAST_ALL:
     case FT_ABORT_MULTICAST_TXN:
+    case FT_GOTO:
     case FT_NONE:
-    case FT_KUPSERT_BROADCAST_ALL:
         ret_val = false;
         break;
     default:
@@ -404,8 +409,8 @@ ft_msg_type_applies_multiple(enum ft_msg_type type)
     case FT_DELETE_MULTICAST:
     case FT_COMMIT_MULTICAST_TXN:
     case FT_COMMIT_MULTICAST_ALL:
-    case FT_KUPSERT_BROADCAST_ALL:
     case FT_ABORT_MULTICAST_TXN:
+    case FT_GOTO:
         ret_val = true;
         break;
     default:
@@ -433,7 +438,7 @@ ft_msg_type_is_multicast(enum ft_msg_type type)
     case FT_OPTIMIZE:
     case FT_OPTIMIZE_FOR_UPGRADE:
     case FT_UPDATE_BROADCAST_ALL:
-    case FT_KUPSERT_BROADCAST_ALL:
+    case FT_GOTO:
         ret_val = false;
         break;
     case FT_DELETE_MULTICAST:
@@ -470,33 +475,25 @@ struct range_delete_extra {
 	enum  pacman_status pm_status;
 };
 
-struct kupsert_extra {
-	BYTESTRING old_prefix;
-	BYTESTRING new_prefix;
-//	DBT * forward(char * old_prefix, char * new_prefix, DBT * old_key);
-//	DBT * backward(char * old_prefix, char * new_prefix DBT * new_key);
+struct goto_extra {
+    BLOCKNUM blocknum;
+    int height;
 };
+
 /* tree commands */
 struct ft_msg {
     enum ft_msg_type type;
-    MSN          msn;          // message sequence number
-    XIDS         xids;
-    const DBT *        key;
-    const DBT *        max_key;
-    const DBT *        val;
+    // message sequence number
+    MSN msn;
+    XIDS xids;
+    const DBT *key;
+    const DBT *val;
+    const DBT *max_key;
     union {
-          struct kupsert_extra k_extra;
-          struct range_delete_extra rd_extra; //for now just extra for range delete.
-    } u;   
-#if 0
-      union {
-        /* insert or delete */
-        struct ft_cmd_insert_delete {
-            const DBT *key;   // for insert, delete, upsertdel
-            const DBT *val;   // for insert, delete, (and it is the "extra" for upsertdel, upsertdel_broadcast_all)
-        } id;
+        // extra for RD and GOTO messages
+        struct range_delete_extra rd_extra;
+        struct goto_extra gt_extra;
     } u;
-    #endif
 };
 // Message sent into brt to implement command (insert, delete, etc.)
 // This structure supports nested transactions, and obsoletes ft_msg.
@@ -518,8 +515,6 @@ static inline void ft_print_key(struct toku_db_key_operations *key_ops, const DB
 {
     key_ops->keyprint(key, true);
 }
-
-int ft_msg_kupsert_forward_transform(struct toku_db_key_operations *key_ops, FT_MSG k_msg, DBT *old_key, DBT *new_key);
 
 typedef int (*ft_compare_func)(DB *, const DBT *, const DBT *);
 typedef void (*setval_func)(const DBT *, void *);
@@ -543,14 +538,13 @@ typedef struct serialized_rollback_log_node *SERIALIZED_ROLLBACK_LOG_NODE;
 //                        used for READ COMMITTED
 //
 
-typedef enum __TXN_SNAPSHOT_TYPE { 
+typedef enum __TXN_SNAPSHOT_TYPE {
     TXN_SNAPSHOT_NONE=0,
     TXN_SNAPSHOT_ROOT=1,
     TXN_SNAPSHOT_CHILD=2
 } TXN_SNAPSHOT_TYPE;
 
 typedef struct ancestors *ANCESTORS;
-typedef struct pivot_bounds const * const PIVOT_BOUNDS;
 typedef struct ftnode_fetch_extra *FTNODE_FETCH_EXTRA;
 typedef struct unlockers *UNLOCKERS;
 

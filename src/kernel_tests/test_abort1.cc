@@ -99,7 +99,6 @@ PATENT RIGHTS GRANT:
 #include <memory.h>
 #include <stdio.h>
 
-extern "C" int ftfs_get_errno(void);
 // TOKU_TEST_FILENAME is defined in the Makefile
 
 static void
@@ -108,10 +107,9 @@ test_db_open_aborts (void) {
     DB *db;
 
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r=toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);       assert(r==0);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);       assert(r==0);
     r=db_env_create(&env, 0); assert(r==0);
-    r=env->open(env, TOKU_TEST_FILENAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_PRIVATE|DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r=env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_PRIVATE|DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r=db_create(&db, env, 0); CKERR(r);
 #if 0
     {
@@ -130,7 +128,7 @@ test_db_open_aborts (void) {
     {
 	DB_TXN *tid;
 	r=env->txn_begin(env, 0, &tid, 0); assert(r==0);
-	r=db->open(db, tid, "foo.db", 0, DB_BTREE, DB_CREATE, S_IRWXU|S_IRWXG|S_IRWXO); CKERR(r);
+	r=db->open(db, tid,  TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU|S_IRWXG|S_IRWXO); CKERR(r);
 	{
 	    DBT key,data;
             dbt_init(&key, "hello", 6);
@@ -155,7 +153,7 @@ test_db_open_aborts (void) {
 #endif
         toku_struct_stat statbuf;
         char filename[TOKU_PATH_MAX+1];
-        r = toku_stat(toku_path_join(filename, 2, TOKU_TEST_FILENAME, "foo.db"), &statbuf);
+        r = toku_stat(toku_path_join(filename, 2, TOKU_TEST_ENV_DIR_NAME, "foo.db"), &statbuf);
         assert(r!=0);
     }
 
@@ -169,16 +167,15 @@ test_db_put_aborts (void) {
     DB *db;
 
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r=toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);       assert(r==0);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);       assert(r==0);
     r=db_env_create(&env, 0); assert(r==0);
-    r=env->open(env, TOKU_TEST_FILENAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_PRIVATE|DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r=env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_PRIVATE|DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r=db_create(&db, env, 0); CKERR(r);
 
     {
 	DB_TXN *tid;
 	r=env->txn_begin(env, 0, &tid, 0); assert(r==0);
-	r=db->open(db, tid, "foo.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+	r=db->open(db, tid, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
 	r=tid->commit(tid,0);        assert(r==0);
     }
     {
@@ -212,7 +209,7 @@ test_db_put_aborts (void) {
         {
             DBT dname;
             DBT iname;
-            dbt_init(&dname, "foo.db", sizeof("foo.db"));
+            dbt_init(&dname, TOKU_TEST_DATA_DB_NAME, sizeof(TOKU_TEST_DATA_DB_NAME));
             dbt_init(&iname, NULL, 0);
             iname.flags |= DB_DBT_MALLOC;
             r = env->get_iname(env, &dname, &iname);
@@ -225,7 +222,7 @@ test_db_put_aborts (void) {
 #endif
 	toku_struct_stat statbuf;
         char fullfile[TOKU_PATH_MAX+1];
-	r = toku_stat(toku_path_join(fullfile, 2, TOKU_TEST_FILENAME, filename), &statbuf);
+	r = toku_stat(toku_path_join(fullfile, 2, TOKU_TEST_ENV_DIR_NAME, filename), &statbuf);
 	assert(r==0);
         toku_free(filename);
     }
@@ -241,14 +238,14 @@ test_db_put_aborts (void) {
 	    r=db->get(db, tid, &key, &data, 0);
 	    assert(r!=0);
 	    assert(r==DB_NOTFOUND);
-	}	    
+	}
 	{
 	    DBT key,data;
             dbt_init(&key, "bye", 4);
             dbt_init(&data, NULL, 0);
 	    r=db->get(db, tid, &key, &data, 0);
 	    CKERR(r);
-	}	    
+	}
 	r=tid->commit(tid,0);        assert(r==0);
     }
 

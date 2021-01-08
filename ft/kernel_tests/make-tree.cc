@@ -203,11 +203,9 @@ test_make_tree_do(int height, int fanout, int nperleaf, int do_verify) {
     int r;
 
     // cleanup
-    const char *fname = TOKU_TEST_FILENAME;
-    r = unlink(fname);
-    if (r != 0) {
-	assert(r == -ENOENT);
-    }
+    const char *fname = TOKU_TEST_FILENAME_DATA;
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r == 0);
 
     // create a cachetable
     CACHETABLE ct = NULL;

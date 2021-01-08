@@ -98,15 +98,14 @@ int
 test_logcursor_empty_logdir (void) {
 
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU);    assert(r==0);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);    assert(r==0);
 
     // verify the log is empty
 
     TOKULOGCURSOR lc = NULL;
     struct log_entry *le;
     
-    r = toku_logcursor_create(&lc, TOKU_TEST_FILENAME);
+    r = toku_logcursor_create(&lc, TOKU_TEST_ENV_DIR_NAME);
     assert(r == 0 && lc != NULL);
 
     r = toku_logcursor_next(lc, &le);
@@ -118,7 +117,7 @@ test_logcursor_empty_logdir (void) {
     r = toku_logcursor_destroy(&lc);
     assert(r == 0 && lc == NULL);
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);    assert(r==0);
 
     return 0;
 }

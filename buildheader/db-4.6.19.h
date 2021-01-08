@@ -1664,7 +1664,9 @@ struct __db {
 		DB_TXN *, DBT *, DBT *, DB_COMPACT *, uint32_t, DBT *));
 	int  (*cursor) __P((DB *, DB_TXN *, DBC **, uint32_t));
 	int  (*del) __P((DB *, DB_TXN *, DBT *, uint32_t));
-	int  (*del_multi) __P((DB *, DB_TXN *, DBT *, DBT *, bool, uint32_t));
+        int  (*del_multi) __P((DB *, DB_TXN *, DBT *, DBT *, bool, uint32_t));
+        int  (*rd) __P((DB *, DB_TXN *, DBT *, DBT *, uint32_t));
+        int  (*clone) __P((DB *, DB_TXN *, DBT *, DBT *, DBT *, DBT *, uint32_t));
 	void (*err) __P((DB *, int, const char *, ...));
 	void (*errx) __P((DB *, const char *, ...));
 	int  (*exists) __P((DB *, DB_TXN *, DBT *, uint32_t));
@@ -2088,8 +2090,18 @@ struct __db_env {
 
 					/* App-specified alloc functions. */
 	void *(*db_malloc) __P((size_t));
-	void *(*db_realloc) __P((void *, size_t));
 	void (*db_free) __P((void *));
+        /* Use these two interfaces when an allocation/free tracks the size,
+         * and you can guarantee that the original size will be passed to free/realloc.
+         * The vast majority of data structures in the ft code track sizes,
+         * and this obviates the need for the southbound code to also track
+         * sizes or query expensive kernel structures.
+         *
+         * db_realloc can only be used with "sized" allocations.
+         */
+        void *(*db_malloc_sized) __P((size_t, bool));
+        void *(*db_realloc) __P((void *, size_t, size_t));
+        void (*db_free_sized) __P((void *, size_t));
 
 	/* Application callback to copy data to/from a custom data source. */
 #define	DB_USERCOPY_GETDATA	0x0001
@@ -2332,7 +2344,6 @@ struct __db_env {
 	int  (*lock_stat_print) __P((DB_ENV *, uint32_t));
 	int  (*lock_vec) __P((DB_ENV *,
 		uint32_t, uint32_t, DB_LOCKREQ *, int, DB_LOCKREQ **));
-	int  (*log_archive) __P((DB_ENV *, char **[], uint32_t));
 	int  (*log_cursor) __P((DB_ENV *, DB_LOGC **, uint32_t));
 	int  (*log_file) __P((DB_ENV *, const DB_LSN *, char *, size_t));
 	int  (*log_flush) __P((DB_ENV *, const DB_LSN *));
@@ -2620,16 +2631,18 @@ int db_env_set_func_dirfree __P((void (*)(char **, int)));
 int db_env_set_func_dirlist __P((int (*)(const char *, char ***, int *)));
 int db_env_set_func_exists __P((int (*)(const char *, int *)));
 int db_env_set_func_free __P((void (*)(void *)));
+int db_env_set_func_free_sized __P((void (*)(void *, size_t)));
 int db_env_set_func_fsync __P((int (*)(int)));
 int db_env_set_func_ftruncate __P((int (*)(int, off_t)));
 int db_env_set_func_ioinfo __P((int (*)(const char *, int, uint32_t *, uint32_t *, uint32_t *)));
 int db_env_set_func_malloc __P((void *(*)(size_t)));
+int db_env_set_func_malloc_sized __P((void *(*)(size_t, bool)));
 int db_env_set_func_map __P((int (*)(char *, size_t, int, int, void **)));
 int db_env_set_func_pread __P((ssize_t (*)(int, void *, size_t, off_t)));
 int db_env_set_func_pwrite __P((ssize_t (*)(int, const void *, size_t, off_t)));
 int db_env_set_func_open __P((int (*)(const char *, int, ...)));
 int db_env_set_func_read __P((ssize_t (*)(int, void *, size_t)));
-int db_env_set_func_realloc __P((void *(*)(void *, size_t)));
+int db_env_set_func_realloc __P((void *(*)(void *, size_t, size_t)));
 int db_env_set_func_rename __P((int (*)(const char *, const char *)));
 int db_env_set_func_seek __P((int (*)(int, off_t, int)));
 int db_env_set_func_sleep __P((int (*)(u_long, u_long)));

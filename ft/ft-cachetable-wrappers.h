@@ -138,25 +138,18 @@ toku_create_new_ftnode (
     int n_children
     );
 
-/**
- * Batched version of toku_pin_ftnode, see cachetable batched API for more
- * details.
- */
-
 int
-toku_pin_ftnode_batched(
+toku_pin_ftnode_for_search(
     FT_HANDLE brt,
     BLOCKNUM blocknum,
     uint32_t fullhash,
     UNLOCKERS unlockers,
+    bool multipath,
     ANCESTORS ancestors,
-    const PIVOT_BOUNDS bounds,
     FTNODE_FETCH_EXTRA bfe,
-    bool apply_ancestor_messages, // this bool is probably temporary, for #3972, once we know how range query estimates work, will revisit this
+    struct pivot_bounds *bounds,
     FTNODE *node_p,
-    bool* msgs_applied,
-    ANCESTORS kupsert_ancestor
-    );
+    bool *node_changed);
 
 /**
  * Unfortunately, this function is poorly named

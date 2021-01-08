@@ -219,64 +219,58 @@ print_le(
     const LEAFENTRY &le, 
     const uint32_t idx UU(), 
     void *const ai UU()
-    ) 
+    )
 {
     print_klpair(stdout, key, keylen, le);
     printf("\n");
     return 0;
 }
 
-static int dump_nonleaf(FT_MSG msg, bool UU(is_fresh), void * UU(args)) {
-
-        void * key = ft_msg_get_key(msg);
-        uint32_t keylen = ft_msg_get_keylen(msg);
-        void * data = ft_msg_get_val(msg);
-        uint32_t datalen = ft_msg_get_vallen(msg);
-        enum ft_msg_type typ = ft_msg_get_type(msg);
-        MSN msn = ft_msg_get_msn(msg);
-        XIDS xids = ft_msg_get_xids(msg);
-        printf("    msn=%" PRIu64 " (0x%" PRIx64 ") ", msn.msn, msn.msn);
-        printf("    TYPE=");
-        switch ((enum ft_msg_type)typ) {
- 	case FT_KUPSERT_BROADCAST_ALL: printf("KUPSERT"); goto ok;
-        case FT_NONE: printf("NONE"); goto ok;
-        case FT_INSERT: printf("INSERT"); goto ok;
-        case FT_UNBOUND_INSERT: printf("UNBOUND INSERT"); goto ok;
-	case FT_INSERT_NO_OVERWRITE: printf("INSERT_NO_OVERWRITE"); goto ok;
-        case FT_DELETE_ANY: printf("DELETE_ANY"); goto ok;
-        case FT_ABORT_ANY: printf("ABORT_ANY"); goto ok;
-                                 case FT_COMMIT_ANY: printf("COMMIT_ANY"); goto ok;
-                                 case FT_COMMIT_BROADCAST_ALL: printf("COMMIT_BROADCAST_ALL"); goto ok;
-                                 case FT_COMMIT_BROADCAST_TXN: printf("COMMIT_BROADCAST_TXN"); goto ok;
-                                 case FT_ABORT_BROADCAST_TXN: printf("ABORT_BROADCAST_TXN"); goto ok;
-                                 case FT_OPTIMIZE: printf("OPTIMIZE"); goto ok;
-                                 case FT_OPTIMIZE_FOR_UPGRADE: printf("OPTIMIZE_FOR_UPGRADE"); goto ok;
-                                 case FT_UPDATE:   printf("UPDATE"); goto ok;
-                                 case FT_UPDATE_BROADCAST_ALL: 
-                                 printf("UPDATE_BROADCAST_ALL"); goto ok;
-                                 case FT_DELETE_MULTICAST:
-                                 printf("DELETE_MULTICAST"); goto ok;
-                                 case FT_COMMIT_MULTICAST_TXN:
-                                 printf("COMMIT_MULTICAST_TXN"); goto ok;
-                                 case FT_COMMIT_MULTICAST_ALL:
-                                 printf("COMMIT MULTICAST_ALL"); goto ok;
-                                 case FT_ABORT_MULTICAST_TXN:
-                                 printf("ABORT_BROADCAST_ALL"); goto ok;
-                                 }
-                                 printf("HUH?");
-                             ok:
-                                 printf(" xid=");
-                                 xids_fprintf(stdout, xids);
-                                 printf(" ");
-                                 print_item(key, keylen);
-                                 if (datalen>0) {
-                                     printf(" ");
-                                     print_item(data, datalen);
-                                 }
-                                 printf("\n");
-                                return 0; 
-
+static int dump_nonleaf(FT_MSG msg, bool UU(is_fresh), void * UU(args))
+{
+    void *key = ft_msg_get_key(msg);
+    uint32_t keylen = ft_msg_get_keylen(msg);
+    void *data = ft_msg_get_val(msg);
+    uint32_t datalen = ft_msg_get_vallen(msg);
+    enum ft_msg_type typ = ft_msg_get_type(msg);
+    MSN msn = ft_msg_get_msn(msg);
+    XIDS xids = ft_msg_get_xids(msg);
+    printf("    msn=%" PRIu64 " (0x%" PRIx64 ") ", msn.msn, msn.msn);
+    printf("    TYPE=");
+    switch ((enum ft_msg_type)typ) {
+    case FT_NONE: printf("NONE"); break;
+    case FT_INSERT: printf("INSERT"); break;
+    case FT_UNBOUND_INSERT: printf("UNBOUND INSERT"); break;
+    case FT_INSERT_NO_OVERWRITE: printf("INSERT_NO_OVERWRITE"); break;
+    case FT_DELETE_ANY: printf("DELETE_ANY"); break;
+    case FT_ABORT_ANY: printf("ABORT_ANY"); break;
+    case FT_COMMIT_ANY: printf("COMMIT_ANY"); break;
+    case FT_COMMIT_BROADCAST_ALL: printf("COMMIT_BROADCAST_ALL"); break;
+    case FT_COMMIT_BROADCAST_TXN: printf("COMMIT_BROADCAST_TXN"); break;
+    case FT_ABORT_BROADCAST_TXN: printf("ABORT_BROADCAST_TXN"); break;
+    case FT_SMART_PIVOT: print("SMART_PIVOT"); break;
+    case FT_OPTIMIZE: printf("OPTIMIZE"); break;
+    case FT_OPTIMIZE_FOR_UPGRADE: printf("OPTIMIZE_FOR_UPGRADE"); break;
+    case FT_UPDATE: printf("UPDATE"); break;
+    case FT_UPDATE_BROADCAST_ALL: printf("UPDATE_BROADCAST_ALL"); break;
+    case FT_DELETE_MULTICAST: printf("DELETE_MULTICAST"); break;
+    case FT_COMMIT_MULTICAST_TXN: printf("COMMIT_MULTICAST_TXN"); break;
+    case FT_COMMIT_MULTICAST_ALL: printf("COMMIT MULTICAST_ALL"); break;
+    case FT_ABORT_MULTICAST_TXN: printf("ABORT_BROADCAST_ALL"); break;
+    default: printf("HUH?");
+    }
+    printf(" xid=");
+    xids_fprintf(stdout, xids);
+    printf(" ");
+    print_item(key, keylen);
+    if (datalen > 0) {
+        printf(" ");
+        print_item(data, datalen);
+    }
+    printf("\n");
+    return 0;
 }
+
 static void
 dump_node (int f, BLOCKNUM blocknum, FT h) {
     FTNODE n;

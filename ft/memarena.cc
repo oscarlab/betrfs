@@ -94,40 +94,32 @@ PATENT RIGHTS GRANT:
 
 #include "memarena.h"
 
-struct memarena {
+struct memarena_entry {
     char *buf;
-    size_t buf_used, buf_size;
+    size_t buf_size;
+};
+
+struct memarena {
+    struct memarena_entry entry;
+    size_t buf_used;
     size_t size_of_other_bufs; // the buf_size of all the other bufs.
-    char **other_bufs;
+    struct memarena_entry *other_entries;
     int n_other_bufs;
 };
 
 MEMARENA memarena_create_presized (size_t initial_size) {
     MEMARENA XMALLOC(result);
-    result->buf_size = initial_size;
+    result->entry.buf_size = initial_size;
     result->buf_used = 0;
-    result->other_bufs = NULL;
+    result->other_entries = NULL;
     result->size_of_other_bufs = 0;
     result->n_other_bufs = 0;
-    XMALLOC_N(result->buf_size, result->buf);
+    result->entry.buf = (char *) sb_malloc_sized(initial_size, true);
     return result;
 }
 
 MEMARENA memarena_create (void) {
     return memarena_create_presized(1024);
-}
-
-void memarena_clear (MEMARENA ma) {
-    // Free the other bufs.
-    int i;
-    for (i=0; i<ma->n_other_bufs; i++) {
-        toku_free(ma->other_bufs[i]);
-        ma->other_bufs[i]=0;
-    }
-    ma->n_other_bufs=0;
-    // But reuse the main buffer
-    ma->buf_used = 0;
-    ma->size_of_other_bufs = 0;
 }
 
 static size_t
@@ -141,29 +133,32 @@ round_to_page (size_t size) {
 }
 
 void* malloc_in_memarena (MEMARENA ma, size_t size) {
-    if (ma->buf_size < ma->buf_used + size) {
+    if (ma->entry.buf_size < ma->buf_used + size) {
         // The existing block isn't big enough.
         // Add the block to the vector of blocks.
-        if (ma->buf) {
+        if (ma->entry.buf) {
             int old_n = ma->n_other_bufs;
-            REALLOC_N(old_n+1, ma->other_bufs);
-            assert(ma->other_bufs);
-            ma->other_bufs[old_n]=ma->buf;
+            // XXX: This could be smarter, like pre-allocating a likely size,
+            // or incrementing by more than one entry
+            REALLOC_N(old_n+1, old_n, ma->other_entries);
+            assert(ma->other_entries);
+            ma->other_entries[old_n].buf=ma->entry.buf;
+            ma->other_entries[old_n].buf_size=ma->entry.buf_size;
             ma->n_other_bufs = old_n+1;
-            ma->size_of_other_bufs += ma->buf_size;
+            ma->size_of_other_bufs += ma->entry.buf_size;
         }
         // Make a new one
         {
-            size_t new_size = 2*ma->buf_size;
+            size_t new_size = 2*ma->entry.buf_size;
             if (new_size<size) new_size=size;
             new_size=round_to_page(new_size); // at least size, but round to the next page size
-            XMALLOC_N(new_size, ma->buf);
+            ma->entry.buf = (char *) sb_malloc_sized(new_size, true);
             ma->buf_used = 0;
-            ma->buf_size = new_size;
+            ma->entry.buf_size = new_size;
         }
     }
     // allocate in the existing block.
-    char *result=ma->buf+ma->buf_used;
+    char *result=ma->entry.buf+ma->buf_used;
     ma->buf_used+=size;
     return result;
 }
@@ -176,16 +171,18 @@ void *memarena_memdup (MEMARENA ma, const void *v, size_t len) {
 
 void memarena_close(MEMARENA *map) {
     MEMARENA ma=*map;
-    if (ma->buf) {
-        toku_free(ma->buf);
-        ma->buf=0;
+    if (ma->entry.buf) {
+        size_t buf_size = ma->entry.buf_size;
+        sb_free_sized(ma->entry.buf, buf_size);
+        ma->entry.buf=0;
     }
     int i;
     for (i=0; i<ma->n_other_bufs; i++) {
-        toku_free(ma->other_bufs[i]);
+        size_t buf_size = ma->other_entries[i].buf_size;
+        sb_free_sized(ma->other_entries[i].buf, buf_size);
     }
-    if (ma->other_bufs) toku_free(ma->other_bufs);
-    ma->other_bufs=0;
+    if (ma->other_entries) toku_free(ma->other_entries);
+    ma->other_entries=0;
     ma->n_other_bufs=0;
     toku_free(ma);
     *map = 0;
@@ -198,10 +195,10 @@ void memarena_close(MEMARENA *map) {
 
 void memarena_move_buffers(MEMARENA dest, MEMARENA source) {
     int i;
-    char **other_bufs = dest->other_bufs;
+    struct memarena_entry *other_bufs = dest->other_entries;
     static int move_counter = 0;
     move_counter++;
-    REALLOC_N(dest->n_other_bufs + source->n_other_bufs + 1, other_bufs);
+    REALLOC_N(dest->n_other_bufs + source->n_other_bufs + 1, dest->n_other_bufs, other_bufs);
 #if TOKU_WINDOWS_32
     if (other_bufs == 0) {
         char **new_other_bufs;
@@ -216,20 +213,22 @@ void memarena_move_buffers(MEMARENA dest, MEMARENA source) {
     }
 #endif
 
-    dest  ->size_of_other_bufs += source->size_of_other_bufs + source->buf_size;
+    dest  ->size_of_other_bufs += source->size_of_other_bufs + source->entry.buf_size;
     source->size_of_other_bufs = 0;
 
     assert(other_bufs);
-    dest->other_bufs = other_bufs;
+    dest->other_entries = other_bufs;
     for (i=0; i<source->n_other_bufs; i++) {
-        dest->other_bufs[dest->n_other_bufs++] = source->other_bufs[i];
+        dest->other_entries[dest->n_other_bufs].buf = source->other_entries[i].buf;
+        dest->other_entries[dest->n_other_bufs++].buf_size = source->other_entries[i].buf_size;
     }
-    dest->other_bufs[dest->n_other_bufs++] = source->buf;
+    dest->other_entries[dest->n_other_bufs].buf = source->entry.buf;
+    dest->other_entries[dest->n_other_bufs++].buf_size = source->entry.buf_size;
     source->n_other_bufs = 0;
-    toku_free(source->other_bufs);
-    source->other_bufs = 0;
-    source->buf = 0;
-    source->buf_size = 0;
+    toku_free(source->other_entries);
+    source->other_entries = 0;
+    source->entry.buf = 0;
+    source->entry.buf_size = 0;
     source->buf_used = 0;
 
 }
@@ -239,11 +238,11 @@ memarena_total_memory_size (MEMARENA m)
 {
     return (memarena_total_size_in_use(m) +
             sizeof(*m) +
-            m->n_other_bufs * sizeof(*m->other_bufs));
+            m->n_other_bufs * sizeof(*m->other_entries));
 }
 
 size_t
 memarena_total_size_in_use (MEMARENA m)
 {
     return m->size_of_other_bufs + m->buf_used;
-}    
+}

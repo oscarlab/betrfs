@@ -99,13 +99,12 @@ int test_log2(void){
 //test_main (int argc __attribute__((__unused__)),
 //	  const char *argv[] __attribute__((__unused__))) {
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU);    assert(r==0);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);    assert(r==0);
     TOKULOGGER logger;
     r = toku_logger_create(&logger);
     assert(r == 0);
     r = toku_logger_close(&logger);
     assert(r == 0);
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);    assert(r==0);
     return 0;
 }

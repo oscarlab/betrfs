@@ -187,7 +187,7 @@ struct cli_args {
     int range_query_limit; // how many rows to look at for range queries
     bool serial_insert;
     bool interleave; // for insert benchmarks, whether to interleave separate threads' puts (or segregate them)
-    bool crash_on_operation_failure; 
+    bool crash_on_operation_failure;
     bool print_performance;
     bool print_thread_performance;
     bool print_iteration_performance;
@@ -678,11 +678,11 @@ scan_cb(const DBT *key, const DBT *val, void *arg_v) {
 }
 
 static int scan_op_and_maybe_check_sum(
-    DB* db, 
-    DB_TXN *txn, 
-    struct scan_op_extra* sce, 
+    DB* db,
+    DB_TXN *txn,
+    struct scan_op_extra* sce,
     bool check_sum
-    ) 
+    )
 {
     int r = 0;
     DBC* cursor = nullptr;
@@ -737,7 +737,7 @@ static int generate_row_for_put(
     invariant(src_key->size >= sizeof(unsigned int));
 
     // Consistent pseudo random source.  Use checksum of key and val, and which db as seed
-    
+
 /*
     struct x1764 l;
     x1764_init(&l);
@@ -775,12 +775,12 @@ static int generate_row_for_put(
         invariant(dest_val->flags == DB_DBT_REALLOC);
 
         if (dest_key->ulen < src_key->size) {
-            dest_key->data = toku_xrealloc(dest_key->data, src_key->size);
+            dest_key->data = toku_xrealloc(dest_key->data, dest_key->size, src_key->size);
             dest_key->ulen = src_key->size;
         }
         dest_key->size = src_key->size;
         if (dest_val->ulen < src_val->size) {
-            dest_val->data = toku_xrealloc(dest_val->data, src_val->size);
+            dest_val->data = toku_xrealloc(dest_val->data, dest_key->size, src_val->size);
             dest_val->ulen = src_val->size;
         }
         dest_val->size = src_val->size;
@@ -1204,11 +1204,11 @@ static int UU() ptquery_and_maybe_check_op(DB* db, DB_TXN *txn, ARG arg, bool ch
     fill_key_buf_random(arg->random_data, keybuf, arg);
 
     r = db->getf_set(
-        db, 
-        txn, 
-        0, 
-        &key, 
-        dbt_do_nothing, 
+        db,
+        txn,
+        0,
+        &key,
+        dbt_do_nothing,
         nullptr
         );
     if (check) {
@@ -1661,7 +1661,15 @@ static int UU() hot_op(DB_TXN *UU(txn), ARG UU(arg), void* UU(operation_extra), 
 
 static void
 get_ith_table_name(char *buf, size_t len, int i) {
-    snprintf(buf, len, "main%d", i);
+    const char *dbname[5];
+    assert(i <= 4);
+    dbname[0] = TOKU_TEST_DATA_DB_NAME;
+    dbname[1] = TOKU_TEST_META_DB_NAME;
+    dbname[2] = TOKU_TEST_ONE_DB_NAME;
+    dbname[3] = TOKU_TEST_TWO_DB_NAME;
+    dbname[4] = TOKU_TEST_THREE_DB_NAME;
+    assert(len >= strlen(dbname[i]) + 1);
+    memcpy(buf, dbname[i], strlen(dbname[i]) + 1);
 }
 
 static DB_TXN * const null_txn = 0;
@@ -1975,11 +1983,11 @@ static int create_tables(DB_ENV **env_res, DB **db_res, int num_DBs,
 ) {
     int r;
     struct env_args env_args = cli_args->env_args;
-    toku_os_recursive_delete(env_args.envdir);
+    r = toku_fs_reset(env_args.envdir, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
+    assert(r==0);
     struct toku_db_key_operations key_ops;
     memset(&key_ops, 0, sizeof(key_ops));
     key_ops.keycmp = bt_compare;
-    r = toku_os_mkdir(env_args.envdir, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
 
     DB_ENV *env;
     db_env_set_num_bucket_mutexes(env_args.num_bucket_mutexes);
@@ -1990,15 +1998,15 @@ static int create_tables(DB_ENV **env_res, DB **db_res, int num_DBs,
     r = env->set_cachesize(env, env_args.cachetable_size / (1 << 30), env_args.cachetable_size % (1 << 30), 1); CKERR(r);
     r = env->set_lg_bsize(env, env_args.rollback_node_size); CKERR(r);
     if (env_args.generate_put_callback) {
-        r = env->set_generate_row_callback_for_put(env, env_args.generate_put_callback); 
+        r = env->set_generate_row_callback_for_put(env, env_args.generate_put_callback);
         CKERR(r);
     }
     else {
-        r = env->set_generate_row_callback_for_put(env, generate_row_for_put); 
+        r = env->set_generate_row_callback_for_put(env, generate_row_for_put);
         CKERR(r);
     }
     if (env_args.generate_del_callback) {
-        r = env->set_generate_row_callback_for_del(env, env_args.generate_del_callback); 
+        r = env->set_generate_row_callback_for_del(env, env_args.generate_del_callback);
         CKERR(r);
     }
     int env_flags = get_env_open_flags(cli_args);
@@ -2080,7 +2088,7 @@ static void fill_single_table(DB_ENV *env, DB *db, struct cli_args *args, bool f
         uint32_t dbt_flags = 0;
         r = env->create_loader(env, txn, &loader, db, 1, &db, &db_flags, &dbt_flags, 0); CKERR(r);
     }
-    #endif 
+    #endif
     for (int i = 0; i < args->num_elements; i++) {
         fill_key_buf(i, keybuf, args);
 
@@ -2305,7 +2313,7 @@ static struct cli_args UU() get_default_args(void) {
         .disperse_keys = false,
         .direct_io = false,
         };
-    DEFAULT_ARGS.env_args.envdir = TOKU_TEST_FILENAME;
+    DEFAULT_ARGS.env_args.envdir = TOKU_TEST_ENV_DIR_NAME;
     return DEFAULT_ARGS;
 }
 
@@ -2313,7 +2321,7 @@ static struct cli_args UU() get_default_args_for_perf(void) {
     struct cli_args args = get_default_args();
     args.num_elements = 1000000; //default of 1M
     args.env_args = DEFAULT_PERF_ENV_ARGS;
-    args.env_args.envdir = TOKU_TEST_FILENAME;
+    args.env_args.envdir = TOKU_TEST_ENV_DIR_NAME;
     return args;
 }
 
@@ -2770,7 +2778,7 @@ static inline void parse_stress_test_args (struct cli_args *args) {
         exit(EINVAL);
     }
 }
-#endif 
+#endif
 static void
 stress_table(DB_ENV *, DB **, struct cli_args *);
 

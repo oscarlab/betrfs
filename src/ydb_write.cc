@@ -94,6 +94,7 @@ PATENT RIGHTS GRANT:
 #include "indexer.h"
 #include <ft/log_header.h>
 #include <ft/checkpoint.h>
+#include <ft/ft-ops.h>
 #include "ydb_row_lock.h"
 #include "ydb_write.h"
 #include "ydb_db.h"
@@ -209,63 +210,10 @@ db_put_check_overwrite_constraint(DB *db, DB_TXN *txn, DBT *key,
     return r;
 }
 
-
-
-int 
-toku_db_rename(DB *db, DB_TXN * txn, DBT * min_key, DBT * max_key, DBT * old_prefix, DBT * new_prefix, uint32_t flags, bool holds_mo_lock) {
-    HANDLE_PANICKED_DB(db);
-    HANDLE_DB_ILLEGAL_WORKING_PARENT_TXN(db, txn);
-    HANDLE_READ_ONLY_TXN(txn);
-
-    uint32_t unchecked_flags = flags;
-    uint32_t lock_flags = get_prelocked_flags(flags);
-    unchecked_flags &= ~lock_flags;
-    bool do_locking = (bool)(db->i->lt && !(lock_flags&DB_PRELOCKED_WRITE));
-    int r;
-
-    if (unchecked_flags != 0)
-        return EINVAL;
-
-    // get new min and max keys
-    DBT new_min_key, new_max_key;
-
-    toku_init_dbt(&new_min_key);
-    r = toku_ft_transform_prefix(&db->dbenv->i->key_ops,
-                                 old_prefix, new_prefix, min_key, &new_min_key);
-    if (r)
-        return r;
-    toku_init_dbt(&new_max_key);
-    r = toku_ft_transform_prefix(&db->dbenv->i->key_ops,
-                                 old_prefix, new_prefix, max_key, &new_max_key);
-    if (r) {
-        toku_destroy_dbt(&new_min_key);
-        return r;
-    }
-
-    if (do_locking) {
-        //Do locking if necessary.
-        r = toku_db_get_range_lock(db, txn, min_key, max_key, toku::lock_request::type::WRITE);
-        if (r) return r;
-        r = toku_db_get_range_lock(db, txn, &new_min_key, &new_max_key, toku::lock_request::type::WRITE);
-        if (r) return r;
-    }
-
-    //Do the actual deleting.
-    if (!holds_mo_lock) toku_multi_operation_client_lock();
-    toku_ft_rename(db->i->ft_handle, min_key, max_key,
-                   &new_min_key, &new_max_key, old_prefix, new_prefix,
-                   txn ? db_txn_struct_i(txn)->tokutxn : 0);
-    if (!holds_mo_lock) toku_multi_operation_client_unlock();
-
-    toku_destroy_dbt(&new_max_key);
-    toku_destroy_dbt(&new_min_key);
-
-    // return r;
-    return 0;
-}
-
-int 
-toku_db_del_multicast(DB *db, DB_TXN * txn, DBT * min_key, DBT * max_key, bool is_right_excl, uint32_t flags, bool holds_mo_lock) {
+int
+toku_db_del_multicast(DB *db, DB_TXN *txn, DBT *min_key, DBT *max_key,
+                      bool is_right_excl, uint32_t flags, bool holds_mo_lock)
+{
     HANDLE_PANICKED_DB(db);
     HANDLE_DB_ILLEGAL_WORKING_PARENT_TXN(db, txn);
     HANDLE_READ_ONLY_TXN(txn);
@@ -275,33 +223,139 @@ toku_db_del_multicast(DB *db, DB_TXN * txn, DBT * min_key, DBT * max_key, bool i
     unchecked_flags &= ~DB_DELETE_ANY;
     uint32_t lock_flags = get_prelocked_flags(flags);
     unchecked_flags &= ~lock_flags;
-    bool do_locking = (bool)(db->i->lt && !(lock_flags&DB_PRELOCKED_WRITE));
+    bool do_locking = (bool)(db->i->lt && !(lock_flags & DB_PRELOCKED_WRITE));
 
     int r = 0;
-    if (unchecked_flags!=0) {
+    if (unchecked_flags != 0) {
         r = EINVAL;
     }
-    
+
     if (r == 0 && do_locking) {
         //Do locking if necessary.
-        r = toku_db_get_range_lock(db, txn, min_key, max_key, toku::lock_request::type::WRITE);
+        r = toku_db_get_range_lock(db, txn, min_key, max_key,
+                                   toku::lock_request::type::WRITE);
     }
     if (r == 0) {
         //Do the actual deleting.
-        if (!holds_mo_lock) toku_multi_operation_client_lock();
-        toku_ft_delete_multicast(db->i->ft_handle, min_key, max_key, is_right_excl, PM_UNCOMMITTED, txn ? db_txn_struct_i(txn)->tokutxn : 0);
-        if (!holds_mo_lock) toku_multi_operation_client_unlock();
+        if (!holds_mo_lock)
+            toku_multi_operation_client_lock();
+        toku_ft_delete_multicast(db->i->ft_handle, min_key, max_key,
+                                 is_right_excl, PM_UNCOMMITTED,
+                                 txn ? db_txn_struct_i(txn)->tokutxn : 0);
+        if (!holds_mo_lock)
+            toku_multi_operation_client_unlock();
     }
 
     if (r == 0) {
-        STATUS_VALUE(YDB_LAYER_NUM_DELETES)++;  // accountability 
+        // accountability
+        STATUS_VALUE(YDB_LAYER_NUM_DELETES)++;
+    } else {
+        // accountability
+        STATUS_VALUE(YDB_LAYER_NUM_DELETES_FAIL)++;
     }
-    else {
-        STATUS_VALUE(YDB_LAYER_NUM_DELETES_FAIL)++;  // accountability 
-    }
+
     return r;
 }
-            
+
+int
+toku_db_rd(DB *db, DB_TXN *txn, DBT *min_key, DBT *max_key, uint32_t flags,
+           bool holds_mo_lock)
+{
+    HANDLE_PANICKED_DB(db);
+    HANDLE_DB_ILLEGAL_WORKING_PARENT_TXN(db, txn);
+    HANDLE_READ_ONLY_TXN(txn);
+    uint32_t lock_flags = get_prelocked_flags(flags);
+    bool do_locking = (bool)(db->i->lt && !(lock_flags & DB_PRELOCKED_WRITE));
+    int r;
+
+    if (flags != 0) {
+        r = EINVAL;
+        goto out;
+    }
+
+    r = 0;
+    if (do_locking) {
+        //Do locking if necessary.
+        r = toku_db_get_range_lock(db, txn, min_key, max_key,
+                                   toku::lock_request::type::WRITE);
+        if (r) {
+            goto out;
+        }
+    }
+    if (!holds_mo_lock)
+        toku_multi_operation_client_lock();
+    toku_ft_rd(db->i->ft_handle, min_key, max_key,
+               txn ? db_txn_struct_i(txn)->tokutxn : 0);
+    if (!holds_mo_lock)
+        toku_multi_operation_client_unlock();
+out:
+    return r;
+}
+
+int
+toku_db_clone(DB *db, DB_TXN *txn, DBT *min_key, DBT *max_key,
+              DBT *old_prefix, DBT *new_prefix, uint32_t flags,
+              bool holds_mo_lock)
+{
+    HANDLE_PANICKED_DB(db);
+    HANDLE_DB_ILLEGAL_WORKING_PARENT_TXN(db, txn);
+    HANDLE_READ_ONLY_TXN(txn);
+
+    bool delete_old = (bool)(flags & DB_CLONE_DELETE_OLD);
+    uint32_t unchecked_flags = flags & (~DB_CLONE_DELETE_OLD);
+    uint32_t lock_flags = get_prelocked_flags(flags);
+    unchecked_flags &= ~lock_flags;
+    bool do_locking = (bool)(db->i->lt && !(lock_flags & DB_PRELOCKED_WRITE));
+    int r;
+
+    if (unchecked_flags != 0) {
+        r = EINVAL;
+        goto out;
+    }
+
+    // get new min and max keys
+    DBT new_min_key, new_max_key;
+
+    toku_init_dbt(&new_min_key);
+    r = toku_ft_transform_prefix(db->i->ft_handle->ft,
+                                 old_prefix, new_prefix, min_key, &new_min_key);
+    if (r)
+        goto out;
+    toku_init_dbt(&new_max_key);
+    r = toku_ft_transform_prefix(db->i->ft_handle->ft,
+                                 old_prefix, new_prefix, max_key, &new_max_key);
+    if (r)
+        goto free_min_out;
+
+    if (do_locking) {
+        //Do locking if necessary.
+        r = toku_db_get_range_lock(db, txn, min_key, max_key,
+                                   toku::lock_request::type::WRITE);
+        if (r)
+            goto free_out;
+        r = toku_db_get_range_lock(db, txn, &new_min_key, &new_max_key,
+                                   toku::lock_request::type::WRITE);
+        if (r)
+            goto free_out;
+    }
+
+    //Do the actual clone.
+    if (!holds_mo_lock)
+        toku_multi_operation_client_lock();
+    toku_ft_clone(db->i->ft_handle, min_key, max_key,
+                  &new_min_key, &new_max_key, old_prefix, new_prefix,
+                  delete_old, txn ? db_txn_struct_i(txn)->tokutxn : 0);
+    if (!holds_mo_lock)
+        toku_multi_operation_client_unlock();
+
+free_out:
+    toku_destroy_dbt(&new_max_key);
+free_min_out:
+    toku_destroy_dbt(&new_min_key);
+out:
+    return r;
+}
+
 int
 toku_db_del(DB *db, DB_TXN *txn, DBT *key, uint32_t flags, bool holds_mo_lock) {
     HANDLE_PANICKED_DB(db);
@@ -1192,7 +1246,7 @@ cleanup:
     return r;
 }
 
-int 
+int
 autotxn_db_del(DB* db, DB_TXN* txn, DBT* key, uint32_t flags) {
     bool changed; int r;
     r = toku_db_construct_autotxn(db, &txn, &changed, false);
@@ -1201,12 +1255,40 @@ autotxn_db_del(DB* db, DB_TXN* txn, DBT* key, uint32_t flags) {
     return toku_db_destruct_autotxn(txn, r, changed);
 }
 
-int 
+int
 autotxn_db_del_multi(DB* db, DB_TXN* txn, DBT* min_key, DBT* max_key, bool is_right_excl, uint32_t flags) {
     bool changed; int r;
     r = toku_db_construct_autotxn(db, &txn, &changed, false);
     if (r!=0) return r;
     r = toku_db_del_multicast(db, txn, min_key, max_key, is_right_excl, flags, false);
+    return toku_db_destruct_autotxn(txn, r, changed);
+}
+
+int
+autotxn_db_rd(DB *db, DB_TXN *txn, DBT *min_key, DBT *max_key, uint32_t flags)
+{
+    bool changed;
+    int r;
+    r = toku_db_construct_autotxn(db, &txn, &changed, false);
+    if (r) {
+        return r;
+    }
+    r = toku_db_rd(db, txn, min_key, max_key, flags, false);
+    return toku_db_destruct_autotxn(txn, r, changed);
+}
+
+int
+autotxn_db_clone(DB *db, DB_TXN *txn, DBT *min_key, DBT *max_key,
+                 DBT *old_prefix, DBT *new_prefix, uint32_t flags)
+{
+    bool changed;
+    int r;
+    r = toku_db_construct_autotxn(db, &txn, &changed, false);
+    if (r) {
+        return r;
+    }
+    r = toku_db_clone(db, txn, min_key, max_key, old_prefix, new_prefix,
+                      flags, false);
     return toku_db_destruct_autotxn(txn, r, changed);
 }
 
@@ -1228,15 +1310,6 @@ do_autotxn_db_put(DB* db, DB_TXN* txn, DBT* key, DBT* data, uint32_t flags, bool
     r = toku_db_destruct_autotxn(txn, r, changed);
 cleanup:
     return r;
-}
-
-int 
-autotxn_db_rename (DB *db, DB_TXN * txn, DBT * min_key, DBT * max_key, DBT * old_prefix, DBT * new_prefix, uint32_t flags) {
-    bool changed; int r;
-    r = toku_db_construct_autotxn(db, &txn, &changed, false);
-    if (r!=0) return r;
-    r = toku_db_rename(db, txn, min_key, max_key, old_prefix, new_prefix, flags, false);
-    return toku_db_destruct_autotxn(txn, r, changed);
 }
 
 int

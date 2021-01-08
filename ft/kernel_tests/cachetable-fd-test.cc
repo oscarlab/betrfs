@@ -99,19 +99,16 @@ cachetable_fd_test (void) {
     int r;
     CACHETABLE ct;
     toku_cachetable_create(&ct, test_limit, ZERO_LSN, NULL_LOGGER);
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);
     assert_zero(r);
-    char fname1[TOKU_PATH_MAX+1];
-    unlink(toku_path_join(fname1, 2, TOKU_TEST_FILENAME, "test1.dat"));
+    const char *fname1 = TOKU_TEST_FILENAME_DATA;
     CACHEFILE cf;
     r = toku_cachetable_openf(&cf, ct, fname1, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO); assert(r == 0);
 
     int fd1 = toku_cachefile_get_fd(cf); assert(fd1 >= 0);
 
     // test set to good fd succeeds
-    char fname2[TOKU_PATH_MAX+1];
-    unlink(toku_path_join(fname2, 2, TOKU_TEST_FILENAME, "test2.dat"));
+    const char *fname2 = TOKU_TEST_FILENAME_META;
     int fd2 = open(fname2, O_RDWR | O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO);
     assert(fd2 >= 0 && fd1 != fd2);
     struct fileid id;

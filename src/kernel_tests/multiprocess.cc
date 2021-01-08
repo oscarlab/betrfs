@@ -100,12 +100,10 @@ static inline size_t max(size_t a, size_t b) {
 static void
 test_env (const char *envdir0, const char *envdir1, int expect_open_return) {
     int r;
-    toku_os_recursive_delete(envdir0);
-    r = toku_os_mkdir(envdir0, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(envdir0, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
     if (strcmp(envdir0, envdir1) != 0) {
-        toku_os_recursive_delete(envdir1);
-        r = toku_os_mkdir(envdir1, S_IRWXU+S_IRWXG+S_IRWXO);
+        r = toku_fs_reset(envdir1, S_IRWXU+S_IRWXG+S_IRWXO);
         CKERR(r);
     }
     DB_ENV *env = NULL;
@@ -157,8 +155,7 @@ test_datadir (const char *envdir0, const char *datadir0, const char *envdir1, co
     //r = system(s);
     //CKERR(r);
 
-    toku_os_recursive_delete(envdir0);    
-    r = toku_os_mkdir(envdir0, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(envdir0, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
 
     //sprintf(s, "rm -rf %s", datadir0);
@@ -166,24 +163,21 @@ test_datadir (const char *envdir0, const char *datadir0, const char *envdir1, co
     //CKERR(r);
 
 
-    toku_os_recursive_delete(datadir0);    
-    r = toku_os_mkdir(datadir0, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(datadir0, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
     //sprintf(s, "rm -rf %s", envdir1);
     //r = system(s);
     //CKERR(r);
 
 
-    toku_os_recursive_delete(envdir1);    
-    r = toku_os_mkdir(envdir1, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(envdir1, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
 
     //sprintf(s, "rm -rf %s", datadir1);
     //r = system(s);
     //CKERR(r);
 
-    toku_os_recursive_delete(datadir1);    
-    r = toku_os_mkdir(datadir1, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(datadir1, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
 
     DB_ENV *env;
@@ -232,8 +226,7 @@ test_logdir (const char *envdir0, const char *datadir0, const char *envdir1, con
     //r = system(s);
     //CKERR(r);
 
-    toku_os_recursive_delete(envdir0);    
-    r = toku_os_mkdir(envdir0, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(envdir0, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
 
     //sprintf(s, "rm -rf %s", datadir0);
@@ -241,8 +234,7 @@ test_logdir (const char *envdir0, const char *datadir0, const char *envdir1, con
     //CKERR(r);
 
 
-    toku_os_recursive_delete(datadir0);    
-    r = toku_os_mkdir(datadir0, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(datadir0, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
 
     //sprintf(s, "rm -rf %s", envdir1);
@@ -250,8 +242,7 @@ test_logdir (const char *envdir0, const char *datadir0, const char *envdir1, con
     //CKERR(r);
 
 
-    toku_os_recursive_delete(envdir1);    
-    r = toku_os_mkdir(envdir1, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(envdir1, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
 
     //sprintf(s, "rm -rf %s", datadir1);
@@ -259,8 +250,7 @@ test_logdir (const char *envdir0, const char *datadir0, const char *envdir1, con
     //CKERR(r);
 
 
-    toku_os_recursive_delete(datadir1);    
-    r = toku_os_mkdir(datadir1, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(datadir1, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
 
     DB_ENV *env;
@@ -291,8 +281,7 @@ test_logdir (const char *envdir0, const char *datadir0, const char *envdir1, con
         CKERR2(r, expect_open_return);
 
         /* delele all generated file by this open */
-        toku_os_recursive_delete(envdir1);    
-        r = toku_os_mkdir(envdir1, S_IRWXU+S_IRWXG+S_IRWXO);
+        r = toku_fs_reset(envdir1, S_IRWXU+S_IRWXG+S_IRWXO);
         CKERR(r);
     }
 
@@ -318,8 +307,7 @@ int test_multiprocess(void) {
 
     pre_setup();
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    int r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU|S_IRWXG|S_IRWXO);
+    int r = toku_fs_reset(TOKU_TEST_FILENAME, S_IRWXU|S_IRWXG|S_IRWXO);
     assert_zero(r);
 
     char *env0 = (char *)toku_xmalloc((TOKU_PATH_MAX+1) * sizeof *env0);
@@ -327,8 +315,6 @@ int test_multiprocess(void) {
     toku_path_join(env0, 2, TOKU_TEST_FILENAME, "e0");
     toku_path_join(env1, 2, TOKU_TEST_FILENAME, "e1");
     test_env(env0, env1, 0);
-
-    DBG;
 
     test_env(env0, env0, EEXIST); /* Minus error code */
     char cwd[2] = "/";

@@ -232,15 +232,7 @@ walk_tree(const char * logdir, const char *fname, int n) {
 }
 
 static void
-init_logdir(const char *logdir) {
-    toku_os_recursive_delete(logdir);
-    int error = toku_os_mkdir(logdir, 0777);
-    assert(error == 0);
-}
-
-static void
 run_test(const char *logdir, const char *ftfile, int n) {
-    init_logdir(logdir);
 
     create_populate_tree(logdir, ftfile, n);
     walk_tree(logdir, ftfile, n);
@@ -254,15 +246,15 @@ test_le_cursor_walk (void) {
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    int r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU);
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);
     assert_zero(r);
 
-    char logdir[TOKU_PATH_MAX+1];
-    toku_path_join(logdir, 2, TOKU_TEST_FILENAME, "logdir");
+    const char* logdir = TOKU_TEST_ENV_DIR_NAME;
+    run_test(logdir, TOKU_TEST_FILENAME_DATA, 0);
 
-    run_test(logdir, "ftfile", 0);
-    run_test(logdir, "ftfile", 1000);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);
+    assert_zero(r);
+    run_test(logdir, TOKU_TEST_FILENAME_DATA, 1000);
 
     toku_ft_layer_destroy();
     #ifdef __SUPPORT_DIRECT_IO

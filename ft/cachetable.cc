@@ -88,15 +88,6 @@ PATENT RIGHTS GRANT:
 
 #ident "Copyright (c) 2007-2013 Tokutek Inc.  All rights reserved."
 #ident "The technology is licensed by the Massachusetts Institute of Technology, Rutgers State University of New Jersey, and the Research Foundation of State University of New York at Stony Brook under United States of America Serial No. 11/760379 and to the patents and/or patent applications resulting from it."
-//#define PROFILE_EVICTOR 1
-//#define DEBUG_CHECKPOINTER 1
-// To use KERN_INFO
-#ifdef DEBUG_CHECKPOINTER
-
-#  define KERN_SOH  "\001"
-#  define KERN_ALERT KERN_SOH "1"
-   extern "C" int printk(const char *fmt, ...);
-#endif
 
 #include <toku_portability.h>
 #include <stdlib.h>
@@ -107,6 +98,7 @@ PATENT RIGHTS GRANT:
 #include <ft/log_header.h>
 #include "checkpoint.h"
 #include "log-internal.h"
+#include "logsuperblock.h"
 #include "cachetable-internal.h"
 #include <memory.h>
 #include <toku_race_tools.h>
@@ -159,7 +151,7 @@ status_init(void) {
     STATUS_INIT(CT_CLEANER_EXECUTIONS,     CACHETABLE_CLEANER_EXECUTIONS, UINT64, "cleaner executions", TOKU_ENGINE_STATUS|TOKU_GLOBAL_STATUS);
     STATUS_INIT(CT_CLEANER_PERIOD,         CACHETABLE_CLEANER_PERIOD, UINT64, "cleaner period", TOKU_ENGINE_STATUS|TOKU_GLOBAL_STATUS);
     STATUS_INIT(CT_CLEANER_ITERATIONS,     CACHETABLE_CLEANER_ITERATIONS, UINT64, "cleaner iterations", TOKU_ENGINE_STATUS|TOKU_GLOBAL_STATUS);
-    
+
     STATUS_INIT(CT_WAIT_PRESSURE_COUNT,    CACHETABLE_WAIT_PRESSURE_COUNT, UINT64, "number of waits on cache pressure", TOKU_ENGINE_STATUS|TOKU_GLOBAL_STATUS);
     STATUS_INIT(CT_WAIT_PRESSURE_TIME,    CACHETABLE_WAIT_PRESSURE_TIME, UINT64, "time waiting on cache pressure", TOKU_ENGINE_STATUS|TOKU_GLOBAL_STATUS);
     STATUS_INIT(CT_LONG_WAIT_PRESSURE_COUNT,    CACHETABLE_LONG_WAIT_PRESSURE_COUNT, UINT64, "number of long waits on cache pressure", TOKU_ENGINE_STATUS|TOKU_GLOBAL_STATUS);
@@ -274,6 +266,11 @@ void cachetable_rr_kibbutz_enq(CACHETABLE ct, void (*f)(void *), void *extra)
     toku_kibbutz_enq(ct->rr_kibbutz, f, extra);
 }
 
+void cachetable_rr_cf_kibbutz_enq(CACHEFILE cf, void (*f)(void *), void *extra)
+{
+    toku_kibbutz_enq(cf->cachetable->rr_kibbutz, f, extra);
+}
+
 // FIXME global with no toku prefix
 void cachefile_kibbutz_enq (CACHEFILE cf, void (*f)(void*), void *extra)
 // The function f must call remove_background_job_from_cf when it completes
@@ -326,16 +323,10 @@ uint32_t toku_get_cleaner_iterations (CACHETABLE ct) {
 uint32_t toku_get_cleaner_iterations_unlocked (CACHETABLE ct) {
     return ct->cl.get_iterations();
 }
-#ifdef PROFILE_EVICTOR
-static uint64_t cachetable_create_time;
-#endif
 // reserve 25% as "unreservable".  The loader cannot have it.
 #define unreservable_memory(size) ((size)/4)
 
 void toku_cachetable_create(CACHETABLE *result, long size_limit, LSN UU(initial_lsn), TOKULOGGER logger) {
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "toku_cachetable_create() size_limit: %ld\n", size_limit);
-#endif
     if (size_limit == 0) {
         size_limit = 128*1024*1024;
     }
@@ -349,16 +340,13 @@ void toku_cachetable_create(CACHETABLE *result, long size_limit, LSN UU(initial_
     ct->ct_kibbutz = toku_kibbutz_create_debug(2*num_processors, "toku_ct");
     int checkpointing_nworkers = (num_processors/4) ? num_processors/4 : 1;
     ct->checkpointing_kibbutz = toku_kibbutz_create_debug(checkpointing_nworkers, "toku_fckpt");
-    ct->rr_kibbutz = toku_kibbutz_create_debug(2, "toku_rr");
+    ct->rr_kibbutz = toku_kibbutz_create_debug(2 * num_processors, "toku_rr");
     // must be done after creating ct_kibbutz
     ct->ev.init(size_limit, &ct->list, &ct->cf_list, ct->ct_kibbutz, EVICTION_PERIOD);
     ct->cp.init(&ct->list, logger, &ct->ev, &ct->cf_list);
     ct->cl.init(1, &ct->list, ct); // by default, start with one iteration
     ct->env_dir = toku_xstrdup(".");
     *result = ct;
-#ifdef PROFILE_EVICTOR
-    cachetable_create_time = toku_current_time_microsec();
-#endif
 }
 
 // Returns a pointer to the checkpoint contained within
@@ -570,7 +558,11 @@ void toku_cachefile_close(CACHEFILE *cfp, bool oplsn_valid, LSN oplsn) {
         cf->close_userdata(cf, cf->fd, cf->userdata, oplsn_valid, oplsn);
     }
     // fsync and close the fd.
-    toku_file_fsync_without_accounting(cf->fd);
+    if (ftfs_is_hdd()) {
+        toku_file_fsync_without_accounting(cf->fd);
+    } else {
+        sb_sfs_dio_fsync(cf->fd);
+    }
     int r = close(cf->fd);
     assert(r == 0);
     cf->fd = -1;
@@ -584,13 +576,6 @@ void toku_cachefile_close(CACHEFILE *cfp, bool oplsn_valid, LSN oplsn) {
     // remove the cf from the list of active cachefiles
     ct->cf_list.remove_cf(cf);
 
-    // Unlink the file if the bit was set
-    if (cf->unlink_on_close) {
-        char *fname_in_cwd = toku_cachetable_get_fname_in_cwd(cf->cachetable, cf->fname_in_env);
-        r = unlink(fname_in_cwd);
-        assert_zero(r);
-        toku_free(fname_in_cwd);
-    }
     toku_free(cf->fname_in_env);
     cf->fname_in_env = NULL;
 
@@ -653,7 +638,7 @@ static void cachetable_free_pair(PAIR p) {
     void* disk_data = p->disk_data;
     void *write_extraargs = p->write_extraargs;
     PAIR_ATTR old_attr = p->attr;
-    
+
     cachetable_evictions++;
     PAIR_ATTR new_attr = p->attr;
     // Note that flush_callback is called with write_me false, so the only purpose of this 
@@ -663,7 +648,7 @@ static void cachetable_free_pair(PAIR p) {
     // for the first two parameters, as these may be invalid (#5171), so, we
     // pass in NULL and -1, dummy values
     flush_callback(NULL, -1, key, value, &disk_data, write_extraargs, old_attr, &new_attr, false, false, true, false);
-    
+
     ctpair_destroy(p);
 }
 
@@ -1265,6 +1250,68 @@ void toku_cachetable_put_with_dep_pairs(
         );
 }
 
+void *
+toku_cachetable_maybe_break_cow(
+    FT ft,
+    PAIR old_p,
+    CACHETABLE_PUT_CALLBACK put_callback
+    )
+{
+    BLOCKNUM new_b;
+    BLOCKNUM old_b = old_p->key;
+    CACHETABLE ct = ft->cf->cachetable;
+
+    if (!toku_blocknum_maybe_break_cow(ft->blocktable, old_b, &new_b, ft)) {
+        return NULL;
+    }
+    // now we have to break CoW
+    uint32_t new_h = toku_cachetable_hash(ft->cf, new_b);
+
+    // clone node (value)
+    void *new_v = NULL;
+    toku_ftnode_cow_clone((FTNODE)old_p->value_data, (FTNODE *)&new_v,
+                          new_b, new_h);
+    // inc refc of children
+    toku_ftnode_inc_child_refc(ft, (FTNODE)new_v);
+
+    {
+        // alloc pair
+        PAIR new_p;
+        XMALLOC(new_p);
+        memset(new_p, 0, sizeof(*new_p));
+        // init pair
+        PAIR_ATTR attr = make_ftnode_pair_attr((FTNODE)new_v);
+        pair_init(new_p, ft->cf, new_b, new_v, attr, CACHETABLE_DIRTY, new_h,
+                  get_write_callbacks_for_node(ft), &ct->ev, &ct->list);
+        pair_lock(new_p);
+        new_p->value_rwlock.write_lock(true);
+        cachetable_put_internal(ft->cf, new_p, new_v, attr, put_callback);
+        pair_unlock(new_p);
+    }
+
+    // we can release old_p now
+    {
+        PAIR_ATTR new_attr = make_ftnode_pair_attr((FTNODE)old_p->value_data);
+        pair_lock(old_p);
+        PAIR_ATTR old_attr = old_p->attr;
+        assert(old_p->value_rwlock.writers());
+        old_p->value_rwlock.write_unlock();
+        pair_unlock(old_p);
+        if (old_attr.size != new_attr.size) {
+            ct->ev.change_pair_attr(old_attr, new_attr);
+        }
+    }
+
+    if (ct->ev.should_client_thread_sleep()) {
+        ct->ev.wait_for_cache_pressure_to_subside();
+    }
+    if (ct->ev.should_client_wake_eviction_thread()) {
+        ct->ev.signal_eviction_thread();
+    }
+
+    return new_v;
+}
+
 void toku_cachetable_put(CACHEFILE cachefile, CACHEKEY key, uint32_t fullhash, void*value, PAIR_ATTR attr,
                         CACHETABLE_WRITE_CALLBACK write_callback,
                         CACHETABLE_PUT_CALLBACK put_callback
@@ -1560,8 +1607,8 @@ static bool try_pin_pair(
     pair_unlock(p);
 
     bool partial_fetch_required = pf_req_callback(p->value_data,read_extraargs);
-    
-    if (partial_fetch_required) {    
+
+    if (partial_fetch_required) {
         if (ct->ev.should_client_thread_sleep() && !already_slept) {
             pair_lock(p);
             unpin_pair(p, (lock_type == PL_READ));
@@ -1595,7 +1642,7 @@ static bool try_pin_pair(
             p->value_rwlock.write_lock(true);
             pair_unlock(p);
         }
-        
+
         partial_fetch_required = pf_req_callback(p->value_data,read_extraargs);
         if (partial_fetch_required) {
             do_partial_fetch(ct, cachefile, p, pf_callback, read_extraargs, true);
@@ -2116,7 +2163,7 @@ maybe_pin_pair(
 
     if (retval == TOKUDB_TRY_AGAIN) {
         unpin_pair(p, (lock_type == PL_READ));
-    }    
+    }
     else {
         // just a sanity check
         assert(retval == 0);
@@ -2143,9 +2190,9 @@ int toku_cachetable_get_and_pin_nonblocking_batched(
 {
     CACHETABLE ct = cf->cachetable;
     assert(lock_type == PL_READ ||
-        lock_type == PL_WRITE_CHEAP ||
-        lock_type == PL_WRITE_EXPENSIVE
-        );
+           lock_type == PL_WRITE_CHEAP ||
+           lock_type == PL_WRITE_EXPENSIVE
+           );
 try_again:
     ct->list.pair_lock_by_fullhash(fullhash);
     PAIR p = ct->list.find_pair(cf, key, fullhash);
@@ -2156,8 +2203,8 @@ try_again:
         ct->list.pair_lock_by_fullhash(fullhash);
         p = ct->list.find_pair(cf, key, fullhash);
         if (p != NULL) {
-            // we just did another search with the write list lock and 
-            // found the pair this means that in between our 
+            // we just did another search with the write list lock and
+            // found the pair this means that in between our
             // releasing the read list lock and grabbing the write list lock,
             // another thread snuck in and inserted the PAIR into
             // the cachetable. For simplicity, we just return
@@ -2190,8 +2237,7 @@ try_again:
         ct->list.write_list_unlock();
 
         // at this point, only the pair is pinned,
-        // and no pair mutex held, and 
-        // no list lock is held
+        // and no pair mutex held, and no list lock is held
         uint64_t t0 = get_tnow();
         cachetable_fetch_pair(ct, cf, p, fetch_callback, read_extraargs, false);
         cachetable_miss++;
@@ -2205,8 +2251,7 @@ try_again:
         }
 
         return TOKUDB_TRY_AGAIN;
-    }
-    else {
+    } else {
         int r = maybe_pin_pair(p, lock_type, unlockers);
         if (r == TOKUDB_TRY_AGAIN) {
             return TOKUDB_TRY_AGAIN;
@@ -2228,16 +2273,15 @@ try_again:
             run_unlockers(unlockers);
 
             // we are now getting an expensive write lock, because we
-            // are doing a partial fetch. So, if we previously have 
-            // either a read lock or a cheap write lock, we need to 
+            // are doing a partial fetch. So, if we previously have
+            // either a read lock or a cheap write lock, we need to
             // release and reacquire the correct lock type
             if (lock_type == PL_READ) {
                 pair_lock(p);
                 p->value_rwlock.read_unlock();
                 p->value_rwlock.write_lock(true);
                 pair_unlock(p);
-            }
-            else if (lock_type == PL_WRITE_CHEAP) {
+            } else if (lock_type == PL_WRITE_CHEAP) {
                 pair_lock(p);
                 p->value_rwlock.write_unlock();
                 p->value_rwlock.write_lock(true);
@@ -2248,8 +2292,7 @@ try_again:
             partial_fetch_required = pf_req_callback(p->value_data,read_extraargs);
             if (partial_fetch_required) {
                 do_partial_fetch(ct, cf, p, pf_callback, read_extraargs, false);
-            }
-            else {
+            } else {
                 pair_lock(p);
                 p->value_rwlock.write_unlock();
                 pair_unlock(p);
@@ -2263,10 +2306,9 @@ try_again:
             }
 
             return TOKUDB_TRY_AGAIN;
-        }
-        else {
+        } else {
             *value = p->value_data;
-            return 0;    
+            return 0;
         }
     }
     // We should not get here. Above code should hit a return in all cases.
@@ -2671,7 +2713,7 @@ void toku_cachetable_close (CACHETABLE *ctp) {
     ct->ev.destroy();
     ct->list.destroy();
     ct->cf_list.destroy();
-    
+
     toku_kibbutz_destroy(ct->client_kibbutz);
     toku_kibbutz_destroy(ct->ct_kibbutz);
     toku_kibbutz_destroy(ct->checkpointing_kibbutz);
@@ -2712,10 +2754,10 @@ int toku_test_cachetable_unpin_ct_prelocked_no_flush(CACHEFILE cachefile, CACHEK
 
 //test-only wrapper
 int toku_test_cachetable_unpin_and_remove (
-    CACHEFILE cachefile, 
+    CACHEFILE cachefile,
     CACHEKEY key,
     CACHETABLE_REMOVE_KEY remove_key,
-    void* remove_key_extra) 
+    void* remove_key_extra)
 {
     uint32_t fullhash = toku_cachetable_hash(cachefile, key);
     PAIR p = test_get_pair(cachefile, key, fullhash, false);
@@ -2723,11 +2765,11 @@ int toku_test_cachetable_unpin_and_remove (
 }
 
 int toku_cachetable_unpin_and_remove (
-    CACHEFILE cachefile, 
+    CACHEFILE cachefile,
     PAIR p,
     CACHETABLE_REMOVE_KEY remove_key,
     void* remove_key_extra
-    ) 
+    )
 {
     invariant_notnull(p);
     int r = ENOENT;
@@ -2741,7 +2783,7 @@ int toku_cachetable_unpin_and_remove (
     nb_mutex_lock(&p->disk_nb_mutex, p->mutex);
     pair_unlock(p);
     assert(p->cloned_value_data == NULL);
-    
+
     //
     // take care of key removal
     //
@@ -2751,7 +2793,7 @@ int toku_cachetable_unpin_and_remove (
     // now let's wipe out the pending bit, because we are
     // removing the PAIR
     p->checkpoint_pending = false;
-    
+
     // For the PAIR to not be picked by the
     // cleaner thread, we mark the cachepressure_size to be 0
     // (This is redundant since we have the write_list_lock)
@@ -2767,12 +2809,10 @@ int toku_cachetable_unpin_and_remove (
     // toku_free_blocknum
     //
     if (remove_key) {
-        remove_key(
-            &key_to_remove, 
-            for_checkpoint&&is_current_checkpoint_real_chkpt(), 
-            remove_key_extra
-            );
-    }    
+        remove_key(&key_to_remove,
+                   for_checkpoint && is_current_checkpoint_real_chkpt(),
+                   remove_key_extra);
+    }
     ct->list.read_pending_cheap_unlock();
 
     pair_lock(p);
@@ -2789,13 +2829,13 @@ int toku_cachetable_unpin_and_remove (
     //     locks the PAIR, and ends up calling unpin_and_remove,
     //     all while get_and_pin_nonblocking is waiting on the PAIR lock.
     //     We did not realize this at first, which caused bug #4357
-    // The following threads CANNOT be blocked waiting on 
+    // The following threads CANNOT be blocked waiting on
     // the PAIR lock:
-    //  - a thread trying to run eviction via run_eviction. 
+    //  - a thread trying to run eviction via run_eviction.
     //     That cannot happen because run_eviction only
     //     attempts to lock PAIRS that are not locked, and this PAIR
     //     is locked.
-    //  - cleaner thread, for the same reason as a thread running 
+    //  - cleaner thread, for the same reason as a thread running
     //     eviction
     //  - client thread doing a normal get_and_pin. The client is smart
     //     enough to not try to lock a PAIR that another client thread
@@ -2816,11 +2856,11 @@ int toku_cachetable_unpin_and_remove (
     //
     // Because we call cachetable_remove_pair and wait,
     // the threads that may be waiting
-    // on this PAIR lock must be careful to do NOTHING with the PAIR 
+    // on this PAIR lock must be careful to do NOTHING with the PAIR
     // As per our analysis above, we only need
     // to make sure the checkpoint thread and get_and_pin_nonblocking do
     // nothing, and looking at those functions, it is clear they do nothing.
-    // 
+    //
     cachetable_remove_pair(&ct->list, &ct->ev, p);
     ct->list.write_list_unlock();
     if (p->refcount > 0) {
@@ -2840,11 +2880,74 @@ int toku_cachetable_unpin_and_remove (
     // just a sanity check
     assert(nb_mutex_users(&p->disk_nb_mutex) == 0);
     assert(p->cloned_value_data == NULL);
-    //Remove pair. 
+    //Remove pair.
     pair_unlock(p);
     cachetable_free_pair(p);
     r = 0;
     return r;
+}
+
+void
+toku_cachetable_dec_refc_and_unpin(FT ft, FTNODE node)
+{
+    CACHEFILE cf = ft->cf;
+    PAIR p = node->ct_pair;
+    invariant_notnull(p);
+    CACHETABLE ct = cf->cachetable;
+
+    // grab disk_nb_mutex to ensure any background thread writing
+    // out a cloned value completes
+    pair_lock(p);
+    assert(p->value_rwlock.writers());
+    nb_mutex_lock(&p->disk_nb_mutex, p->mutex);
+    pair_unlock(p);
+    invariant_null(p->cloned_value_data);
+
+    ct->list.write_list_lock();
+    ct->list.read_pending_cheap_lock();
+
+    CACHEKEY key = p->key;
+    int r = toku_blocknum_dec_refc(ft->blocktable, &key, ft,
+                p->checkpoint_pending && is_current_checkpoint_real_chkpt());
+    if (r == 0) {
+        toku_ftnode_gc_bncs_and_children(ft, node);
+        p->dirty = CACHETABLE_CLEAN;
+        p->checkpoint_pending = false;
+        p->attr.cache_pressure_size = 0;
+    }
+
+    ct->list.read_pending_cheap_unlock();
+
+    pair_lock(p);
+    p->value_rwlock.write_unlock();
+    nb_mutex_unlock(&p->disk_nb_mutex);
+    if (r == 0) {
+        cachetable_remove_pair(&ct->list, &ct->ev, p);
+    }
+    ct->list.write_list_unlock();
+
+    if (r == 0) {
+        if (p->refcount > 0) {
+            pair_wait_for_ref_release_unlocked(p);
+        }
+        if (p->value_rwlock.users() > 0) {
+            p->value_rwlock.write_lock(true);
+            assert(p->refcount == 0);
+            assert(p->value_rwlock.users() == 0);
+            assert(!p->checkpoint_pending);
+            assert(p->attr.cache_pressure_size == 0);
+            p->value_rwlock.write_unlock();
+        }
+        assert(nb_mutex_users(&p->disk_nb_mutex) == 0);
+        assert(p->cloned_value_data == NULL);
+        pair_unlock(p);
+        cachetable_free_pair(p);
+    } else {
+        pair_unlock(p);
+        r = cachetable_unpin_internal(cf, p, (enum cachetable_dirty)node->dirty,
+                                      make_ftnode_pair_attr(node), true);
+        assert_zero(r);
+    }
 }
 
 int set_filenum_in_array(const FT &ft, const uint32_t index, FILENUM *const array);
@@ -3090,7 +3193,11 @@ toku_cachefile_get_cachetable(CACHEFILE cf) {
 //Only called by ft_end_checkpoint
 //Must have access to cf->fd (must be protected)
 void toku_cachefile_fsync(CACHEFILE cf) {
-    toku_file_fsync(cf->fd);
+    if (ftfs_is_hdd()) {
+        toku_file_fsync(cf->fd);
+    } else {
+        sb_sfs_dio_fsync(cf->fd);
+    }
 }
 
 // Make it so when the cachefile closes, the underlying file is unlinked
@@ -3750,9 +3857,6 @@ ENSURE_POD(evictor);
 //
 extern "C" void *eviction_thread(void *evictor_v);
 void *eviction_thread(void *evictor_v) {
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::eviction_thread()\n");
-#endif
     evictor* CAST_FROM_VOIDP(evictor, evictor_v);
     evictor->run_eviction_thread();
     return evictor_v;
@@ -3766,10 +3870,6 @@ void evictor::init(long _size_limit, pair_list* _pl, cachefile_list* _cf_list, K
     TOKU_VALGRIND_HG_DISABLE_CHECKING(&m_ev_thread_is_running, sizeof m_ev_thread_is_running);
     TOKU_VALGRIND_HG_DISABLE_CHECKING(&m_size_evicting, sizeof m_size_evicting);
 
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::init() size_limit: %d eviction_period: %u\n",
-           _size_limit, (unsigned long) eviction_period);
-#endif
     // set max difference to around 500MB
     int64_t max_diff = (1 << 29);
 
@@ -3789,7 +3889,7 @@ void evictor::init(long _size_limit, pair_list* _pl, cachefile_list* _cf_list, K
     if ((m_high_size_watermark - m_high_size_hysteresis) > max_diff) {
         m_high_size_watermark = m_high_size_hysteresis + max_diff;
     }
-    
+
     m_size_reserved = unreservable_memory(_size_limit);
     m_size_current = 0;
     m_size_evicting = 0;
@@ -3829,10 +3929,7 @@ void evictor::init(long _size_limit, pair_list* _pl, cachefile_list* _cf_list, K
 //
 // NOTE: This should only be called if there are no evictions in progress.
 //
-void evictor::destroy() {    
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::destroy()\n");
-#endif
+void evictor::destroy() {
     assert(m_size_evicting == 0);
     //
     // commented out of Ming, because we could not finish
@@ -3875,10 +3972,6 @@ void evictor::destroy() {
 // of the evictor based on the given pair attribute.
 //
 void evictor::add_pair_attr(PAIR_ATTR attr) {
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::add_pair_attr() attr.size %d\n",
-        attr.size);
-#endif
     assert(attr.is_valid);
     add_to_size_current(attr.size);
     increment_partitioned_counter(m_size_nonleaf, attr.nonleaf_size);
@@ -3892,10 +3985,6 @@ void evictor::add_pair_attr(PAIR_ATTR attr) {
 // of the evictor based on the given pair attribute.
 //
 void evictor::remove_pair_attr(PAIR_ATTR attr) {
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::remove_pair_attr() attr.size %d\n",
-        attr.size);
-#endif
     assert(attr.is_valid);
     remove_from_size_current(attr.size);
     increment_partitioned_counter(m_size_nonleaf, 0 - attr.nonleaf_size);
@@ -3909,9 +3998,6 @@ void evictor::remove_pair_attr(PAIR_ATTR attr) {
 // while also removing the given "old" pair attribute. 
 //
 void evictor::change_pair_attr(PAIR_ATTR old_attr, PAIR_ATTR new_attr) {
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::chainge_pair_attr()\n");
-#endif
     this->add_pair_attr(new_attr);
     this->remove_pair_attr(old_attr);
 }
@@ -3921,9 +4007,6 @@ void evictor::change_pair_attr(PAIR_ATTR old_attr, PAIR_ATTR new_attr) {
 // the size of the cachetable.
 //
 void evictor::add_to_size_current(long size) {
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::add_to_size_current(): %d\n", size);
-#endif
     (void) toku_sync_fetch_and_add(&m_size_current, size);
 }
 
@@ -3932,9 +4015,6 @@ void evictor::add_to_size_current(long size) {
 // approximation of the cachetable size.
 //
 void evictor::remove_from_size_current(long size) {
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::remove_size_from_current(): %d\n", size);
-#endif
     (void) toku_sync_fetch_and_sub(&m_size_current, size);
 }
 
@@ -3942,9 +4022,6 @@ void evictor::remove_from_size_current(long size) {
 // TODO: (Zardosht) comment this function
 //
 uint64_t evictor::reserve_memory(int fraction, uint64_t upper_bound) {
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::reserve_memory() \n");
-#endif
     toku_mutex_lock(&m_ev_thread_lock);
     uint64_t reserved_memory = (fraction * (m_low_size_watermark - m_size_reserved)) / 100;
     if (0) { // debug
@@ -3968,11 +4045,8 @@ uint64_t evictor::reserve_memory(int fraction, uint64_t upper_bound) {
 // TODO: (Zardosht) comment this function
 //
 void evictor::release_reserved_memory(uint64_t reserved_memory){
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::release_reserved_memory()\n");
-#endif
     (void) toku_sync_fetch_and_sub(&m_size_current, reserved_memory);
-    toku_mutex_lock(&m_ev_thread_lock);    
+    toku_mutex_lock(&m_ev_thread_lock);
     m_size_reserved -= reserved_memory;
     // signal the eviction thread in order to possibly wake up sleeping clients
     if (m_num_sleepers  > 0) {
@@ -3987,9 +4061,6 @@ void evictor::release_reserved_memory(uint64_t reserved_memory){
 // by waiting on m_ev_thread_cond.
 //
 void evictor::run_eviction_thread(){
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::run_eviction_thread()\n");
-#endif
     toku_mutex_lock(&m_ev_thread_lock);
     while (m_run_thread) {
         m_num_eviction_thread_runs++; // for test purposes only
@@ -4034,16 +4105,13 @@ void evictor::run_eviction_thread(){
 // it is the responsibility of this function to release and reacquire ev_thread_lock as it sees fit.
 //
 void evictor::run_eviction(){
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::run_eviction()\n");
-#endif
     //
     // These variables will help us detect if everything in the clock is currently being accessed.
     // We must detect this case otherwise we will end up in an infinite loop below.
     //
     bool exited_early = false;
     uint32_t num_pairs_examined_without_evicting = 0;
-    
+
     while (this->eviction_needed()) {
         if (m_num_sleepers > 0 && this->should_sleeping_clients_wakeup()) {
             toku_cond_broadcast(&m_flow_control_cond);
@@ -4109,9 +4177,6 @@ exit:
 // on exit, the same conditions must apply
 //
 bool evictor::run_eviction_on_pair(PAIR curr_in_clock) {
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::run_eviction_on_pair()\n");
-#endif
     uint32_t n_in_table;
     int64_t size_current;
     bool ret_val = false;
@@ -4238,12 +4303,9 @@ exit:
 // on exit, PAIR is unpinned
 //
 void evictor::do_partial_eviction(PAIR p, bool pair_mutex_held) {
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::do_paritial_eviction()\n");
-#endif
     PAIR_ATTR new_attr;
     PAIR_ATTR old_attr = p->attr;
-    
+
     p->pe_callback(p->value_data, old_attr, &new_attr, p->write_extraargs);
 
     this->change_pair_attr(old_attr, new_attr);
@@ -4266,9 +4328,6 @@ void evictor::do_partial_eviction(PAIR p, bool pair_mutex_held) {
 // on entry, pair's mutex is held, on exit, the pair's mutex is NOT held
 //
 void evictor::try_evict_pair(PAIR p) {
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::try_to_evict_pair()\n");
-#endif
     CACHEFILE cf = p->cachefile;
     // evictions without a write or unpinned pair's that are clean
     // can be run in the current thread
@@ -4310,9 +4369,6 @@ void evictor::try_evict_pair(PAIR p) {
 //                on exit, neither is held
 //
 void evictor::evict_pair(PAIR p, bool for_checkpoint) {
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::evict_pair()\n");
-#endif
     if (p->dirty) {
         pair_unlock(p);
         cachetable_write_locked_pair(this, p, for_checkpoint);
@@ -4347,10 +4403,6 @@ void evictor::evict_pair(PAIR p, bool for_checkpoint) {
 //  - in some circumstances, signal the eviction thread
 //
 void evictor::decrease_size_evicting(long size_evicting_estimate) {
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::decrease_size_evicting(): %d\n",
-           size_evicting_estimate);
-#endif
     if (size_evicting_estimate > 0) {
         toku_mutex_lock(&m_ev_thread_lock);
         int64_t buffer = m_high_size_hysteresis - m_low_size_watermark;
@@ -4385,9 +4437,6 @@ void evictor::decrease_size_evicting(long size_evicting_estimate) {
 // size_evicting is number of bytes queued up to be evicted
 //
 void evictor::wait_for_cache_pressure_to_subside() {
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::wait_for_cache_pressure_to_subside()\n");
-#endif
     uint64_t t0 = toku_current_time_microsec();
     toku_mutex_lock(&m_ev_thread_lock);
     m_num_sleepers++;
@@ -4410,9 +4459,6 @@ void evictor::wait_for_cache_pressure_to_subside() {
 // and the evictor's set limit. 
 //
 void evictor::get_state(long *size_current_ptr, long *size_limit_ptr) {
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::get_state()\n");
-#endif
     if (size_current_ptr) {
         *size_current_ptr = m_size_current;
     }
@@ -4428,9 +4474,6 @@ void evictor::get_state(long *size_current_ptr, long *size_limit_ptr) {
 // As a result, scheduling is not guaranteed, but that is tolerable.
 //
 void evictor::signal_eviction_thread() {
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::signal_eviction_thread()\n");
-#endif
     toku_cond_signal(&m_ev_thread_cond);
 }
 
@@ -4442,17 +4485,7 @@ void evictor::signal_eviction_thread() {
 // the values may be a little off, but we think that is tolerable.
 //
 bool evictor::should_client_thread_sleep(){
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::should_client_thread_sleep(): %d\n",
-           unsafe_read_size_current() > m_high_size_watermark);
-#endif
     bool ret = unsafe_read_size_current() > m_high_size_watermark;
-#ifdef PROFILE_EVICTOR
-    if(ret) {
-	uint64_t current = toku_current_time_microsec();
-    	printf("above hsw. evictor::client thread is going to sleep. %" PRIu64 " elapsed\n", current - cachetable_create_time);
-   }
-#endif
     return ret;
 }
 
@@ -4465,21 +4498,10 @@ bool evictor::should_client_thread_sleep(){
 // the values may be a little off, but we think that is tolerable.
 //
 bool evictor::should_sleeping_clients_wakeup() {
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::should_sleeping_clients_wakeup(): %d\n",
-           unsafe_read_size_current() <= m_high_size_hysteresis);
-#endif
     bool ret = unsafe_read_size_current() <= m_high_size_hysteresis;
-#ifdef PROFILE_EVICTOR
-    if(ret) {
-	uint64_t current = toku_current_time_microsec();
-
-    	printf("below hsh. evictor:: client thread is going to wake up. %" PRIu64 " elapsed\n", current-cachetable_create_time);
-   }
-#endif
     return ret;
 }
-// 
+//
 // Returns true if a client thread should try to wake up the eviction
 // thread because the client thread has noticed too much data taken
 // up in the cachetable.
@@ -4492,18 +4514,9 @@ bool evictor::should_sleeping_clients_wakeup() {
 // calling this function.
 //
 bool evictor::should_client_wake_eviction_thread() {
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::should_client_wake_eviction_thread()\n");
-#endif
     bool ret = 
         !m_ev_thread_is_running &&
         ((unsafe_read_size_current() - m_size_evicting) > m_low_size_hysteresis);
-#ifdef PROFILE_EVICTOR
-     if(ret) {
-	uint64_t current = toku_current_time_microsec();
-    	printf("above lsh. evictors waked up %" PRIu64 " elapsed\n", current - cachetable_create_time);
-   }
-#endif
    return ret;
 }
 
@@ -4513,35 +4526,15 @@ bool evictor::should_client_wake_eviction_thread() {
 // the amount of data currently being evicted, then eviction is needed
 //
 bool evictor::eviction_needed() {
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::eviction_needed(): "
-           "m_size_current: %d "
-           "m_size_evicting: %d "
-           "m_low_size_watermark: %d\n",
-           m_size_current, m_size_evicting, m_low_size_watermark);
-#endif
     bool ret = (m_size_current - m_size_evicting) > m_low_size_watermark;
-#ifdef PROFILE_EVICTOR
-    if(!ret) {
-	uint64_t current = toku_current_time_microsec();
-    	printf("below lsw. no more evictions needed. %" PRIu64 " elapsed\n", current - cachetable_create_time);
-	}
-#endif
     return ret;
 
 }
 inline int64_t evictor::unsafe_read_size_current(void) const {
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::unsafe_read_size_current(): %d\n",
-           m_size_current);
-#endif
     return m_size_current;
 }
 
 void evictor::fill_engine_status() {
-#ifdef DEBUG_EVICTOR
-    printk(KERN_ALERT "evictor::fill_engine_status()\n");
-#endif
     STATUS_VALUE(CT_SIZE_CURRENT)           = m_size_current;
     STATUS_VALUE(CT_SIZE_LIMIT)             = m_low_size_hysteresis;
     STATUS_VALUE(CT_SIZE_WRITING)           = m_size_evicting;
@@ -4562,14 +4555,9 @@ ENSURE_POD(checkpointer);
 //
 // Sets the cachetable reference in this checkpointer class, this is temporary.
 //
-void checkpointer::init(pair_list *_pl, 
-                        TOKULOGGER _logger,
-                        evictor *_ev,
-                        cachefile_list *files) {
-#ifdef DEBUG_CHECKPOINTER
-    printk(KERN_ALERT "checkpointer::init()\n");
-#endif
-
+void checkpointer::init(pair_list *_pl, TOKULOGGER _logger,
+                        evictor *_ev, cachefile_list *files)
+{
     int num_processors = toku_os_get_number_active_processors();
     m_list = _pl;
     m_logger = _logger;
@@ -4581,11 +4569,8 @@ void checkpointer::init(pair_list *_pl,
     toku_minicron_setup_debug(&m_checkpointer_cron, 0, checkpoint_thread, this, "checkpointer");
 }
 
-void checkpointer::destroy() {
-#ifdef DEBUG_CHECKPOINTER
-    printk(KERN_ALERT "checkpointer::destroy()\n");
-#endif
-
+void checkpointer::destroy()
+{
     if (!this->has_been_shutdown()) {
         // for test code only, production code uses toku_cachetable_minicron_shutdown()
         int r = this->shutdown();
@@ -4664,13 +4649,11 @@ static bool is_pair_unbound(PAIR p) {
 // 3. it does not have any impact on the statistics of checkpoint writes.(engine status reflects the write from real checkpoint.
 // in one word, it is an attempt to recycle the code of pending all the nodes and writting all the nodes out. However, i can imagine we fix above limitation
 // for a real fuzzy checkpoint. -JUN
-void checkpointer::begin_partial_checkpoint() {
-#ifdef DEBUG_CHECKPOINTER
-    toku_trace_printk("checkpointer::begin_partial_checkpoint()\n");
-#endif
+void checkpointer::begin_partial_checkpoint()
+{
      m_partial_checkpoint_num_files = 0;
  //   m_checkpoint_num_txns = 0;
-    
+
     // 2. Make list of cachefiles to be included in the checkpoint.
     // TODO: <CER> How do we remove the non-lock cachetable reference here?
     m_cf_list->read_lock();
@@ -4678,7 +4661,7 @@ void checkpointer::begin_partial_checkpoint() {
         // The caller must serialize open, close, and begin checkpoint.
         // So we should never see a closing cachefile here.
         // <CER> Is there an assert we can add here?
-        
+
         // Putting this check here so that this method may be called
         // by cachetable tests.
      //   assert(cf->note_pin_by_checkpoint);
@@ -4687,7 +4670,7 @@ void checkpointer::begin_partial_checkpoint() {
         m_partial_checkpoint_num_files++;
     }
     m_cf_list->read_unlock();
-  
+
     bjm_reset(m_checkpoint_clones_bjm);
 
     m_list->write_pending_exp_lock();
@@ -4697,28 +4680,21 @@ void checkpointer::begin_partial_checkpoint() {
     // 4. Turn on all the relevant checkpoint pending bits.
     set_checkpoint_filter(is_pair_unbound);
     this->turn_on_pending_bits_partial();
-    
+
     m_list->write_pending_cheap_unlock();
     m_cf_list->read_unlock();
     m_list->read_list_unlock();
     m_list->write_pending_exp_unlock();
-#ifdef DEBUG_CHECKPOINTER
-    toku_trace_printk("checkpointer::begin_partial_checkpoint() finished\n");
-#endif
-
 }
 
 // Sets up and kicks off a checkpoint.
 //
-void checkpointer::begin_checkpoint() {
-#ifdef DEBUG_CHECKPOINTER
-    toku_trace_printk("checkpointer::begin_checkpoint()\n");
-#endif
-
+void checkpointer::begin_checkpoint()
+{
     // 1. Initialize the accountability counters.
     m_checkpoint_num_files = 0;
     m_checkpoint_num_txns = 0;
-    
+
     // 2. Make list of cachefiles to be included in the checkpoint.
     // TODO: <CER> How do we remove the non-lock cachetable reference here?
     m_cf_list->read_lock();
@@ -4726,7 +4702,7 @@ void checkpointer::begin_checkpoint() {
         // The caller must serialize open, close, and begin checkpoint.
         // So we should never see a closing cachefile here.
         // <CER> Is there an assert we can add here?
-        
+
         // Putting this check here so that this method may be called
         // by cachetable tests.
         assert(cf->note_pin_by_checkpoint);
@@ -4735,23 +4711,14 @@ void checkpointer::begin_checkpoint() {
         m_checkpoint_num_files++;
     }
     m_cf_list->read_unlock();
- #ifdef DEBUG_CHECKPOINTER
-    toku_trace_printk("checkpointer::begin_checkpoint(): about to unlock partial lock\n");
-#endif 
     // 3. Create log entries for this checkpoint.
     toku_checkpoint_safe_partial_checkpoint_client_unlock();
- #ifdef DEBUG_CHECKPOINTER
-    toku_trace_printk("checkpointer::begin_checkpoint(): unlocked partial lock\n");
-#endif 
- 
+
     if (m_logger) {
         this->log_begin_checkpoint();
     }
     checkpoint_safe_partial_checkpoint_lock();
-#ifdef DEBUG_CHECKPOINTER
-    toku_trace_printk("checkpointer::begin_checkpoint(): locked partial lock again\n");
-#endif 
- 
+
     bjm_reset(m_checkpoint_clones_bjm);
 
     m_list->write_pending_exp_lock();
@@ -4761,17 +4728,13 @@ void checkpointer::begin_checkpoint() {
     // 4. Turn on all the relevant checkpoint pending bits. 
     reset_checkpoint_filter();
     this->turn_on_pending_bits();
-    
+
     // 5.
     this->update_cachefiles();
     m_list->write_pending_cheap_unlock();
     m_cf_list->read_unlock();
     m_list->read_list_unlock();
     m_list->write_pending_exp_unlock();
-#ifdef DEBUG_CHECKPOINTER
-    toku_trace_printk("checkpointer::begin_checkpoint() finished\n");
-#endif
-
 }
 
 //
@@ -4789,10 +4752,6 @@ void checkpointer::begin_checkpoint() {
 void checkpointer::log_begin_checkpoint() {
     int r = 0;
 
-#ifdef DEBUG_CHECKPOINTER
-    toku_trace_printk("checkpointer::log_begin_checkpoint()\n");
-#endif
-    
     // Write the BEGIN_CHECKPOINT to the log.
     LSN begin_lsn={ .lsn = (uint64_t) -1 }; // we'll need to store the lsn of the checkpoint begin in all the trees that are checkpointed.
     TXN_MANAGER mgr = toku_logger_get_txn_manager(m_logger);
@@ -4835,36 +4794,6 @@ void checkpointer::turn_on_pending_bits_partial() {
         //     current lock is ever released.
         p->checkpoint_pending = true;
 
-///////////////////////////////////////////
-        FTNODE node = (FTNODE) p->value_data;
-        PAIR_ATTR attr = p->attr;
-
-        if (p->dirty == false && attr.is_tree_node &&  node != NULL && node->unbound_insert_count > 0 && node->height == 0) {
-            printf("skip the pair=%p, unbound=%u, height=%d\n", p, node->unbound_insert_count, node->height);
-            for (int ii=0; ii<node->n_children; ii++) {
-                 if(BP_STATE(node,ii) != PT_AVAIL) {
-                    printf("partition ii=%d is not in memory\n", ii);
-                    continue; 
-                 }
-    	         toku_list *unbound_msgs;
-                 if (node->height > 0) {
-                     unbound_msgs = &BNC(node,ii)->unbound_inserts;
-                 } else {
-                     unbound_msgs = &BLB(node,ii)->unbound_inserts;
-                 }
-    	         struct toku_list *list = unbound_msgs->next;
-   	         while(list!=unbound_msgs) {
-                     struct unbound_insert_entry *entry = toku_list_struct(list, struct unbound_insert_entry, node_list);
-                     paranoid_invariant(entry->state == UBI_UNBOUND);
-                     toku_mutex_lock(&global_logger->ubi_lock);
-                     toku_list_remove(&entry->in_or_out);
-                     toku_mutex_unlock(&global_logger->ubi_lock);
-                     list = list->next;
-    	         }
-            }
-        }
-///////////////////////////////////////////
-
         if (m_list->m_pending_head) {
             m_list->m_pending_head->pending_prev = p;
         }
@@ -4903,38 +4832,6 @@ void checkpointer::turn_on_pending_bits() {
         //     current lock is ever released.
         p->checkpoint_pending = true;
 
-///////////////////////////////////////////
-        FTNODE node = (FTNODE) p->value_data;
-        PAIR_ATTR attr = p->attr;
-
-        if (p->dirty == false && attr.is_tree_node && node != NULL && node->unbound_insert_count > 0 && node->height == 0) {
-            printf("skip the pair=%p, unbound=%u, height=%d\n", p, node->unbound_insert_count, node->height);
-            for (int ii=0; ii<node->n_children; ii++) {
-                 if(BP_STATE(node,ii) != PT_AVAIL) {
-                    printf("partition ii=%d is not in memory\n", ii);
-                    continue; 
-                 }
-
-    	         toku_list *unbound_msgs;
-                 if (node->height > 0) {
-                     unbound_msgs = &BNC(node,ii)->unbound_inserts;
-                 } else {
-                     unbound_msgs = &BLB(node,ii)->unbound_inserts;
-                 }
-
-    	         struct toku_list *list = unbound_msgs->next;
-
-   	         while(list!=unbound_msgs) {
-                     struct unbound_insert_entry *entry = toku_list_struct(list, struct unbound_insert_entry, node_list);
-                     paranoid_invariant(entry->state == UBI_UNBOUND);
-                     toku_mutex_lock(&global_logger->ubi_lock);
-                     toku_list_remove(&entry->in_or_out);
-                     toku_mutex_unlock(&global_logger->ubi_lock);
-                     list = list->next;
-    	         }
-            }
-        }
-///////////////////////////////////////////
         if (m_list->m_pending_head) {
             m_list->m_pending_head->pending_prev = p;
         }
@@ -4963,7 +4860,7 @@ static void _checkpoint_pending_pairs_partial_internal(void * extra) {
     struct chkpt_partial_args * CAST_FROM_VOIDP(args, extra);
     pair_list * _list = args -> list;
     evictor * _ev = args->ev;
-    
+
     _list->write_list_lock();
     while ((p = _list->m_pending_head)!=0) {
         // <CER> TODO: Investigate why we move pending head outisde of the pending_pairs_remove() call.
@@ -4993,29 +4890,21 @@ void checkpointer::checkpoint_pending_pairs_partial(void) {
 		args->ev = m_ev;
 		args->list = m_list;
 		args->bjm = chkpt_bjm;
-		toku_kibbutz_enq(m_chkpt_kibbutz, _checkpoint_pending_pairs_partial_internal, args);	
+		toku_kibbutz_enq(m_chkpt_kibbutz, _checkpoint_pending_pairs_partial_internal, args);
 	}
 	bjm_wait_for_jobs_to_finish(chkpt_bjm);
 	bjm_wait_for_jobs_to_finish(m_checkpoint_clones_bjm);
 	bjm_destroy(chkpt_bjm);
 }
 
-void checkpointer::end_partial_checkpoint(void (*testcallback_f)(void*),  void* testextra) {
-#ifdef DEBUG_CHECKPOINTER
-    toku_trace_printk("checkpointer::end_partial_checkpoint()\n");
-#endif
+void checkpointer::end_partial_checkpoint(void (*testcallback_f)(void*), void* testextra)
+{
     CACHEFILE *XMALLOC_N(m_partial_checkpoint_num_files, checkpoint_cfs);
-    this->fill_checkpoint_cfs_partial(checkpoint_cfs);    
-#ifdef DEBUG_CHECKPOINTER
-    toku_trace_printk("checkpointer::end_partial_checkpoint() filled!\n");
-#endif
+    this->fill_checkpoint_cfs_partial(checkpoint_cfs);
     this->checkpoint_pending_pairs_partial();
     // For testing purposes only.  Dictionary has been fsync-ed to disk but log has not yet been written.
-#ifdef DEBUG_CHECKPOINTER
-    toku_trace_printk("checkpointer::end_partial_checkpoint() written!!\n");
-#endif
     if (testcallback_f) {
-        testcallback_f(testextra);      
+        testcallback_f(testextra);
     }
 
     this->checkpoint_userdata_partial(checkpoint_cfs);
@@ -5023,28 +4912,19 @@ void checkpointer::end_partial_checkpoint(void (*testcallback_f)(void*),  void* 
     this->remove_cachefiles_partial(checkpoint_cfs);
     toku_free(checkpoint_cfs);
     reset_checkpoint_filter();
-#ifdef DEBUG_CHECKPOINTER
-    toku_trace_printk("checkpointer::end_partial_checkpoint() finished\n");
-#endif
-
 }
-void checkpointer::end_checkpoint(void (*testcallback_f)(void*),  void* testextra) {
-#ifdef DEBUG_CHECKPOINTER
-    toku_trace_printk("checkpointer::end_checkpoint()\n");
-#endif
 
+void checkpointer::end_checkpoint(void (*testcallback_f)(void*),  void* testextra)
+{
     CACHEFILE *XMALLOC_N(m_checkpoint_num_files, checkpoint_cfs);
 
-    this->fill_checkpoint_cfs(checkpoint_cfs);    
+    this->fill_checkpoint_cfs(checkpoint_cfs);
     this->checkpoint_pending_pairs();
-#ifdef DEBUG_CHECKPOINTER
-    toku_trace_printk("checkpointer::end_checkpoint() trying to unlock the partial lock\n");
-#endif
     toku_checkpoint_safe_partial_checkpoint_client_unlock();
     this->checkpoint_userdata(checkpoint_cfs);
     // For testing purposes only.  Dictionary has been fsync-ed to disk but log has not yet been written.
     if (testcallback_f) {
-        testcallback_f(testextra);      
+        testcallback_f(testextra);
     }
     this->log_end_checkpoint();
     this->end_checkpoint_userdata(checkpoint_cfs);
@@ -5052,10 +4932,6 @@ void checkpointer::end_checkpoint(void (*testcallback_f)(void*),  void* testextr
     //Delete list of cachefiles in the checkpoint,
     this->remove_cachefiles(checkpoint_cfs);
     toku_free(checkpoint_cfs);
-#ifdef DEBUG_CHECKPOINTER
-    toku_trace_printk("checkpointer::end_checkpoint() finished\n");
-#endif
-
 }
 
 void checkpointer::fill_checkpoint_cfs_partial(CACHEFILE* checkpoint_cfs) {

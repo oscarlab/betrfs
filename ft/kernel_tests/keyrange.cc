@@ -100,7 +100,7 @@ under this License.
 static TOKUTXN const null_txn = 0;
 static DB * const null_db = 0;
 
-static const char *fname = "toku_test_file";
+static const char *fname = TOKU_TEST_FILENAME_DATA;
 static CACHETABLE ct;
 static FT_HANDLE t;
 
@@ -112,7 +112,7 @@ static void close_ft_and_ct (void) {
 
 static void open_ft_and_ct (bool unlink_old) {
 	int r;
-	if (unlink_old) unlink(fname);
+	if (unlink_old) { r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777); assert(r==0); }
 	toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
 	r = toku_open_ft_handle(fname, 1, &t, 1<<12, 1<<9, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);   assert(r==0);
 }

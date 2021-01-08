@@ -123,22 +123,23 @@ test_hsoc (int pagesize) {
     int npp = pagesize / 16;
     int n = npp + 13*npp/2;
 
-    DB_TXN * const null_txn = 0;
-    const char * const fname = "test.hsoc.ft_handle";
+    DB_TXN * null_txn = 0;
+    const char * const fname = TOKU_TEST_DATA_DB_NAME;
     int r;
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r=toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
 
     /* create the dup database file */
     DB_ENV *env;
     r = db_env_create(&env, 0); assert(r == 0);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL, 0); assert(r == 0);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL+DB_INIT_LOG+DB_INIT_TXN, 0); assert(r == 0);
+
+    r = env->txn_begin(env, NULL, &null_txn, 0); assert_zero(r);
 
     DB *db;
     r = db_create(&db, env, 0); assert(r == 0);
     r = db->set_pagesize(db, pagesize); assert(r == 0);
-    r = db->open(db, null_txn, fname, "main", DB_BTREE, DB_CREATE, 0666); assert(r == 0);
+    r = db->open(db, null_txn, fname, NULL, DB_BTREE, DB_CREATE, 0666); assert(r == 0);
 
     int i;
 
@@ -165,7 +166,7 @@ test_hsoc (int pagesize) {
     r = db->close(db, 0); assert(r == 0);
     r = db_create(&db, env, 0); assert(r == 0);
     r = db->set_pagesize(db, pagesize); assert(r == 0);
-    r = db->open(db, null_txn, fname, "main", DB_BTREE, 0, 0666); assert(r == 0);
+    r = db->open(db, null_txn, fname, NULL, DB_BTREE, 0, 0666); assert(r == 0);
 
     /* do a cursor get k=0 to pull in leaf 0 */
     DBC *cursor;
@@ -189,6 +190,7 @@ test_hsoc (int pagesize) {
     r = cursor->c_close(cursor); assert(r == 0);
 
     r = db->close(db, 0); assert(r == 0);
+    r = null_txn->commit(null_txn, 0); assert_zero(r);
     r = env->close(env, 0); assert(r == 0);
 }
 

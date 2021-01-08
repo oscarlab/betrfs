@@ -103,12 +103,12 @@ test_dump_ft(void) {
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
 
-    const char *n = TOKU_TEST_FILENAME;
-    int r;
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r == 0);
+
+    const char *n = TOKU_TEST_FILENAME_DATA;
     FT_HANDLE t;
     CACHETABLE ct;
-    FILE *f = fopen("test-dump-ft.out", "w");
-    unlink(n);
+    FILE *f = fopen(TOKU_TEST_FILENAME_META, "w");
     assert(f);
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
     r = toku_open_ft_handle(n, 1, &t, 1<<12, 1<<9, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun); assert(r==0);
@@ -124,7 +124,9 @@ test_dump_ft(void) {
     r = toku_close_ft_handle_nolsn(t, 0); assert(r==0);
     toku_cachetable_close(&ct);
     fclose(f);
-    toku_os_recursive_delete("test-dump-ft.out");
+    
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r == 0);
+
     toku_ft_layer_destroy();
 #ifdef __SUPPORT_DIRECT_IO
     printf("\n INFO: direct io is turned on \n");

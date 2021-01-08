@@ -106,18 +106,18 @@ static int  aa[MAX_DBS][32] UU();
 static int inv[MAX_DBS][32] UU();
 
 // rotate right and left functionsp
-static inline unsigned int UU() 
+static inline unsigned int UU()
 rotr32(const unsigned int x, const unsigned int num) {
     const unsigned int n = num % 32;
     return (x >> n) | ( x << (32 - n));
 }
-static inline unsigned int UU() 
+static inline unsigned int UU()
 rotl32(const unsigned int x, const unsigned int num) {
     const unsigned int n = num % 32;
     return (x << n) | ( x >> (32 - n));
 }
 
-static void UU() 
+static void UU()
 generate_permute_tables(void) {
     srandom(1);
     int i, j, tmp;
@@ -138,7 +138,7 @@ generate_permute_tables(void) {
 }
 
 // permute bits of x based on permute table bitmap
-static unsigned int UU() 
+static unsigned int UU()
 twiddle32(unsigned int x, int db)
 {
     unsigned int b = 0;
@@ -149,7 +149,7 @@ twiddle32(unsigned int x, int db)
 }
 
 // permute bits of x based on inverse permute table bitmap
-static unsigned int UU() 
+static unsigned int UU()
 inv_twiddle32(unsigned int x, int db)
 {
     unsigned int b = 0;
@@ -160,11 +160,11 @@ inv_twiddle32(unsigned int x, int db)
 }
 
 // generate val from key, index
-static unsigned int UU() 
+static unsigned int UU()
 generate_val(int key, int i) {
     return rotl32((key + MAGIC), i);
 }
-static unsigned int UU() 
+static unsigned int UU()
 pkey_for_val(int key, int i) {
     return rotr32(key, i) - MAGIC;
 }
@@ -206,7 +206,7 @@ check_results_after_row_n(DB_ENV *env, DB **dbs, const int num_dbs, const int nu
         r = dbs[j]->cursor(dbs[j], txn, &cursor, 0);
         CKERR(r);
         for(int i=first_row_to_check; i<num_rows; i++) {
-            r = cursor->c_get(cursor, &key, &val, DB_NEXT);    
+            r = cursor->c_get(cursor, &key, &val, DB_NEXT);
             CKERR(r);
             k = *(unsigned int*)key.data;
             pkey_for_db_key = (j == 0) ? k : inv_twiddle32(k, j);
@@ -234,7 +234,7 @@ check_results(DB_ENV *env, DB **dbs, const int num_dbs, const int num_rows)
 }
 
 
-static int UU() 
+static int UU()
 put_multiple_generate(DB *dest_db, DB *src_db, DBT *dest_key, DBT *dest_val, const DBT *src_key, const DBT *src_val, void *extra) {
 
     (void) src_db;
@@ -259,12 +259,12 @@ put_multiple_generate(DB *dest_db, DB *src_db, DBT *dest_key, DBT *dest_val, con
     else {
         assert(dest_key->flags==DB_DBT_REALLOC);
         if (dest_key->ulen < sizeof(unsigned int)) {
-            dest_key->data = toku_xrealloc(dest_key->data, sizeof(unsigned int));
+            dest_key->data = toku_xrealloc(dest_key->data, dest_key->ulen, sizeof(unsigned int));
             dest_key->ulen = sizeof(unsigned int);
         }
         assert(dest_val->flags==DB_DBT_REALLOC);
         if (dest_val->ulen < sizeof(unsigned int)) {
-            dest_val->data = toku_xrealloc(dest_val->data, sizeof(unsigned int));
+            dest_val->data = toku_xrealloc(dest_val->data, dest_val->ulen, sizeof(unsigned int));
             dest_val->ulen = sizeof(unsigned int);
         }
         unsigned int *new_key = (unsigned int *)dest_key->data;

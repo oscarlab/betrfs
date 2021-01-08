@@ -104,19 +104,19 @@ static DB_TXN *txn = NULL;
 static DB *db = NULL;
 static uint32_t db_page_size = 4096;
 static uint32_t db_basement_size = 4096;
-static const char *envdir = TOKU_TEST_FILENAME;
+static const char *envdir = TOKU_TEST_ENV_DIR_NAME;
 static uint64_t nrows = 30000;
 static bool get_all = true;
 static bool use_loader = false;
 static bool random_keys = false;
 
-static int 
+static int
 my_compare(DB *this_db UU(), const DBT *a UU(), const DBT *b UU()) {
     assert(a->size == b->size);
     return memcmp(a->data, b->data, a->size);
 }
 
-static int 
+static int
 my_generate_row(DB *dest_db UU(), DB *src_db UU(), DBT_ARRAY *dest_keys UU(), DBT_ARRAY *dest_vals UU(), const DBT *src_key UU(), const DBT *src_val UU()) {
     toku_dbt_array_resize(dest_keys, 1);
     toku_dbt_array_resize(dest_vals, 1);
@@ -124,11 +124,11 @@ my_generate_row(DB *dest_db UU(), DB *src_db UU(), DBT_ARRAY *dest_keys UU(), DB
     DBT *dest_val = &dest_vals->dbts[0];
 
     assert(dest_key->flags == DB_DBT_REALLOC);
-    dest_key->data = toku_realloc(dest_key->data, src_key->size);
+    dest_key->data = toku_realloc(dest_key->data, dest_key->size, src_key->size);
     memcpy(dest_key->data, src_key->data, src_key->size);
     dest_key->size = src_key->size;
     assert(dest_val->flags == DB_DBT_REALLOC);
-    dest_val->data = toku_realloc(dest_val->data, src_val->size);
+    dest_val->data = toku_realloc(dest_val->data, dest_val->size, src_val->size);
     memcpy(dest_val->data, src_val->data, src_val->size);
     dest_val->size = src_val->size;
     return 0;
@@ -139,7 +139,7 @@ swap(uint64_t keys[], uint64_t i, uint64_t j) {
     uint64_t t = keys[i]; keys[i] = keys[j]; keys[j] = t;
 }
 
-static uint64_t 
+static uint64_t
 max64(uint64_t a, uint64_t b) {
     return a < b ? b : a;
 }
@@ -156,7 +156,7 @@ static void open_env(void) {
     r = env->open(env, envdir, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
 }
 
-static void 
+static void
 run_test(void) {
 
     size_t key_size = 9;
@@ -170,7 +170,7 @@ run_test(void) {
     r = db->set_pagesize(db, db_page_size); CKERR(r);
     r = db->set_readpagesize(db, db_basement_size); CKERR(r);
     r = env->txn_begin(env, 0, &txn, 0); CKERR(r);
-    r = db->open(db, txn, "foo.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r = txn->commit(txn, 0);    CKERR(r);
 
     uint64_t *XMALLOC_N(nrows, keys);
@@ -315,11 +315,11 @@ run_test(void) {
     r = txn->commit(txn, 0);    CKERR(r);
     r = db->close(db, 0);     CKERR(r);
     r = env->close(env, 0);   CKERR(r);
-    
+
     toku_free(keys);
 }
 /*
-static int 
+static int
 usage(void) {
     fprintf(stderr, "-v (verbose)\n");
     fprintf(stderr, "-q (quiet)\n");
@@ -343,8 +343,7 @@ int test_keyrange(void) {
     //get_all = 0;//atoi(argv[++i]) != 0;
     //get_all = 1; random_keys = 1;
 
-    toku_os_recursive_delete(envdir);
-    int r = toku_os_mkdir(envdir, S_IRWXU+S_IRWXG+S_IRWXO);       CKERR(r);
+    int r = toku_fs_reset(envdir, S_IRWXU+S_IRWXG+S_IRWXO);       CKERR(r);
 
     run_test();
 

@@ -113,7 +113,7 @@ PATENT RIGHTS GRANT:
 #define flt_flush_completely_delete_leaf 15
 #define flt_flush_completely_delete_basement 16
 
-#define DEAD_LEAF 1
+#define DEAD_LEAF 0
 typedef struct flusher_advice FLUSHER_ADVICE;
 
 /**

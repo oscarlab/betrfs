@@ -3,10 +3,8 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 set(tokuportability_srcs
   huge_page_detection
   file
-  memory
   os_malloc
   portability
-  toku_assert
   toku_crash
   toku_path
   toku_pthread
@@ -31,7 +29,7 @@ toku_merge_static_libs(${LIBTOKUPORTABILITY}_static ${LIBTOKUPORTABILITY}_static
 maybe_add_gcov_to_libraries(tokuportability_static_conv)
 set_property(TARGET tokuportability_static_conv APPEND PROPERTY COMPILE_DEFINITIONS _GNU_SOURCE)
 
-set_property(SOURCE file memory os_malloc portability toku_assert toku_rwlock APPEND PROPERTY
+set_property(SOURCE file memory os_malloc portability toku_rwlock APPEND PROPERTY
   COMPILE_DEFINITIONS TOKU_ALLOW_DEPRECATED=1)
 
 # detect when we are being built as a subproject
@@ -55,7 +53,6 @@ endif ()
 
 if (NOT BUILD_FOR_LINUX_KERNEL_MODULE)
   add_subdirectory(tests)
-else () 
+else ()
   add_subdirectory(kernel_tests)
 endif (NOT BUILD_FOR_LINUX_KERNEL_MODULE)
-

@@ -108,10 +108,10 @@ PATENT RIGHTS GRANT:
 
 static DB_ENV *env;
 static DB *db;
-static char dbname[] = "foo.db";
+static char dbname[] = TOKU_TEST_DATA_DB_NAME;
 static char path[PATHSIZE];
 
-static const int envflags = DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_INIT_LOCK|DB_PRIVATE;
+static const int envflags = DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_INIT_LOCK|DB_PRIVATE|DB_INIT_LOG|DB_INIT_TXN;
 
 static int ninsert, nread, nread_notfound, nread_failed, ndelete, ndelete_notfound, ndelete_failed;
 
@@ -149,10 +149,10 @@ static void
 setup(void)
 {
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
     r = db_env_create(&env, 0);                                         CKERR(r);
-    r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);      CKERR(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);      CKERR(r);
     r = db_create(&db, env, 0);                                         CKERR(r);
     r = db->open(db, NULL, dbname, NULL, DB_BTREE, DB_CREATE, 0666);    CKERR(r);
 }
@@ -224,7 +224,7 @@ get_file_pathname(void) {
     iname.flags |= DB_DBT_MALLOC;
     int r = env->get_iname(env, &dname, &iname);
     CKERR(r);
-    sprintf(path, "%s/%s", TOKU_TEST_FILENAME, (char*)iname.data);
+    sprintf(path, "%s/%s", TOKU_TEST_ENV_DIR_NAME, (char*)iname.data);
     toku_free(iname.data);
     if (verbose) printf("path = %s\n", path);
 }

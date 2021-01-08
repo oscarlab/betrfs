@@ -98,10 +98,7 @@ static void setup_env (void) {
     //const int len = strlen(envdir)+100;
    // char cmd[len];
    // snprintf(cmd, len, "rm -rf %s", envdir);
-    {toku_os_recursive_delete(envdir);
-     //CKERR(r); 
-     }
-    {int r = toku_os_mkdir(envdir, S_IRWXU+S_IRWXG+S_IRWXO);                                                                            CKERR(r); }
+    {int r = toku_fs_reset(envdir, S_IRWXU+S_IRWXG+S_IRWXO);                                                                            CKERR(r); }
     {int r = db_env_create(&env, 0);                                                                                                    CKERR(r); }
     //env->set_errfile(env, stderr);
 #ifdef TOKUDB
@@ -109,7 +106,7 @@ static void setup_env (void) {
 #endif
     { int r = env->open(env, envdir, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r); }
     { int r = db_create(&db, env, 0);                                                                                                   CKERR(r); }
-    { int r = db->open(db, NULL, "foo.db", 0, DB_BTREE, DB_CREATE | DB_AUTO_COMMIT, S_IRWXU+S_IRWXG+S_IRWXO);                           CKERR(r); }
+    { int r = db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE | DB_AUTO_COMMIT, S_IRWXU+S_IRWXG+S_IRWXO);                           CKERR(r); }
 }
 
 static void shutdown_env (void) {
@@ -140,7 +137,7 @@ static void put (const char *keystring, int size, bool should_work) {
 extern "C" int test_rowsize(void);
 int test_rowsize(void) {
     pre_setup();
-    envdir = TOKU_TEST_FILENAME;
+    envdir = TOKU_TEST_ENV_DIR_NAME;
     setup_env();
     if (0) put("foo", 32, true);
     put("foo", 32*1024*1024, true);

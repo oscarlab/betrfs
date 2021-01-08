@@ -104,22 +104,22 @@ extern "C" int test_test_5015(void);
 int test_test_5015(void) {
 
     DB_TXN * const null_txn = 0;
-    const char * const fname = "test.already.exists.ft_handle";
+    const char * const fname = TOKU_TEST_DATA_DB_NAME;
     int r;
 
     pre_setup();
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r=toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r == 0); 
 
     DB_ENV *env;
     r = db_env_create(&env, 0); assert(r == 0);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE | DB_PRIVATE | DB_INIT_MPOOL | DB_INIT_TXN | DB_INIT_LOCK | DB_INIT_LOG, 0); assert(r == 0);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE | DB_PRIVATE | DB_INIT_MPOOL | DB_INIT_TXN | DB_INIT_LOCK | DB_INIT_LOG, 0); assert(r == 0);
 
     DB *db;
     r = db_create(&db, env, 0);
     CKERR(r);
     db->set_errfile(db,0); // Turn off those annoying errors
-    r = db->open(db, null_txn, fname, "main", DB_BTREE, DB_CREATE, 0666);
+    r = db->open(db, null_txn, fname, NULL, DB_BTREE, DB_CREATE, 0666);
     CKERR(r);
     DB_TXN* parent_txn = NULL;
     DB_TXN* child_txn = NULL;

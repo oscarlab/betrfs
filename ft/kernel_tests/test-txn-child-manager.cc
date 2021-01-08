@@ -123,7 +123,8 @@ void txn_child_manager_unit_test::run_child_txn_test() {
     TOKULOGGER logger;
     CACHETABLE ct;
     int r = 0;
-    test_setup(TOKU_TEST_FILENAME, &logger, &ct);
+    r=test_setup(TOKU_TEST_ENV_DIR_NAME, &logger, &ct);
+    assert(r==0);
     // create the root transaction
     TOKUTXN root_txn = NULL;
     r = toku_txn_begin_txn(
@@ -167,8 +168,8 @@ void txn_child_manager_unit_test::run_test() {
     TOKULOGGER logger;
     CACHETABLE ct;
     int r = 0;
-    DBG;
-    test_setup(TOKU_TEST_FILENAME, &logger, &ct);
+    r=test_setup(TOKU_TEST_ENV_DIR_NAME, &logger, &ct);
+    assert(r==0);
     // create the root transaction
     TOKUTXN root_txn = NULL;
     r = toku_txn_begin_txn(
@@ -180,7 +181,6 @@ void txn_child_manager_unit_test::run_test() {
         false
         );
     CKERR(r);
-    DBG;
     txn_child_manager* cm = root_txn->child_manager;
     assert(cm == &root_txn->child_manager_s);
     assert(cm->m_root == root_txn);
@@ -201,7 +201,6 @@ void txn_child_manager_unit_test::run_test() {
         false
         );
     CKERR(r);
-    DBG;
     assert(child_txn->child_manager == cm);
     assert(child_txn->parent == root_txn);
     assert(root_txn->child == child_txn);
@@ -236,7 +235,6 @@ void txn_child_manager_unit_test::run_test() {
 
     r = toku_txn_commit_txn(grandchild_txn, true, NULL, NULL);
     CKERR(r);
-    DBG;
     toku_txn_close_txn(grandchild_txn);
 
 
@@ -333,8 +331,6 @@ void txn_child_manager_unit_test::run_test() {
     r = toku_txn_commit_txn(root_txn, true, NULL, NULL);
     CKERR(r);
     toku_txn_close_txn(root_txn);
-
-    DBG;
 
     clean_shutdown(&logger, &ct);
 }

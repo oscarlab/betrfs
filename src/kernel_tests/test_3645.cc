@@ -226,13 +226,12 @@ test_evictions (void) {
     if (verbose) printf("test_3645:%d \n", n);
 
     DB_TXN * const null_txn = 0;
-    const char * const fname = "test.bulk_fetch.ft_handle";
+    const char * const fname = TOKU_TEST_DATA_DB_NAME;
     int r;
 
-    const char *file = "test_3645";
+    const char *file = TOKU_TEST_ENV_DIR_NAME;
 
-    toku_os_recursive_delete(file);
-    r=toku_os_mkdir(file, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
+    r=toku_fs_reset(file, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
 
     /* create the dup database file */
     DB_ENV *env;
@@ -242,7 +241,7 @@ test_evictions (void) {
     key_ops.keycmp = int_dbt_cmp;
     r = env->set_key_ops(env, &key_ops); CKERR(r);
     // set the cache size to 10MB
-    r = env->set_cachesize(env, 0, 100000, 1); CKERR(r);
+    r = env->set_cachesize(env, 0, 1000000, 1); CKERR(r);
     r=env->open(env, file, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r = env->checkpointing_set_period(env, 10); 
     CKERR(r);
@@ -258,7 +257,7 @@ test_evictions (void) {
     assert(r == 0);
     r = db->set_readpagesize(db, 1024);
     assert(r == 0);
-    r = db->open(db, null_txn, fname, "main", DB_BTREE, DB_CREATE, 0666);
+    r = db->open(db, null_txn, fname, NULL, DB_BTREE, DB_CREATE, 0666);
     assert(r == 0);
 
     int* keys = (int*) toku_xmalloc(n* sizeof(int));

@@ -39,7 +39,6 @@ set(FT_SOURCES
   ft-cachetable-wrappers
   ft-flusher
   ft-hot-flusher
-  ftloader
   ftloader-callback
   ft_msg
   ft_node-serialize
@@ -74,7 +73,6 @@ set(FT_SOURCES
   ule
   x1764
   xids
-  ft-slice
   ybt
   "${CMAKE_CURRENT_BINARY_DIR}/log_code"
   "${CMAKE_CURRENT_BINARY_DIR}/log_print"

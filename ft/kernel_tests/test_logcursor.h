@@ -123,7 +123,7 @@ const ITEMLEN len_ignore = 0xFFFFFFFF;
 
 // dummymsn needed to simulate msn because test messages are injected at a lower level than toku_ft_root_put_cmd()
 #define MIN_DUMMYMSN ((MSN) {(uint64_t)1<<62})
-static MSN dummymsn;      
+static MSN dummymsn;
 static int dummymsn_initialized = 0;
 
 #if 0
@@ -136,14 +136,14 @@ initialize_dummymsn(void) {
 }
 #endif
 
-static UU() MSN 
+static UU() MSN
 next_dummymsn(void) {
     assert(dummymsn_initialized);
     ++(dummymsn.msn);
     return dummymsn;
 }
 
-static UU() MSN 
+static UU() MSN
 last_dummymsn(void) {
     assert(dummymsn_initialized);
     return dummymsn;
@@ -164,7 +164,7 @@ lookup_checkf (ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *p
         if (key!=NULL) {
             if (pair->keylen!=len_ignore) {
                 assert(pair->keylen == keylen);
-                if (pair->key) 
+                if (pair->key)
                     assert(memcmp(pair->key, key, keylen)==0);
             }
             if (pair->vallen!=len_ignore) {
@@ -226,12 +226,12 @@ def_flush (CACHEFILE f __attribute__((__unused__)),
        ) {
 }
 
-static UU() void 
+static UU() void
 def_pe_est_callback(
     void* UU(ftnode_pv),
-    void* UU(dd), 
-    long* bytes_freed_estimate, 
-    enum partial_eviction_cost *cost, 
+    void* UU(dd),
+    long* bytes_freed_estimate,
+    enum partial_eviction_cost *cost,
     void* UU(write_extraargs)
     )
 {
@@ -239,13 +239,13 @@ def_pe_est_callback(
     *cost = PE_CHEAP;
 }
 
-static UU() int 
+static UU() int
 def_pe_callback (
-    void *ftnode_pv __attribute__((__unused__)), 
-    PAIR_ATTR bytes_to_free __attribute__((__unused__)), 
-    PAIR_ATTR* bytes_freed, 
+    void *ftnode_pv __attribute__((__unused__)),
+    PAIR_ATTR bytes_to_free __attribute__((__unused__)),
+    PAIR_ATTR* bytes_freed,
     void* extraargs __attribute__((__unused__))
-    ) 
+    )
 {
     *bytes_freed = bytes_to_free;
     return 0;
@@ -287,15 +287,15 @@ put_callback_nop(
 
 static UU() int
 fetch_die(
-    CACHEFILE UU(thiscf), 
+    CACHEFILE UU(thiscf),
     PAIR UU(p),
-    int UU(fd), 
-    CACHEKEY UU(key), 
-    uint32_t UU(fullhash), 
+    int UU(fd),
+    CACHEKEY UU(key),
+    uint32_t UU(fullhash),
     void **UU(value),
-    void **UU(dd), 
-    PAIR_ATTR *UU(sizep), 
-    int *UU(dirtyp), 
+    void **UU(dd),
+    PAIR_ATTR *UU(sizep),
+    int *UU(dirtyp),
     void *UU(extraargs)
     )
 {
@@ -354,7 +354,7 @@ public:
 UU()
 static void copy_dbt(DBT *dest, const DBT *src) {
     assert(dest->flags & DB_DBT_REALLOC);
-    dest->data = toku_realloc(dest->data, src->size);
+    dest->data = toku_realloc(dest->data, dest->size, src->size);
     dest->size = src->size;
     memcpy(dest->data, src->data, src->size);
 }

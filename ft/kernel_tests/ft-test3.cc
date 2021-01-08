@@ -108,7 +108,8 @@ static void test3 (int nodesize, int basementnodesize, int count) {
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
     gettimeofday(&t0, 0);
-    unlink(fname);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
+
     r = toku_open_ft_handle(fname, 1, &t, nodesize, basementnodesize, compression_method, ct, null_txn, toku_builtin_compare_fun);
     assert(r==0);
     for (i=0; i<count; i++) {
@@ -160,7 +161,7 @@ test_ft_test3 (void) {
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
 
-    fname = TOKU_TEST_FILENAME;
+    fname = TOKU_TEST_FILENAME_DATA;
     ft_blackbox_test();
 
     if (verbose) printf("test ok\n");

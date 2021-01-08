@@ -98,22 +98,25 @@ PATENT RIGHTS GRANT:
 #include "toku_time.h"
 #include <portability/toku_path.h>
 
-
-
 static int verbose = 2;
 static void
 create_files(int N, int fds[/*N*/]) {
     int i;
-    char name[30];
+    const char *name[5];
+    assert(N <= 5);
+    name[0] = TOKU_TEST_FILENAME_DATA;
+    name[1] = TOKU_TEST_FILENAME_META;
+    name[2] = TOKU_TEST_FILENAME_ONE;
+    name[3] = TOKU_TEST_FILENAME_TWO;
+    name[4] = TOKU_TEST_FILENAME_THREE;
+
     for (i = 0; i < N; i++) {
-        snprintf(name, sizeof(name), "%s/%d", TOKU_TEST_FILENAME, i);
-        fds[i] = open(name, O_CREAT|O_WRONLY, 0644);
+        fds[i] = open(name[i], O_CREAT|O_WRONLY, 0644);
         if (fds[i] < 0) {
             CKERR(fds[i]);
         }
     }
 }
-
 static void
 write_to_files(int N, int bytes, int fds[/*N*/]) {
     char *junk = (char *)toku_xmalloc(bytes);
@@ -288,8 +291,7 @@ int test_fsync_options(int N, int bytes) {
     //N = 1000;
     //bytes = 4096;
    
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
 
     int fds[N];
@@ -311,5 +313,6 @@ int test_fsync_options(int N, int bytes) {
 }
 
 int test_fsync_files(void) {
-    return test_fsync_options(1000, 4096);
+    // YZJ: for SFS. just test 5 files
+    return test_fsync_options(5, 4096);
 }

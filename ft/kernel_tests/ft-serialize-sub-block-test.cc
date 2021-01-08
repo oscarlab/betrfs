@@ -96,7 +96,7 @@ static int verbose = 1;
 static void test_sub_block(int n) {
     if (verbose) printf("%s:%d %d\n", __FUNCTION__, __LINE__, n);
 
-    const char *fname = TOKU_TEST_FILENAME;
+    const char *fname = TOKU_TEST_FILENAME_DATA;
     const int nodesize = 4*1024*1024;
     const int basementnodesize = 128*1024;
     const enum toku_compression_method compression_method = TOKU_DEFAULT_COMPRESSION_METHOD;
@@ -108,7 +108,7 @@ static void test_sub_block(int n) {
     FT_HANDLE brt;
     int i;
 
-    unlink(fname);
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
 

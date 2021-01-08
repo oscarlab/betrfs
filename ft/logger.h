@@ -100,13 +100,13 @@ enum {
     TOKU_LOG_VERSION_2 = 2,
     //After 2 we linked the log version to the FT_LAYOUT VERSION.
     //So it went from 2 to 13 (3-12 do not exist)
-    TOKU_LOG_VERSION   = FT_LAYOUT_VERSION, 
+    TOKU_LOG_VERSION   = FT_LAYOUT_VERSION,
     TOKU_LOG_MIN_SUPPORTED_VERSION = FT_LAYOUT_MIN_SUPPORTED_VERSION,
 };
 
 //these are just for bill to debug
 void swap_inbuf_outbuf (TOKULOGGER logger, unsigned int *n);
-void write_outbuf_to_logfile (TOKULOGGER logger, LSN *fsynced_lsn, unsigned int n);
+void write_outbuf_to_logfile (TOKULOGGER logger, LSN *fsynced_lsn, unsigned int n, int update_log_start);
 void release_output (TOKULOGGER logger, LSN fsynced_lsn);
 
 int toku_logger_create (TOKULOGGER *resultp);
@@ -127,10 +127,9 @@ typedef enum {
     UBI_BOUND=4,			/* bound. */
 } ubi_state_t;
 
-struct unbound_insert_entry *toku_alloc_unbound_insert_entry(ubi_state_t state, LSN lsn,// FT_HANDLE ft_h,
- MSN msn, DBT * k);
+struct ubi_entry *toku_alloc_ubi_entry(ubi_state_t state, LSN lsn, MSN msn, DBT *k);
 extern "C" int toku_logger_bind_insert_location(TOKULOGGER logger, FT_MSG msg, DISKOFF diskoff, DISKOFF size);
-extern "C" void toku_logger_append_unbound_insert_entry(TOKULOGGER logger, struct unbound_insert_entry * entry);
+extern "C" void toku_logger_append_ubi_entry(TOKULOGGER logger, struct ubi_entry *entry);
 
 void toku_logger_fsync (TOKULOGGER logger);
 void toku_logger_fsync_if_lsn_not_fsynced(TOKULOGGER logger, LSN lsn);
@@ -202,8 +201,6 @@ TOKULOGGER toku_txn_logger (TOKUTXN txn);
 
 void toku_txnid2txn (TOKULOGGER logger, TXNID_PAIR txnid, TOKUTXN *result);
 
-int toku_logger_log_archive (TOKULOGGER logger, char ***logs_p, int flags);
-
 TOKUTXN toku_logger_txn_parent (TOKUTXN txn);
 void toku_logger_note_checkpoint(TOKULOGGER logger, LSN lsn);
 
@@ -220,16 +217,16 @@ int toku_logger_write_inbuf (TOKULOGGER logger);
 // Rationale:  When the buffer becomes nearly full, call this function so that more can be put in.
 // Implementation note:  Since the output lock is acquired first, we must release the input lock, and then grab both in the right order.
 
-void toku_logger_maybe_fsync (TOKULOGGER logger, LSN lsn, int do_fsync, bool holds_input_lock);
+void toku_logger_maybe_fsync (TOKULOGGER logger, LSN lsn, int do_fsync, int update_log_start, bool holds_input_lock);
 // Effect: If fsync is nonzero, then make sure that the log is flushed and synced at least up to lsn.
 // Entry: Holds input lock iff 'holds_input_lock'.
 // Exit:  Holds no locks.
 
 // Discussion: How does the logger work:
-//  The logger has two buffers: an inbuf and an outbuf.  
+//  The logger has two buffers: an inbuf and an outbuf.
 //  There are two locks, called the inlock, and the outlock.  To write, both locks must be held, and the outlock is acquired first.
 //  Roughly speaking, the inbuf is used to accumulate logged data, and the outbuf is used to write to disk.
-//  When something is to be logged we do the following: 
+//  When something is to be logged we do the following:
 //    acquire the inlock.
 //    Make sure there is space in the inbuf for the logentry. (We know the size of the logentry in advance):
 //      if the inbuf doesn't have enough space then
@@ -249,7 +246,7 @@ void toku_logger_maybe_fsync (TOKULOGGER logger, LSN lsn, int do_fsync, bool hol
 //      release the inlock
 //      acquire the outlock
 //      acquire the inlock
-//      if the LSN has been flushed and fsynced (if so we are done.  Some other thread did the flush.)  
+//      if the LSN has been flushed and fsynced (if so we are done.  Some other thread did the flush.)
 //        release the locks
 //      if the LSN has been flushed but not fsynced up to the LSN:
 //        release the inlock

@@ -105,30 +105,40 @@ static int iszero(char *cp, size_t n) {
 }
 
 extern "C" int test_pwrite4g(void);
-
+static int ALIGNMENT_SIZE;
 int test_pwrite4g(void) {
     int r;
-    unlink(TOKU_TEST_FILENAME);
-    int fd = open(TOKU_TEST_FILENAME, O_RDWR | O_CREAT | O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
+    int fd = open(TOKU_TEST_FILENAME_DATA, O_RDWR | O_CREAT | O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO);
     assert(fd>=0);
-    char *XMALLOC_N_ALIGNED(512, 512, buf);
-    memset(buf, 0, 512);
+    if (ftfs_is_hdd()) {
+        ALIGNMENT_SIZE = 512;
+    } else {
+        ALIGNMENT_SIZE = 4096;
+    }
+
+    char *XMALLOC_N_ALIGNED(ALIGNMENT_SIZE, ALIGNMENT_SIZE, buf);
+    memset(buf, 0, ALIGNMENT_SIZE);
     strcpy(buf, "hello");
-    int64_t offset = (1LL<<32) + 512;
-    toku_os_full_pwrite(fd, buf, 512, offset);
-    char newbuf[512];
-    r = pread(fd, newbuf, sizeof newbuf, 100);
-    assert(r==sizeof newbuf);
-    assert(iszero(newbuf, sizeof newbuf));
-    r = pread(fd, newbuf, sizeof newbuf, offset);
-    assert(r==sizeof newbuf);
-    assert(memcmp(newbuf, buf, sizeof newbuf) == 0);
+    int64_t offset = (1LL<<32) + ALIGNMENT_SIZE;
+    toku_os_full_pwrite(fd, buf, ALIGNMENT_SIZE, offset, true);
+    char *XMALLOC_N_ALIGNED(ALIGNMENT_SIZE, ALIGNMENT_SIZE, newbuf);
+
+    r = pread(fd, newbuf, 512, 100);
+    assert(r==512);
+    assert(iszero(newbuf, 512));
+    r = pread(fd, newbuf, 512, offset);
+    assert(r==512);
+    assert(memcmp(newbuf, buf, 512) == 0);
     int64_t fsize;
     r = toku_os_get_file_size(fd, &fsize);
     printf("fsize: %lu\n", fsize);
     assert(r == 0);
-    assert(fsize > 100 + 512);
+    assert(fsize > 100 + ALIGNMENT_SIZE);
     toku_free(buf);
+    toku_free(newbuf);
+
     r = close(fd);
     assert(r==0);
     return 0;

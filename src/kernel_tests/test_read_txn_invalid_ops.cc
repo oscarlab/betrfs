@@ -133,8 +133,8 @@ static void test_invalid_ops(uint32_t iso_flags) {
     DB * db;
     DB_ENV * env;
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, 0755); { int chk_r = r; CKERR(chk_r); }
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
 
     // set things up
     r = db_env_create(&env, 0); 
@@ -144,7 +144,7 @@ static void test_invalid_ops(uint32_t iso_flags) {
     r = env->set_generate_row_callback_for_del(env,generate_row_for_del); 
     CKERR(r);
     env->set_update(env, update_fun);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_TXN|DB_PRIVATE, 0755); 
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_TXN|DB_PRIVATE, 0755); 
     CKERR(r);
     r = db_create(&db, env, 0); 
     CKERR(r);
@@ -153,9 +153,9 @@ static void test_invalid_ops(uint32_t iso_flags) {
     r = env->txn_begin(env, 0, &txn, iso_flags | DB_TXN_READ_ONLY);
     CKERR(r);
 
-    r = db->open(db, txn, "foo.db", NULL, DB_BTREE, DB_CREATE, 0644); 
+    r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_CREATE, 0644); 
     CKERR2(r, EINVAL);
-    r = db->open(db, NULL, "foo.db", NULL, DB_BTREE, DB_CREATE, 0644); 
+    r = db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_CREATE, 0644); 
     CKERR(r);
 
     int k = 1;

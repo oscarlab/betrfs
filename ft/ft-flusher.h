@@ -160,7 +160,8 @@ toku_ft_flush_node_on_background_thread(
 
 int
 toku_ft_node_relift(FT ft, FTNODE node, DBT *old_lifted, DBT *new_lifted);
-int
+
+int 
 toku_ft_relift_key(FT ft, DBT *key, DBT *old_lifted, DBT *new_lifted);
 /**
  * Effect: Split a leaf node.
@@ -171,7 +172,7 @@ toku_ft_relift_key(FT ft, DBT *key, DBT *old_lifted, DBT *new_lifted);
  *   splitk is the right-most key of nodea
  */
 void
-ftleaf_split(
+ft_split_leaf(
     FT h,
     FTNODE node,
     FTNODE *nodea,
@@ -189,8 +190,8 @@ enum ft_rfm_type {
     FT_RELOCATE_FINISH_MERGE_BOTH
 };
 
-int
-ft_relocate_finish_merge(FT ft, FTNODE node, int childnum, enum ft_rfm_type type);
+void
+ft_nonleaf_fetch_child_and_flush(FT ft, FTNODE node, int childnum, FTNODE *child);
 
 /**
  * Effect: node must be a node-leaf node.  It is split into two nodes, and
@@ -248,9 +249,4 @@ toku_ft_hot_optimize(FT_HANDLE brt, DBT* left, DBT* right,
                       void *progress_extra, uint64_t* loops_run);
 extern "C" void printf_count_blindwrite(void);
 
-void toku_ft_flush_this_child(
-    FT ft,
-    FTNODE node,
-    FTNODE childnode,
-    int childnum) ;
 #endif // End of header guardian.

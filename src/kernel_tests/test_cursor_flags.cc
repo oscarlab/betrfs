@@ -103,21 +103,22 @@ static void
 test_cursor_flags (int cursor_flags, int expectr) {
     if (verbose) printf("test_cursor_flags:%d %d\n", cursor_flags, expectr);
 
-    DB_TXN * const null_txn = 0;
-    const char * const fname = "test.cursor.delete.ft_handle";
+    DB_TXN *null_txn = 0;
+    const char * const fname = TOKU_TEST_DATA_DB_NAME;
     int r;
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
-    
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);    
+
     DB_ENV *env;
     r = db_env_create(&env, 0); assert(r == 0);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL, 0); assert(r == 0);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL+DB_INIT_LOG+DB_INIT_TXN, 0); assert(r == 0);
+    r = env->txn_begin(env, NULL, &null_txn, 0);
 
     DB *db;
     r = db_create(&db, env, 0); assert(r == 0);
     db->set_errfile(db,0); // Turn off those annoying errors
-    r = db->open(db, null_txn, fname, "main", DB_BTREE, DB_CREATE, 0666); assert(r == 0);
+    r = db->open(db, null_txn, fname, NULL, DB_BTREE, DB_CREATE, 0666); assert(r == 0);
 
     DBC *cursor;
     r = db->cursor(db, null_txn, &cursor, cursor_flags);
@@ -128,6 +129,9 @@ test_cursor_flags (int cursor_flags, int expectr) {
     }
 
     r = db->close(db, 0); assert(r == 0);
+
+    r = null_txn->commit(null_txn, 0); assert_zero(r);
+
     r = env->close(env, 0); assert(r == 0);
 }
 

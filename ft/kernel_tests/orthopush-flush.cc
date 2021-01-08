@@ -669,6 +669,9 @@ flush_to_internal_multiple(FT_HANDLE t) {
        toku_free(child_messages[i]);
     }
     destroy_nonleaf_childinfo(parent_bnc);
+    for (i = 0; i < 7; ++i) {
+        toku_cleanup_dbt(&child->childkeys[i]);
+    }
     toku_ftnode_free(&child);
     toku_free(parent_messages);
     toku_free(child_messages);
@@ -804,18 +807,17 @@ flush_to_leaf(FT_HANDLE t, bool make_leaf_up_to_date, bool use_flush) {
         set_BNC(parentnode, 0, parent_bnc);
         BP_STATE(parentnode, 0) = PT_AVAIL;
         parentnode->max_msn_applied_to_node_on_disk = max_parent_msn;
-        struct ancestors ancestors = { .node = parentnode, .childnum = 0, .next = NULL };
-        const struct pivot_bounds infinite_bounds = { .lower_bound_exclusive = NULL, .upper_bound_inclusive = NULL };
+        struct ancestors ancestors;
+        ancestors.node = parentnode;
+        ancestors.childnum = 0;
+        ancestors.is_goto = false;
+        toku_init_dbt(&ancestors.goto_lift);
+        toku_init_dbt(&ancestors.goto_not_lifted);
+        ancestors.goto_msn = {0};
+        ancestors.next = NULL;
+        struct pivot_bounds infinite_bounds = { .lk = NULL, .uk = NULL };
         bool msgs_applied;
-        toku_apply_ancestors_messages_to_node(t, child, &ancestors, &infinite_bounds, &msgs_applied, -1, nullptr);
-#if 0
-
-        FIFO_ITERATE(parent_bnc->buffer, key, keylen, val, vallen, type, msn, xids, is_fresh,
-                     {
-                         key = key; keylen = keylen; val = val; vallen = vallen; type = type; msn = msn; xids = xids;
-                         assert(!is_fresh);
-                     });
-#endif
+        toku_apply_ancestors_messages_to_node(t, child, &ancestors, &infinite_bounds, &msgs_applied, -1);
         toku_fifo_iterate(parent_bnc->buffer, iter_assert_fresh, NULL);
         invariant(parent_bnc->fresh_message_tree.size() + parent_bnc->stale_message_tree.size()
                   == (uint32_t) num_parent_messages);
@@ -914,6 +916,9 @@ flush_to_leaf(FT_HANDLE t, bool make_leaf_up_to_date, bool use_flush) {
     for (i = 0; i < num_child_messages; ++i) {
         toku_free(child_messages[i]);
         toku_free(key_pointers[i]);
+    }
+    for (i = 0; i < 7; ++i) {
+        toku_cleanup_dbt(&child->childkeys[i]);
     }
     toku_ftnode_free(&child);
     toku_free(parent_messages);
@@ -1070,22 +1075,25 @@ flush_to_leaf_with_keyrange(FT_HANDLE t, bool make_leaf_up_to_date) {
     set_BNC(parentnode, 0, parent_bnc);
     BP_STATE(parentnode, 0) = PT_AVAIL;
     parentnode->max_msn_applied_to_node_on_disk = max_parent_msn;
-    struct ancestors ancestors = { .node = parentnode, .childnum = 0, .next = NULL };
+    struct ancestors ancestors;
+    ancestors.node = parentnode;
+    ancestors.childnum = 0;
+    ancestors.is_goto = false;
+    toku_init_dbt(&ancestors.goto_lift);
+    toku_init_dbt(&ancestors.goto_not_lifted);
+    ancestors.goto_msn = {0};
+    ancestors.next = NULL;
     DBT lbe, ubi;
-    const struct pivot_bounds bounds = {
-        .lower_bound_exclusive = toku_init_dbt(&lbe),
-        .upper_bound_inclusive = toku_clone_dbt(&ubi, childkeys[7])
-    };
+    struct pivot_bounds infinite_bounds = { .lk = toku_init_dbt(&lbe), .uk = toku_clone_dbt(&ubi, childkeys[7]) };
     bool msgs_applied;
-    toku_apply_ancestors_messages_to_node(t, child, &ancestors, &bounds, &msgs_applied, -1, nullptr);
+    toku_apply_ancestors_messages_to_node(t, child, &ancestors, &infinite_bounds, &msgs_applied, -1);
 
-//    FIFO_ITERATE(parent_bnc->buffer, key, keylen, val, vallen, type, msn, xids, is_fresh,
-struct iter_fn2_args args = {
-    num_parent_messages,
-    parent_messages,
-    parent_messages_is_fresh,
-    childkeys
-};
+    struct iter_fn2_args args = {
+        num_parent_messages,
+        parent_messages,
+        parent_messages_is_fresh,
+        childkeys
+    };
     toku_fifo_iterate(parent_bnc->buffer, iter_flush_to_leaf_fn, &args);
     toku_ftnode_free(&parentnode);
 
@@ -1119,6 +1127,9 @@ struct iter_fn2_args args = {
     for (i = 0; i < num_child_messages; ++i) {
         toku_free(child_messages[i]);
         toku_free(key_pointers[i]);
+    }
+    for (i = 0; i < 7; ++i) {
+        toku_cleanup_dbt(&child->childkeys[i]);
     }
     toku_ftnode_free(&child);
     toku_free(parent_messages);
@@ -1254,18 +1265,17 @@ compare_apply_and_flush(FT_HANDLE t, bool make_leaf_up_to_date) {
     set_BNC(parentnode, 0, parent_bnc);
     BP_STATE(parentnode, 0) = PT_AVAIL;
     parentnode->max_msn_applied_to_node_on_disk = max_parent_msn;
-    struct ancestors ancestors = { .node = parentnode, .childnum = 0, .next = NULL };
-    const struct pivot_bounds infinite_bounds = { .lower_bound_exclusive = NULL, .upper_bound_inclusive = NULL };
+    struct ancestors ancestors;
+    ancestors.node = parentnode;
+    ancestors.childnum = 0;
+    ancestors.is_goto = false;
+    toku_init_dbt(&ancestors.goto_lift);
+    toku_init_dbt(&ancestors.goto_not_lifted);
+    ancestors.goto_msn = {0};
+    ancestors.next = NULL;
+    struct pivot_bounds infinite_bounds = { .lk = NULL, .uk = NULL };
     bool msgs_applied;
-    toku_apply_ancestors_messages_to_node(t, child2, &ancestors, &infinite_bounds, &msgs_applied, -1, nullptr);
-#if 0
-
-    FIFO_ITERATE(parent_bnc->buffer, key, keylen, val, vallen, type, msn, xids, is_fresh,
-                 {
-                     key = key; keylen = keylen; val = val; vallen = vallen; type = type; msn = msn; xids = xids;
-                     assert(!is_fresh);
-                 });
-#endif
+    toku_apply_ancestors_messages_to_node(t, child2, &ancestors, &infinite_bounds, &msgs_applied, -1);
 
     toku_fifo_iterate(parent_bnc->buffer, iter_assert_fresh, NULL);
     invariant(parent_bnc->fresh_message_tree.size() + parent_bnc->stale_message_tree.size()
@@ -1321,6 +1331,10 @@ compare_apply_and_flush(FT_HANDLE t, bool make_leaf_up_to_date) {
         toku_free(key_pointers[i]);
         toku_free(child_messages[i]);
     }
+    for (i = 0; i < 7; ++i) {
+        toku_cleanup_dbt(&child1->childkeys[i]);
+        toku_cleanup_dbt(&child2->childkeys[i]);
+    }
     toku_ftnode_free(&child1);
     toku_ftnode_free(&child2);
     toku_free(parent_messages);
@@ -1337,13 +1351,16 @@ int test_orthopush_flush(void) {
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
 
-    fname = TOKU_TEST_FILENAME;
+    fname = TOKU_TEST_FILENAME_DATA;
     int r;
     CACHETABLE ct;
+
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r == 0);
     FT_HANDLE t;
-    r = toku_open_ft_handle(fname, 1, &t, 128*1024, 4096, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun); assert(r==0);
+    r = toku_open_ft_handle(fname, 1, &t, 128*1024, 4096, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
+    assert(r==0);
     toku_ft_set_update(t, orthopush_flush_update_fun);
     // HACK
     t->ft->update_fun = orthopush_flush_update_fun;

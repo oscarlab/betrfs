@@ -111,7 +111,7 @@ typedef int (*ft_search_compare_func_t)(const struct ft_search &, const DBT *);
 typedef struct ft_search {
     ft_search_compare_func_t compare;
     enum ft_search_direction_e direction;
-    const DBT *k;
+    DBT k;
     void *context;
 
     // To fix #3522, we need to remember the pivots that we have searched unsuccessfully.
@@ -134,9 +134,9 @@ typedef struct ft_search {
     // There also remains a potential thrashing problem.  When we get a TOKUDB_TRY_AGAIN, we unpin everything.  There's
     //   no guarantee that we will get everything pinned again.  We ought to keep nodes pinned when we retry, except that on the
     //   way out with a DB_NOTFOUND we ought to unpin those nodes.  See #3528.
+    bool use_pivot_bound;
     DBT pivot_bound;
-
-    ANCESTORS kupsert_ancestors;
+    const DBT *user_key;
 } ft_search_t;
 
 static inline ft_search_t *
@@ -146,10 +146,15 @@ ft_search_init(ft_search_t *so, ft_search_compare_func_t compare,
 {
     so->compare = compare;
     so->direction = direction;
-    so->k = k;
+    if (k) {
+        toku_copy_dbt(&so->k, *k);
+    } else {
+        toku_init_dbt(&so->k);
+    }
     so->context = context;
+    so->use_pivot_bound = false;
     toku_init_dbt(&so->pivot_bound);
-    so->kupsert_ancestors = NULL;
+    so->user_key = k;
     return so;
 }
 #endif

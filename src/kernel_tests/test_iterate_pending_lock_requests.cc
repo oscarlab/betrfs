@@ -96,7 +96,7 @@ PATENT RIGHTS GRANT:
 static DB_ENV *env;
 static DB *db;
 static DB_TXN *txn1, *txn2, *txn3;
-static const char *dname = "iterate_pending_requests_dname";
+static const char *dname = TOKU_TEST_DATA_DB_NAME;
 static const int magic_key = 100;
 static int iterate_callback_called;
 static toku_pthread_t thread1, thread2;
@@ -145,11 +145,11 @@ int test_test_iterate_pending_lock_requests(void) {
 
     pre_setup();
     iterate_callback_called = 0;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, 0755); CKERR(r);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);    
 
     r = db_env_create(&env, 0); CKERR(r);
-    r = env->open(env, TOKU_TEST_FILENAME, env_flags, 0755); CKERR(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, env_flags, 0755); CKERR(r);
     r = env->set_lock_timeout(env, 4000, nullptr);
 
     r = db_create(&db, env, 0); CKERR(r);

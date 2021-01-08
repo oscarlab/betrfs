@@ -750,7 +750,12 @@ static inline tokutxn_args * pack_args(TOKUTXN txn) {
 
 static void
 maybe_log_begin_txn_for_write_operation_unlocked(TOKUTXN txn) {
-    GenericStack<stack_elem> stack(1500);
+    // DEP 5/17/20: If this stack goes over 512 elems (1 page), it
+    // gets vmalloc'ed, which makes everything go slower.
+    // We should try to keep it small in the common case,
+    // ideally even smaller, and make gigantic transactions pay
+    // for a bigger stack dyamically
+    GenericStack<stack_elem> stack(256);
     marker status = marker::ENTRY;
     stack_elem e1 = {.status = EXIT };
     stack.push(e1);

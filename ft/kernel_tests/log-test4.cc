@@ -89,6 +89,7 @@ PATENT RIGHTS GRANT:
 #ident "Copyright (c) 2007, 2008 Tokutek Inc.  All rights reserved."
 
 #include "log-test3.h"
+#include "logsuperblock.h"
 
 // create and close, making sure that everything is deallocated properly.
 
@@ -96,11 +97,10 @@ extern "C" int log_test4(void);
 char log_name[TOKU_PATH_MAX+1];
 int log_test4 (void) {
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU);                               assert(r==0);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
     TOKULOGGER logger;
     r = toku_logger_create(&logger);                                 assert(r == 0);
-    r = toku_logger_open(TOKU_TEST_FILENAME, logger);                             assert(r == 0);
+    r = toku_logger_open(TOKU_TEST_ENV_DIR_NAME, logger);                             assert(r == 0);
 
     {
 	ml_lock(&logger->input_lock);
@@ -114,12 +114,17 @@ int log_test4 (void) {
 
     r = toku_logger_close(&logger);                                  assert(r == 0);
     {
-	toku_struct_stat statbuf;
-        sprintf(log_name, "%s/log000000000000.tokulog%d", TOKU_TEST_FILENAME, TOKU_LOG_VERSION);
-	r = toku_stat(log_name, &statbuf);
-	assert(r==0);
-	assert(statbuf.st_size==12+5);
+        sprintf(log_name, "%s/log000000000000.tokulog%d", TOKU_TEST_ENV_DIR_NAME, TOKU_LOG_VERSION);
+        int fd = open(log_name, O_RDONLY);
+        assert(fd >= 0);
+
+        uint32_t log_size;
+        r = toku_verify_logmagic_read_log_end(fd, &log_size);
+        assert(r==0);
+        printf("%s: log_size=%u\n", __func__, log_size);
+        assert(log_size==sizeof(struct log_super_block) + 5);
+
     }
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
     return 0;
 }

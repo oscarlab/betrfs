@@ -125,25 +125,15 @@ void ft_msg_init(FT_MSG, enum ft_msg_type, MSN, XIDS, const DBT *, const DBT *);
 MSN ft_msg_get_msn(FT_MSG);
 void ft_msg_multicast_init(FT_MSG, enum ft_msg_type, MSN, XIDS, const DBT *, const DBT *, const DBT *, bool, enum pacman_status);
 
+void ft_msg_goto_init(FT_MSG, MSN, XIDS, const DBT *, const DBT *, const DBT *, BLOCKNUM, int);
+
+struct goto_extra *ft_msg_goto_extra(FT_MSG);
+
 void ft_msg_read_from_rbuf(FT_MSG, DBT *, DBT *, DBT *, struct rbuf *, XIDS *, bool *);
 bool is_dbt_empty(const DBT *);
 const DBT * get_dbt_empty(void);
 
 void ft_msg_write_to_wbuf(FT_MSG, struct wbuf *, int );
-void ft_msg_kupsert_init(FT_MSG ft_msg, enum ft_msg_type type, MSN msn, XIDS
-                         xids, BYTESTRING old_prefix, BYTESTRING new_prefix);
-
-char *  ft_msg_get_kupsert_new_prefix(FT_MSG ft_msg) ;
-uint32_t ft_msg_get_kupsert_new_prefix_len(FT_MSG ft_msg) ;
-char * ft_msg_get_kupsert_old_prefix(FT_MSG ft_msg);
-uint32_t ft_msg_get_kupsert_old_prefix_len(FT_MSG ft_msg);
-#if 0
-
-void ft_msg_from_dbts(FT_MSG ft_msg, DBT *key, DBT *val, XIDS xids, enum ft_msg_type type);
-
-#endif
-
-
 
 #endif  // FT_MSG_H
 

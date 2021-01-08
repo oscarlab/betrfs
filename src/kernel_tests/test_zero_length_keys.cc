@@ -97,10 +97,11 @@ PATENT RIGHTS GRANT:
 #include <sys/stat.h>
 #include <db.h>
 
+static DB_TXN *null_txn = 0;
+
 static void
 walk (DB *db) {
     int r;
-    DB_TXN * const null_txn = 0;
 
     DBC *cursor;
     r = db->cursor(db, null_txn, &cursor, 0); assert(r == 0);
@@ -110,7 +111,7 @@ walk (DB *db) {
     int i;
     for (i=0; ; i++) {
         r = cursor->c_get(cursor, &key, &val, DB_NEXT);
-        if (r != 0) 
+        if (r != 0)
             break;
         if (verbose) printf("%d %u %u\n", i, key.size, val.size);
         if (i == 0) assert(key.size == 0);
@@ -126,22 +127,22 @@ static void
 test_insert_zero_length (int n, int dup_mode, const char *fname) {
     if (verbose) printf("test_insert_zero_length:%d %d\n", n, dup_mode);
 
-    DB_TXN * const null_txn = 0;
     int r;
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
 
     /* create the dup database file */
     DB_ENV *env;
     r = db_env_create(&env, 0); assert(r == 0);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL, 0); assert(r == 0);
+
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL+DB_INIT_LOG+DB_INIT_TXN, 0); assert(r == 0);
+    r = env->txn_begin(env, NULL, &null_txn, 0); assert_zero(r);
 
     DB *db;
     r = db_create(&db, env, 0); assert(r == 0);
     r = db->set_flags(db, dup_mode); assert(r == 0);
     r = db->set_pagesize(db, 4096); assert(r == 0);
-    r = db->open(db, null_txn, fname, "main", DB_BTREE, DB_CREATE, 0666); assert(r == 0);
+    r = db->open(db, null_txn, fname, NULL, DB_BTREE, DB_CREATE, 0666); assert(r == 0);
 
     int i;
     for (i=0; i<n; i++) {
@@ -161,7 +162,11 @@ test_insert_zero_length (int n, int dup_mode, const char *fname) {
             assert(r == 0 && val.data == 0 && val.size == 0);
 
             r = db->get(db, null_txn, &key, dbt_init_malloc(&val), 0);
-            assert(r == 0 && val.data != 0 && val.size == 0);
+            // dep 1/1/20: My reading of the BDB spec it is valid for
+            // val.data to be NULL or non-NULL if the size is zero
+            // when passed with the DB_DBT_MALLOC flag (set in db_init_malloc()).
+            // So we don't check val.data here, as either NULL or non-NULL are acceptable
+            assert(r == 0 && val.size == 0);
             toku_free(val.data);
 
             memset(&key, 0, sizeof key);
@@ -170,7 +175,7 @@ test_insert_zero_length (int n, int dup_mode, const char *fname) {
             assert(r == 0 && val.data == 0 && val.size == 0);
 
             r = db->get(db, null_txn, &key, dbt_init_malloc(&val), 0);
-            assert(r == 0 && val.data != 0 && val.size == 0);
+            assert(r == 0 && val.size == 0);
             toku_free(val.data);
         }
     }
@@ -178,6 +183,7 @@ test_insert_zero_length (int n, int dup_mode, const char *fname) {
     walk(db);
 
     r = db->close(db, 0); assert(r == 0);
+    r = null_txn->commit(null_txn, 0); assert_zero(r);
     r = env->close(env, 0); assert(r == 0);
 }
 
@@ -185,22 +191,22 @@ static void
 test_insert_zero_length_keys (int n, int dup_mode, const char *fname) {
     if (verbose) printf("test_insert_zero_length_keys:%d %d\n", n, dup_mode);
 
-    DB_TXN * const null_txn = 0;
     int r;
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
 
     /* create the dup database file */
     DB_ENV *env;
     r = db_env_create(&env, 0); assert(r == 0);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL, 0); assert(r == 0);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL+DB_INIT_LOG+DB_INIT_TXN, 0); assert(r == 0);
+
+    r = env->txn_begin(env, NULL, &null_txn, 0); assert_zero(r);
 
     DB *db;
     r = db_create(&db, env, 0); assert(r == 0);
     r = db->set_flags(db, dup_mode); assert(r == 0);
     r = db->set_pagesize(db, 4096); assert(r == 0);
-    r = db->open(db, null_txn, fname, "main", DB_BTREE, DB_CREATE, 0666); assert(r == 0);
+    r = db->open(db, null_txn, fname, NULL, DB_BTREE, DB_CREATE, 0666); assert(r == 0);
 
     int i;
     for (i=0; i<n; i++) {
@@ -218,21 +224,18 @@ test_insert_zero_length_keys (int n, int dup_mode, const char *fname) {
     walk(db);
 
     r = db->close(db, 0); assert(r == 0);
+    r = null_txn->commit(null_txn, 0); assert_zero(r);
     r = env->close(env, 0); assert(r == 0);
 }
 
 extern "C" int test_test_zero_length_keys(void);
 int test_test_zero_length_keys(void) {
 
-    pre_setup(); 
-#define TFILE __FILE__ ".tktrace"
-    unlink(TFILE);
-    SET_TRACE_FILE(TFILE);
+    pre_setup();
 
-    test_insert_zero_length(32, 0, "test0");
-    test_insert_zero_length_keys(32, 0, "test0keys");
+    test_insert_zero_length(32, 0, TOKU_TEST_DATA_DB_NAME);
+    test_insert_zero_length_keys(32, 0, TOKU_TEST_DATA_DB_NAME);
 
-    CLOSE_TRACE_FILE();
     post_teardown();
 
     return 0;

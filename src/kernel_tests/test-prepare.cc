@@ -97,8 +97,7 @@ static void clean_env (const char *envdir) {
     snprintf(cmd, len, "rm -rf %s", envdir);
     int r = system(cmd);
     CKERR(r);*/
-    toku_os_recursive_delete(envdir);    
-    CKERR(toku_os_mkdir(envdir, S_IRWXU+S_IRWXG+S_IRWXO));
+    CKERR(toku_fs_reset(envdir, S_IRWXU+S_IRWXG+S_IRWXO));
 }
 
 static void setup_env (DB_ENV **envp, const char *envdir) {

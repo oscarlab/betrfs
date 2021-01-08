@@ -115,7 +115,7 @@ static int compare_fields (const void *av, const void *bv) {
     if (a->offset< b->offset) return -1;
     if (a->offset==b->offset) return  0;
     return +1;
-}				      
+}
 
 #define STRUCT_SETUP(typ, fname, fstring) ({            \
     assert(field_counter<FIELD_LIMIT);                  \
@@ -272,6 +272,7 @@ static void print_defines (void) {
 #endif
     printf("#define DB_BADFORMAT -30500\n"); // private tokudb
     printf("#define DB_DELETE_ANY %d\n", 1<<16); // private tokudb
+    printf("#define DB_CLONE_DELETE_OLD %d\n", 1<<16); // the clone detetes old (rename)
 
     dodefine(DB_FIRST);
     dodefine(DB_LAST);
@@ -338,8 +339,9 @@ static void print_defines (void) {
         dodefine_from_track(txn_flags, DB_INHERIT_ISOLATION);
         dodefine_from_track(txn_flags, DB_SERIALIZABLE);
         dodefine_from_track(txn_flags, DB_TXN_READ_ONLY);
+        dodefine_from_track(txn_flags, DB_SEQ_READ);
     }
-    
+
     /* TOKUDB specific error codes*/
     printf("/* TOKUDB specific error codes */\n");
     dodefine(TOKUDB_OUT_OF_LOCKS);
@@ -375,11 +377,10 @@ static void print_db_env_struct (void) {
     printf("struct toku_db_key_operations {\n");
     printf("    int (*keycmp) (DB *, const DBT *, const DBT *);\n");
     printf("    int (*keypfsplit) (DB *, const DBT *, const DBT *, void (*set_key)(const DBT *new_key, void *set_extra), void *extra);\n");
-    printf("    int (*keyrename) (const DBT *old_prefix, const DBT *new_prefix, const DBT *, void (*set_key)(const DBT *new_key, void *set_extra), void *set_extra);\n");
     printf("    void (*keyprint) (const DBT *key, bool is_tracable_print);\n");
-    printf("    int (*keylift) (const DBT *lpivot, const DBT *rpivot, void (*set_lift)(const DBT *lift, void *set_extra), void *set_extra);\n");
-    printf("    int (*keyliftkey) (const DBT *key, const DBT *lifted, void (*set_key)(const DBT *new_key, void *set_extra), void *set_extra);\n");
-    printf("    int (*keyunliftkey) (const DBT *key, const DBT *lifted, void (*set_key)(const DBT *new_key, void *set_extra), void *set_extra);\n");
+    printf("    int (*keylift) (DB *db, const DBT *lpivot, const DBT *rpivot, void (*set_lift)(const DBT *lift, void *set_extra), void *set_extra);\n");
+    printf("    int (*liftkey) (const DBT *key, const DBT *lifted, void (*set_key)(const DBT *new_key, void *set_extra), void *set_extra);\n");
+    printf("    int (*unliftkey) (const DBT *key, const DBT *lifted, void (*set_key)(const DBT *new_key, void *set_extra), void *set_extra);\n");
     printf("};\n");
 
     field_counter=0;
@@ -392,7 +393,6 @@ static void print_db_env_struct (void) {
     STRUCT_SETUP(DB_ENV, get_flags, "int  (*%s) (DB_ENV *, uint32_t *)");
     STRUCT_SETUP(DB_ENV, get_lg_max, "int  (*%s) (DB_ENV *, uint32_t*)");
 #endif
-    STRUCT_SETUP(DB_ENV, log_archive, "int  (*%s) (DB_ENV *, char **[], uint32_t)");
     STRUCT_SETUP(DB_ENV, log_flush, "int  (*%s) (DB_ENV *, const DB_LSN *)");
     STRUCT_SETUP(DB_ENV, open, "int  (*%s) (DB_ENV *, const char *, uint32_t, int)");
     STRUCT_SETUP(DB_ENV, set_cachesize, "int  (*%s) (DB_ENV *, uint32_t, uint32_t, int)");
@@ -512,8 +512,9 @@ static void print_db_struct (void) {
     STRUCT_SETUP(DB, cursor,         "int (*%s) (DB *, DB_TXN *, DBC **, uint32_t)");
     STRUCT_SETUP(DB, dbenv,          "DB_ENV *%s");
     STRUCT_SETUP(DB, del,            "int (*%s) (DB *, DB_TXN *, DBT *, uint32_t)");
-    STRUCT_SETUP(DB, del_multi,            "int (*%s) (DB *, DB_TXN *, DBT *, DBT *, bool, uint32_t)");
-    STRUCT_SETUP(DB, rename,         "int (*%s) (DB *, DB_TXN *, DBT *, DBT *, DBT *, DBT *, uint32_t)"); 
+    STRUCT_SETUP(DB, del_multi,      "int (*%s) (DB *, DB_TXN *, DBT *, DBT *, bool, uint32_t)");
+    STRUCT_SETUP(DB, rd,             "int (*%s) (DB *, DB_TXN *, DBT *, DBT *, uint32_t)");
+    STRUCT_SETUP(DB, clone,          "int (*%s) (DB *, DB_TXN *, DBT *, DBT *, DBT *, DBT *, uint32_t)");
     STRUCT_SETUP(DB, fd,             "int (*%s) (DB *, int *)");
     STRUCT_SETUP(DB, get,            "int (*%s) (DB *, DB_TXN *, DBT *, DBT *, uint32_t)");
 #if DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 3
@@ -587,7 +588,7 @@ static void print_db_txn_struct (void) {
     STRUCT_SETUP(DB_TXN, mgrp,        "DB_ENV *%s /*In TokuDB, mgrp is a DB_ENV not a DB_TXNMGR*/");
     STRUCT_SETUP(DB_TXN, parent,      "DB_TXN *%s");
     const char *extra[] = {
-	"int (*txn_stat)(DB_TXN *, struct txn_stat **)", 
+	"int (*txn_stat)(DB_TXN *, struct txn_stat **)",
 	"struct toku_list open_txns",
 	"int (*commit_with_progress)(DB_TXN*, uint32_t, TXN_PROGRESS_POLL_FUNCTION, void*)",
 	"int (*abort_with_progress)(DB_TXN*, TXN_PROGRESS_POLL_FUNCTION, void*)",
@@ -644,8 +645,7 @@ int main (int argc, char *const argv[] __attribute__((__unused__))) {
     printf("#include <stdbool.h>\n");
     printf("#include <stdint.h>\n");
     printf("#else\n");
-    printf("#include \"faked_std.h\"\n");
-    printf("#include \"ftfs_files.h\"\n");
+    printf("#include \"sb_files.h\"\n");
     printf("#endif //__KERNEL__\n");
     //printf("#include <inttypes.h>\n");
     printf("#if defined(__cplusplus) || defined(__cilkplusplus)\nextern \"C\" {\n#endif\n");
@@ -689,7 +689,7 @@ int main (int argc, char *const argv[] __attribute__((__unused__))) {
     printf("typedef int(*YDB_CALLBACK_FUNCTION)(DBT const*, DBT const*, void*);\n");
 
     printf("#include \"tdb-internal.h\"\n");
-    
+
     //stat64
     printf("typedef struct __toku_db_btree_stat64 {\n");
     printf("  uint64_t bt_nkeys; /* how many unique keys (guaranteed only to be an estimate, even when flattened)          */\n");
@@ -852,9 +852,11 @@ int main (int argc, char *const argv[] __attribute__((__unused__))) {
     printf("void db_env_set_func_fsync (int (*)(int)) %s;\n", VISIBLE);
     printf("void db_env_set_func_free (void (*)(void*)) %s;\n", VISIBLE);
     printf("void db_env_set_func_malloc (void *(*)(size_t)) %s;\n", VISIBLE);
-    printf("void db_env_set_func_realloc (void *(*)(void*, size_t)) %s;\n", VISIBLE);
+    printf("void db_env_set_func_realloc (void *(*)(void*, size_t, size_t)) %s;\n", VISIBLE);
+    printf("void db_env_set_func_free_sized (void (*)(void*, size_t)) %s;\n", VISIBLE);
+    printf("void db_env_set_func_malloc_sized (void *(*)(size_t, bool)) %s;\n", VISIBLE);
     printf("void db_env_set_func_pwrite (ssize_t (*)(int, const void *, size_t, toku_off_t)) %s;\n", VISIBLE);
-    printf("void db_env_set_func_full_pwrite (ssize_t (*)(int, const void *, size_t, toku_off_t)) %s;\n", VISIBLE);
+    printf("void db_env_set_func_full_pwrite (ssize_t (*)(int, const void *, size_t, toku_off_t, bool)) %s;\n", VISIBLE);
     printf("void db_env_set_func_write (ssize_t (*)(int, const void *, size_t)) %s;\n", VISIBLE);
     printf("void db_env_set_func_full_write (ssize_t (*)(int, const void *, size_t)) %s;\n", VISIBLE);
     printf("void db_env_set_func_fdopen (FILE* (*)(int, const char *)) %s;\n", VISIBLE);

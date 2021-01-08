@@ -101,22 +101,24 @@ PATENT RIGHTS GRANT:
 static void
 test_insert_delete_insert (void) {
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
 
     if (verbose) printf("test_insert_delete_insert:\n");
 
-    DB_TXN * const null_txn = 0;
-    const char * const fname = "test.cursor.insert.delete.insert.ft_handle";
+    DB_TXN *null_txn = 0;
+    const char * const fname = TOKU_TEST_DATA_DB_NAME;
 
     /* create the dup database file */
     DB_ENV *env;
     r = db_env_create(&env, 0); assert(r == 0);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL, 0); assert(r == 0);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL+DB_INIT_LOG+DB_INIT_TXN, 0); assert(r == 0);
+
+    r = env->txn_begin(env, NULL, &null_txn, 0); assert_zero(r);
 
     DB *db;
     r = db_create(&db, env, 0); assert(r == 0);
-    r = db->open(db, null_txn, fname, "main", DB_BTREE, DB_CREATE, 0666); assert(r == 0);
+    r = db->open(db, null_txn, fname, NULL, DB_BTREE, DB_CREATE, 0666); assert(r == 0);
 
     DBC *cursor;
     r = db->cursor(db, null_txn, &cursor, 0); assert(r == 0);
@@ -150,6 +152,7 @@ test_insert_delete_insert (void) {
     r = cursor->c_close(cursor); assert(r == 0);
 
     r = db->close(db, 0); assert(r == 0);
+    r = null_txn->commit(null_txn, 0); assert_zero(r);
     r = env->close(env, 0); assert(r == 0);
 }
 

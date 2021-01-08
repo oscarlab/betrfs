@@ -117,11 +117,18 @@ enum {NUM_DBS=5};
 
 static const char *env_dir; // the default env_dir.
 
+static const char* dbname[5] = {
+    TOKU_TEST_DATA_DB_NAME,
+    TOKU_TEST_META_DB_NAME,
+    TOKU_TEST_ONE_DB_NAME,
+    TOKU_TEST_TWO_DB_NAME,
+    TOKU_TEST_THREE_DB_NAME
+};
+
 static void run_cachetable_race_test(void) 
 {
     int r;
-    toku_os_recursive_delete(env_dir);
-    r = toku_os_mkdir(env_dir, S_IRWXU+S_IRWXG+S_IRWXO);                                                      CKERR(r);
+    r = toku_fs_reset(env_dir, S_IRWXU+S_IRWXG+S_IRWXO);                                                      CKERR(r);
 
     r = db_env_create(&env, 0);                                                                               CKERR(r);
     env->set_errfile(env, stderr);
@@ -130,18 +137,14 @@ static void run_cachetable_race_test(void)
     env->set_errfile(env, stderr);
     r = env->checkpointing_set_period(env, 5);                                                                CKERR(r);
     
-    enum {MAX_NAME=128};
-    char name[MAX_NAME];
-
     DB **XMALLOC_N(NUM_DBS, dbs);
     int idx[NUM_DBS];
     for(int i=0;i<NUM_DBS;i++) {
         idx[i] = i;
         r = db_create(&dbs[i], env, 0);                                                                       CKERR(r);
         dbs[i]->app_private = &idx[i];
-        snprintf(name, sizeof(name), "db_%04x", i);
-        r = dbs[i]->open(dbs[i], NULL, name, NULL, DB_BTREE, DB_CREATE, 0666);                                CKERR(r);
-
+        assert(i < 5);
+        r = dbs[i]->open(dbs[i], NULL, dbname[i], NULL, DB_BTREE, DB_CREATE, 0666);                                CKERR(r);
     }
 
     for(int i=0;i<NUM_DBS;i++) {
@@ -168,7 +171,7 @@ static void do_args(void) {
 
 extern "C" int test_cachetable_race(void);
 int test_cachetable_race(void) {
-    env_dir = TOKU_TEST_FILENAME;
+    env_dir = TOKU_TEST_ENV_DIR_NAME;
     pre_setup();
     do_args();
     run_cachetable_race_test();

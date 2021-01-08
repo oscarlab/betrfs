@@ -104,7 +104,7 @@ le_add_to_bn(bn_data* bn, uint32_t idx, char *key, int keylen, char *val, int va
     LEAFENTRY r = NULL;
     uint32_t size_needed = LE_CLEAN_MEMSIZE(vallen);
     bn->get_space_for_insert(
-        idx, 
+        idx,
         key,
         keylen,
         size_needed,
@@ -129,9 +129,9 @@ test_serialize_leaf(int valsize, int nelts, double entropy) {
     //    struct ft_handle source_ft;
     struct ftnode *sn, *dn;
 
-    int fd = open(TOKU_TEST_FILENAME, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
-    int r;
+    int fd = open(TOKU_TEST_FILENAME_DATA, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
 
     XCALLOC(sn);
 
@@ -151,8 +151,12 @@ test_serialize_leaf(int valsize, int nelts, double entropy) {
     sn->totalchildkeylens = 0;
     for (int i = 0; i < sn->n_children; ++i) {
         BP_STATE(sn,i) = PT_AVAIL;
+        BP_PREFETCH_PFN(sn,i)    = NULL;
+        BP_PREFETCH_PFN_CNT(sn,i) = 0;
+        BP_PREFETCH_FLAG(sn,i) = false;
         set_BLB(sn, i, toku_create_empty_bn());
         toku_init_dbt(&BP_LIFT(sn, i));
+        toku_init_dbt(&BP_NOT_LIFTED(sn, i));
     }
     int nperbn = nelts / sn->n_children;
     for (int ck = 0; ck < sn->n_children; ++ck) {
@@ -170,9 +174,9 @@ test_serialize_leaf(int valsize, int nelts, double entropy) {
             le_add_to_bn(
                 BLB_DATA(sn,ck),
                 i,
-                (char *)&k, 
-                sizeof k, 
-                buf, 
+                (char *)&k,
+                sizeof k,
+                buf,
                 sizeof buf
                 );
         }
@@ -195,7 +199,6 @@ test_serialize_leaf(int valsize, int nelts, double entropy) {
 
     brt_h->key_ops.keycmp = long_key_cmp;
     toku_blocktable_create_new(&brt_h->blocktable);
-    { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
     //Want to use block #20
     BLOCKNUM b = make_blocknum(0);
     while (b.b < 20) {
@@ -217,7 +220,7 @@ test_serialize_leaf(int valsize, int nelts, double entropy) {
     struct timeval t[2];
     gettimeofday(&t[0], NULL);
     FTNODE_DISK_DATA ndd = NULL;
-    r = toku_serialize_ftnode_to(fd, make_blocknum(20), sn, &ndd, true, brt->ft, false, &offset, &size);
+    r = toku_serialize_ftnode_to(fd, make_blocknum(20), sn, &ndd, true, brt->ft, false, &offset, &size, true);
     assert(r==0);
     gettimeofday(&t[1], NULL);
     double dt;
@@ -258,9 +261,9 @@ test_serialize_nonleaf(int valsize, int nelts, double entropy) {
     //    struct ft_handle source_ft;
     struct ftnode sn, *dn;
 
-    int fd = open(TOKU_TEST_FILENAME, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
-    int r;
+    int fd = open(TOKU_TEST_FILENAME_DATA, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
 
     //    source_ft.fd=fd;
     sn.max_msn_applied_to_node_on_disk.msn = 0;
@@ -282,6 +285,7 @@ test_serialize_nonleaf(int valsize, int nelts, double entropy) {
         BP_STATE(&sn,i) = PT_AVAIL;
         set_BNC(&sn, i, toku_create_empty_nl());
         toku_init_dbt(&BP_LIFT(&sn, i));
+        toku_init_dbt(&BP_NOT_LIFTED(&sn, i));
     }
     //Create XIDS
     XIDS xids_0 = xids_get_root_xids();
@@ -333,7 +337,6 @@ test_serialize_nonleaf(int valsize, int nelts, double entropy) {
 
     brt_h->key_ops.keycmp = long_key_cmp;
     toku_blocktable_create_new(&brt_h->blocktable);
-    { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
     //Want to use block #20
     BLOCKNUM b = make_blocknum(0);
     while (b.b < 20) {
@@ -355,7 +358,7 @@ test_serialize_nonleaf(int valsize, int nelts, double entropy) {
     struct timeval t[2];
     gettimeofday(&t[0], NULL);
     FTNODE_DISK_DATA ndd = NULL;
-    r = toku_serialize_ftnode_to(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false, &offset, &size);
+    r = toku_serialize_ftnode_to(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false, &offset, &size, true);
     assert(r==0);
     gettimeofday(&t[1], NULL);
     double dt;

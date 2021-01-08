@@ -243,16 +243,8 @@ public:
         uint32_t old_le_size
         );
 
-    void move_leafentries_to_through_kupsert(
-        struct toku_db_key_operations *key_ops,
-        BN_DATA dest_bd,
-        FT_MSG cmd,
-        int32_t lbi, //lower bound inclusive
-        int32_t ube //upper bound exclusive
-        );
-
-    void relift_leafentries(BN_DATA dest_db, FT ft,
-                            DBT *old_lifted, DBT *new_lifted);
+    void relift_leafentries(FT ft, DBT *old_lift, DBT *new_lift,
+                            uint32_t lbi, uint32_t ube);
 
     void get_space_for_overwrite(uint32_t idx, const void* keyp, uint32_t keylen, uint32_t old_size, uint32_t new_size, LEAFENTRY* new_le_space);
     void get_space_for_insert(uint32_t idx, const void* keyp, uint32_t keylen, size_t size, LEAFENTRY* new_le_space);

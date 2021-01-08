@@ -96,7 +96,7 @@ PATENT RIGHTS GRANT:
 #include <toku_portability.h>
 #include "../ft-ops.h" 
 
-#define FNAME "test1308a.data"
+#define FNAME TOKU_TEST_FILENAME_DATA
 
 #define BUFSIZE (16<<20)
 
@@ -109,7 +109,7 @@ test_1308a (void)
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
  
-    unlink(FNAME);
+    { int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r==0); }
     
     int fd;
     {
@@ -142,7 +142,8 @@ test_1308a (void)
     assert(file_size==file_size2);
     close(fd);
 
-    unlink(FNAME);
+    { int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r==0); }
+
     toku_ft_layer_destroy();
     return 0;
 }
