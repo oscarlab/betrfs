@@ -112,9 +112,20 @@ void *toku_xcalloc(size_t nmemb, size_t size)  __attribute__((__visibility__("de
 void *toku_malloc(size_t size)  __attribute__((__visibility__("default")));
 void *toku_malloc_aligned(size_t alignment, size_t size)  __attribute__((__visibility__("default")));
 
+/* Use these two interfaces when an allocation/free tracks the size,
+ * and you can guarantee that the original size will be passed to
+ * free/realloc.  The vast majority of data structures in the ft code
+ * track sizes, and this obviates the need for the southbound code to
+ * also track sizes or query expensive kernel structures.
+ *
+ * db_realloc can only be used with "sized" allocations.
+ */
+void *sb_malloc_sized(size_t size, bool abort_on_fail);
+void sb_free_sized(void* ptr, size_t size);
+
 // xmalloc aborts instead of return NULL if we run out of memory
 void *toku_xmalloc(size_t size)  __attribute__((__visibility__("default")));
-void *toku_xrealloc(void*, size_t size) __attribute__((__visibility__("default")));
+void *toku_xrealloc(void*, size_t old_size, size_t new_size) __attribute__((__visibility__("default")));
 void *toku_xmalloc_aligned(size_t alignment, size_t size) __attribute__((__visibility__("default")));
 // Effect: Perform a os_malloc_aligned(size) with the additional property that the returned pointer is a multiple of ALIGNMENT.
 //  Fail with a resource_assert if the allocation fails (don't return an error code).
@@ -122,13 +133,11 @@ void *toku_xmalloc_aligned(size_t alignment, size_t size) __attribute__((__visib
 // Requires: alignment is a power of two.
 
 void toku_free(void*) __attribute__((__visibility__("default")));
-void *toku_realloc(void *, size_t size)  __attribute__((__visibility__("default")));
-void *toku_realloc_aligned(size_t alignment, void *p, size_t size) __attribute__((__visibility__("default")));
+void *toku_realloc(void *, size_t old_size, size_t new_size)  __attribute__((__visibility__("default")));
+    //void *toku_realloc_aligned(size_t alignment, void *p, size_t size) __attribute__((__visibility__("default")));
 // Effect: Perform a os_realloc_aligned(alignment, p, size) which has the additional property that the returned pointer is a multiple of ALIGNMENT.
 //  If the malloc_aligned function has been set then call it instead.
 // Requires: alignment is a power of two.
-
-size_t toku_malloc_usable_size(void *p) __attribute__((__visibility__("default")));
 
 /* MALLOC is a macro that helps avoid a common error:
  * Suppose I write
@@ -156,16 +165,15 @@ size_t toku_malloc_usable_size(void *p) __attribute__((__visibility__("default")
 
 #define CALLOC(v) CALLOC_N(1,v)
 
-#define REALLOC_N(n,v) CAST_FROM_VOIDP(v, toku_realloc(v, (n)*sizeof(*v)))
-#define REALLOC_N_ALIGNED(align, n,v) CAST_FROM_VOIDP(v, toku_realloc_aligned((align), v, (n)*sizeof(*v)))
+#define REALLOC_N(n,o,v) CAST_FROM_VOIDP(v, toku_realloc(v, (o)*sizeof(*v), (n)*sizeof(*v)))
 
 // XMALLOC macros are like MALLOC except they abort if the operation fails
 #define XMALLOC(v) CAST_FROM_VOIDP(v, toku_xmalloc(sizeof(*v)))
 #define XMALLOC_N(n,v) CAST_FROM_VOIDP(v, toku_xmalloc((n)*sizeof(*v)))
 #define XCALLOC_N(n,v) CAST_FROM_VOIDP(v, toku_xcalloc((n), (sizeof(*v))))
 #define XCALLOC(v) XCALLOC_N(1,(v))
-#define XREALLOC(v,s) CAST_FROM_VOIDP(v, toku_xrealloc(v, s))
-#define XREALLOC_N(n,v) CAST_FROM_VOIDP(v, toku_xrealloc(v, (n)*sizeof(*v)))
+#define XREALLOC(v,o,s) CAST_FROM_VOIDP(v, toku_xrealloc(v, o, s))
+#define XREALLOC_N(o,n,v) CAST_FROM_VOIDP(v, toku_xrealloc(v, (o)*sizeof(*v), (n)*sizeof(*v)))
 
 #define XMALLOC_N_ALIGNED(align, n, v) CAST_FROM_VOIDP(v, toku_xmalloc_aligned((align), (n)*sizeof(*v)))
 
@@ -196,9 +204,8 @@ void toku_do_memory_check(void);
 
 typedef void *(*malloc_fun_t)(size_t);
 typedef void  (*free_fun_t)(void*);
-typedef void *(*realloc_fun_t)(void*,size_t);
+typedef void *(*realloc_fun_t)(void*,size_t, size_t);
 typedef void *(*malloc_aligned_fun_t)(size_t /*alignment*/, size_t /*size*/);
-typedef void *(*realloc_aligned_fun_t)(size_t /*alignment*/, void * /*pointer*/, size_t /*size*/);
 
 void toku_set_func_malloc(malloc_fun_t f);
 void toku_set_func_xmalloc_only(malloc_fun_t f);
@@ -212,8 +219,8 @@ typedef struct memory_status {
     uint64_t malloc_count;    // number of malloc operations
     uint64_t free_count;      // number of free operations
     uint64_t realloc_count;   // number of realloc operations
-    uint64_t malloc_fail;     // number of malloc operations that failed 
-    uint64_t realloc_fail;    // number of realloc operations that failed 
+    uint64_t malloc_fail;     // number of malloc operations that failed
+    uint64_t realloc_fail;    // number of realloc operations that failed
     uint64_t requested;       // number of bytes requested
     uint64_t used;            // number of bytes used (requested + overhead), obtained from malloc_usable_size()
     uint64_t freed;           // number of bytes freed;
