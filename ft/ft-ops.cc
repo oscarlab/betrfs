@@ -3832,7 +3832,7 @@ ft_clone_finalize_goto(FT ft, FTNODE node, int childnum, FT_MSG cmd)
     if (!match_l && !match_r) {
         int old_n_children = node->n_children;
         node->n_children += 2;
-    
+
         // shift bps
         REALLOC_N(node->n_children, old_n_children, node->bp);
         memmove(&node->bp[childnum + 3], &node->bp[childnum + 1],
@@ -4130,7 +4130,7 @@ ft_basement_node_gc_once(BASEMENTNODE bn,
     }
 
     // Don't run garbage collection if this leafentry decides it's not worth it.
-    if (!toku_le_innermost_is_delete(leaf_entry, oldest_referenced_xid_known) && 
+    if (!toku_le_innermost_is_delete(leaf_entry, oldest_referenced_xid_known) &&
         !toku_le_worth_running_garbage_collection(leaf_entry, oldest_referenced_xid_known)) {
         goto exit;
     }
@@ -4238,7 +4238,7 @@ ft_leaf_gc_all_les(FTNODE node,
         STAT64INFO_S delta;
         delta.numrows = 0;
         delta.numbytes = 0;
-        basement_node_gc_all_les(bn, snapshot_xids, referenced_xids, live_root_txns, oldest_referenced_xid_known, &delta); 
+        basement_node_gc_all_les(bn, snapshot_xids, referenced_xids, live_root_txns, oldest_referenced_xid_known, &delta);
         toku_ft_update_stats(&ft->in_memory_stats, delta);
     }
 }
@@ -4945,13 +4945,10 @@ void toku_ft_leaf_apply_cmd(
     // Pass the oldest possible live xid value to each basementnode
     // when we apply messages to them.
     TXNID oldest_referenced_xid_known = node->oldest_referenced_xid_known;
-    if (cmd->type == FT_UNBOUND_INSERT) {
-        assert(ubi_entry);
-        node->unbound_insert_count++;
-    }
 
     if (ft_msg_applies_once(cmd)) {
         unsigned int childnum;
+        bool ubi_applied_just_now = false;
 
         if (target_childnum >= 0) {
             childnum = target_childnum;
@@ -4970,7 +4967,18 @@ void toku_ft_leaf_apply_cmd(
                 toku_ft_bn_apply_cmd(ft, desc, (it == node) ? ubi_entry : NULL,
                                      bn, cmd, oldest_referenced_xid_known,
                                      gc_info, workdone, stats_to_update);
+                if (cmd->type == FT_UNBOUND_INSERT) {
+                        ubi_applied_just_now = true;
+                        assert(ubi_entry);
+                        node->unbound_insert_count++;  // when FT_INDIRECT is not turned on, unbound_insert_count does not increase to sync with bn.
+                }
             }
+        }
+        if (ubi_applied_just_now == false && ubi_entry != NULL) {
+            toku_mutex_lock(&global_logger->ubi_lock);
+            toku_list_remove(&ubi_entry->in_or_out);
+            toku_mutex_unlock(&global_logger->ubi_lock);
+            destroy_ubi_entry(ubi_entry);
         }
     } else if (ft_msg_applies_multiple(cmd)) {
         int start = 0;
