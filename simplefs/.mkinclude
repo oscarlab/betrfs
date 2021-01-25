@@ -1,0 +1,4 @@
+#KDIR=$(shell uname -r)
+#MOD_KERN_SOURCE=/lib/modules/$(KDIR)/build
+KDIR=3.11.10
+MOD_KERN_SOURCE=$(PWD)/../linux-3.11.10
