@@ -7,7 +7,7 @@ touch console.out
 sudo chown libvirt-qemu console.out
 
 vagrant up > /dev/null
-vagrant ssh -c 'cd /oscar/betrfs/ftfs/userspace-testing/; tail -n +126 /oscar/betrfs/ftfs/userspace-testing/all.tests | head -125 > test2.tests; sudo ./run-tests.py test2.tests'
+vagrant ssh -c 'cd /oscar/betrfs/ftfs/userspace-testing/; tail -n +126 /oscar/betrfs/ftfs/userspace-testing/all.tests | head -125 > test2.tests; sudo ./run-tests.py test2.tests --sfs'
 result=$?
 
 vagrant destroy -f

@@ -15,13 +15,22 @@ echo "Setup Circle Size: $1"
 
 # prep file system
 $DIR/mkfs.ftfs $sb_dev
-touch $DIR/$dummy_file
-losetup $dummy_dev $DIR/$dummy_file 
 
 # mount the file system
 mkdir -p $mntpnt
 modprobe zlib
-insmod $module sb_dev=$sb_dev sb_fstype=ext4
-mount -t ftfs $dummy_dev $mntpnt -o max=$1
+insmod $module
+
+blkdev=`echo $sb_dev | tr -d [:digit:]`
+is_rotational=`lsblk -d $blkdev -o name,rota  | tail -n 1 | awk '{print $2}'`
+
+if [[ $use_sfs == "true" ]]
+    mount -t ftfs -o max=$1,sb_fstype=sfs,d_dev=$dummy_dev $sb_dev $mntpnt
+    mount -t ftfs -o max=$1,sb_fstype=sfs,d_dev=$dummy_dev,is_rotational=$is_rotational $sb_dev $mntpnt
+else
+    mount -t ftfs -o max=$1,sb_fstype=ext4,d_dev=$dummy_dev $sb_dev $mntpnt
+    mount -t ftfs -o max=$1,sb_fstype=ext4,d_dev=$dummy_dev,is_rotational=$is_rotational $sb_dev $mntpnt
+fi
+
 #$circle_size
-chown -R betrfs:betrfs $mntpnt
+chown -R $user_owner $mntpnt

@@ -1,19 +1,31 @@
 #!/usr/bin/python
 
-import sys, os, string, subprocess, fileinput, random
+import sys, os, string, subprocess, fileinput, random, json
 
 DEF_INTERP="default-interp.py"
 DEF_PRE="default-pre.py"
 DEF_POST="default-post.py"
 procfile="/proc/toku_test"
 
-def format_sfs():
+use_sfs = False
+DEF_PRE_SFS="default-pre.py --sfs"
+
+def format_sfs(cv):
     print "Format SFS"
-    command = "./mkfs-sfs.sh /dev/sdb ${PWD}/../../simplefs/tmp"
+    command = "./mkfs-sfs.sh {} ${{PWD}}/../../simplefs/tmp".format(cv["southbound device"])
     ret = subprocess.call(command, shell=True)
     if ret != 0 :
         print "ERROR! Failed to format SFS"
         exit(ret)
+
+def format_ext4(cv):
+    print "Format SFS"
+    command = "./mkfs-ext4.sh {} {}".format(cv["southbound device"], cv["ext4mntpnt"])
+    ret = subprocess.call(command, shell=True)
+    if ret != 0 :
+        print "ERROR! Failed to format ext4"
+        exit(ret)
+
 
 def run_one_test(test, interp, pre, post):
     """ the main testing worker
@@ -68,7 +80,10 @@ def run_test_set(test_array):
 
     for test in test_array :
         if (len(test) == 1) :
-            ret = run_one_test(test[0], DEF_INTERP, DEF_PRE, DEF_POST)
+	    if use_sfs == True:
+                ret = run_one_test(test[0], DEF_INTERP, DEF_PRE_SFS, DEF_POST)
+            else:
+                ret = run_one_test(test[0], DEF_INTERP, DEF_PRE, DEF_POST)
         else :
             ret = run_one_test(test[0], test[1], test[2], test[3])
 
@@ -136,19 +151,23 @@ try:
         help()
         exit(-1)
     shuffle = False
-    use_sfs = False
+    fd = open("test-config.json", 'r')
+    config_values = json.load(fd)
+    fd.close()
     print "Running tests:", sys.argv
     print "----"
 
     test_file = sys.argv[1]
     for x in sys.argv[2:]:
-       if x == "sfs":
+       if x == "--sfs":
           use_sfs = True
        if x == "-s":
           shuffle = True;
-    
+
     if use_sfs:
-       format_sfs() 
+       format_sfs(config_values) 
+    else:
+       format_ext4(config_values)
 
     ret = run_all_tests(test_file, shuffle)
     sys.exit(ret)
