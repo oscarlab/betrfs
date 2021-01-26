@@ -1,0 +1,4 @@
+{
+	"southbound device":"/dev/sdb",
+	"ext4mntpnt":"/mnt"
+}
