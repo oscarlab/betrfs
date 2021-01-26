@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # DEP: Since this is used in CI now, quit if a command fails and propagate out the error
-set -e
+set -ex
 
 #pass tests to be run as a parameter
 if [ $# -eq 0 ]
