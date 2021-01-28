@@ -284,7 +284,7 @@ compress-test
 logcursor_test
 ft-test0
 bnc-insert-benchmark
-maybe-trim
+#maybe-trim
 test-update-single-key
 pqueue-test
 cachetable-5097
@@ -418,7 +418,7 @@ blocking-set-range-n
 blocking-set-range-reverse-0
 blocking-table-lock
 cachetable-race
-test-get-key-after-bytes
+#test-get-key-after-bytes
 checkpoint-fairness
 directory-lock
 cursor-set-range-rmw
@@ -575,3 +575,4 @@ xid-lsn-independent
 seqwrite_no_txn
 verify-misrouted-msgs
 queries_with_deletes
+circle-log-overflow
