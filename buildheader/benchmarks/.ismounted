@@ -1,5 +1,0 @@
-mountpoint -q $mntpnt
-if [ $? -ne 0 ]; then
-   echo "no file system mounted: $?"
-   exit 1
-fi

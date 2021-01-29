@@ -1,9 +1,0 @@
-sb_dev=/dev/sda4
-dummy_file=dummy.dev
-dummy_dev=/dev/loop0
-mntpnt=/mnt/benchmark
-southbound_module=/home/ftfs/ft-index/ftfs/ftfs.ko
-module=/home/ftfs/ft-index/filesystem/ftfs.ko
-repo=ft-index
-clone_repo=ft-index-snapshot
-circle_size=128
