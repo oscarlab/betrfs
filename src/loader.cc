@@ -524,7 +524,8 @@ int toku_loader_cleanup_temp_files(DB_ENV *env) {
             char fname[fnamelen];
             int l = snprintf(fname, fnamelen, "%s/%s", dir, de->d_name);
             assert(l+1 == fnamelen);
-            r = unlink(fname);
+            // YZJ: It seems loader is never used
+            assert(false);
             if (r!=0) {
 #ifdef TOKU_LINUX_MODULE
                 result = get_error_errno(r);

@@ -192,7 +192,7 @@ static void run_test(uint32_t nelts) {
             invariant(called[i]);
         }
     }
-	
+
     omt.destroy();
     toku_free(called);
 }
@@ -278,7 +278,7 @@ static void *stress_mark_worker(void *extrav) {
         toku_mutex_lock(&mutex);
         rwlock_read_unlock(&shared.lock);
         toku_mutex_unlock(&mutex);
-	
+
         usleep(1);
     }
 
@@ -335,7 +335,7 @@ public:
  *   generate random range.  Mark that range, increment iteration number
  *
  *
- * 
+ *
  *
  * for each context
      * create rng based on context->last_seed
@@ -385,7 +385,9 @@ static inline uint32_t count_true(const bool *const bools, uint32_t n) {
 static void stress_deleter(struct reader_extra *const readers, int num_marker_threads, stress_omt *omt) {
     // Verify (iterate_over_marked) agrees exactly with iterate_and_mark_range (multithreaded)
     stress_shared &shared = *readers[0].shared;
-    bool *should_be_marked = (bool *) toku_xmalloc(omt->size() * sizeof(*should_be_marked));
+    bool *should_be_marked;
+    size_t bytes = omt->size() * sizeof(*should_be_marked);
+    should_be_marked = (bool *) sb_malloc_sized(bytes, true);
     if (!should_be_marked) {
         fprintf(stderr, "ERROR! xmalloc failed\n");
         return;
@@ -396,11 +398,11 @@ static void stress_deleter(struct reader_extra *const readers, int num_marker_th
         simulate_reader_marks_on_array(&readers[i], shared, should_be_marked);
     }
 
-    bool *is_marked_according_to_iterate = (bool *) toku_xmalloc(omt->size() *
-                                                                 sizeof(*should_be_marked));
+    bool *is_marked_according_to_iterate;
+    is_marked_according_to_iterate = (bool *) sb_malloc_sized(bytes, true);
     if (!is_marked_according_to_iterate) {
         fprintf(stderr, "ERROR! xmalloc failed\n");
-        toku_free(should_be_marked);
+        sb_free_sized(should_be_marked, bytes);
         return;
     }
     memset(is_marked_according_to_iterate, 0,
@@ -428,8 +430,8 @@ static void stress_deleter(struct reader_extra *const readers, int num_marker_th
     inserter ins(omt);
     aftor.iterate(ins);
     omt->verify_marks_consistent();
-    toku_free(should_be_marked);
-    toku_free(is_marked_according_to_iterate);
+    sb_free_sized(is_marked_according_to_iterate, bytes);
+    sb_free_sized(should_be_marked, bytes);
 }
 #endif
 
@@ -479,7 +481,7 @@ static void stress_test(int nelts) {
     extra.running = true;
     extra.num_marker_threads = num_marker_threads;
 
-    struct reader_extra *readers = 
+    struct reader_extra *readers =
         (reader_extra *) toku_xmalloc(num_marker_threads *
                                       sizeof(struct reader_extra));
     if (!readers) {
@@ -553,5 +555,3 @@ int test_marked_omt(void) {
 #endif
     return 0;
 }
-
-

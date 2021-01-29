@@ -115,9 +115,9 @@ template<typename T> class GrowableArray {
     void init (void)
     // Effect: Initialize the array to contain no elements.
     {
-  m_array=NULL;
-  m_size=0;
-  m_size_limit=0;
+	m_array=NULL;
+	m_size=0;
+	m_size_limit=0;
     }
 
     void deinit (void)
@@ -125,49 +125,49 @@ template<typename T> class GrowableArray {
     {
         size_t bytes = m_size_limit * sizeof(T);
         sb_free_sized(m_array, bytes);
-  m_array     =NULL;
-  m_size      =0;
-  m_size_limit=0;
+	m_array     =NULL;
+	m_size      =0;
+	m_size_limit=0;
     }
 
     T fetch_unchecked (size_t i) const
     // Effect: Fetch the ith element.  If i is out of range, the system asserts.
     {
-  return m_array[i];
+	return m_array[i];
     }
 
     void store_unchecked (size_t i, T v)
     // Effect: Store v in the ith element.  If i is out of range, the system asserts.
     {
-  paranoid_invariant(i<m_size);
-  m_array[i]=v;
+	paranoid_invariant(i<m_size);
+	m_array[i]=v;
     }
 
     void push (T v)
     // Effect: Add v to the end of the array (increasing the size).  The amortized cost of this operation is constant.
     // Implementation hint:  Double the size of the array when it gets too big so that the amortized cost stays constant.
     {
-  if (m_size>=m_size_limit) {
+	if (m_size>=m_size_limit) {
             size_t old_size = m_size_limit;
-      if (m_array==NULL) {
-    m_size_limit=1;
-      } else {
-    m_size_limit*=2;
-      }
+	    if (m_array==NULL) {
+		m_size_limit=1;
+	    } else {
+		m_size_limit*=2;
+	    }
             XREALLOC_N(old_size, m_size_limit, m_array);
-  }
-  m_array[m_size++]=v;
+	}
+	m_array[m_size++]=v;
     }
 
     size_t get_size (void) const
     // Effect: Return the number of elements in the array.
     {
-  return m_size;
+	return m_size;
     }
     size_t memory_size(void) const
     // Effect: Return the size (in bytes) that the array occupies in memory.  This is really only an estimate.
     {
-  return sizeof(*this)+sizeof(T)*m_size_limit;
+	return sizeof(*this)+sizeof(T)*m_size_limit;
     }
 
  private:

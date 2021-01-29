@@ -73,11 +73,6 @@
 
    tokutime_to_seconds;
 
-   toku_do_assert;
-   toku_do_assert_fail;
-   toku_do_assert_zero_fail;
-   toku_set_assert_on_write_enospc;
-
    toku_test_db_redirect_dictionary;
    toku_test_get_latest_lsn;
    toku_test_get_checkpointing_user_data_status;
@@ -94,4 +89,3 @@
 
  local: *;
 };
-
