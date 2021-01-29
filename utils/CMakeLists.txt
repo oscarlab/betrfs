@@ -1,6 +1,6 @@
 set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS _GNU_SOURCE DONT_DEPRECATE_ERRNO)
 
-set(utils tokudb_gen tokudb_load tokudb_dump)
+set(utils tokudb_gen tokudb_dump)
 foreach(util ${utils})
   add_executable(${util} ${util})
   set_target_properties(${util} PROPERTIES

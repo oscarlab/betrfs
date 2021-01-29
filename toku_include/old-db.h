@@ -113,7 +113,7 @@ enum {
   DB_VERB_CHKPOINT = 0x0001,
   DB_VERB_DEADLOCK = 0x0002,
   DB_VERB_RECOVERY = 0x0004
-  
+
 };
 
 typedef struct yobi_db DB;
@@ -191,7 +191,6 @@ struct yobi_db_env {
   int  (*set_cachesize) (DB_ENV *, uint32_t, uint32_t, int);
   int  (*set_lk_detect) (DB_ENV *, uint32_t);
   int  (*set_lk_max) (DB_ENV *, uint32_t);
-  int  (*log_archive) (DB_ENV *, char **[], uint32_t);
   int  (*txn_stat) (DB_ENV *, DB_TXN_STAT **, uint32_t);
 #ifdef _YDB_WRAP_H
 #undef txn_begin
@@ -237,16 +236,16 @@ enum {
   DB_CREATE     = 0x0000001,
   DB_RDONLY     = 0x0000010,
   DB_RECOVER    = 0x0000020,
-  DB_THREAD     = 0x0000040, 
+  DB_THREAD     = 0x0000040,
   DB_TXN_NOSYNC = 0x0000100,
-  
+
   DB_PRIVATE    = 0x0100000
 };
 
 enum {
   DB_LOCK_DEFAULT = 1,
   DB_LOCK_OLDEST  = 7,
-  DB_LOCK_RANDOM  = 8 
+  DB_LOCK_RANDOM  = 8
 };
 
 enum {

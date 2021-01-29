@@ -100,7 +100,7 @@ static int expected_comparison_magic = 55;
 
 static int my_compare_dbts(DB *db, const DBT *a, const DBT *b) {
     invariant(db->cmp_descriptor == expected_descriptor);
-    (void) a; 
+    (void) a;
     (void) b;
     return expected_comparison_magic;
 }
@@ -139,6 +139,7 @@ void locktree_unit_test::test_misc(void) {
 
     p_mgr->release_lt(lt);
     p_mgr->destroy();
+    toku_free(p_mgr);
 }
 
 } /* namespace toku */

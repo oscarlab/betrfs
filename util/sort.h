@@ -121,15 +121,16 @@ namespace toku {
         mergesort_r(sortdata_t *a, const int n, sortextra_t &extra)
         {
             sortdata_t *as[2] = { a, nullptr };
+            size_t bytes = n * sizeof(*as[1]);
             if (n >= single_threaded_threshold) {
-                XMALLOC_N(n, as[1]);
+                as[1] = (sortdata_t *) sb_malloc_sized(bytes, true);
             }
             int which = mergesort_internal(as, 0, n, extra);
             if (which == 1) {
                 memcpy(a, as[1], n * (sizeof a[0]));
             }
             if (n >= single_threaded_threshold) {
-                toku_free(as[1]);
+                sb_free_sized(as[1], bytes);
             }
             return 0;
         }
