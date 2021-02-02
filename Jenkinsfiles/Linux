@@ -21,7 +21,7 @@ pipeline {
         stage('Test Group 1') {
           steps {
             sh "hostname"
-            timeout(time: 1, unit: 'HOURS'){
+            timeout(time: 2, unit: 'HOURS'){
               sh '''
               cd Jenkinsfiles
               sudo chmod +x test1.sh
@@ -46,7 +46,7 @@ pipeline {
         stage('Test Group 2') {
           steps {
             sh "hostname"
-            timeout(time: 1, unit: 'HOURS'){
+            timeout(time: 3, unit: 'HOURS'){
               sh '''
               sleep 10
               cd Jenkinsfiles
@@ -72,7 +72,7 @@ pipeline {
         stage('Test Group 3') {
           steps {
             sh "hostname"
-            timeout(time: 4, unit: 'HOURS'){
+            timeout(time: 2, unit: 'HOURS'){
               sh '''
               sleep 20
               cd Jenkinsfiles
@@ -98,7 +98,7 @@ pipeline {
         stage('Test Group 4') {
           steps {
             sh "hostname"
-            timeout(time: 4, unit: 'HOURS'){
+            timeout(time: 1, unit: 'HOURS'){
               sh '''
               sleep 30
               cd Jenkinsfiles
@@ -154,6 +154,23 @@ pipeline {
     always {
       sh '''
       cd Jenkinsfiles
+      echo "*** Console from Build: "
+      cat console.out
+      echo "*** Console from Test Group 1: "
+      cd test1
+      cat console.out
+      echo "*** Console from Test Group 2: "
+      cd ../test2
+      cat console.out
+      echo "*** Console from Test Group 3: "
+      cd ../test3
+      cat console.out
+      echo "*** Console from Test Group 4: "
+      cd ../test4
+      cat console.out
+      echo "*** Console from Test Group 5: "
+      cd ../test5
+      cat console.out
       '''
     }
   }
