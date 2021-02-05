@@ -136,8 +136,6 @@ cd -;
 
 #h. copy a few scripts from the ft-index repository
 cp kvm-xfstests "$FSTESTS_DIR/kvm-xfstests/"
-cp ../email-results.py "$FSTESTS_DIR/kvm-xfstests/"
-cp ../../unit_tests_email "$FSTESTS_DIR/kvm-xfstests/xfstests_email"
 
 #i. Seed ftfs test files from ext4
 cd "$FSTESTS_DIR/kvm-xfstests/test-appliance/files/root/fs"
