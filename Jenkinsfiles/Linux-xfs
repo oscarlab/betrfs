@@ -14,6 +14,7 @@ pipeline {
            sh '''
 	     /usr/bin/sudo /bin/cp /host/playpen/btrfs/* /sbin/
 	     /usr/bin/sudo /bin/ln -s $(/bin/pwd) /oscar/betrfs
+	     cp /usr/src/linux-source-3.11.10-ftfs /oscar/betrfs/linux-3.11.10
 	     cd /oscar/betrfs/qemu-utils/xfstests/
 	     ./xfstests.sh --force-hdd
            '''
