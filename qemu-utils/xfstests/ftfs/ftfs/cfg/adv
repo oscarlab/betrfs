@@ -1,0 +1,4 @@
+SIZE=small
+export MKFS_OPTIONS="-q -I 256 -O inline_data,metadata_csum,64bit"
+export EXT_MOUNT_OPTIONS=""
+TESTNAME="Ext4 advanced features (inline_data, metadata_csum, 64bit)"

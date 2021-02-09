@@ -1,0 +1,5 @@
+SIZE=small
+export MKFS_OPTIONS="-q -O metadata_csum,64bit"
+export EXT_MOUNT_OPTIONS=""
+TESTNAME="Ext4 4k block w/metadata_csum"
+

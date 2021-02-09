@@ -1,0 +1,4 @@
+SIZE=small
+export MKFS_OPTIONS=""
+export EXT_MOUNT_OPTIONS="dummy_encryption,nodelalloc"
+TESTNAME="Ext4 encryption w/nodelalloc"

@@ -1,5 +1,28 @@
 #!/bin/bash
 set -e
+set -x
+
+## Check argument count
+if [ $# != 1 ] && [ $# != 2 ]; then
+	echo "Need one  or two arguments: [--force-hdd | --force-ssd] or kernel_version!"
+	echo "Example: xfstests.sh --force-hdd 4.19.99"
+	exit 1
+fi
+
+## Make sure the first argument is what is expected
+if [ $1 == "--force-hdd" ]; then
+	MNTOPTS="$MNTOPTS,is_rotational=1"
+elif [ $1 == "--force-ssd" ]; then
+	MNTOPTS="$MNTOPTS,is_rotational=0"
+else
+	echo "The argument should be --force-hdd or --force-ssd!"
+	exit 1
+fi
+
+## Set KERNEL_VERSION if there is a second argument
+if [[ $# -eq 2 ]]; then
+	KERNEL_VERSION=$2
+fi
 
 source config
 source common
@@ -10,32 +33,34 @@ echo $HOST
 #1. Setting up the framework
 
 #a. Check to proceed only if the script is being run for the first time OR there have been commits since the last run
-if [[ $HOST != "betrfs-dev"* ]]; then
-	git remote update
-	UPSTREAM=${1:-'@{u}'}
-	LOCAL=$(git rev-parse @)
-	REMOTE=$(git rev-parse "$UPSTREAM")
 
-	if [[ ($LOCAL = $REMOTE) && (-e $FSTESTS_DIR/kvm-xfstests/summary.log) ]]; then
-		echo "Repository Up-to-date since last run. Exiting."
-		exit
+# Download the kernel from kernel.org if not present elsewhere on the system
+if [[ ! -d ${LINUX_SOURCE} ]]; then
+	KERNEL_DOWNLOADED=true
+	mkdir ${LINUX_SOURCE}
+	wget --no-clobber https://cdn.kernel.org/pub/linux/kernel/v${MAJOR_KERNEL_VERSION}.x/linux-${KERNEL_VERSION}.tar.xz
+	tar -xf linux-${KERNEL_VERSION}.tar.xz -C ${LINUX_SOURCE}/..
+fi
+
+if [[ $HOST != "betrfs-dev"* || ${KERNEL_DOWNLOADED} = true ]]; then
+	#b. Pull the latest code and build the kernel
+	if [[ -f $KERNEL_CONFIG ]]; then
+		cp $KERNEL_CONFIG ${LINUX_SOURCE}/.config
+	else
+		cp kernel-3.11.10.config ${LINUX_SOURCE}/.config
 	fi
+	cd ${LINUX_SOURCE}; make olddefconfig; make -j16; make modules -j4; cd -;
+else
+	## Jenkins with pre-built kernel: do nothing. Jenkinsfiles/Linux-xfs handles this case.
+	: # this is a no-op
 fi
 
-#b. Pull the latest code and build the kernel
-cp $KERNEL_CONFIG ../../linux-3.11.10/.config
-
-if [[ $HOST != "betrfs-dev"* ]]; then
-	git pull;
-fi
-
-cd ../../linux-3.11.10; make oldconfig; make -j16; make modules -j4; cd -;
 
 #c. Build the filesystem
 #Make sure the kernel source in the Makefile (defined in ft-index/filesystem/Makefile) points to the above kernel
-cd ../../; mkdir -p build; cp qemu-utils/cmake-ft.sh build/.; cd -;
-cd ../../build; ./cmake-ft.sh; cd -;
-cd ../../filesystem; make; cd -;
+cd ../../; mkdir -p build; cp qemu-utils/cmake-ft-debug.sh build/.; cd -;
+cd ../../build; ./cmake-ft-debug.sh; cd -;
+cd ../../filesystem; make MOD_KERN_SOURCE=$LINUX_SOURCE debug; cd -;
 
 #d. Download or build the image.
 echo Testing whether $IMG_NAME is present
@@ -70,12 +95,15 @@ sudo mount /dev/nbd0 mnt/
 cd -
 
 echo Installing modules
-cd ../../linux-3.11.10/
+cd $LINUX_SOURCE
 sudo make INSTALL_MOD_PATH="$FSTESTS_DIR/kvm-xfstests/test-appliance/mnt" modules_install
 cd -
 
 echo Installing ftfs.ko - kernel version is $KERNEL_VERSION
 sudo mkdir -p "$FSTESTS_DIR/kvm-xfstests/test-appliance/mnt/lib/modules/$KERNEL_VERSION/kernel/ftfs"
+sudo mkdir -p "$FSTESTS_DIR/kvm-xfstests/test-appliance/mnt/usr/local/bin"
+
+cd $FSTESTS_DIR/../
 sudo cp ../../filesystem/ftfs.ko "$FSTESTS_DIR/kvm-xfstests/test-appliance/mnt/lib/modules/$KERNEL_VERSION/kernel/ftfs/ftfs.ko"
 
 sudo depmod -a -b $FSTESTS_DIR/kvm-xfstests/test-appliance/mnt $KERNEL_VERSION
@@ -95,6 +123,10 @@ sudo cp -r ftfs "$FSTESTS_DIR/kvm-xfstests/test-appliance/mnt/root/fs"
 #            supports one mount at a time, so we need to use ext4 as the scratch device
 sudo cp rc "$FSTESTS_DIR/kvm-xfstests/test-appliance/mnt/root/xfstests/common/"
 
+# XXXXXX Hack: copy in mkfs.btrfs, just for now.  Don't ask unless you want to see a grown man weep.
+sudo cp /sbin/*.btrfs "$FSTESTS_DIR/kvm-xfstests/test-appliance/mnt/sbin/"
+sudo cp /sbin/btrfs* "$FSTESTS_DIR/kvm-xfstests/test-appliance/mnt/sbin/"
+
 ## The default .bashrc hangs in jenkins, because of tty resizing. :(
 # We re-copy this every time, because this could change (but probably won't)
 echo Installing modified .bashrc
@@ -108,6 +140,7 @@ cd -
 
 #f. replace the config under fstests/kvm-xfstests
 cp config "$FSTESTS_DIR/kvm-xfstests/config.kvm"
+sed -i -e 's/LINUX_SOURCE=`realpath ../LINUX_SOURCE=`realpath ..\/..\/../g' "$FSTESTS_DIR/kvm-xfstests/config.kvm"
 
 #g. setup the disk images to be tested
 cd "$FSTESTS_DIR/kvm-xfstests/"
