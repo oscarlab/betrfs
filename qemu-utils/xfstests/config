@@ -1,6 +1,21 @@
 FTINDEX_DIR=`pwd`/../../../
 FSTESTS_DIR=`pwd`/fstests
 QEMU=/usr/bin/kvm
+KERNEL_VERSION=${KERNEL_VERSION:=3.11.10}
+MAJOR_KERNEL_VERSION=${KERNEL_VERSION:0:1}
+KERNEL_EXTRA=-ftfs
+LINUX_SOURCE=$(realpath ../..)/linux-${KERNEL_VERSION}
+KERNEL=../../../../linux-${KERNEL_VERSION}/arch/x86_64/boot/bzImage
+
+HOST=$(hostname -s)
+echo $HOST
+
+if [[ $HOST == "betrfs-dev"* ]]; then
+      	## Jenkins machine
+	LINUX_SOURCE=/usr/src/linux-source-${KERNEL_VERSION}${KERNEL_EXTRA}
+	KERNEL=${LINUX_SOURCE}/arch/x86_64/boot/bzImage
+fi
+
 
 ## Use these variables to set xfstests to a specific version
 ## DEP: Latest version as of 9/21/17 - just need a working version
@@ -13,18 +28,16 @@ QEMU=/usr/bin/kvm
 # sudo apt-get update
 # sudo apt-get upgrade
 XFSTESTS_BLD_COMMIT=60303db
+## DEP: Version as of roughly Jul '17.
 ## DEP: Version as of roughly Apr '17.  Older versions don't
 ##      build properly with autoconf
-XFSTESTS_COMMIT=5d20084fef
+XFSTESTS_COMMIT=22ea2f8
 
 FIO_COMMIT=fio-2.10
-
-KERNEL_VERSION=3.11.10
 
 MNTOPTS="sb_dev=/dev/vdb,sb_fstype=ext4,d_dev=/dev/loop0"
 
 KERNEL_CONFIG=kernel.config
-KERNEL=`pwd`/../../../../linux-3.11.10/arch/x86_64/boot/bzImage
 NR_CPU=2
 MEM=5192
 

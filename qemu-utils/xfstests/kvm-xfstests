@@ -1,8 +1,8 @@
 #!/bin/bash
 
+set -x
 DIR=.
-if test -n "$KVM_XFSTESTS_DIR"
-then
+if test -n "$KVM_XFSTESTS_DIR"; then
     DIR="$KVM_XFSTESTS_DIR"
 fi
 
@@ -18,10 +18,10 @@ if ! test -f "$KERNEL"; then
      exit 1
 fi
 
-if test -z "$DO_NET" ; then
+if test -z "$DO_NET"; then
    echo "Networking disabled."
    NET="-net none "
-elif test $(whoami) = "root" ; then
+elif test $(whoami) = "root"; then
   NET="-net nic,model=virtio -net tap,script=$IFUP,downscript=$IFDOWN "
 else
   NET="-netdev user,id=mynet0,net=172.20.0.0/24 -device virtio-net,netdev=mynet0 "
@@ -29,33 +29,30 @@ fi
 
 EXTRA_ARG=$(echo "$EXTRA_ARG" | sed -e 's/:/ /')
 
-if test -n "$SKIP_LOG" ; then
+if test -n "$SKIP_LOG"; then
     LOGFILE=/tmp/log.$(date +%Y%m%d%H%M)
 else
     mkdir -p "$DIR/logs"
     LOGFILE="$DIR/logs/log.$(date +%Y%m%d%H%M)"
 fi
 
-if test -n "$INITRD" ; then
+if test -n "$INITRD"; then
     INITRD="--initrd $INITRD"
 fi
 
-if ! test -e $VDB -a -e $VDC -a -e $VDD -a -e $VDE -a -e $VDF -a -e $VDG
-then
+if ! test -e $VDB -a -e $VDC -a -e $VDD -a -e $VDE -a -e $VDF -a -e $VDG; then
 	echo "Test disks don't exist, running setup..."
 	$DIR/setup
 fi
 
-for i in "$VDB" "$VDC" "$VDD" "$VDE" "$VDF" "$VDG"
-do
-    if ! test -e "$i"
-    then
+for i in "$VDB" "$VDC" "$VDD" "$VDE" "$VDF" "$VDG"; do
+    if ! test -e "$i"; then
 	echo "Fatal error: disk $i does not exit.  Config error?"
 	exit 1;
     fi
 done
 
-if ionice -h > /dev/null ; then
+if ionice -h > /dev/null; then
     IONICE="ionice -n 5"
 fi
 
@@ -63,13 +60,11 @@ VDH=$(mktemp /tmp/kvm-upload.XXXXXXXX)
 trap 'rm -f "$VDH"' 0
 tar -c -f "$VDH" -T /dev/null
 
-if test -z "$NO_ACTION" -a "$UPDATE_XFSTESTS" = "yes"
-then
+if test -z "$NO_ACTION" -a "$UPDATE_XFSTESTS" = "yes"; then
     tar -r -f $VDH -C "$DIR/.." xfstests.tar.gz
 fi
 
-if test -z "$NO_ACTION" -a "$UPDATE_FILES" = "yes"
-then
+if test -z "$NO_ACTION" -a "$UPDATE_FILES" = "yes"; then
     TDIR=$(mktemp -d /tmp/files.XXXXXXXX)
     if test -z "$TDIR"; then
 	echo "Couldn't create temp directory"
@@ -108,7 +103,7 @@ tee $LOGFILE
 
 $DIR/get-results $LOGFILE
 
-if test -n "$SKIP_LOG" ; then
+if test -n "$SKIP_LOG"; then
   rm $LOGFILE
 else
   echo "logfile in $LOGFILE"
