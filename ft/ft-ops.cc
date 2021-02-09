@@ -1986,6 +1986,10 @@ ft_compare_pivot(DESCRIPTOR desc, ft_compare_func cmp, const DBT *key, const DBT
 void toku_destroy_ftnode_internals(FTNODE node)
 {
     if (node->n_children > 1) {
+        if (node->childkeys == NULL){
+            printf("node->childkeys == NULL while n_children is %d\n", node->n_children);
+            assert(false);
+        }
         for (int i = 0; i < node->n_children - 1; i++) {
             toku_destroy_dbt(&node->childkeys[i]);
         }
@@ -2023,6 +2027,7 @@ void toku_destroy_ftnode_internals(FTNODE node)
     node->childkeys = NULL;
     node->bp = NULL;
     node->unbound_insert_count = 0;
+    node->n_children = 0;
 }
 
 void toku_destroy_ftnode_shadows(FTNODE node)
