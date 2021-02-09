@@ -2933,7 +2933,7 @@ toku_cachetable_dec_refc_and_unpin(FT ft, FTNODE node)
         if (p->value_rwlock.users() > 0) {
             p->value_rwlock.write_lock(true);
             assert(p->refcount == 0);
-            assert(p->value_rwlock.users() == 0);
+            assert(p->value_rwlock.users() == 1);  // us
             assert(!p->checkpoint_pending);
             assert(p->attr.cache_pressure_size == 0);
             p->value_rwlock.write_unlock();
