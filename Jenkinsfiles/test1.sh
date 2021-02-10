@@ -6,11 +6,6 @@ cp ../Vagrantfile.testing Vagrantfile
 touch console.out
 sudo chown libvirt-qemu console.out
 
-vagrant up
+vagrant up > /dev/null
 vagrant ssh -c 'cd /oscar/betrfs/ftfs/userspace-testing/; head -125 /oscar/betrfs/ftfs/userspace-testing/all.tests > test1.tests; sudo ./run-tests.py test1.tests'
-result=$?
-
-vagrant destroy -f
-cat console.out
-
-exit ${result}
+exit $?

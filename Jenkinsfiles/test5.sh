@@ -8,9 +8,4 @@ sudo chown libvirt-qemu console.out
 
 vagrant up > /dev/null
 vagrant ssh -c 'cd /oscar/betrfs/ftfs/userspace-testing/; tail -n +501 /oscar/betrfs/ftfs/userspace-testing/all.tests > test5.tests; sudo ./run-tests.py test5.tests'
-result=$?
-
-vagrant destroy -f
-cat console.out
-
-exit ${result}
+exit $?

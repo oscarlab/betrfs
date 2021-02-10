@@ -148,7 +148,26 @@ pipeline {
     always {
       sh '''
       cd Jenkinsfiles
+      echo "*** Console from Build: "
+      cat console.out
+      echo "*** Console from Test Group 1: "
+      cd test1
+      cat console.out
+      echo "*** Console from Test Group 2: "
+      cd ../test2
+      cat console.out
+      echo "*** Console from Test Group 3: "
+      cd ../test3
+      cat console.out
+      echo "*** Console from Test Group 4: "
+      cd ../test4
+      cat console.out
+      echo "*** Console from Test Group 5: "
+      cd ../test5
+      cat console.out
       '''
+      findText regexp: 'Test.*completed.*\\(.*\\):.*[1-9]\\d*', alsoCheckConsoleOutput: true, unstableIfFound: true
+      //findText regexp: 'ftfs\\serror', alsoCheckConsoleOutput: true, unstableIfFound: true
     }
   }
 }
