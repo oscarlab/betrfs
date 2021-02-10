@@ -109,7 +109,7 @@ static int __init ftfs_module_init(void)
 	int ret;
 	void *data = NULL;
 
-	//trace_printk("ftfs_module_init is called!\n");
+	printk(KERN_ERR "ftfs_module_init is called!\n");
 
 	if (!sb_dev) {
 		ftfs_error(__func__, "no mount device for ftfs_southbound!");
