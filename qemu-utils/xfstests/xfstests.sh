@@ -100,6 +100,7 @@ sudo make INSTALL_MOD_PATH="$FSTESTS_DIR/kvm-xfstests/test-appliance/mnt" module
 cd -
 
 echo Installing ftfs.ko - kernel version is $KERNEL_VERSION
+sudo ls -l "$FSTESTS_DIR/kvm-xfstests/test-appliance/mnt/lib/modules"
 sudo mkdir -p "$FSTESTS_DIR/kvm-xfstests/test-appliance/mnt/lib/modules/$KERNEL_VERSION/kernel/ftfs"
 sudo mkdir -p "$FSTESTS_DIR/kvm-xfstests/test-appliance/mnt/usr/local/bin"
 
