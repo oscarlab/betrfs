@@ -21,7 +21,7 @@ pipeline {
         stage('Test Group 1') {
           steps {
             sh "hostname"
-            timeout(time: 2, unit: 'HOURS'){
+            timeout(time: 70, unit: 'MINUTES'){
               sh '''
               cd Jenkinsfiles
               sudo chmod +x test1.sh
@@ -46,7 +46,7 @@ pipeline {
         stage('Test Group 2') {
           steps {
             sh "hostname"
-            timeout(time: 3, unit: 'HOURS'){
+            timeout(time: 70, unit: 'MINUTES'){
               sh '''
               sleep 10
               cd Jenkinsfiles
@@ -72,7 +72,7 @@ pipeline {
         stage('Test Group 3') {
           steps {
             sh "hostname"
-            timeout(time: 2, unit: 'HOURS'){
+            timeout(time: 70, unit: 'MINUTES'){
               sh '''
               sleep 20
               cd Jenkinsfiles
@@ -98,7 +98,7 @@ pipeline {
         stage('Test Group 4') {
           steps {
             sh "hostname"
-            timeout(time: 1, unit: 'HOURS'){
+            timeout(time: 70, unit: 'MINUTES'){
               sh '''
               sleep 30
               cd Jenkinsfiles
@@ -124,7 +124,7 @@ pipeline {
         stage('Test Group 5') {
           steps {
             sh "hostname"
-            timeout(time: 2, unit: 'HOURS'){
+            timeout(time: 70, unit: 'MINUTES'){
               sh '''
               sleep 40
               cd Jenkinsfiles
@@ -172,6 +172,7 @@ pipeline {
       cd ../test5
       cat console.out
       '''
+      findText regexp: 'Test.*completed.*\\(.*\\):.*[1-9]\\d*', alsoCheckConsoleOutput: true, unstableIfFound: true
     }
   }
 }
