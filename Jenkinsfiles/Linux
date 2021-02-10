@@ -10,7 +10,6 @@ pipeline {
       steps {
         sh '''
         cd Jenkinsfiles
-        sudo chmod +x build.sh
         ./build.sh
         '''
       }
@@ -24,7 +23,6 @@ pipeline {
             timeout(time: 1, unit: 'HOURS'){
               sh '''
               cd Jenkinsfiles
-              sudo chmod +x test1.sh
               ./test1.sh
               '''
             }
@@ -33,7 +31,7 @@ pipeline {
             always {
               timeout(time: 10, unit: 'MINUTES') {
                 sh '''
-                cd Jenkinsfiles
+                cd Jenkinsfiles/test1
                 vagrant ssh -c "/bin/dmesg"
                 result=$?
                 vagrant destroy -f
@@ -50,7 +48,6 @@ pipeline {
               sh '''
               sleep 10
               cd Jenkinsfiles
-              sudo chmod +x test2.sh
               ./test2.sh
               '''
             }
@@ -59,7 +56,7 @@ pipeline {
             always {
               timeout(time: 10, unit: 'MINUTES') {
                 sh '''
-                cd Jenkinsfiles
+                cd Jenkinsfiles/test2
                 vagrant ssh -c "/bin/dmesg"
                 result=$?
                 vagrant destroy -f
@@ -76,7 +73,6 @@ pipeline {
               sh '''
               sleep 20
               cd Jenkinsfiles
-              sudo chmod +x test3.sh
               ./test3.sh
               '''
             }
@@ -85,7 +81,7 @@ pipeline {
             always {
               timeout(time: 10, unit: 'MINUTES') {
                 sh '''
-                cd Jenkinsfiles
+                cd Jenkinsfiles/test3
                 vagrant ssh -c "/bin/dmesg"
                 result=$?
                 vagrant destroy -f
@@ -102,7 +98,6 @@ pipeline {
               sh '''
               sleep 30
               cd Jenkinsfiles
-              sudo chmod +x test4.sh
               ./test4.sh
               '''
             }
@@ -111,7 +106,7 @@ pipeline {
             always {
               timeout(time: 10, unit: 'MINUTES') {
                 sh '''
-                cd Jenkinsfiles
+                cd Jenkinsfiles/test4
                 vagrant ssh -c "/bin/dmesg"
                 result=$?
                 vagrant destroy -f
@@ -128,7 +123,6 @@ pipeline {
               sh '''
               sleep 40
               cd Jenkinsfiles
-              sudo chmod +x test5.sh
               ./test5.sh
               '''
             }
@@ -137,7 +131,7 @@ pipeline {
             always {
               timeout(time: 10, unit: 'MINUTES') {
                 sh '''
-                cd Jenkinsfiles
+                cd Jenkinsfiles/test5
                 vagrant ssh -c "/bin/dmesg"
                 result=$?
                 vagrant destroy -f
