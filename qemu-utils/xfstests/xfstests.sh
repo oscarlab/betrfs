@@ -1,6 +1,7 @@
 #!/bin/bash
 set -e
-set -x
+## Uncomment for more debugging - but too verbose for now; losing useful other output
+#set -x
 
 ## Check argument count
 if [ $# != 1 ] && [ $# != 2 ]; then
