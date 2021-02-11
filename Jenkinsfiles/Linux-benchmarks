@@ -37,6 +37,7 @@ pipeline {
     always {
       sh '''
       cd Jenkinsfiles
+      vagrant status
       vagrant destroy -f
       cat console.out
       '''

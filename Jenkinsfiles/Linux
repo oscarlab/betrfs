@@ -32,6 +32,7 @@ pipeline {
               timeout(time: 10, unit: 'MINUTES') {
                 sh '''
                 cd Jenkinsfiles/test1
+                vagrant status
                 vagrant ssh -c "/bin/dmesg"
                 result=$?
                 vagrant destroy -f
@@ -57,6 +58,7 @@ pipeline {
               timeout(time: 10, unit: 'MINUTES') {
                 sh '''
                 cd Jenkinsfiles/test2
+                vagrant status
                 vagrant ssh -c "/bin/dmesg"
                 result=$?
                 vagrant destroy -f
@@ -82,6 +84,7 @@ pipeline {
               timeout(time: 10, unit: 'MINUTES') {
                 sh '''
                 cd Jenkinsfiles/test3
+                vagrant status
                 vagrant ssh -c "/bin/dmesg"
                 result=$?
                 vagrant destroy -f
@@ -133,6 +136,7 @@ pipeline {
               timeout(time: 10, unit: 'MINUTES') {
                 sh '''
                 cd Jenkinsfiles/test5
+                vagrant status
                 vagrant ssh -c "/bin/dmesg"
                 result=$?
                 vagrant destroy -f
