@@ -171,7 +171,9 @@ toku_destroy_dbt(DBT *dbt) {
     switch (dbt->flags) {
     case DB_DBT_MALLOC:
     case DB_DBT_REALLOC:
-        sb_free_sized(dbt->data, dbt->size);
+        if (dbt->data) {
+          sb_free_sized(dbt->data, dbt->size);
+        }
         toku_init_dbt(dbt);
         break;
     }
