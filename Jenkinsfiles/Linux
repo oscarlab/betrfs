@@ -107,6 +107,7 @@ pipeline {
               timeout(time: 10, unit: 'MINUTES') {
                 sh '''
                 cd Jenkinsfiles/test4
+                vagrant status
                 vagrant ssh -c "/bin/dmesg"
                 result=$?
                 vagrant destroy -f
