@@ -32,6 +32,7 @@ pipeline {
               timeout(time: 10, unit: 'MINUTES') {
                 sh '''
                 cd Jenkinsfiles/test1
+                sleep 30
                 vagrant status
                 vagrant ssh -c "/bin/dmesg"
                 result=$?
@@ -58,6 +59,7 @@ pipeline {
               timeout(time: 10, unit: 'MINUTES') {
                 sh '''
                 cd Jenkinsfiles/test2
+                sleep 30
                 vagrant status
                 vagrant ssh -c "/bin/dmesg"
                 result=$?
@@ -84,6 +86,7 @@ pipeline {
               timeout(time: 10, unit: 'MINUTES') {
                 sh '''
                 cd Jenkinsfiles/test3
+                sleep 30
                 vagrant status
                 vagrant ssh -c "/bin/dmesg"
                 result=$?
@@ -110,6 +113,7 @@ pipeline {
               timeout(time: 10, unit: 'MINUTES') {
                 sh '''
                 cd Jenkinsfiles/test4
+                sleep 30
                 vagrant status
                 vagrant ssh -c "/bin/dmesg"
                 result=$?
@@ -136,6 +140,7 @@ pipeline {
               timeout(time: 10, unit: 'MINUTES') {
                 sh '''
                 cd Jenkinsfiles/test5
+                sleep 30
                 vagrant status
                 vagrant ssh -c "/bin/dmesg"
                 result=$?
