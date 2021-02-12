@@ -1978,7 +1978,9 @@ ft_compare_pivot(DESCRIPTOR desc, ft_compare_func cmp, const DBT *key, const DBT
     return r;
 }
 
-
+#define KERN_SOH  "\001"
+#define KERN_ALERT KERN_SOH "1"
+extern "C" int printk(const char *fmt, ...);
 // destroys the internals of the ftnode, but it does not free the values
 // that are stored
 // this is common functionality for toku_ftnode_free and rebalance_ftnode_leaf
@@ -1991,6 +1993,8 @@ void toku_destroy_ftnode_internals(FTNODE node)
             assert(false);
         }
         for (int i = 0; i < node->n_children - 1; i++) {
+            DBT * DBT_debug = &node->childkeys[i];
+            if (DBT_debug->size != 0) printk(KERN_ALERT "1)%d\n", DBT_debug->size);
             toku_destroy_dbt(&node->childkeys[i]);
         }
         toku_free(node->childkeys);
@@ -2019,7 +2023,11 @@ void toku_destroy_ftnode_internals(FTNODE node)
                 assert(is_BNULL(node, i));
             }
             set_BNULL(node, i);
+            DBT * DBT_debug = &BP_LIFT(node, i);
+            if (DBT_debug->size != 0) printk(KERN_ALERT "2)%d\n", DBT_debug->size);
             toku_destroy_dbt(&BP_LIFT(node, i));
+            DBT_debug = &BP_NOT_LIFTED(node, i);
+            if (DBT_debug->size != 0) printk(KERN_ALERT "3)%d\n", DBT_debug->size);
             toku_destroy_dbt(&BP_NOT_LIFTED(node, i));
         }
         toku_free(node->bp);
@@ -6064,6 +6072,9 @@ static void setkey_no_alloc_func(const DBT *new_key, void *extra)
     }
 }
 
+/*  lifted_key = key - lift */
+/*  the data from key will be copied to lifted_key without new memory allocated */
+/*  toku_memdup_dbt(lifted_key, &key_buf[key->size-2], 2); */
 int toku_ft_lift_key_no_alloc(FT UU(ft), DBT *lifted_key,
                               const DBT *key, const DBT *lift)
 {
