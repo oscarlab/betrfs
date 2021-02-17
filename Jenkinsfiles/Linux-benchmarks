@@ -22,7 +22,7 @@ pipeline {
 
     stage('Benchmarks') {
       steps {
-        timeout(time: 5, unit: 'HOURS'){
+        timeout(time: 30, unit: 'MINUTES'){
           sh '''
           cd Jenkinsfiles
           vagrant ssh -c "cd /oscar/betrfs/benchmarks/; sudo REPO=betrfs CUR_MNTPNT=/oscar ./run-benchmark.sh perf_tests"
@@ -37,7 +37,6 @@ pipeline {
     always {
       sh '''
       cd Jenkinsfiles
-      sleep 30
       vagrant status
       vagrant destroy -f
       cat console.out
