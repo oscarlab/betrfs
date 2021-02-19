@@ -97,7 +97,7 @@ pipeline {
         stage('Test Group 4') {
           steps {
             sh "hostname"
-            timeout(time: 2, unit: 'HOURS'){
+            timeout(time: 3, unit: 'HOURS'){
               sh '''
               sleep 30
               cd Jenkinsfiles
