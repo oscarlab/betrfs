@@ -8,10 +8,12 @@ pipeline {
   stages {
     stage('Build') {
       steps {
-        sh '''
-        cd Jenkinsfiles
-        ./build.sh
-        '''
+        timeout(time: 40, unit: 'MINUTES') {
+          sh '''
+          cd Jenkinsfiles
+          ./build.sh
+          '''
+        }
       }
     }
 
@@ -20,7 +22,7 @@ pipeline {
         stage('Test Group 1') {
           steps {
             sh "hostname"
-            timeout(time: 70, unit: 'MINUTES'){
+            timeout(time: 70, unit: 'MINUTES') {
               sh '''
               cd Jenkinsfiles
               ./test1.sh
@@ -45,7 +47,7 @@ pipeline {
         stage('Test Group 2') {
           steps {
             sh "hostname"
-            timeout(time: 70, unit: 'MINUTES'){
+            timeout(time: 70, unit: 'MINUTES') {
               sh '''
               sleep 10
               cd Jenkinsfiles
@@ -71,7 +73,7 @@ pipeline {
         stage('Test Group 3') {
           steps {
             sh "hostname"
-            timeout(time: 70, unit: 'MINUTES'){
+            timeout(time: 70, unit: 'MINUTES') {
               sh '''
               sleep 20
               cd Jenkinsfiles
@@ -97,7 +99,7 @@ pipeline {
         stage('Test Group 4') {
           steps {
             sh "hostname"
-            timeout(time: 3, unit: 'HOURS'){
+            timeout(time: 3, unit: 'HOURS') {
               sh '''
               sleep 30
               cd Jenkinsfiles
@@ -123,7 +125,7 @@ pipeline {
         stage('Test Group 5') {
           steps {
             sh "hostname"
-            timeout(time: 2, unit: 'HOURS'){
+            timeout(time: 2, unit: 'HOURS') {
               sh '''
               sleep 40
               cd Jenkinsfiles
