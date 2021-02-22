@@ -1367,6 +1367,7 @@ ft_split_leaf(FT ft, FTNODE node, FTNODE *nodea, FTNODE *nodeb, DBT *splitk,
                 node->unbound_insert_count -= ubi_count;
                 B->unbound_insert_count += ubi_count;
             }
+            memset(&node->bp[curr_src_bn_idx], 0, sizeof(node->bp[0]));
         }
         if (curr_dst_bn_idx < B->n_children) {
             // we copied everything, but we may still leave some bp UNAVAIL
@@ -1625,8 +1626,8 @@ merge_leaf_nodes(FT ft, FTNODE parent, int childnuma, FTNODE a, FTNODE b,
         assert_zero(r);
         r = toku_ft_node_relift(ft, b, &BP_LIFT(parent, childnuma + 1), &new_lift);
         assert_zero(r);
-        toku_cleanup_dbt(&BP_LIFT(parent, childnuma));
-        toku_cleanup_dbt(&BP_LIFT(parent, childnuma + 1));
+        toku_destroy_dbt(&BP_LIFT(parent, childnuma));
+        toku_destroy_dbt(&BP_LIFT(parent, childnuma + 1));
         toku_copy_dbt(&BP_LIFT(parent, childnuma), new_lift);
     }
 
@@ -1655,6 +1656,7 @@ merge_leaf_nodes(FT ft, FTNODE parent, int childnuma, FTNODE a, FTNODE b,
         // Set both the state to invalid, and the tag to null
         BP_STATE(b,i) = PT_INVALID;
         set_BNULL(b, i);
+        toku_init_dbt(&BP_LIFT(b, i));
     }
 
     a->unbound_insert_count += b->unbound_insert_count;
@@ -1682,9 +1684,15 @@ merge_leaf_nodes(FT ft, FTNODE parent, int childnuma, FTNODE a, FTNODE b,
         memmove(&parent->bp[childnuma + 1], &parent->bp[childnuma + 2],
                 (parent->n_children - childnuma - 1) * sizeof(parent->bp[0]));
         REALLOC_N(parent->n_children, parent->n_children + 1, parent->bp);
-        memmove(&parent->childkeys[childnuma], &parent->childkeys[childnuma + 1],
-                (parent->n_children - childnuma - 1) * sizeof(parent->childkeys[0]));
-        REALLOC_N(parent->n_children - 1, parent->n_children, parent->childkeys);
+
+        if (parent->n_children > 1) {
+            memmove(&parent->childkeys[childnuma], &parent->childkeys[childnuma + 1],
+                    (parent->n_children - childnuma - 1) * sizeof(parent->childkeys[0]));
+            REALLOC_N(parent->n_children - 1, parent->n_children, parent->childkeys);
+        } else {
+            toku_free(parent->childkeys);
+            parent->childkeys = NULL;
+        }
     }
 
     parent->dirty = 1;

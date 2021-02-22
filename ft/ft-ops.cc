@@ -2023,6 +2023,7 @@ void toku_destroy_ftnode_internals(FTNODE node)
     node->childkeys = NULL;
     node->bp = NULL;
     node->unbound_insert_count = 0;
+    node->n_children = 0;
 }
 
 void toku_destroy_ftnode_shadows(FTNODE node)
