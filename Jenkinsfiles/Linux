@@ -32,13 +32,18 @@ pipeline {
           post {
             always {
               timeout(time: 1, unit: 'MINUTES') {
-                sh '''
-                cd Jenkinsfiles/test1
-                # comment this out since it's causing problems
-                # vagrant ssh -c "/bin/dmesg"
-                # result=$?
-                vagrant destroy -f
-                '''
+                try {
+                  sh '''
+                  cd Jenkinsfiles/test1
+                  vagrant ssh -c "/bin/dmesg"
+                  result=$?
+                  vagrant destroy -f
+                  '''
+                }
+                catch (Exception e) {
+                  echo 'Exception occurred: ' + e.toString()
+                  sh 'vagrant destroy -f'
+                }
               }
             }
           }
@@ -58,13 +63,18 @@ pipeline {
           post {
             always {
               timeout(time: 1, unit: 'MINUTES') {
-                sh '''
-                cd Jenkinsfiles/test2
-                # comment this out since it's causing problems
-                # vagrant ssh -c "/bin/dmesg"
-                # result=$?
-                vagrant destroy -f
-                '''
+                try {
+                  sh '''
+                  cd Jenkinsfiles/test2
+                  vagrant ssh -c "/bin/dmesg"
+                  result=$?
+                  vagrant destroy -f
+                  '''
+                }
+                catch (Exception e) {
+                  echo 'Exception occurred: ' + e.toString()
+                  sh 'vagrant destroy -f'
+                }
               }
             }
           }
@@ -84,13 +94,18 @@ pipeline {
           post {
             always {
               timeout(time: 1, unit: 'MINUTES') {
-                sh '''
-                cd Jenkinsfiles/test3
-                # comment this out since it's causing problems
-                # vagrant ssh -c "/bin/dmesg"
-                # result=$?
-                vagrant destroy -f
-                '''
+                try {
+                  sh '''
+                  cd Jenkinsfiles/test3
+                  vagrant ssh -c "/bin/dmesg"
+                  result=$?
+                  vagrant destroy -f
+                  '''
+                }
+                catch (Exception e) {
+                  echo 'Exception occurred: ' + e.toString()
+                  sh 'vagrant destroy -f'
+                }
               }
             }
           }
@@ -110,13 +125,18 @@ pipeline {
           post {
             always {
               timeout(time: 1, unit: 'MINUTES') {
-                sh '''
-                cd Jenkinsfiles/test4
-                # comment this out since it's causing problems
-                # vagrant ssh -c "/bin/dmesg"
-                # result=$?
-                vagrant destroy -f
-                '''
+                try {
+                  sh '''
+                  cd Jenkinsfiles/test4
+                  vagrant ssh -c "/bin/dmesg"
+                  result=$?
+                  vagrant destroy -f
+                  '''
+                }
+                catch (Exception e) {
+                  echo 'Exception occurred: ' + e.toString()
+                  sh 'vagrant destroy -f'
+                }
               }
             }
           }
@@ -136,13 +156,18 @@ pipeline {
           post {
             always {
               timeout(time: 1, unit: 'MINUTES') {
-                sh '''
-                cd Jenkinsfiles/test5
-                # comment this out since it's causing problems
-                # vagrant ssh -c "/bin/dmesg"
-                # result=$?
-                vagrant destroy -f
-                '''
+                try {
+                  sh '''
+                  cd Jenkinsfiles/test5
+                  vagrant ssh -c "/bin/dmesg"
+                  result=$?
+                  vagrant destroy -f
+                  '''
+                }
+                catch (Exception e) {
+                  echo 'Exception occurred: ' + e.toString()
+                  sh 'vagrant destroy -f'
+                }
               }
             }
           }
