@@ -32,17 +32,19 @@ pipeline {
           post {
             always {
               timeout(time: 1, unit: 'MINUTES') {
-                try {
-                  sh '''
-                  cd Jenkinsfiles/test1
-                  vagrant ssh -c "/bin/dmesg"
-                  result=$?
-                  vagrant destroy -f
-                  '''
-                }
-                catch (Exception e) {
-                  echo 'Exception occurred: ' + e.toString()
-                  sh 'vagrant destroy -f'
+                script {
+                  try {
+                    sh '''
+                    cd Jenkinsfiles/test1
+                    vagrant ssh -c "/bin/dmesg"
+                    result=$?
+                    vagrant destroy -f
+                    '''
+                  }
+                  catch (Exception e) {
+                    echo 'Exception occurred: ' + e.toString()
+                    sh 'vagrant destroy -f'
+                  }
                 }
               }
             }
@@ -63,17 +65,19 @@ pipeline {
           post {
             always {
               timeout(time: 1, unit: 'MINUTES') {
-                try {
-                  sh '''
-                  cd Jenkinsfiles/test2
-                  vagrant ssh -c "/bin/dmesg"
-                  result=$?
-                  vagrant destroy -f
-                  '''
-                }
-                catch (Exception e) {
-                  echo 'Exception occurred: ' + e.toString()
-                  sh 'vagrant destroy -f'
+                script {
+                  try {
+                    sh '''
+                    cd Jenkinsfiles/test2
+                    vagrant ssh -c "/bin/dmesg"
+                    result=$?
+                    vagrant destroy -f
+                    '''
+                  }
+                  catch (Exception e) {
+                    echo 'Exception occurred: ' + e.toString()
+                    sh 'vagrant destroy -f'
+                  }
                 }
               }
             }
@@ -94,17 +98,19 @@ pipeline {
           post {
             always {
               timeout(time: 1, unit: 'MINUTES') {
-                try {
-                  sh '''
-                  cd Jenkinsfiles/test3
-                  vagrant ssh -c "/bin/dmesg"
-                  result=$?
-                  vagrant destroy -f
-                  '''
-                }
-                catch (Exception e) {
-                  echo 'Exception occurred: ' + e.toString()
-                  sh 'vagrant destroy -f'
+                script {
+                  try {
+                    sh '''
+                    cd Jenkinsfiles/test3
+                    vagrant ssh -c "/bin/dmesg"
+                    result=$?
+                    vagrant destroy -f
+                    '''
+                  }
+                  catch (Exception e) {
+                    echo 'Exception occurred: ' + e.toString()
+                    sh 'vagrant destroy -f'
+                  }
                 }
               }
             }
@@ -125,17 +131,19 @@ pipeline {
           post {
             always {
               timeout(time: 1, unit: 'MINUTES') {
-                try {
-                  sh '''
-                  cd Jenkinsfiles/test4
-                  vagrant ssh -c "/bin/dmesg"
-                  result=$?
-                  vagrant destroy -f
-                  '''
-                }
-                catch (Exception e) {
-                  echo 'Exception occurred: ' + e.toString()
-                  sh 'vagrant destroy -f'
+                script {
+                  try {
+                    sh '''
+                    cd Jenkinsfiles/test4
+                    vagrant ssh -c "/bin/dmesg"
+                    result=$?
+                    vagrant destroy -f
+                    '''
+                  }
+                  catch (Exception e) {
+                    echo 'Exception occurred: ' + e.toString()
+                    sh 'vagrant destroy -f'
+                  }
                 }
               }
             }
@@ -156,17 +164,19 @@ pipeline {
           post {
             always {
               timeout(time: 1, unit: 'MINUTES') {
-                try {
-                  sh '''
-                  cd Jenkinsfiles/test5
-                  vagrant ssh -c "/bin/dmesg"
-                  result=$?
-                  vagrant destroy -f
-                  '''
-                }
-                catch (Exception e) {
-                  echo 'Exception occurred: ' + e.toString()
-                  sh 'vagrant destroy -f'
+                script {
+                  try {
+                    sh '''
+                    cd Jenkinsfiles/test5
+                    vagrant ssh -c "/bin/dmesg"
+                    result=$?
+                    vagrant destroy -f
+                    '''
+                  }
+                  catch (Exception e) {
+                    echo 'Exception occurred: ' + e.toString()
+                    sh 'vagrant destroy -f'
+                  }
                 }
               }
             }

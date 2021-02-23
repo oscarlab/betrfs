@@ -35,19 +35,21 @@ pipeline {
 
   post {
     always {
-      try {
-        sh '''
-        cd Jenkinsfiles
-        vagrant status
-        vagrant ssh -c "/bin/dmesg"
-        result=$?
-        vagrant destroy -f
-        cat console.out
-        '''
-      }
-      catch (Exception e) {
-        echo 'Exception occurred: ' + e.toString()
-        sh 'vagrant destroy -f'
+      script {
+        try {
+          sh '''
+          cd Jenkinsfiles
+          vagrant status
+          vagrant ssh -c "/bin/dmesg"
+          result=$?
+          vagrant destroy -f
+          cat console.out
+          '''
+        }
+        catch (Exception e) {
+          echo 'Exception occurred: ' + e.toString()
+          sh 'vagrant destroy -f'
+        }
       }
       findText regexp: 'The.*ceiling.*is.*the.*roof', alsoCheckConsoleOutput: true, succeedIfFound: true
       //findText regexp: 'ftfs\\serror', alsoCheckConsoleOutput: true, unstableIfFound: true
