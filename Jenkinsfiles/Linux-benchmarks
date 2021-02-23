@@ -22,7 +22,7 @@ pipeline {
 
     stage('Benchmarks') {
       steps {
-        timeout(time: 5, unit: 'HOURS'){
+        timeout(time: 30, unit: 'MINUTES'){
           sh '''
           cd Jenkinsfiles
           vagrant ssh -c "cd /oscar/betrfs/benchmarks/; sudo REPO=betrfs CUR_MNTPNT=/oscar ./run-benchmark.sh perf_tests"
@@ -35,11 +35,22 @@ pipeline {
 
   post {
     always {
-      sh '''
-      cd Jenkinsfiles
-      vagrant destroy -f
-      cat console.out
-      '''
+      script {
+        try {
+          sh '''
+          cd Jenkinsfiles
+          vagrant status
+          vagrant ssh -c "/bin/dmesg"
+          result=$?
+          vagrant destroy -f
+          cat console.out
+          '''
+        }
+        catch (Exception e) {
+          echo 'Exception occurred: ' + e.toString()
+          sh 'cd Jenkinsfiles; vagrant destroy -f'
+        }
+      }
       findText regexp: 'The.*ceiling.*is.*the.*roof', alsoCheckConsoleOutput: true, succeedIfFound: true
       //findText regexp: 'ftfs\\serror', alsoCheckConsoleOutput: true, unstableIfFound: true
     }

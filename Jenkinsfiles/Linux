@@ -8,11 +8,12 @@ pipeline {
   stages {
     stage('Build') {
       steps {
-        sh '''
-        cd Jenkinsfiles
-        sudo chmod +x build.sh
-        ./build.sh
-        '''
+        timeout(time: 40, unit: 'MINUTES') {
+          sh '''
+          cd Jenkinsfiles
+          ./build.sh
+          '''
+        }
       }
     }
 
@@ -21,23 +22,30 @@ pipeline {
         stage('Test Group 1') {
           steps {
             sh "hostname"
-            timeout(time: 1, unit: 'HOURS'){
+            timeout(time: 70, unit: 'MINUTES') {
               sh '''
               cd Jenkinsfiles
-              sudo chmod +x test1.sh
               ./test1.sh
               '''
             }
           }
           post {
             always {
-              timeout(time: 10, unit: 'MINUTES') {
-                sh '''
-                cd Jenkinsfiles
-                vagrant ssh -c "/bin/dmesg"
-                result=$?
-                vagrant destroy -f
-                '''
+              timeout(time: 1, unit: 'MINUTES') {
+                script {
+                  try {
+                    sh '''
+                    cd Jenkinsfiles/test1
+                    vagrant ssh -c "/bin/dmesg"
+                    result=$?
+                    vagrant destroy -f
+                    '''
+                  }
+                  catch (Exception e) {
+                    echo 'Exception occurred: ' + e.toString()
+                    sh 'cd Jenkinsfiles/test1; vagrant destroy -f'
+                  }
+                }
               }
             }
           }
@@ -46,24 +54,31 @@ pipeline {
         stage('Test Group 2') {
           steps {
             sh "hostname"
-            timeout(time: 1, unit: 'HOURS'){
+            timeout(time: 70, unit: 'MINUTES') {
               sh '''
               sleep 10
               cd Jenkinsfiles
-              sudo chmod +x test2.sh
               ./test2.sh
               '''
             }
           }
           post {
             always {
-              timeout(time: 10, unit: 'MINUTES') {
-                sh '''
-                cd Jenkinsfiles
-                vagrant ssh -c "/bin/dmesg"
-                result=$?
-                vagrant destroy -f
-                '''
+              timeout(time: 1, unit: 'MINUTES') {
+                script {
+                  try {
+                    sh '''
+                    cd Jenkinsfiles/test2
+                    vagrant ssh -c "/bin/dmesg"
+                    result=$?
+                    vagrant destroy -f
+                    '''
+                  }
+                  catch (Exception e) {
+                    echo 'Exception occurred: ' + e.toString()
+                    sh 'cd Jenkinsfiles/test2; vagrant destroy -f'
+                  }
+                }
               }
             }
           }
@@ -72,24 +87,31 @@ pipeline {
         stage('Test Group 3') {
           steps {
             sh "hostname"
-            timeout(time: 4, unit: 'HOURS'){
+            timeout(time: 70, unit: 'MINUTES') {
               sh '''
               sleep 20
               cd Jenkinsfiles
-              sudo chmod +x test3.sh
               ./test3.sh
               '''
             }
           }
           post {
             always {
-              timeout(time: 10, unit: 'MINUTES') {
-                sh '''
-                cd Jenkinsfiles
-                vagrant ssh -c "/bin/dmesg"
-                result=$?
-                vagrant destroy -f
-                '''
+              timeout(time: 1, unit: 'MINUTES') {
+                script {
+                  try {
+                    sh '''
+                    cd Jenkinsfiles/test3
+                    vagrant ssh -c "/bin/dmesg"
+                    result=$?
+                    vagrant destroy -f
+                    '''
+                  }
+                  catch (Exception e) {
+                    echo 'Exception occurred: ' + e.toString()
+                    sh 'cd Jenkinsfiles/test3; vagrant destroy -f'
+                  }
+                }
               }
             }
           }
@@ -98,24 +120,31 @@ pipeline {
         stage('Test Group 4') {
           steps {
             sh "hostname"
-            timeout(time: 4, unit: 'HOURS'){
+            timeout(time: 3, unit: 'HOURS') {
               sh '''
               sleep 30
               cd Jenkinsfiles
-              sudo chmod +x test4.sh
               ./test4.sh
               '''
             }
           }
           post {
             always {
-              timeout(time: 10, unit: 'MINUTES') {
-                sh '''
-                cd Jenkinsfiles
-                vagrant ssh -c "/bin/dmesg"
-                result=$?
-                vagrant destroy -f
-                '''
+              timeout(time: 1, unit: 'MINUTES') {
+                script {
+                  try {
+                    sh '''
+                    cd Jenkinsfiles/test4
+                    vagrant ssh -c "/bin/dmesg"
+                    result=$?
+                    vagrant destroy -f
+                    '''
+                  }
+                  catch (Exception e) {
+                    echo 'Exception occurred: ' + e.toString()
+                    sh 'cd Jenkinsfiles/test4; vagrant destroy -f'
+                  }
+                }
               }
             }
           }
@@ -124,24 +153,31 @@ pipeline {
         stage('Test Group 5') {
           steps {
             sh "hostname"
-            timeout(time: 2, unit: 'HOURS'){
+            timeout(time: 2, unit: 'HOURS') {
               sh '''
               sleep 40
               cd Jenkinsfiles
-              sudo chmod +x test5.sh
               ./test5.sh
               '''
             }
           }
           post {
             always {
-              timeout(time: 10, unit: 'MINUTES') {
-                sh '''
-                cd Jenkinsfiles
-                vagrant ssh -c "/bin/dmesg"
-                result=$?
-                vagrant destroy -f
-                '''
+              timeout(time: 1, unit: 'MINUTES') {
+                script {
+                  try {
+                    sh '''
+                    cd Jenkinsfiles/test5
+                    vagrant ssh -c "/bin/dmesg"
+                    result=$?
+                    vagrant destroy -f
+                    '''
+                  }
+                  catch (Exception e) {
+                    echo 'Exception occurred: ' + e.toString()
+                    sh 'cd Jenkinsfiles/test5; vagrant destroy -f'
+                  }
+                }
               }
             }
           }
@@ -154,7 +190,26 @@ pipeline {
     always {
       sh '''
       cd Jenkinsfiles
+      echo "*** Console from Build: "
+      cat console.out
+      echo "*** Console from Test Group 1: "
+      cd test1
+      cat console.out
+      echo "*** Console from Test Group 2: "
+      cd ../test2
+      cat console.out
+      echo "*** Console from Test Group 3: "
+      cd ../test3
+      cat console.out
+      echo "*** Console from Test Group 4: "
+      cd ../test4
+      cat console.out
+      echo "*** Console from Test Group 5: "
+      cd ../test5
+      cat console.out
       '''
+      findText regexp: 'Test.*completed.*\\(.*\\):.*[1-9]\\d*', alsoCheckConsoleOutput: true, unstableIfFound: true
+      //findText regexp: 'ftfs\\serror', alsoCheckConsoleOutput: true, unstableIfFound: true
     }
   }
 }
