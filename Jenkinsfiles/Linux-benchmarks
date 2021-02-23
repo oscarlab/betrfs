@@ -48,7 +48,7 @@ pipeline {
         }
         catch (Exception e) {
           echo 'Exception occurred: ' + e.toString()
-          sh 'vagrant destroy -f'
+          sh 'cd Jenkinsfiles; vagrant destroy -f'
         }
       }
       findText regexp: 'The.*ceiling.*is.*the.*roof', alsoCheckConsoleOutput: true, succeedIfFound: true

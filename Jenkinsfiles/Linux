@@ -43,7 +43,7 @@ pipeline {
                   }
                   catch (Exception e) {
                     echo 'Exception occurred: ' + e.toString()
-                    sh 'vagrant destroy -f'
+                    sh 'cd Jenkinsfiles/test1; vagrant destroy -f'
                   }
                 }
               }
@@ -76,7 +76,7 @@ pipeline {
                   }
                   catch (Exception e) {
                     echo 'Exception occurred: ' + e.toString()
-                    sh 'vagrant destroy -f'
+                    sh 'cd Jenkinsfiles/test2; vagrant destroy -f'
                   }
                 }
               }
@@ -109,7 +109,7 @@ pipeline {
                   }
                   catch (Exception e) {
                     echo 'Exception occurred: ' + e.toString()
-                    sh 'vagrant destroy -f'
+                    sh 'cd Jenkinsfiles/test3; vagrant destroy -f'
                   }
                 }
               }
@@ -142,7 +142,7 @@ pipeline {
                   }
                   catch (Exception e) {
                     echo 'Exception occurred: ' + e.toString()
-                    sh 'vagrant destroy -f'
+                    sh 'cd Jenkinsfiles/test4; vagrant destroy -f'
                   }
                 }
               }
@@ -175,7 +175,7 @@ pipeline {
                   }
                   catch (Exception e) {
                     echo 'Exception occurred: ' + e.toString()
-                    sh 'vagrant destroy -f'
+                    sh 'cd Jenkinsfiles/test5; vagrant destroy -f'
                   }
                 }
               }
