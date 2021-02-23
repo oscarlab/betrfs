@@ -1319,6 +1319,7 @@ ft_split_leaf(FT ft, FTNODE node, FTNODE *nodea, FTNODE *nodeb, DBT *splitk,
                 B->childkeys = NULL;
             }
             REALLOC_N(num_children_in_b, B->n_children, B->bp);
+            memset(B->bp, 0, num_children_in_b * sizeof(B->bp[0]));
             B->n_children = num_children_in_b;
             for (int i = 0; i < num_children_in_b; i++) {
                 BP_BLOCKNUM(B, i).b = 0;
