@@ -1,6 +1,0 @@
-if [[ `hostname` != beaker* ]]
-then
-    echo "Be careful. This script formats disk partitions."
-    echo "It should only be run on a properly configured crash box!!"
-    exit 0
-fi
