@@ -6,7 +6,7 @@ endif
 
 obj-m += ftfs.o
 
-ftfs-y := ftfs_super.o ftfs_bstore.o ftfs_metadata.o rbtreekv.o ftfs_module.o
+ftfs-y := nb_super.o nb_bstore.o ftfs_metadata.o rbtreekv.o ftfs_module.o
 
 all:
 	make -C /lib/modules/$(KDIR)/build M=$(PWD) modules

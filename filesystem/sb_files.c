@@ -17,12 +17,12 @@
 #include <linux/uio.h>
 #include <linux/mm.h>
 #include <linux/falloc.h>
-#include "ftfs_files.h"
-#include "ftfs_malloc.h"
+#include "sb_files.h"
+#include "sb_malloc.h"
 #include "ftfs_southbound.h"
 #include "ftfs.h"
-#include "ftfs_dir.h"
-#include "ftfs_error.h"
+#include "sb_dir.h"
+#include "sb_error.h"
 
 //typedef int (* do_flock_t)(struct fd, unsigned int);
 typedef int (* do_truncate_t)(struct dentry *, loff_t, unsigned int,

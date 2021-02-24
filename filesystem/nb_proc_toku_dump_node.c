@@ -3,8 +3,8 @@
 #include <linux/slab.h>
 #include <linux/kernel.h>
 #include <linux/proc_fs.h>
-#include "ftfs_fs.h"
-#include "toku_dump_node.h"
+#include "ftfs_northbound.h"
+#include "nb_proc_toku_dump_node.h"
 
 static struct proc_dir_entry * dump_node_entry;
 

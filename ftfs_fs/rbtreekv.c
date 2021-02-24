@@ -4,7 +4,7 @@
 #define RBTREE_KV_H
 
 #include "tokudb.h"
-#include "ftfs_fs.h"
+#include "ftfs_northbound.h"
 
 /*
  * Create one db as a rbtree. One db_env has a list of rbtrees, each

@@ -5,8 +5,8 @@
 #include <linux/fs.h>
 #include <linux/slab.h>
 #include <linux/proc_fs.h>
-#include "ftfs_fs.h"
-#include "toku_engine_status.h"
+#include "ftfs_northbound.h"
+#include "nb_proc_toku_engine_status.h"
 
 static struct proc_dir_entry * engine_status_entry;
 

@@ -4,7 +4,7 @@
 #include <linux/types.h>
 #include <linux/timer.h>
 #include <linux/rtc.h>
-#include "ftfs_pthread.h"
+#include "sb_pthread.h"
 
 #include "ftfs.h"
 

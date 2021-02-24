@@ -16,11 +16,11 @@
 #include <linux/kallsyms.h>
 #include <linux/dcache.h>
 #include "ftfs_southbound.h"
-#include "toku_misc.h"
-#include "ftfs_malloc.h"
-#include "ftfs_files.h"
-#include "ftfs_dir.h"
-#include "ftfs_error.h"
+#include "sb_misc.h"
+#include "sb_malloc.h"
+#include "sb_files.h"
+#include "sb_dir.h"
+#include "sb_error.h"
 #include "ftfs.h"
 
 MODULE_LICENSE("GPL");

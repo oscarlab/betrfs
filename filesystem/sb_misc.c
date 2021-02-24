@@ -18,11 +18,11 @@
 #include <linux/ctype.h>
 #include <linux/resource.h>
 #include "ftfs.h"
-#include "ftfs_files.h"
+#include "sb_files.h"
 #include "ftfs_southbound.h"
-#include "ftfs_error.h"
-#include "ftfs_dir.h"
-#include "toku_misc.h"
+#include "sb_error.h"
+#include "sb_dir.h"
+#include "sb_misc.h"
 
 typedef long (* sys_newlstat_t)(const char *, struct stat *);
 typedef long (* sys_setrlimit_t) (unsigned int, struct rlimit *);

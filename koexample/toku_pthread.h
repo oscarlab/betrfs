@@ -92,7 +92,7 @@ PATENT RIGHTS GRANT:
 #ifndef TOKU_PTHREAD_H
 #define TOKU_PTHREAD_H
 
-#include "ftfs_pthread.h"
+#include "sb_pthread.h"
 
 #include "toku_assert.h"
 

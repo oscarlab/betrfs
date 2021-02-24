@@ -12,7 +12,7 @@
 #include <linux/kallsyms.h>
 #include <linux/sched.h>
 
-#include "ftfs_fs.h"
+#include "ftfs_northbound.h"
 
 static char root_meta_key[] = "m\x00\x00\x00\x00\x00\x00\x00\x00";
 

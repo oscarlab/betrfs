@@ -5,8 +5,8 @@
 #include <linux/fs.h>
 #include <linux/slab.h>
 #include <linux/proc_fs.h>
-#include "ftfs_fs.h"
-#include "toku_checkpoint.h"
+#include "ftfs_northbound.h"
+#include "nb_proc_toku_checkpoint.h"
 
 static struct proc_dir_entry * checkpoint_entry;
 

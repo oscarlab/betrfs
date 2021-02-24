@@ -5,7 +5,7 @@
 #include <linux/kernel.h>
 #include <linux/sched.h>
 #include <linux/printk.h>
-#include "ftfs_files.h"
+#include "sb_files.h"
 
 static FILE fstderr = {
 	.fd = 2,

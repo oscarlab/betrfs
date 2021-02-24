@@ -645,7 +645,7 @@ int main (int argc, char *const argv[] __attribute__((__unused__))) {
     printf("#include <stdint.h>\n");
     printf("#else\n");
     printf("#include \"faked_std.h\"\n");
-    printf("#include \"ftfs_files.h\"\n");
+    printf("#include \"sb_files.h\"\n");
     printf("#endif //__KERNEL__\n");
     //printf("#include <inttypes.h>\n");
     printf("#if defined(__cplusplus) || defined(__cilkplusplus)\nextern \"C\" {\n#endif\n");

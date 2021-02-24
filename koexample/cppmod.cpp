@@ -2,7 +2,7 @@
 #include "kernel_api.h"
 #include "circular_buffer.h"
 
-#include "ftfs_pthread.h"
+#include "sb_pthread.h"
 
 pthread_t p;
 int global = 0;

@@ -21,8 +21,8 @@
 #include <linux/security.h>
 #include <linux/kallsyms.h>
 #include <linux/fcntl.h>
-#include "ftfs_random.h"
-#include "ftfs_files.h"
+#include "sb_random.h"
+#include "sb_files.h"
 #include "ftfs.h"
 #if 1
 

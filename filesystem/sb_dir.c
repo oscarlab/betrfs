@@ -18,9 +18,9 @@
 #include <linux/kallsyms.h>
 #include <linux/fcntl.h>
 #include "ftfs_southbound.h"
-#include "ftfs_files.h"
+#include "sb_files.h"
 #include "ftfs.h"
-#include "ftfs_error.h"
+#include "sb_error.h"
 
 struct getdents_callback64 {
 	struct dir_context ctx;

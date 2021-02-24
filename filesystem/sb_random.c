@@ -3,7 +3,7 @@
 #include <linux/slab.h>
 #include <asm/uaccess.h>
 #include <linux/random.h>
-#include "ftfs_random.h"
+#include "sb_random.h"
 struct mutex lock_random_generator;
 DEFINE_MUTEX(lock_random_generator);
 

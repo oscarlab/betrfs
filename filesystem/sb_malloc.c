@@ -7,8 +7,8 @@
 #include <linux/page-flags.h>
 #include <linux/mm_types.h>
 #include <linux/mm.h>
-#include "ftfs_malloc.h"
-#include "ftfs_error.h"
+#include "sb_malloc.h"
+#include "sb_error.h"
 #include "ftfs.h"
 
 #include <linux/hashtable.h>

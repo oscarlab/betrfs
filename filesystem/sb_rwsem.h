@@ -14,7 +14,7 @@
 
 #include <linux/rwsem.h>
 #include <linux/sched.h>
-#include "ftfs_pthread.h"
+#include "sb_pthread.h"
 /*
  * lock for reading
  */

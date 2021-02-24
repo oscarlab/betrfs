@@ -17,10 +17,10 @@
 #include <linux/namei.h>
 #include <linux/fcntl.h>
 #include <linux/version.h>
-#include "ftfs_files.h"
+#include "sb_files.h"
 #include "ftfs_southbound.h"
 #include "ftfs.h"
-#include "ftfs_error.h"
+#include "sb_error.h"
 
 static int ftfs_vfs_fstat(unsigned int fd, struct kstat *stat)
 {

@@ -7,7 +7,7 @@
  * Written by David Howells (dhowells@redhat.com).
  * Derived from arch/i386/kernel/semaphore.c
  */
-#include "ftfs_rwsem.h"
+#include "sb_rwsem.h"
 #include <linux/sched.h>
 #include <linux/init.h>
 #include <linux/export.h>

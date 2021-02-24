@@ -4,7 +4,7 @@
 #include <linux/kernel.h>
 #include <linux/slab.h>
 
-#include "ftfs_fs.h"
+#include "ftfs_northbound.h"
 
 size_t db_cachesize;
 

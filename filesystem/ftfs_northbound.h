@@ -68,8 +68,6 @@ void exit_ftfs_fs(void);
 #define ftfs_get_block_num_by_size(size)	\
 		(((size) == 0) ? 0 : (((size) - 1) >> (FTFS_BSTORE_BLOCKSIZE_BITS)) + 1)
 
-#define FTFS_SUPER_MAGIC 0XF7F5
-
 #define TIME_T_TO_TIMESPEC(ts, t) do \
 		{ \
 			ts.tv_sec = t; \

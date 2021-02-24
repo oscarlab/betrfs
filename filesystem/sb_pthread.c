@@ -9,9 +9,9 @@
 #include <linux/time.h>
 
 #include "ftfs.h"
-#include "ftfs_error.h"
+#include "sb_error.h"
 #include "ftfs_southbound.h"
-#include "ftfs_pthread.h"
+#include "sb_pthread.h"
 #include "ftfs_frwlock.h"
 /* dummy phtread_mutexattr */
 int

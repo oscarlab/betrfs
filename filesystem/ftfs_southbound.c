@@ -8,9 +8,8 @@
 #include <linux/mount.h>
 #include "ftfs_southbound.h"
 #include "ftfs.h"
-#include "ftfs_pthread.h"
-#include "ftfs_stat.h"
-#include "ftfs_fs.h"
+#include "sb_pthread.h"
+#include "sb_stat.h"
 
 static DEFINE_MUTEX(ftfs_southbound_lock);
 
