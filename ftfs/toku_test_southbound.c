@@ -22,11 +22,11 @@
 #include <linux/mm_types.h>
 #include <linux/mm.h>
 #include "ftfs.h"
-#include "ftfs_files.h"
-#include "ftfs_dir.h"
-#include "ftfs_stat.h"
-#include "ftfs_error.h"
-#include "ftfs_malloc.h"
+#include "sb_files.h"
+#include "sb_dir.h"
+#include "sb_stat.h"
+#include "sb_error.h"
+#include "sb_malloc.h"
 
 extern int usleep(unsigned long);
 

@@ -4,7 +4,7 @@
 #include <linux/cred.h>
 #include <linux/slab.h>
 
-#include "ftfs_fs.h"
+#include "ftfs_northbound.h"
 
 /*
  * add an entry to metadata table

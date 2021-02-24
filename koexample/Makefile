@@ -2,7 +2,7 @@
 # kernel build system and can use its language.
 ifneq ($(KERNELRELEASE),)
 	obj-m += mydrv.o
-	mydrv-objs := interface.o cppmod.o kernel_api.o ftfs_pthread.o ftfs_malloc.o
+	mydrv-objs := interface.o cppmod.o kernel_api.o sb_pthread.o sb_malloc.o
 	list-multi := mydrv.o
 # Otherwise we were called directly from the command
 # line; invoke the kernel build system.

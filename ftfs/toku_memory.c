@@ -5,7 +5,7 @@
 #include <linux/kernel.h>
 #include <linux/mm.h>
 #include "ftfs.h"
-#include "ftfs_malloc.h"
+#include "sb_malloc.h"
 
 typedef struct memory_status {
     uint64_t malloc_count;    // number of malloc operations

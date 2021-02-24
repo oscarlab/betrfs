@@ -4,7 +4,7 @@
 #include <linux/string.h>
 #include <linux/kernel.h>
 #include <linux/slab.h>
-#include "ftfs_pthread.h"
+#include "sb_pthread.h"
 
 extern int atoi(char *);
 
