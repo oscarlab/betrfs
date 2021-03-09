@@ -9,10 +9,17 @@ pipeline {
     stage('Build') {
       steps {
         timeout(time: 40, unit: 'MINUTES') {
-          sh '''
-          cd Jenkinsfiles
-          ./build.sh
-          '''
+          script {
+            try {
+              sh 'cd Jenkinsfiles; ./build.sh'
+            }
+            catch (Exception e) {
+              echo 'Exception occurred: ' + e.toString()
+              sh 'cd Jenkinsfiles; vagrant destroy -f'
+              // error is necessary to prevent the job from continuing
+              error 'Build stage failed.'
+            }
+          }
         }
       }
     }
