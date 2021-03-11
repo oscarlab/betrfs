@@ -2,7 +2,17 @@
 // vim: set tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab:
 #include <linux/slab.h>
 #include <asm/uaccess.h>
-#include "ftfs_toku_lock.h"
+
+struct mutex lock_list;
+DEFINE_MUTEX(lock_list);
+
+struct toku_lockfile {
+    char *fname;
+    struct list_head list;
+};
+
+struct list_head toku_lockfile_list;
+LIST_HEAD(toku_lockfile_list);
 
 int ftfs_toku_lock_file(const char *fname, size_t len)
 {
