@@ -1,9 +1,19 @@
 /* -*- mode: C++; c-basic-offset: 8; indent-tabs-mode: t -*- */
 // vim: set tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab:
 
+/* This file is part of the southbound interface (really klibc),
+ * which implements partitioned counters, using Linux per-CPU
+ * variables.
+ */
 
-#include "ftfs_partitioned_counter.h"
+#include <linux/percpu_counter.h>
+#include <linux/slab.h>
 #include "ftfs.h"
+
+typedef struct partitioned_counter {
+	struct percpu_counter pcpu_counter;
+} *PARTITIONED_COUNTER;
+
 
 /*
  * The kernel version implementation of util/partitioned_counter.cc|h
