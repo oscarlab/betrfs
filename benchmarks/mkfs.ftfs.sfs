@@ -1,0 +1,22 @@
+#!/bin/bash
+set -x
+set -e
+
+DIR="${BASH_SOURCE%/*}"
+if [[ ! -d "$DIR" ]]; then DIR="$PWD"; fi
+
+. "$DIR/fs-info.sh"
+. "$DIR/.hostcheck"
+. "$DIR/.rootcheck"
+
+## 1) Go to simplefs dir
+## 2) Run the mount script there
+cd $FT_HOMEDIR/simplefs/
+./setup-sfs.sh $sb_dev $FT_HOMEDIR/simplefs/tmp
+cd -
+
+lsmod | grep simplefs
+sleep 1
+## Umount it from tmp path
+## to hind underlying SFS details
+umount $FT_HOMEDIR/simplefs/tmp

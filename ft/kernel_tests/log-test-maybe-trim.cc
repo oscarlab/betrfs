@@ -99,13 +99,13 @@ extern "C" int test_maybe_trim(void);
 int
 test_maybe_trim (void) {
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU);    assert(r==0);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);
+    assert(r==0);
 
     TOKULOGGER logger;
     r = toku_logger_create(&logger); assert(r == 0);
     r = toku_logger_set_lg_max(logger, 32); assert(r == 0);
-    r = toku_logger_open(TOKU_TEST_FILENAME, logger); assert(r == 0);
+    r = toku_logger_open(TOKU_TEST_ENV_DIR_NAME, logger); assert(r == 0);
     BYTESTRING hello = (BYTESTRING) { 5, (char *) "hello"};
     LSN comment_lsn;
     toku_log_comment(logger, &comment_lsn, true, 0, hello);
@@ -118,12 +118,15 @@ test_maybe_trim (void) {
 
     // verify all log entries prior the begin checkpoint are trimmed
     TOKULOGCURSOR lc = NULL;
-    r = toku_logcursor_create(&lc, TOKU_TEST_FILENAME); assert(r == 0);
+    r = toku_logcursor_create(&lc, TOKU_TEST_ENV_DIR_NAME); assert(r == 0);
     struct log_entry *le = NULL;
     r = toku_logcursor_first(lc, &le); assert(r == 0);
-    assert(le->cmd == LT_begin_checkpoint);
+    // For SFS, trim_log_files has been disabled.
+    // The first log entry should still be LT_comment
+    assert(le->cmd == LT_comment);
     r = toku_logcursor_destroy(&lc); assert(r == 0);
     
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);
+    assert(r==0);
     return 0;
 }

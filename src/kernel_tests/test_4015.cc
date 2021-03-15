@@ -208,17 +208,16 @@ int test_test_4015(void) {
         CKERR(r);
 */
 
-        env_dir = "test_4015";
-        toku_os_recursive_delete(env_dir);
-
+        env_dir = TOKU_TEST_ENV_DIR_NAME;
+        int r=toku_fs_reset(env_dir, S_IRWXU+S_IRWXG+S_IRWXO);
+        assert(r==0);
     }
-    { int chk_r = toku_os_mkdir(env_dir, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
     const int envflags = DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_TXN|DB_PRIVATE;
     { int chk_r = env->open(env, env_dir, envflags, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
 
     { int chk_r = db_create(&db, env, 0); CKERR(chk_r); }
     { int chk_r = db->set_pagesize(db, 1024); CKERR(chk_r); }
-    { int chk_r = db->open(db, NULL, "db", NULL, DB_BTREE, DB_CREATE, 0666); CKERR(chk_r); }
+    { int chk_r = db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_CREATE, 0666); CKERR(chk_r); }
     DBT desc;
     dbt_init(&desc, "foo", sizeof("foo"));
     IN_TXN_COMMIT(env, NULL, txn, 0,

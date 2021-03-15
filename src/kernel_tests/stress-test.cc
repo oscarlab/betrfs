@@ -174,10 +174,11 @@ gen_data(void)
     }
 }
 
+static DB_TXN *null_txn;
+
 static void
 run_test(DB *db)
 {
-    DB_TXN * const null_txn = 0;
     int p = 0, d = 0;
     for (int cursz = NKEYS / 10; cursz <= NKEYS; cursz += NKEYS / 10) {
         // insert a chunk
@@ -213,6 +214,7 @@ run_test(DB *db)
                 } else {
                     CKERR2(r, DB_NOTFOUND);
                 }
+                toku_destroy_dbt(&val);
             }
 	}
 
@@ -244,6 +246,10 @@ run_test(DB *db)
             }
             assert(i == cursz);
             assert(r == DB_NOTFOUND);
+            toku_destroy_dbt(&ck);
+            toku_destroy_dbt(&cv);
+            r = cur->c_close(cur);
+            CKERR(r);
         }
 
         // with a backward traversal
@@ -274,6 +280,10 @@ run_test(DB *db)
             }
             assert(i == -1);
             assert(r == DB_NOTFOUND);
+            toku_destroy_dbt(&ck);
+            toku_destroy_dbt(&cv);
+            r = cur->c_close(cur);
+            CKERR(r);
         }
     }
 }
@@ -281,15 +291,14 @@ run_test(DB *db)
 static void
 init_db(DB_ENV **env, DB **db)
 {
-    DB_TXN * const null_txn = 0;
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    { int chk_r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
+    { int chk_r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
     { int chk_r = db_env_create(env, 0); CKERR(chk_r); }
     (*env)->set_errfile(*env, stderr);
-    { int chk_r = (*env)->open(*env, TOKU_TEST_FILENAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL, 0); CKERR(chk_r); }
+    { int chk_r = (*env)->open(*env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL+DB_INIT_LOG+DB_INIT_TXN, 0); CKERR(chk_r); }
+    { int r = (*env)->txn_begin(*env, NULL, &null_txn, 0); assert_zero(r); }
     { int chk_r = db_create(db, *env, 0); CKERR(chk_r); }
-    { int chk_r = (*db)->open(*db, null_txn, "test.stress.ft_handle", "main",
+    { int chk_r = (*db)->open(*db, null_txn, TOKU_TEST_DATA_DB_NAME, NULL,
                               DB_BTREE, DB_CREATE, 0666); CKERR(chk_r); }
 }
 
@@ -297,6 +306,7 @@ static void
 destroy_db(DB_ENV *env, DB *db)
 {
     { int chk_r = db->close(db, 0); CKERR(chk_r); }
+    { int r = null_txn->commit(null_txn, 0); assert_zero(r); }
     { int chk_r = env->close(env, 0); CKERR(chk_r); }
 }
 

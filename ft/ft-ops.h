@@ -245,10 +245,16 @@ void toku_ft_maybe_delete (FT_HANDLE brt, DBT *k, TOKUTXN txn, bool oplsn_valid,
 
 void toku_ft_maybe_delete_multicast (FT_HANDLE, DBT *, DBT *, bool, enum pacman_status, TOKUTXN, bool, LSN, bool, bool);
 
-void toku_ft_rename(FT_HANDLE brt, DBT * min_key, DBT * max_key, DBT * new_min_key, DBT * new_max_key, DBT * old_prefix, DBT * new_prefix, TOKUTXN txn) ;
+int
+toku_ft_transform_prefix(FT ft, const DBT *old_prefix, const DBT *new_prefix,
+                         const DBT *old_key, DBT *new_key);
 
-int toku_ft_transform_prefix(struct toku_db_key_operations *key_ops,
-                             const DBT *old_prefix, const DBT *new_prefix, const DBT *old_key, DBT *new_key);
+void toku_ft_rename(FT_HANDLE brt, DBT *min_key, DBT *max_key,
+                    DBT *new_min_key, DBT *new_max_key,
+                    DBT *old_prefix, DBT *new_prefix, TOKUTXN txn);
+void toku_ft_clone(FT_HANDLE brt, DBT *min_key, DBT *max_key,
+                   DBT *new_min_key, DBT *new_max_key,
+                   DBT *old_prefix, DBT *new_prefix, TOKUTXN txn);
 
 int toku_ft_lift(FT ft, DBT *lift, const DBT *lpivot, const DBT *rpivot);
 int toku_ft_lift_key(FT ft, DBT *lifted_key, const DBT *key, const DBT *lifted);
@@ -270,6 +276,16 @@ void toku_ft_maybe_rename(
     bool do_logging
     );
 
+void toku_ft_maybe_clone(
+    FT_HANDLE ft_h,
+    DBT *min_key,
+    DBT *max_key,
+    DBT *new_min_key,
+    DBT *new_max_key,
+    DBT *old_prefix,
+    DBT *new_prefix,
+    TOKUTXN txn,
+    bool do_logging);
 
 void toku_ft_send_insert(FT_HANDLE brt, DBT *key, DBT *val, XIDS xids, enum ft_msg_type type, struct unbound_insert_entry *entry, TXNID oldest_referenced_xid, GC_INFO gc_info);
 void toku_ft_send_delete(FT_HANDLE brt, DBT *key, XIDS xids, TXNID oldest_referenced_xid, GC_INFO gc_info);
@@ -289,6 +305,7 @@ void toku_ft_cursor_set_leaf_mode(FT_CURSOR);
 // Sets a boolean on the brt cursor that prevents uncessary copying of
 // the cursor duing a one query.
 void toku_ft_cursor_set_temporary(FT_CURSOR);
+void toku_ft_cursor_set_seqread(FT_CURSOR);
 void toku_ft_cursor_remove_restriction(FT_CURSOR);
 int toku_ft_cursor_is_leaf_mode(FT_CURSOR);
 void toku_ft_cursor_set_range_lock(FT_CURSOR, const DBT *, const DBT *, bool, bool, int);
@@ -398,8 +415,7 @@ toku_ft_relocate_start(FT ft,
 int toku_ft_relocate_finish(FT ft,
                             FTNODE src_above_LCA, FTNODE dst_above_LCA,
                             int src_childnum, int dst_childnum,
-                            FT_MSG src_msg, FT_MSG dst_msg,
-                            TXNID oldest_ref_txnid, bool is_src_empty);
+                            bool is_src_empty);
 
 int toku_ft_relocate_abort(FT, FTNODE, FTNODE);
 

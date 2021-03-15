@@ -292,6 +292,7 @@ if (BUILD_FOR_LINUX_KERNEL_MODULE)
     -I${CMAKE_SOURCE_DIR}/kinclude
 
     -DTOKU_LINUX_MODULE=1
+    #-DUSE_SFS_DIO=1
     )
 
   include_directories( ${CMAKE_SOURCE_DIR}/kinclude )

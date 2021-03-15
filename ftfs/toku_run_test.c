@@ -4,12 +4,9 @@
 #include <linux/string.h>
 #include <linux/kernel.h>
 #include <linux/slab.h>
-#include "ftfs_pthread.h"
+#include "sb_pthread.h"
 
 extern int atoi(char *);
-
-/* performance tests */
-extern int bench_insert(void);
 
 /* unbound_insert tests */
 extern int test_ubi_root_chkpt(void);
@@ -22,7 +19,6 @@ extern int test_slab(void);
 extern int test_assert(void);
 extern int test_directio(void);
 extern int list_open_southbound_files(void);
-extern int test_posix_memalign(void);
 extern int test_ftfs_realloc(void);
 extern int test_remove(void);
 extern int test_preadwrite(void);
@@ -35,7 +31,6 @@ extern int test_mkdir(void);
 extern int test_mkrmdir(void);
 extern int test_verify_unsorted_leaf(void);
 extern int test_unlink(void);
-extern int test_getdents64(void);
 extern int test_openclose(void);
 extern int test_stat_ftfs(void);
 extern int test_statfs(void);
@@ -95,6 +90,8 @@ extern int test_fsync_directory(void);
 extern int test_fsync_files(void);
 extern int test_flock(void);
 extern int test_fcopy(void);
+extern int test_fcopy_dio(void);
+extern int test_sfs_dio_read_write(void);
 extern int test_manager_status(void);
 extern int test_omt(void);
 extern int test_manager_create_destroy(void);
@@ -302,8 +299,8 @@ extern int test_ft_overflow(void);
 extern int test_cachetable_simple_unpin_remove_checkpoint(void);
 extern int test_ft_serialize(void);
 extern int test_orthopush_flush(void);
-extern int test_range_del(void);
-extern int test_range_del2(void);
+//extern int test_range_del(void);
+//extern int test_range_del2(void);
 extern int test_recovery_range_delete(void);
 
 /* src tests */
@@ -463,10 +460,7 @@ extern int test_cursor_more_than_a_leaf_provdel(void);
 extern int test_preload_db(void);
 extern int test_simple(void);
 extern int test_multiprocess(void);
-extern int test_test_archive0(void);
-extern int test_test_archive1(void);
-extern int test_test_archive2(void);
-extern int test_test_txn_nested_abort(void); 
+extern int test_test_txn_nested_abort(void);
 extern int test_bug1381(void);
 extern int test_preload_db_nested(void);
 extern int test_test_txn_nested_abort(void);
@@ -493,7 +487,6 @@ extern int test_prelock_read_write(void);
 extern int test_prelock_write_read(void);
 extern int test_prelock_write_write(void);
 extern int test_insert_dup_prelock(void);
-extern int test_env_startup(void);
 extern int test_mvcc_create_table(void);
 extern int test_mvcc_many_committed(void);
 extern int test_mvcc_read_committed(void);
@@ -586,7 +579,6 @@ extern int test_test_log1_abort(void);
 extern int test_test_cursor_stickyness(void);
 extern int test_test_cursor_delete2(void);
 extern int test_test_logflush(void);
-extern int test_test_logmax(void);
 extern int test_replace_into_write_lock(void);
 extern int test_test_query(void);
 extern int test_test_nested(void);
@@ -606,7 +598,6 @@ extern int test_root_fifo_31(void);
 extern int test_root_fifo_32(void);
 extern int test_root_fifo_41(void);
 extern int test_test_multiple_checkpoints_block_commit(void);
-extern int test_test_set_func_malloc(void);
 extern int test_test_nested_xopen_eclose(void);
 extern int test_print_engine_status(void);
 extern int test_queries_with_deletes(void);
@@ -616,6 +607,7 @@ extern int test_verify_misrouted_msgs(void);
 extern int test_test_db_env_strdup_null(void);
 extern int test_seqwrite_no_txn(void);
 extern int test_rename_simple(void);
+extern int test_circle_log_overflow(void);
 /* large IO tests */
 //extern int logger_test_tables(void);
 
@@ -630,8 +622,7 @@ struct {
 } tests[] = {
 	//{ "fail", test_fail , 5},
 	//{"logger-lists", logger_test_tables, 5},
-	{"seq-write-perf", perf_test_sequential_writes, 5},
-	{"seq-read-perf", perf_test_sequential_reads, 5},
+	{ "sfs-dio", test_sfs_dio_read_write, 5},
 	{"ubi-root-chkpt", test_ubi_root_chkpt, 5},
 	{"orthopush-flush", test_orthopush_flush, 5},
 	{ "inflate", test_inflate , 5},
@@ -826,17 +817,10 @@ struct {
 	{ "manager_lm", test_manager_lm, 5},
 	{ "manager-status", test_manager_status, 5},
 	{ "omt-test", test_omt, 5},
-	{ "mkdir", test_mkdir, 5},
-	{ "remove", test_remove, 5},
 	{ "slab", test_slab, 5},
 	{ "assert", test_assert, 5},
-	{ "posix-memalign", test_posix_memalign, 5},
-	{ "dio", test_directio, 5},
 	{ "realloc", test_ftfs_realloc, 5},
-	{ "mkrmdir", test_mkrmdir, 5},
 	{ "verify-unsorted-leaf", test_verify_unsorted_leaf, 5},
-	{ "unlink", test_unlink, 5},
-	{ "getdents64", test_getdents64, 5},
 	{ "openclose", test_openclose, 5},
 	{ "stat_ftfs", test_stat_ftfs, 5},
 	{ "statfs", test_statfs, 5},
@@ -844,7 +828,6 @@ struct {
 	{ "readwrite", test_readwrite, 5},
 	{ "pwrite", test_pwrite, 5},
 	{ "write", test_write, 5},
-	{ "readlink", test_readlink, 5},
 	{ "f-all", test_f_all, 5},
 	{ "shortcut", test_shortcut, 5},
 	{ "bug1381", test_bug1381, 5},
@@ -855,12 +838,9 @@ struct {
 	{ "redirect", test_redirect, 5},
 	//{ "create-datadir", test_create_datadir, 5},
 	{ "isolation-read-committed", test_isolation_read_committed, 5},
-	{ "openclose-dir", test_openclose_dir, 5},
-	{ "recursive-deletion", test_recursive_deletion, 5},
-	{ "trunc", test_trunc, 5},
-	{ "ftrunc", test_ftrunc, 5},
 	{ "fsync", test_fsync, 5},
 	{ "fcopy", test_fcopy, 5},
+	{ "fcopy_dio", test_fcopy_dio, 5},
 	{ "test_locktree_overlapping", test_locktree_overlapping, 5},
 	{ "test_lockrequest_pending", test_lockrequest_pending, 5},
 	{ "test_locktree_escalation", test_locktree_escalation_stalls, 5},
@@ -897,7 +877,7 @@ struct {
 	{"test_log_4", log_test4, 5},
 	{"list-test", test_list_test, 5},
 	{"comparator-test", test_comparator, 5},
-	
+
 	{"minicron", test_minicron, 5},
 	{"benchmark-test", test_benchmark_test, 5},
 	{"verify-dup-pivots", test_verify_dup_pivots, 5},
@@ -1050,7 +1030,7 @@ struct {
 	{"test_recovery_fopen_missing_file", recovery_fopen_missing_file, 5},
 	{"test_recovery_bad_last_entry", recovery_bad_last_entry, 5},
 	{"le-cursor-right", test_le_cursor_right, 5},
-	{"cachetable-clone-partial-fetch-pinned-node", test_cachetable_clone_partial_fetch_pinned_node, 5}, 
+	{"cachetable-clone-partial-fetch-pinned-node", test_cachetable_clone_partial_fetch_pinned_node, 5},
 	{"test-quicklz", test_quicklz, 5},
 	{"ft-overflow",test_ft_overflow, 5},
 	{"big-nested-aa",test_big_nested_abort_abort, 5},
@@ -1065,7 +1045,7 @@ struct {
 	{"bigtxn27", test_bigtxn27, 5},
 	{"test_db_env_open_close", test_test_db_env_open_close , 5},
 	{"blocking-next-prev",test_blocking_next_prev, 5},
-	{"blocking-next-prev-deadlock", test_blocking_next_prev_deadlock , 5}, 
+	{"blocking-next-prev-deadlock", test_blocking_next_prev_deadlock , 5},
 	{"blocking-prelock-range", test_blocking_prelock_range, 5},
 	{"blocking-put", test_blocking_put, 5},
 	{"blocking-put-wakeup",test_blocking_put_wakeup, 5},
@@ -1088,15 +1068,11 @@ struct {
 	{"preload-db", test_preload_db, 5},
 	{"simple", test_simple, 5},
 	{"multiprocess", test_multiprocess, 5},
-	{"test_archive0", test_test_archive0, 5},
-	{"test_archive1", test_test_archive1, 5},
-	{"test_archive2", test_test_archive2, 5},
 	{"test-prelock-read-read", test_prelock_read_read, 5},
 	{"test-prelock-read-write", test_prelock_read_write, 5},
 	{"test-prelock-write-write", test_prelock_write_write, 5},
 	{"test-prelock-write-read", test_prelock_write_read, 5},
 	{"insert-dup-prelock", test_insert_dup_prelock, 5},
-	{"env-startup", test_env_startup, 5},
 	{"mvcc-create-table", test_mvcc_create_table, 5},
 	{"mvcc-many-committed", test_mvcc_many_committed, 5},
 	{"mvcc-read-committed", test_mvcc_read_committed, 5},
@@ -1145,7 +1121,6 @@ struct {
 	{"perf-checkpoint-var", test_perf_checkpoint_var, 30},
 	{"perf-malloc-free", test_perf_malloc_free, 30},
 	{"perf-cursor-nop", test_perf_cursor_nop, 30},
-	{"bench-insert", bench_insert, 15},
 	{"perf-insert", test_perf_insert, 30},
 	{"perf-iibench", test_perf_iibench, 60},
 	{"perf-ptquery", test_perf_ptquery, 30},
@@ -1186,7 +1161,7 @@ struct {
 	{"env-create-db-create", test_test_env_create_db_create, 5},
 	{"test-error", test_test_error, 5},
 	{"test-forkjoin", test_test_forkjoin, 5},
-	{"test-get-zeroed-dbt", test_test_get_zeroed_dbt, 5},		
+	{"test-get-zeroed-dbt", test_test_get_zeroed_dbt, 5},
 	{"test-groupcommit-count", test_test_groupcommit_count, 5},
 	{"test-locking-with-read-txn",test_test_locking_with_read_txn, 5},
 	{"test-lock-timeout-callback", test_test_lock_timeout_callback, 5},
@@ -1213,7 +1188,6 @@ struct {
 	{"test_db_remove",test_test_db_remove, 5},
 	{"test_iterate_live_transactions", test_test_iterate_live_transactions, 5},
 	{"test_xopen_eclose", test_test_xopen_eclose, 5},
-	{"test-logmax", test_test_logmax, 240},
 	{"test-log1-abort", test_test_log1_abort, 5},
 	{"replace-into-write-lock", test_replace_into_write_lock, 5},
 	{"test-query",test_test_query, 5},
@@ -1227,18 +1201,17 @@ struct {
 	{"root-fifo-2", test_root_fifo_2, 5},
 	{"test-multiple-checkpoints-block-commit", test_test_multiple_checkpoints_block_commit, 5},
 	{"test-rand-insert",test_test_rand_insert, 5},
-	{"test-set-func-malloc",test_test_set_func_malloc, 5},
 	{"test-nested-xopen-eclose",test_test_nested_xopen_eclose, 5},
 	{"print_engine_status", test_print_engine_status, 5},
 	{"xid-lsn-independent", test_xid_lsn_independent, 5},
 	{"verify-misrouted-msgs",test_verify_misrouted_msgs, 5},
 	{"queries_with_deletes", test_queries_with_deletes, 5},
 	{"seqwrite_no_txn", test_seqwrite_no_txn, 5},
-	{"range-del",test_range_del, 5},
-	{"range-del2",test_range_del2, 5},
-	{"range-del2",test_range_del2, 5},
+	//{"range-del",test_range_del, 5},
+	//{"range-del2",test_range_del2, 5},
 	{"rename-simple",test_rename_simple, 5},
-	{"recovery-range-delete",test_recovery_range_delete, 5}
+	{"recovery-range-delete",test_recovery_range_delete, 5},
+	{"circle-log-overflow",test_circle_log_overflow, 5}
 };
 
 
@@ -1274,7 +1247,7 @@ int run_test(char * _test_name){
 			times = atoi(p+1);
 			*p = '\0';
 		}
-		test_name = _test_name_copy;	
+		test_name = _test_name_copy;
 		if (strcmp(test_name, tests[i].name) == 0 ||
 		    strcmp(test_name, "all") == 0) {
 
@@ -1283,7 +1256,7 @@ int run_test(char * _test_name){
 			if(strcmp(test_name, "all") == 0) {
 				test_all = 1;
 			}
-			
+
 			printk(KERN_ALERT "\n<test_descriptor>"
 			       "<name>%s</name>"
 			       "<timeout>%d</timeout>"
@@ -1292,7 +1265,7 @@ int run_test(char * _test_name){
 			while(times) {
 				if (tests[i].fn() != 0) {
 					result = -1;
-					
+
 					if(test_all == 1) {
 						printk(KERN_DEBUG "Testing \"all\" failed at \"%s\" \n", tests[i].name);
 					}

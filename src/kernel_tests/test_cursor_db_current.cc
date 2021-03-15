@@ -110,18 +110,20 @@ static void
 test_cursor_current (void) {
     if (verbose) printf("test_cursor_current\n");
 
-    DB_TXN * const null_txn = 0;
-    const char * const fname = "test.cursor.current.ft_handle";
+    DB_TXN *txn = 0;
+    const char * const fname = TOKU_TEST_DATA_DB_NAME;
     int r;
 
     DB_ENV *env;
     r = db_env_create(&env, 0); assert(r == 0);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL, 0); assert(r == 0);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL+DB_INIT_LOG+DB_INIT_TXN, 0); assert(r == 0);
+
+    r = env->txn_begin(env, NULL, &txn, 0); assert_zero(r);
 
     DB *db;
     r = db_create(&db, env, 0); CKERR(r);
     db->set_errfile(db,0); // Turn off those annoying errors
-    r = db->open(db, null_txn, fname, "main", DB_BTREE, DB_CREATE, 0666); CKERR(r);
+    r = db->open(db, txn, fname, NULL, DB_BTREE, DB_CREATE, 0666); CKERR(r);
 
     int k = 42, v = 42000;
     db_put(db, k, v);
@@ -129,7 +131,7 @@ test_cursor_current (void) {
  
     DBC *cursor;
 
-    r = db->cursor(db, null_txn, &cursor, 0); CKERR(r);
+    r = db->cursor(db, txn, &cursor, 0); CKERR(r);
 
     DBT key, data; int kk, vv;
 
@@ -154,7 +156,7 @@ test_cursor_current (void) {
     assert(data.size == sizeof vv);
     memcpy(&vv, data.data, data.size);
     assert(vv == v);
-    r = db->del(db, null_txn, &key, DB_DELETE_ANY);
+    r = db->del(db, txn, &key, DB_DELETE_ANY);
     toku_free(key.data); toku_free(data.data);
 
     r = cursor->c_get(cursor, dbt_init_malloc(&key), dbt_init_malloc(&data), DB_CURRENT);
@@ -166,6 +168,7 @@ test_cursor_current (void) {
     r = cursor->c_close(cursor); CKERR(r);
 
     r = db->close(db, 0); CKERR(r);
+    r = txn->commit(txn, 0); assert_zero(r);
     r = env->close(env, 0); CKERR(r);
 }
 
@@ -181,17 +184,17 @@ test_reopen (void) {
     if (verbose) printf("test_reopen\n");
 
     DB_TXN * const null_txn = 0;
-    const char * const fname = "test.cursor.current.ft_handle";
+    const char * const fname = TOKU_TEST_DATA_DB_NAME;
     int r;
 
     DB_ENV *env;
     r = db_env_create(&env, 0); assert(r == 0);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL, 0); assert(r == 0);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL+DB_INIT_LOG+DB_INIT_TXN, 0); assert(r == 0);
 
     DB *db;
     r = db_create(&db, env, 0); CKERR(r);
     db->set_errfile(db,0); // Turn off those annoying errors
-    r = db->open(db, null_txn, fname, "main", DB_BTREE, 0, 0666); CKERR(r);
+    r = db->open(db, null_txn, fname, NULL, DB_BTREE, 0, 0666); CKERR(r);
 
     db_get(db, 1, 1, DB_NOTFOUND);
 
@@ -203,8 +206,8 @@ extern "C" int test_test_cursor_db_current(void);
 int test_test_cursor_db_current(void) {
   
     pre_setup();
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    int r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
 
     test_cursor_current();
     test_reopen();

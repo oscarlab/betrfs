@@ -132,8 +132,8 @@ toku_dbt_array_resize(DBT_ARRAY *dbts, uint32_t size) {
             while (new_capacity < size) {
                 new_capacity *= 2;
             }
+            XREALLOC_N(dbts->capacity, new_capacity, dbts->dbts);
             dbts->capacity = new_capacity;
-            XREALLOC_N(new_capacity, dbts->dbts);
             for (uint32_t i = old_capacity; i < new_capacity; i++) {
                 toku_init_dbt_flags(&dbts->dbts[i], DB_DBT_REALLOC);
             }
@@ -144,7 +144,7 @@ toku_dbt_array_resize(DBT_ARRAY *dbts, uint32_t size) {
                 for (int i = new_capacity; i < old_capacity; i++) {
                     toku_destroy_dbt(&dbts->dbts[i]);
                 }
-                XREALLOC_N(new_capacity, dbts->dbts);
+                XREALLOC_N(dbts->capacity, new_capacity, dbts->dbts);
                 dbts->capacity = new_capacity;
             }
         }
@@ -166,14 +166,12 @@ toku_dbt_array_destroy(DBT_ARRAY *dbts) {
     toku_dbt_array_destroy_shallow(dbts);
 }
 
-
-
 void
 toku_destroy_dbt(DBT *dbt) {
     switch (dbt->flags) {
     case DB_DBT_MALLOC:
     case DB_DBT_REALLOC:
-        toku_free(dbt->data);
+        sb_free_sized(dbt->data, dbt->size);
         toku_init_dbt(dbt);
         break;
     }
@@ -190,9 +188,12 @@ toku_fill_dbt(DBT *dbt, bytevec k, ITEMLEN len) {
 DBT *toku_memdup_dbt(DBT *dbt, const void *k, size_t len) {
     toku_init_dbt_flags(dbt, DB_DBT_MALLOC);
     dbt->size = len;
-    dbt->data = toku_xmemdup(k, len);
+    dbt->data = sb_malloc_sized(len, true);
+    memcpy(dbt->data, k, len);
     return dbt;
 }
+
+
 
 DBT *toku_copyref_dbt(DBT *dst, const DBT src) {
     dst->flags = 0;
@@ -216,7 +217,9 @@ DBT *toku_clone_dbt(DBT *dst, const DBT &src) {
 
 void
 toku_cleanup_dbt(DBT * dbt) {
-    if (dbt->data) toku_free(dbt->data);
+    if (dbt->data) {
+        sb_free_sized(dbt->data, dbt->size);
+    }
     memset(dbt, 0, sizeof(*dbt));
 }
 void
@@ -226,11 +229,13 @@ toku_sdbt_cleanup(struct simple_dbt *sdbt) {
 }
 
 static inline int
-sdbt_realloc(struct simple_dbt *sdbt) {
-    void *new_data = toku_realloc(sdbt->data, sdbt->len);
+sdbt_realloc(struct simple_dbt *sdbt, size_t old_len) {
+    void *new_data = toku_realloc(sdbt->data, old_len, sdbt->len);
     int r;
     if (new_data == NULL) {
         r = ENOMEM;
+        // dep XXX: Not sure this case is handled well
+        assert(0);
     } else {
         sdbt->data = new_data;
         r = 0;
@@ -239,11 +244,15 @@ sdbt_realloc(struct simple_dbt *sdbt) {
 }
 
 static inline int
-dbt_realloc(DBT *dbt) {
-    void *new_data = toku_realloc(dbt->data, dbt->ulen);
+dbt_realloc(DBT *dbt, size_t old_len) {
+    // XXX: Possible realloc optimization here
+    void *new_data = toku_realloc(dbt->data, old_len, dbt->ulen);
+    dbt->data = new_data;
     int r;
-    if (new_data == NULL) {
+    if (new_data == NULL && dbt->ulen != 0) {
         r = ENOMEM;
+        // dep XXX: Not sure this case is handled well
+        assert(0);
     } else {
         dbt->data = new_data;
         r = 0;
@@ -273,16 +282,19 @@ toku_dbt_set (ITEMLEN len, bytevec val, DBT *d, struct simple_dbt *sdbt) {
             //Fall through to DB_DBT_REALLOC
         case (DB_DBT_REALLOC):
             if (d->ulen < len) {
+                size_t old_len = d->ulen;
                 d->ulen = len*2;
-                r = dbt_realloc(d);
+                r = dbt_realloc(d, old_len);
             }
             else if (d->ulen > 16 && d->ulen > len*4) {
+                size_t old_len = d->ulen;
                 d->ulen = len*2 < 16 ? 16 : len*2;
-                r = dbt_realloc(d);
+                r = dbt_realloc(d, old_len);
             }
             else if (d->data==NULL) {
+                size_t old_len = d->ulen;
                 d->ulen = len;
-                r = dbt_realloc(d);
+                r = dbt_realloc(d, old_len);
             }
             else r=0;
 
@@ -293,12 +305,14 @@ toku_dbt_set (ITEMLEN len, bytevec val, DBT *d, struct simple_dbt *sdbt) {
             break;
         case (0):
             if (sdbt->len < len) {
+                size_t old_len = sdbt->len;
                 sdbt->len = len*2;
-                r = sdbt_realloc(sdbt);
+                r = sdbt_realloc(sdbt, old_len);
             }
             else if (sdbt->len > 16 && sdbt->len > len*4) {
+                size_t old_len = sdbt->len;
                 sdbt->len = len*2 < 16 ? 16 : len*2;
-                r = sdbt_realloc(sdbt);
+                r = sdbt_realloc(sdbt, old_len);
             }
             else r=0;
 
@@ -340,7 +354,7 @@ int toku_dbt_infinite_compare(const DBT *a, const DBT *b) {
     } else if (a == toku_dbt_negative_infinity()) {
         return -1;
     } else {
-        invariant(b == toku_dbt_negative_infinity());     
+        invariant(b == toku_dbt_negative_infinity());
         return 1;
     }
 }

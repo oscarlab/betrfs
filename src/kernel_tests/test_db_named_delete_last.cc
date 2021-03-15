@@ -99,7 +99,6 @@ PATENT RIGHTS GRANT:
 #include "test.h"
 
 // TOKU_TEST_FILENAME is defined in the Makefile
-#define FNAME       "foo.tokudb"
 static const char *name = NULL;
 
 #define NUM         8
@@ -114,13 +113,13 @@ static void
 open_db(void) {
     int r = db_create(&db, env, 0);
     CKERR(r);
-    r = db->open(db, null_txn, FNAME, name, DB_BTREE, DB_CREATE, 0666);
+    r = db->open(db, null_txn, name, NULL, DB_BTREE, DB_CREATE, 0666);
     CKERR(r);
 }
 
 static void
 delete_db(void) {
-    int r = env->dbremove(env, NULL, FNAME, name, 0); CKERR(r);
+    int r = env->dbremove(env, NULL, name, NULL, 0); CKERR(r);
 }
 
 static void
@@ -133,42 +132,42 @@ close_db(void) {
 static void
 setup_data(void) {
     int r = db_env_create(&env, 0);                                           CKERR(r);
-    const int envflags = DB_CREATE|DB_INIT_MPOOL|DB_INIT_TXN|DB_INIT_LOCK |DB_THREAD |DB_PRIVATE;
-    r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);        CKERR(r);
+    const int envflags = DB_CREATE|DB_INIT_MPOOL|DB_INIT_LOG|DB_INIT_TXN|DB_INIT_LOCK |DB_THREAD |DB_PRIVATE;
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);        CKERR(r);
 }
 
 static void
 runtest(void) {
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r=toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
     setup_data();
 
-    name = "foo";
+    name = TOKU_TEST_DATA_DB_NAME;
     open_db();
     close_db();
     delete_db();
 
-    name = "foo1";
+    name = TOKU_TEST_ONE_DB_NAME;
     open_db();
     close_db();
-    name = "foo2";
+    name = TOKU_TEST_TWO_DB_NAME;
     open_db();
     close_db();
-    name = "foo1";
+    name = TOKU_TEST_ONE_DB_NAME;
     delete_db();
-    name = "foo2";
+    name = TOKU_TEST_TWO_DB_NAME;
     delete_db();
 
-    name = "foo1";
+    name = TOKU_TEST_ONE_DB_NAME;
     open_db();
     close_db();
-    name = "foo2";
+    name = TOKU_TEST_TWO_DB_NAME;
     open_db();
     close_db();
-    name = "foo2";
+    name = TOKU_TEST_TWO_DB_NAME;
     delete_db();
-    name = "foo1";
+    name = TOKU_TEST_ONE_DB_NAME;
     delete_db();
 
     env->close(env, 0);

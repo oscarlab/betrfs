@@ -4,6 +4,7 @@
 set -e
 
 #pass tests to be run as a parameter
+
 if [ $# -eq 0 ]
 	then
 		echo "Pass Tests to be run in a file as arg"
@@ -18,37 +19,37 @@ if [[ ! -d "$DIR" ]]; then DIR="$PWD"; fi
 
 . "$DIR/fs-info.sh"
 . "$DIR/.hostcheck"
+#. "$DIR/.rootcheck"
+#. "$DIR/.mountcheck"
+
+## Let's make a different script to build if needed; I don't think we need to build twice in CI
+#cd ../build #copy cmake file to build from qemu utils in linux folder in ft-index
+#./cmake-ft.sh
+#cd ../ftfs
+#sudo -s make clean
+#sudo -s make
 
 cd ../benchmarks
 
 sudo rm -rf  results
 mkdir results
 
-main_dir=${FT_HOMEDIR}/benchmarks
+main_dir=$FT_HOMEDIR/benchmarks
 
-# This loop reads the input file (e.g., perf_tests) and
-# executes each test
+#
 while read -r line || [[ -n "$line" ]]; do
     if [[ ${line:0:1} == "#" ]]; then
-        # ignore comments
         continue
-    elif [[ ${line:0:1} == "." ]]; then
-        # Run the script, assuming it starts with a dot
+	fi
+	if [[ ${line:0:1} == "." ]]; then
         /bin/bash $line
         cd $main_dir
     else
-        # Do the cleanup since the last test, and reset the fs state
         yes | sudo -E /bin/bash ./cleanup-fs.sh
         sudo -E ./setup-ftfs.sh
-        # Change to the working directory for the next test
         cd $line
     fi
 
 done < $1
 
-# Final cleanup
-yes | sudo -E /bin/bash ./cleanup-fs.sh
-
-# Famous Michael Jordan quote we don't expect to see otherwise,
-# Jenkins looks for this to check for completion (vs. dying in cleanup)
 echo "The ceiling is the roof"

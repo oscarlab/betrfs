@@ -1,0 +1,96 @@
+This folder contains the main code for BetrFS, and builds the
+file system module.
+
+Particularly, it includes code for the "northbound code" (i.e., glue
+code between the VFS layer and the key-value store), and the
+"southbound code" (i.e., glue code between the key-value store's
+minimal POSIX-ish requirements and the simple FS and other kernel
+interfaces).
+
+We adopt a naming convention that any northbound code/files are
+prefixed with nb_ and any southbound code is prefixed with sb_.
+
+Other northbound notes
+----------------------
+
+ftfs_super.c: Implements most of the VFS hooks.  Relies heavily on
+              nb_bstore.c.
+
+nb_bstore.c: Implements a higher-level wrapper for the tokudb/ft code's
+             standard operations (get, put, del), and implements the
+	     betrfs schema.
+
+nb_super.c: Implements VFS-level superblock support, and registers inode
+	    hooks with the VFS.
+
+Northbound /proc files
+----------------------
+
+Several northbound source files implement files in /proc,
+which serve as a "side" interface to do things like
+control some FS-level behaviors (e.g., forcing a checkpoint),
+or dumping debugging information.  These files are listed below.
+
+nb_proc_toku_checkpoint.c: Implements a /proc file that forces a checkpoint
+			   of the be-tree.
+
+nb_proc_toku_dump_node.c: Implements a /proc file that dumps a be-tree node.
+
+nb_proc_toku_flusher.c: Implements a /proc file that forces a hot flush of the
+			be-tree.
+
+nb_proc_toku_memleak_detect.c: Implements a /proc file that does something (??)
+			       related to memory leak detection.
+XXX: Document this better.
+
+---------------------------
+
+Soutbound notes:
+
+sb_assert.c: Implements assertion support, as a wrapper for the kernel's
+	     BUG() macros.
+
+sb_dir.c: Implements simple directory operations on the underlying storage.
+ - XXX: Can probably be largely removed.
+
+sb_error.c: A stub for errno support.  Does not actually work.
+ - XXX: Should either implement properly or remove
+
+sb_files.c: Implements southbound support for emulating file handles
+
+sb_flock.c: Implements file lock emulation.
+ - XXX: I still think this code should be excised.
+
+sb_linkage.c: Implements miscellaneous libc functions and hooks
+	      needed by the key-value code.
+
+sb_malloc.c: Implements memory allocation and management for the
+	     key-value store, largely using kmalloc and vmalloc.
+
+sb_misc.c: Implements other misc libc functions needed by the ft code.
+
+sb_partitioned_counter.c: Implements partitioned counters, using
+			  Linux per-cpu variables.
+
+sb_pthread.c: Implements a subset of the pthread API, needed by the
+	      key-value store.
+
+sb_random.c: Implements a pseudo-random number generator.
+
+sb_rwsem.c: Implements reader/write semaphores using kernel semaphores.
+	    This is primarily to support pthread locks (sb_pthread.c).
+
+sb_sfs_ops.c: Implements direct IO support on SFS.
+
+ftfs_southbound.c: Implements "glue" code for private mounting and
+		   issuing metadata operations on southbound files.
+
+sb_stat.c: Implements the stat system call and friends on the southbound
+	   file system.
+
+sb_stdio.c: Implements fprintf() and friends on printk(), used mostly for unit
+	    test and warning messages.
+
+sb_strerror.c: Implements strerror() and strerror_r().
+
+sb_zlib: A wrapper around the Linux zlib compression functions.

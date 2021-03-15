@@ -174,8 +174,7 @@ compare_dbs(DB *compare_db1, DB *compare_db2) {
 static void UU()
 dir_create(const char *envdir) {
     int r;
-    toku_os_recursive_delete(envdir);
-    r = toku_os_mkdir(envdir, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(envdir, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
 }
 
@@ -195,7 +194,7 @@ env_startup(const char *envdir, int64_t bytes, int recovery_flags) {
 	r = env->set_cachesize(env, bytes >> 30, bytes % (1<<30), 1);
         CKERR(r);
     }
-    int envflags = DB_INIT_LOCK | DB_INIT_MPOOL | DB_INIT_TXN | DB_CREATE | DB_PRIVATE | recovery_flags;
+    int envflags = DB_INIT_LOCK | DB_INIT_MPOOL | DB_INIT_LOG | DB_INIT_TXN | DB_CREATE | DB_PRIVATE | recovery_flags;
     r = env->open(env, envdir, envflags, S_IRWXU+S_IRWXG+S_IRWXO);
         CKERR(r);
     env->set_errfile(env, stderr);
@@ -244,9 +243,7 @@ db_startup(DICTIONARY d, DB_TXN *open_txn) {
     //Small nodesize means many nodes.
     db->set_pagesize(db, 1<<10);
     {
-        char name[MAX_NAME*2];
-        fill_name(d, name, sizeof(name));
-        r = db->open(db, open_txn, name, NULL, DB_BTREE, DB_CREATE, 0666);
+        r = db->open(db, open_txn, d->filename, NULL, DB_BTREE, DB_CREATE, 0666);
             CKERR(r);
     }
     {

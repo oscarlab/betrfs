@@ -107,6 +107,7 @@ PATENT RIGHTS GRANT:
 #include <ft/log_header.h>
 #include "checkpoint.h"
 #include "log-internal.h"
+#include "logsuperblock.h"
 #include "cachetable-internal.h"
 #include <memory.h>
 #include <toku_race_tools.h>
@@ -570,7 +571,11 @@ void toku_cachefile_close(CACHEFILE *cfp, bool oplsn_valid, LSN oplsn) {
         cf->close_userdata(cf, cf->fd, cf->userdata, oplsn_valid, oplsn);
     }
     // fsync and close the fd.
-    toku_file_fsync_without_accounting(cf->fd);
+    if (ftfs_is_hdd()) {
+        toku_file_fsync_without_accounting(cf->fd);
+    } else {
+        sb_sfs_dio_fsync(cf->fd);
+    }
     int r = close(cf->fd);
     assert(r == 0);
     cf->fd = -1;
@@ -584,13 +589,6 @@ void toku_cachefile_close(CACHEFILE *cfp, bool oplsn_valid, LSN oplsn) {
     // remove the cf from the list of active cachefiles
     ct->cf_list.remove_cf(cf);
 
-    // Unlink the file if the bit was set
-    if (cf->unlink_on_close) {
-        char *fname_in_cwd = toku_cachetable_get_fname_in_cwd(cf->cachetable, cf->fname_in_env);
-        r = unlink(fname_in_cwd);
-        assert_zero(r);
-        toku_free(fname_in_cwd);
-    }
     toku_free(cf->fname_in_env);
     cf->fname_in_env = NULL;
 
@@ -2671,7 +2669,7 @@ void toku_cachetable_close (CACHETABLE *ctp) {
     ct->ev.destroy();
     ct->list.destroy();
     ct->cf_list.destroy();
-    
+
     toku_kibbutz_destroy(ct->client_kibbutz);
     toku_kibbutz_destroy(ct->ct_kibbutz);
     toku_kibbutz_destroy(ct->checkpointing_kibbutz);
@@ -3090,7 +3088,11 @@ toku_cachefile_get_cachetable(CACHEFILE cf) {
 //Only called by ft_end_checkpoint
 //Must have access to cf->fd (must be protected)
 void toku_cachefile_fsync(CACHEFILE cf) {
-    toku_file_fsync(cf->fd);
+    if (ftfs_is_hdd()) {
+        toku_file_fsync(cf->fd);
+    } else {
+        sb_sfs_dio_fsync(cf->fd);
+    }
 }
 
 // Make it so when the cachefile closes, the underlying file is unlinked

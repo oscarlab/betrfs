@@ -101,7 +101,7 @@ static void corrupt_the_checksum(void) {
     char * logname = (char *) toku_xmalloc(sizeof(char)*(TOKU_PATH_MAX+1));
     int r;
     memset(logname, 0, TOKU_PATH_MAX+1);
-    sprintf(logname,  "%s/log000000000000.tokulog%d", TOKU_TEST_FILENAME, TOKU_LOG_VERSION);
+    sprintf(logname,  "%s/log000000000000.tokulog%d", TOKU_TEST_ENV_DIR_NAME, TOKU_LOG_VERSION);
     FILE *f = fopen(logname, "r+b"); assert(f);
     r = fseek(f, 025, SEEK_SET); assert(r == 0);
     char c = 100;
@@ -115,8 +115,7 @@ int
 test_logcursor_bad_checksum(void) {
 
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU);    assert(r==0);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);    assert(r==0);
     TOKULOGGER logger;
     LSN lsn = ZERO_LSN;
 
@@ -125,7 +124,7 @@ test_logcursor_bad_checksum(void) {
     r = toku_logger_create(&logger); 
     assert(r == 0);
 
-    r = toku_logger_open(TOKU_TEST_FILENAME, logger);
+    r = toku_logger_open(TOKU_TEST_ENV_DIR_NAME, logger);
     assert(r == 0);
 
     BYTESTRING bs0 = { .len = 5, .data = (char *) "hello" };
@@ -149,7 +148,7 @@ test_logcursor_bad_checksum(void) {
     TOKULOGCURSOR lc = NULL;
     struct log_entry *le;
     
-    r = toku_logcursor_create(&lc, TOKU_TEST_FILENAME);
+    r = toku_logcursor_create(&lc, TOKU_TEST_ENV_DIR_NAME);
     assert(r == 0 && lc != NULL);
 
     r = toku_logcursor_next(lc, &le);
@@ -159,7 +158,7 @@ test_logcursor_bad_checksum(void) {
     assert(r == 0 && lc == NULL);
 
     // walk backwards
-    r = toku_logcursor_create(&lc, TOKU_TEST_FILENAME);
+    r = toku_logcursor_create(&lc, TOKU_TEST_ENV_DIR_NAME);
     assert(r == 0 && lc != NULL);
 
     r = toku_logcursor_prev(lc, &le);
@@ -168,7 +167,7 @@ test_logcursor_bad_checksum(void) {
     r = toku_logcursor_destroy(&lc);
     assert(r == 0 && lc == NULL);
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);    assert(r==0);
 
     return 0;
 }

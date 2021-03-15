@@ -117,12 +117,11 @@ test_loader_abort (bool do_compress, bool abort_loader, bool abort_txn) {
     DB *db;
     DB_TXN *txn;
     DB_TXN* const null_txn = 0;
-    const char * const fname = "test.loader_abort.ft_handle";
+    const char * const fname = TOKU_TEST_DATA_DB_NAME;
     int r;
-    const char *testfile = "test_5469";
 
-    toku_os_recursive_delete(testfile);
-    toku_os_mkdir(testfile, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
 
     DB_LOADER *loader;
     uint32_t db_flags = 0;
@@ -135,10 +134,10 @@ test_loader_abort (bool do_compress, bool abort_loader, bool abort_txn) {
     env->set_errfile(env, stderr);
     r = env->set_generate_row_callback_for_put(env, put_multiple_generate);
     CKERR(r);
-    r = env->open(env, testfile, DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_TXN|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_TXN|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r = db_create(&db, env, 0); assert(r == 0);
     db->set_errfile(db,stderr); // Turn off those annoying errors
-    r = db->open(db, null_txn, fname, "main", DB_BTREE, DB_CREATE, 0666); assert(r == 0);
+    r = db->open(db, null_txn, fname, NULL, DB_BTREE, DB_CREATE, 0666); assert(r == 0);
 
     r = env->txn_begin(env, NULL, &txn, 0);                                                               
     CKERR(r);

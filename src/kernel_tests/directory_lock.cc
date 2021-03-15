@@ -114,135 +114,7 @@ static int update_fun(DB *UU(db),
                       void *UU(set_extra)) {
     return 0;
 }
-#if 0
-static void verify_shared_ops_fail(DB_ENV* env, DB* db) {
-    int r;
-    DB_TXN* txn = NULL;
-    uint32_t flags = 0;
-    DBT key,val;
-    DBT in_key,in_val;
-    uint32_t in_key_data, in_val_data = 0;
-    memset(&in_key, 0, sizeof(in_key));
-    memset(&in_val, 0, sizeof(in_val));
-    in_key.size = sizeof(in_key_data);
-    in_val.size = sizeof(in_val_data);
-    in_key.data = &in_key_data;
-    in_val.data = &in_val_data;
-    in_key.flags = DB_DBT_USERMEM;
-    in_val.flags = DB_DBT_USERMEM;
-    in_key.ulen = sizeof(in_key_data);
-    in_val.ulen = sizeof(in_val_data);
-    DBT in_keys[2];
-    memset(&in_keys, 0, sizeof(in_keys));
-    dbt_init(&key, "a", 2);
-    dbt_init(&val, "a", 2);
 
-    r = env->txn_begin(env, NULL, &txn, 0); CKERR(r);
-    r = db->put(
-        db, 
-        txn, 
-        &key, 
-        &val, 
-        0
-        ); 
-    CKERR2(r, DB_LOCK_NOTGRANTED);
-    r = txn->commit(txn,0); CKERR(r);
-
-    r = env->txn_begin(env, NULL, &txn, 0); CKERR(r);
-    r = db->del(
-        db, 
-        txn, 
-        &key,  
-        DB_DELETE_ANY
-        );
-    CKERR2(r, DB_LOCK_NOTGRANTED);    
-    r = txn->commit(txn,0); CKERR(r);
-
-    r = env->txn_begin(env, NULL, &txn, 0); CKERR(r);
-    r = env_put_multiple_test_no_array(
-        env, db, txn,
-        &key, &val,
-        1, &db, &in_key, &in_val, &flags);
-    CKERR2(r, DB_LOCK_NOTGRANTED);
-    r = txn->commit(txn,0); CKERR(r);
-
-    r = env->txn_begin(env, NULL, &txn, 0); CKERR(r);
-    r = env_put_multiple_test_no_array(
-        env, NULL, txn,
-        &key, &val,
-        1, &db, &in_key, &in_val, &flags);
-    CKERR2(r, DB_LOCK_NOTGRANTED);
-    r = txn->commit(txn,0); CKERR(r);
-
-    flags = DB_DELETE_ANY;
-
-    r = env->txn_begin(env, NULL, &txn, 0); CKERR(r);
-    r = env_del_multiple_test_no_array(
-        env, db, txn,
-        &key, &val,
-        1, &db, &in_key, &flags);
-    CKERR2(r, DB_LOCK_NOTGRANTED);
-    r = txn->commit(txn,0); CKERR(r);
-
-    r = env->txn_begin(env, NULL, &txn, 0); CKERR(r);
-    r = env_del_multiple_test_no_array(
-        env, NULL, txn,
-        &key, &val,
-        1, &db, &in_key, &flags);
-    CKERR2(r, DB_LOCK_NOTGRANTED);
-    r = txn->commit(txn,0); CKERR(r);
-
-    flags = 0;
-
-    r = env->txn_begin(env, NULL, &txn, 0); CKERR(r);
-    r = env_update_multiple_test_no_array(
-        env, NULL, txn,
-        &key, &val,
-        &key, &val,
-        1, &db, &flags,
-        2, in_keys,
-        1, &in_val);
-    CKERR2(r, DB_LOCK_NOTGRANTED);
-    r = txn->commit(txn,0); CKERR(r);
-
-    r = env->txn_begin(env, NULL, &txn, 0); CKERR(r);
-    r = env_update_multiple_test_no_array(
-        env, db, txn,
-        &key, &val,
-        &key, &val,
-        1, &db, &flags,
-        2, in_keys,
-        1, &in_val);
-    CKERR2(r, DB_LOCK_NOTGRANTED);
-    r = txn->commit(txn,0); CKERR(r);
-
-    
-    DBT extra_up;
-    dbt_init(&extra_up, NULL, 0);
-
-    r = env->txn_begin(env, NULL, &txn, 0); CKERR(r);
-    r = db->update(
-        db, 
-        txn, 
-        &key, 
-        &extra_up, 
-        0
-        ); 
-    CKERR2(r, DB_LOCK_NOTGRANTED);
-    r = txn->commit(txn,0); CKERR(r);
-
-    r = env->txn_begin(env, NULL, &txn, 0); CKERR(r);
-    r = db->update_broadcast(db, txn, &extra_up, 0);
-    CKERR2(r, DB_LOCK_NOTGRANTED);
-    r = txn->commit(txn,0); CKERR(r);
-
-    r = env->txn_begin(env, NULL, &txn, 0); CKERR(r);
-    r = db->update_broadcast(db, txn, &extra_up, DB_IS_RESETTING_OP);
-    CKERR2(r, DB_LOCK_NOTGRANTED);
-    r = txn->commit(txn,0); CKERR(r);
-
-}
-#endif 
 static void verify_excl_ops_fail(DB_ENV* env, const char* name) {
     DB_TXN* txn = NULL;
     int r; 
@@ -273,8 +145,8 @@ int test_directory_lock(void) {
     in_val.flags = DB_DBT_USERMEM;
     in_key.ulen = sizeof(in_key_data);
     in_val.ulen = sizeof(in_val_data);
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
     DB_ENV *env;
     //DB_LOADER* loader = NULL;
     //uint32_t put_flags = 0;
@@ -286,7 +158,7 @@ int test_directory_lock(void) {
     r = env->set_generate_row_callback_for_del(env, del_multiple_callback);
     CKERR(r);
     env->set_update(env, update_fun);
-    r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                      CKERR(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                      CKERR(r);
     
     DB* db;
     DB* db2;
@@ -300,8 +172,8 @@ int test_directory_lock(void) {
     //
     r = env->txn_begin(env, NULL, &txna, 0); CKERR(r);
     r = db_create(&db2, env, 0); CKERR(r);
-    r = db2->open(db2, txna, "foo2.db", NULL, DB_BTREE, DB_CREATE|DB_IS_HOT_INDEX, 0666); CKERR(r);
-    verify_excl_ops_fail(env, "foo2.db");
+    r = db2->open(db2, txna, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_CREATE|DB_IS_HOT_INDEX, 0666); CKERR(r);
+    verify_excl_ops_fail(env, TOKU_TEST_DATA_DB_NAME);
     r = txna->commit(txna, 0); CKERR(r);
 
 
@@ -310,7 +182,7 @@ int test_directory_lock(void) {
     //
     r = env->txn_begin(env, NULL, &txna, 0); CKERR(r);
     r = db_create(&db, env, 0); CKERR(r);
-    r = db->open(db, txna, "foo.db", NULL, DB_BTREE, DB_CREATE, 0666); CKERR(r);
+    r = db->open(db, txna, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_CREATE, 0666); CKERR(r);
     r = txna->commit(txna, 0); CKERR(r);
 
     //
@@ -333,7 +205,7 @@ int test_directory_lock(void) {
     dbt_init(&key, "b", 2);
     dbt_init(&val, "b", 2);
     r = db->put(db, txnb, &key, &val, 0);       CKERR(r);
-    verify_excl_ops_fail(env,"foo.db");
+    verify_excl_ops_fail(env, TOKU_TEST_DATA_DB_NAME);
     r = txna->abort(txna); CKERR(r);
     r = txnb->abort(txnb); CKERR(r);
 
@@ -343,7 +215,7 @@ int test_directory_lock(void) {
     r = db->del(db, txna, &key, DB_DELETE_ANY); CKERR(r);
     dbt_init(&key, "b", 2);
     r = db->del(db, txnb, &key, DB_DELETE_ANY); CKERR(r);
-    verify_excl_ops_fail(env,"foo.db");
+    verify_excl_ops_fail(env, TOKU_TEST_DATA_DB_NAME);
     r = txna->abort(txna); CKERR(r);
     r = txnb->abort(txnb); CKERR(r);
 
@@ -354,13 +226,13 @@ int test_directory_lock(void) {
     r = db->update(db, txna, &key, &val, 0); CKERR(r);
     dbt_init(&key, "b", 2);
     r = db->update(db, txnb, &key, &val, 0); CKERR(r);
-    verify_excl_ops_fail(env,"foo.db");
+    verify_excl_ops_fail(env, TOKU_TEST_DATA_DB_NAME);
     r = txna->abort(txna); CKERR(r);
     r = txnb->abort(txnb); CKERR(r);
 
     r = env->txn_begin(env, NULL, &txna, 0); CKERR(r);
     r = db->update_broadcast(db, txna, &val, 0); CKERR(r);
-    verify_excl_ops_fail(env,"foo.db");
+    verify_excl_ops_fail(env, TOKU_TEST_DATA_DB_NAME);
     r = txna->abort(txna); CKERR(r);
 
     uint32_t flags = 0;
@@ -381,7 +253,7 @@ int test_directory_lock(void) {
         &key, &val,
         1, &db, &in_key, &in_val, &flags);
     CKERR(r);
-    verify_excl_ops_fail(env,"foo.db");
+    verify_excl_ops_fail(env, TOKU_TEST_DATA_DB_NAME);
     r = txna->abort(txna); CKERR(r);
     r = txnb->abort(txnb); CKERR(r);
 
@@ -402,7 +274,7 @@ int test_directory_lock(void) {
         &key, &val,
         1, &db, &in_key, &flags);
     CKERR(r);
-    verify_excl_ops_fail(env,"foo.db");
+    verify_excl_ops_fail(env, TOKU_TEST_DATA_DB_NAME);
     r = txna->abort(txna); CKERR(r);
     r = txnb->abort(txnb); CKERR(r);
 
@@ -431,7 +303,7 @@ int test_directory_lock(void) {
         2, in_keys,
         1, &in_val);
     CKERR(r);
-    verify_excl_ops_fail(env,"foo.db");
+    verify_excl_ops_fail(env, TOKU_TEST_DATA_DB_NAME);
     r = txna->abort(txna); CKERR(r);
     r = txnb->abort(txnb); CKERR(r);
 

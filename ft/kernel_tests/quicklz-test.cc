@@ -93,20 +93,20 @@ PATENT RIGHTS GRANT:
 #include "test.h"
 #include "quicklz.h"
 
-
 static void test_qlz_random_i (int i) {
     printf("i=%d\n", i);
 
     qlz_state_compress *MALLOC(compress_state);
     qlz_state_decompress *MALLOC(decompress_state);
 
-    char *MALLOC_N(i, m);
-    char *MALLOC_N(i, m2);
+    size_t msize = sizeof(char) * i;
+    char *m = (char *) sb_malloc_sized(msize, false);
+    char *m2 = (char *) sb_malloc_sized(msize, false);
     for (int j=0; j<i; j++) {
 	m[j] = (random()%256)-128;
     }
-    int csize_bound = i+400;
-    char *MALLOC_N(csize_bound, c);
+    size_t csize_bound = i+400;
+    char *c = (char *) sb_malloc_sized(csize_bound * sizeof(*c), false);
     memset(compress_state,   0, sizeof(*compress_state));
     memset(decompress_state, 0, sizeof(*decompress_state));
     int s = qlz_compress(m, c, i, compress_state);
@@ -115,15 +115,15 @@ static void test_qlz_random_i (int i) {
     assert(r==i);
     assert(memcmp(m, m2, i)==0);
 
-    toku_free(m);
-    toku_free(c);
-    toku_free(m2);
+    sb_free_sized(m, msize);
+    sb_free_sized(m2, msize);
+    sb_free_sized(c, csize_bound);
     toku_free(compress_state);
     toku_free(decompress_state);
 }
 
 static void test_qlz_random (void) {
-    
+
     printf("\nStarting test QLZ random");
     // quicklz cannot handle i==0.
     for (int i=1; i<100; i++) {
@@ -136,11 +136,11 @@ static void test_qlz_random (void) {
     printf("\nDone test QLZ Random");
 }
 
-extern "C" int test_quicklz(void); 
+extern "C" int test_quicklz(void);
 
 int test_quicklz(void) {
 
-    initialize_dummymsn();    
+    initialize_dummymsn();
     test_qlz_random();
 
     return 0;

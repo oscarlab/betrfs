@@ -1,7 +1,4 @@
 #!/bin/bash
-# DEP: Since this is used in CI now, quit if a command fails and propagate out the error
-set -e
-
 DIR="${BASH_SOURCE%/*}"
 if [[ ! -d "$DIR" ]]; then DIR="$PWD"; fi
 
@@ -38,9 +35,9 @@ then
     ## YZJ: Just to make sure everything can be cleared up in SFS
     if [[ $use_sfs == "true" ]]
     then
+        losetup -d $dummy_dev
         rmmod simplefs
     fi
-    losetup -d $dummy_dev
     exit 0
 elif [[ $fstype == "zfs" ]]
 then

@@ -122,16 +122,16 @@ test_3856 (void) {
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
 
-
     /* parse parameters */
-    fname = TOKU_TEST_FILENAME;
+    fname = TOKU_TEST_FILENAME_DATA;
 
     CACHETABLE ct;
     FT_HANDLE t;
-    fname = TOKU_TEST_FILENAME;
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
-    unlink(fname);
-    int r = toku_open_ft_handle(fname, 1, &t, nodesize, basementnodesize, compression_method, ct, null_txn, string_cmp); assert(r==0);
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);
+    assert(r==0);
+
+    r = toku_open_ft_handle(fname, 1, &t, nodesize, basementnodesize, compression_method, ct, null_txn, string_cmp); assert(r==0);
 
     for (int i = 0; i < count; ++i) {
         char key[100],val[100];

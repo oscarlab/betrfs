@@ -16,16 +16,16 @@
 #include <linux/kallsyms.h>
 #include <linux/dcache.h>
 #include "ftfs_southbound.h"
-#include "toku_misc.h"
-#include "ftfs_malloc.h"
-#include "ftfs_files.h"
-#include "ftfs_dir.h"
-#include "ftfs_error.h"
+#include "sb_misc.h"
+#include "sb_malloc.h"
+#include "sb_files.h"
 #include "ftfs.h"
+#include "ftfs_unit_test.h"
+#include "nb_proc_toku_memleak_detect.h"
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Stony Brook University");
-MODULE_DESCRIPTION("Fractal Tree File System");
+MODULE_AUTHOR("BetrFS.org");
+MODULE_DESCRIPTION("B^e-tree file system");
 
 static char *sb_dev = NULL;
 module_param(sb_dev, charp, 0);
@@ -34,6 +34,10 @@ MODULE_PARM_DESC(sb_dev, "the southbound file system's block device");
 static char *sb_fstype = NULL;
 module_param(sb_fstype, charp, 0);
 MODULE_PARM_DESC(sb_fstype, "the southbound file system type (ex: ext4)");
+
+bool sb_is_rotational = 0;
+module_param(sb_is_rotational, bool, 0);
+MODULE_PARM_DESC(sb_is_rotational, "the southbound device type is hdd or not (ex: 0 or 1 )");
 
 /* Do not remove --This filename is not the testname passed to toku_run_test,
  * it is a test file name used by one of portability tests which used
@@ -48,6 +52,11 @@ MODULE_PARM_DESC(toku_ncpus, "Limit on the number of CPUs used by the FT code");
 
 static struct proc_dir_entry *toku_proc_entry;
 static int last_result;
+
+bool ftfs_is_hdd(void)
+{
+	return sb_is_rotational;
+}
 
 void ftfs_error (const char * function, const char * fmt, ...)
 {
@@ -159,6 +168,7 @@ static int toku_test_init(void)
 	}
 
 	ftfs_log(__func__, "toku procfs entry created");
+	TOKU_MEMLEAK_INIT;
 
 	return 0;
 }
@@ -171,24 +181,24 @@ static void toku_test_exit(void)
 {
 	remove_proc_entry(TOKU_PROC_NAME, NULL);
 	ftfs_log(__func__, "toku procfs entry removed");
+	TOKU_MEMLEAK_EXIT;
 }
 
 static void __exit ftfs_module_exit(void)
 {
 	put_ftfs_southbound();
 
-	if (ftfs_private_umount())
+	if (sb_private_umount())
 		ftfs_error(__func__, "unable to umount ftfs southbound");
-	destroy_ftfs_vmalloc_cache();
+	destroy_sb_vmalloc_cache();
 	toku_test_exit();
 }
 
 static int resolve_ftfs_symbols(void)
 {
 	if (resolve_ftfs_southbound_symbols() ||
-	    resolve_ftfs_files_symbols() ||
-	    resolve_ftfs_dir_symbols() ||
-	    resolve_ftfs_malloc_symbols() ||
+	    resolve_sb_files_symbols() ||
+	    resolve_sb_malloc_symbols() ||
 	    resolve_toku_misc_symbols()) {
 		return -EINVAL;
 	}
@@ -226,7 +236,7 @@ static int __init ftfs_module_init(void)
 	 * resolution.
 	 */
 
-	ret = ftfs_private_mount(sb_dev, sb_fstype, data);
+	ret = sb_private_mount(sb_dev, sb_fstype, data);
 	if (ret) {
 		ftfs_error(__func__, "can't mount southbound");
 		return ret;
@@ -247,7 +257,7 @@ static int __init ftfs_module_init(void)
 		return ret;
 	}
 
-	ret = init_ftfs_vmalloc_cache();
+	ret = init_sb_vmalloc_cache();
 	if (ret) {
 		ftfs_error(__func__, "can't init vmalloc caches");
 		return ret;

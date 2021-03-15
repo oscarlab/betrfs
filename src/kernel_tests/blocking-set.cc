@@ -88,8 +88,8 @@ PATENT RIGHTS GRANT:
 
 #ident "Copyright (c) 2007-2013 Tokutek Inc.  All rights reserved."
 #ident "The technology is licensed by the Massachusetts Institute of Technology, Rutgers State University of New Jersey, and the Research Foundation of State University of New York at Stony Brook under United States of America Serial No. 11/760379 and to the patents and/or patent applications resulting from it."
-// verify that cursor set operations suspend the conflicting threads when another transaction 
-// owns a lock on the key.  
+// verify that cursor set operations suspend the conflicting threads when another transaction
+// owns a lock on the key.
 
 #include "test.h"
 #include "toku_pthread.h"
@@ -118,7 +118,7 @@ static int blocking_set_callback(DBT const *a UU(), DBT const *b UU(), void *e U
     DBT const *found_val = b;
     DBT *my_val = (DBT *) e;
     assert(my_val->flags == DB_DBT_REALLOC);
-    my_val->data = toku_xrealloc(my_val->data, found_val->size);
+    my_val->data = toku_xrealloc(my_val->data, my_val->size, found_val->size);
     my_val->size = found_val->size;
     memcpy(my_val->data, found_val->data, found_val->size);
     return 0;
@@ -181,8 +181,8 @@ int test_blocking_set(void) {
     uint64_t nrows = 100;
     int nthreads = 2;
     long sleeptime = 100000;
-    const char *db_env_dir = TOKU_TEST_FILENAME;
-    const char *db_filename = "test.db";
+    const char *db_env_dir = TOKU_TEST_ENV_DIR_NAME;
+    const char *db_filename = TOKU_TEST_DATA_DB_NAME;
     int db_env_open_flags = DB_CREATE | DB_PRIVATE | DB_INIT_MPOOL | DB_INIT_TXN | DB_INIT_LOCK | DB_INIT_LOG | DB_THREAD;
 #if 0
     for (int i = 1; i < argc; i++) {
@@ -213,8 +213,7 @@ int test_blocking_set(void) {
     // setup env
     pre_setup();
     int r;
-    toku_os_recursive_delete(db_env_dir);    
-    r = toku_os_mkdir(db_env_dir, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH); assert(r == 0);
+    r = toku_fs_reset(db_env_dir, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH); assert(r == 0);
 
     DB_ENV *db_env = NULL;
     r = db_env_create(&db_env, 0); assert(r == 0);

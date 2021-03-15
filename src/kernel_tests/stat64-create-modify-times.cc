@@ -100,14 +100,14 @@ test_stat64_create_time (uint64_t n) {
     if (verbose) printf("%s:%u\n", __FUNCTION__, __LINE__);
 
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
-    
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
+
     DB_ENV *env = NULL;
     r = db_env_create(&env, 0);                                           CKERR(r);
 
     r = env->set_cachesize(env, 0, 20*1000000, 1);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
 
     DB *db = NULL;
     r = db_create(&db, env, 0);                                           CKERR(r);
@@ -116,7 +116,7 @@ test_stat64_create_time (uint64_t n) {
     r = env->txn_begin(env, 0, &txn, 0); assert(r == 0);
 
     r = db->set_pagesize(db, 4096); assert(r == 0);
-    r = db->open(db, txn, "foo.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
 
     // initial stats
     DB_BTREE_STAT64 s0;

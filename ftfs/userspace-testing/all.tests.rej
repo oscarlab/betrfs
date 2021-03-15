@@ -1,0 +1,100 @@
+diff a/ftfs/userspace-testing/all.tests b/ftfs/userspace-testing/all.tests	(rejected hunks)
+@@ -141,7 +141,6 @@ cpu-frequency
+ cpu-frequency-openlimit
+ hugepage
+ fsync-directory
+-flock
+ fsync-files
+ fgetc
+ toku-malloc
+@@ -173,17 +172,19 @@ toku-snprintf
+ manager_lm
+ manager-status
+ omt-test
+-mkdir
+-remove
++#mkdir
++#remove
+ slab
+ assert
+-posix-memalign
+-dio
++#dio
+ realloc
+-mkrmdir
++#mkrmdir
++recovery-cbegin
++recovery-no-log
++recovery-empty
+ verify-unsorted-leaf
+-unlink
+-getdents64
++recovery-hello
++#unlink
+ openclose
+ stat_ftfs
+ statfs
+@@ -191,8 +192,7 @@ preadwrite
+ readwrite
+ pwrite
+ write
+-readlink
+-f-all
++#readlink
+ f-all
+ bug1381
+ cursor-step-over-delete
+@@ -253,7 +255,7 @@ cachetable-4357
+ cachetable-5978
+ cachetable-5978-2
+ cachetable-put
+-cachetable-put-checkpoint
++#cachetable-put-checkpoint
+ cachetable-checkpoint-prefetched-nodes
+ cachetable-pin-nonblocking-checkpoint-clean
+ cachetable-checkpoint-pinned-nodes
+@@ -368,20 +370,16 @@ recovery-lsn-error-during-forward-scan
+ hot-with-bounds
+ inc-split
+ pick-child-to-flush
+-oexcl
++#oexcl
+ cachetable-cleaner-checkpoint
+ cachetable-kibbutz-and-flush-cachefile
+ cachetable-cleaner-thread-everything-pinned
+ cachetable-prefetch-close-leak-test
+-recovery-cbegin
+ recovery-cbegin-cend-hello
+ verify-bad-pivots
+ recovery-cbegin-cend
+-recovery-no-log
+ recovery-cend-cbegin
+-recovery-empty
+ verify-unsorted-pivots
+-recovery-hello
+ verify-bad-msn
+ cachetable-clock-all-pinned
+ cachetable-pin-checkpoint
+@@ -521,7 +516,8 @@ test3039
+ test3219
+ test3522
+ test3522b
+-test3529
++# This test takes too long (and is not currently linked into ftfs)
++#test3529
+ test_3529_insert_2
+ test_3529_table_lock
+ env-close-flags
+@@ -570,10 +566,10 @@ root-fifo-1
+ root-fifo-2
+ test-multiple-checkpoints-block-commit
+ test-rand-insert
+-test-set-func-malloc
+ test-nested-xopen-eclose
+ print_engine_status
+ xid-lsn-independent
++seqwrite_no_txn
+ verify-misrouted-msgs
+ queries_with_deletes
+-seqwrite_no_txn
++circle-log-overflow

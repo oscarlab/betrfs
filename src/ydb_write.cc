@@ -94,6 +94,7 @@ PATENT RIGHTS GRANT:
 #include "indexer.h"
 #include <ft/log_header.h>
 #include <ft/checkpoint.h>
+#include <ft/ft-ops.h>
 #include "ydb_row_lock.h"
 #include "ydb_write.h"
 #include "ydb_db.h"
@@ -209,10 +210,11 @@ db_put_check_overwrite_constraint(DB *db, DB_TXN *txn, DBT *key,
     return r;
 }
 
-
-
-int 
-toku_db_rename(DB *db, DB_TXN * txn, DBT * min_key, DBT * max_key, DBT * old_prefix, DBT * new_prefix, uint32_t flags, bool holds_mo_lock) {
+int
+toku_db_rename(DB *db, DB_TXN *txn, DBT *min_key, DBT *max_key,
+               DBT *old_prefix, DBT *new_prefix, uint32_t flags,
+               bool holds_mo_lock)
+{
     HANDLE_PANICKED_DB(db);
     HANDLE_DB_ILLEGAL_WORKING_PARENT_TXN(db, txn);
     HANDLE_READ_ONLY_TXN(txn);
@@ -220,7 +222,7 @@ toku_db_rename(DB *db, DB_TXN * txn, DBT * min_key, DBT * max_key, DBT * old_pre
     uint32_t unchecked_flags = flags;
     uint32_t lock_flags = get_prelocked_flags(flags);
     unchecked_flags &= ~lock_flags;
-    bool do_locking = (bool)(db->i->lt && !(lock_flags&DB_PRELOCKED_WRITE));
+    bool do_locking = (bool)(db->i->lt && !(lock_flags & DB_PRELOCKED_WRITE));
     int r;
 
     if (unchecked_flags != 0)
@@ -230,12 +232,12 @@ toku_db_rename(DB *db, DB_TXN * txn, DBT * min_key, DBT * max_key, DBT * old_pre
     DBT new_min_key, new_max_key;
 
     toku_init_dbt(&new_min_key);
-    r = toku_ft_transform_prefix(&db->dbenv->i->key_ops,
+    r = toku_ft_transform_prefix(db->i->ft_handle->ft,
                                  old_prefix, new_prefix, min_key, &new_min_key);
     if (r)
         return r;
     toku_init_dbt(&new_max_key);
-    r = toku_ft_transform_prefix(&db->dbenv->i->key_ops,
+    r = toku_ft_transform_prefix(db->i->ft_handle->ft,
                                  old_prefix, new_prefix, max_key, &new_max_key);
     if (r) {
         toku_destroy_dbt(&new_min_key);
@@ -244,17 +246,77 @@ toku_db_rename(DB *db, DB_TXN * txn, DBT * min_key, DBT * max_key, DBT * old_pre
 
     if (do_locking) {
         //Do locking if necessary.
-        r = toku_db_get_range_lock(db, txn, min_key, max_key, toku::lock_request::type::WRITE);
+        r = toku_db_get_range_lock(db, txn, min_key, max_key,
+                                   toku::lock_request::type::WRITE);
         if (r) return r;
-        r = toku_db_get_range_lock(db, txn, &new_min_key, &new_max_key, toku::lock_request::type::WRITE);
+        r = toku_db_get_range_lock(db, txn, &new_min_key, &new_max_key,
+                                   toku::lock_request::type::WRITE);
         if (r) return r;
     }
 
-    //Do the actual deleting.
+    //Do the actual rename.
     if (!holds_mo_lock) toku_multi_operation_client_lock();
     toku_ft_rename(db->i->ft_handle, min_key, max_key,
                    &new_min_key, &new_max_key, old_prefix, new_prefix,
                    txn ? db_txn_struct_i(txn)->tokutxn : 0);
+    if (!holds_mo_lock) toku_multi_operation_client_unlock();
+
+    toku_destroy_dbt(&new_max_key);
+    toku_destroy_dbt(&new_min_key);
+
+    // return r;
+    return 0;
+}
+
+int
+toku_db_clone(DB *db, DB_TXN *txn, DBT *min_key, DBT *max_key,
+              DBT *old_prefix, DBT *new_prefix, uint32_t flags,
+              bool holds_mo_lock)
+{
+    HANDLE_PANICKED_DB(db);
+    HANDLE_DB_ILLEGAL_WORKING_PARENT_TXN(db, txn);
+    HANDLE_READ_ONLY_TXN(txn);
+
+    uint32_t unchecked_flags = flags;
+    uint32_t lock_flags = get_prelocked_flags(flags);
+    unchecked_flags &= ~lock_flags;
+    bool do_locking = (bool)(db->i->lt && !(lock_flags & DB_PRELOCKED_WRITE));
+    int r;
+
+    if (unchecked_flags != 0)
+        return EINVAL;
+
+    // get new min and max keys
+    DBT new_min_key, new_max_key;
+
+    toku_init_dbt(&new_min_key);
+    r = toku_ft_transform_prefix(db->i->ft_handle->ft,
+                                 old_prefix, new_prefix, min_key, &new_min_key);
+    if (r)
+        return r;
+    toku_init_dbt(&new_max_key);
+    r = toku_ft_transform_prefix(db->i->ft_handle->ft,
+                                 old_prefix, new_prefix, max_key, &new_max_key);
+    if (r) {
+        toku_destroy_dbt(&new_min_key);
+        return r;
+    }
+
+    if (do_locking) {
+        //Do locking if necessary.
+        r = toku_db_get_range_lock(db, txn, min_key, max_key,
+                                   toku::lock_request::type::WRITE);
+        if (r) return r;
+        r = toku_db_get_range_lock(db, txn, &new_min_key, &new_max_key,
+                                   toku::lock_request::type::WRITE);
+        if (r) return r;
+    }
+
+    //Do the actual clone.
+    if (!holds_mo_lock) toku_multi_operation_client_lock();
+    toku_ft_clone(db->i->ft_handle, min_key, max_key,
+                  &new_min_key, &new_max_key, old_prefix, new_prefix,
+                  txn ? db_txn_struct_i(txn)->tokutxn : 0);
     if (!holds_mo_lock) toku_multi_operation_client_unlock();
 
     toku_destroy_dbt(&new_max_key);
@@ -1230,12 +1292,27 @@ cleanup:
     return r;
 }
 
-int 
-autotxn_db_rename (DB *db, DB_TXN * txn, DBT * min_key, DBT * max_key, DBT * old_prefix, DBT * new_prefix, uint32_t flags) {
+int
+autotxn_db_rename(DB *db, DB_TXN *txn, DBT *min_key, DBT *max_key,
+                  DBT *old_prefix, DBT *new_prefix, uint32_t flags)
+{
     bool changed; int r;
     r = toku_db_construct_autotxn(db, &txn, &changed, false);
     if (r!=0) return r;
-    r = toku_db_rename(db, txn, min_key, max_key, old_prefix, new_prefix, flags, false);
+    r = toku_db_rename(db, txn, min_key, max_key, old_prefix, new_prefix,
+                       flags, false);
+    return toku_db_destruct_autotxn(txn, r, changed);
+}
+
+int
+autotxn_db_clone(DB *db, DB_TXN *txn, DBT *min_key, DBT *max_key,
+                 DBT *old_prefix, DBT *new_prefix, uint32_t flags)
+{
+    bool changed; int r;
+    r = toku_db_construct_autotxn(db, &txn, &changed, false);
+    if (r!=0) return r;
+    r = toku_db_clone(db, txn, min_key, max_key, old_prefix, new_prefix,
+                      flags, false);
     return toku_db_destruct_autotxn(txn, r, changed);
 }
 

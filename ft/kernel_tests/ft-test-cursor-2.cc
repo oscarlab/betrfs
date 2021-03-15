@@ -118,7 +118,7 @@ static void test_multiple_ft_cursor_dbts(int n) {
     FT_HANDLE brt;
     FT_CURSOR cursors[n];
 
-    unlink(fname);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
 
@@ -187,7 +187,7 @@ test_ft_test_cursor_2 (void) {
     initialize_dummymsn();
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
-    fname = TOKU_TEST_FILENAME;
+    fname = TOKU_TEST_FILENAME_DATA;
 
     test_ft_cursor();
     if (verbose) printf("test ok\n");

@@ -124,9 +124,9 @@ static int increment_update (DB *db __attribute__((__unused__)),
 }
 
 static void setup (void) {
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    { int r=toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);   CKERR(r); }
-    { int r=db_env_create(&env, 0);                           CKERR(r); }
+    int r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
+    {  r=db_env_create(&env, 0);                           CKERR(r); }
     env->set_errfile(env, stderr);
     env->set_update(env, increment_update);
 }

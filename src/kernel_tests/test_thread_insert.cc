@@ -140,14 +140,14 @@ do_inserts (void *arg) {
 
 extern "C" int test_test_thread_insert(void);
 int test_test_thread_insert(void) {
-    const char *dbfile = "test.db";
-    const char *dbname = "main";
+    const char *dbfile = TOKU_TEST_DATA_DB_NAME;
+    const char *dbname = NULL;
     int nthreads = 2;
     my_t n = 1000000;
     pre_setup();
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
 
     int i;
     verbose = 1; 
@@ -177,7 +177,7 @@ int test_test_thread_insert(void) {
 
     r = db_env_create(&env, 0); assert(r == 0);
     r = env->set_cachesize(env, 0, 128000000, 1); assert(r == 0);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE + DB_THREAD + DB_PRIVATE + DB_INIT_MPOOL + DB_INIT_LOCK, S_IRWXU+S_IRWXG+S_IRWXO); assert(r == 0);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE + DB_THREAD + DB_PRIVATE + DB_INIT_MPOOL + DB_INIT_LOCK + DB_INIT_LOG + DB_INIT_TXN, S_IRWXU+S_IRWXG+S_IRWXO); assert(r == 0);
 
     DB *db;
 

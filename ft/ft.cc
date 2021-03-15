@@ -100,9 +100,9 @@ PATENT RIGHTS GRANT:
 #include <toku_assert.h>
 #include <portability/toku_atomic.h>
 
-void 
+void
 toku_reset_root_xid_that_created(FT ft, TXNID new_root_xid_that_created) {
-    // Reset the root_xid_that_created field to the given value.  
+    // Reset the root_xid_that_created field to the given value.
     // This redefines which xid created the dictionary.
 
     // hold lock around setting and clearing of dirty bit
@@ -249,23 +249,23 @@ static void ft_checkpoint (CACHEFILE cf, int fd, void *header_v) {
         ch->time_of_last_modification = now;
         ch->checkpoint_count++;
         ft_hack_highest_unused_msn_for_upgrade_for_checkpoint(ft);
-                                                             
+
         // write translation and header to disk (or at least to OS internal buffer)
         toku_serialize_ft_to(fd, ch, ft->blocktable, ft->cf);
         ch->dirty = 0;                      // this is only place this bit is cleared (in checkpoint_header)
-        
+
         // fsync the cachefile
         toku_cachefile_fsync(cf);
         ft->h->checkpoint_count++;        // checkpoint succeeded, next checkpoint will save to alternate header location
         ft->h->checkpoint_lsn = ch->checkpoint_lsn;  //Header updated.
-    } 
+    }
     else {
         toku_block_translation_note_skipped_checkpoint(ft->blocktable);
     }
 }
 
 // maps to cf->end_checkpoint_userdata
-// free unused disk space 
+// free unused disk space
 // (i.e. tell BlockAllocator to liberate blocks used by previous checkpoint).
 // Must have access to fd (protected)
 static void ft_end_checkpoint (CACHEFILE UU(cachefile), int fd, void *header_v) {
@@ -471,7 +471,7 @@ int toku_read_ft_and_store_in_cachefile (FT_HANDLE brt, CACHEFILE cf, LSN max_ac
 // max_acceptable_lsn is the latest acceptable checkpointed version of the file.
 {
     {
-        FT h; 
+        FT h;
         if ((h = (FT) toku_cachefile_get_userdata(cf))!=0) {
             *header = h;
             assert(brt->options.update_fun == h->update_fun);
@@ -542,7 +542,7 @@ toku_ft_has_one_reference_unlocked(FT ft) {
 // evict a ft from memory by closing its cachefile. any future work
 // will have to read in the ft in a new cachefile and new FT object.
 void toku_ft_evict_from_memory(FT ft, bool oplsn_valid, LSN oplsn) {
-    assert(ft->cf); 
+    assert(ft->cf);
     toku_cachefile_close(&ft->cf, oplsn_valid, oplsn);
 }
 
@@ -558,7 +558,7 @@ FT_HANDLE toku_ft_get_only_existing_ft_handle(FT h) {
 
 // Purpose: set fields in brt_header to capture accountability info for start of HOT optimize.
 // Note: HOT accountability variables in header are modified only while holding header lock.
-//       (Header lock is really needed for touching the dirty bit, but it's useful and 
+//       (Header lock is really needed for touching the dirty bit, but it's useful and
 //       convenient here for keeping the HOT variables threadsafe.)
 void
 toku_ft_note_hot_begin(FT_HANDLE brt) {
@@ -590,7 +590,7 @@ toku_ft_note_hot_complete(FT_HANDLE brt, bool success, MSN msn_at_start_of_hot) 
         // If we just successfully completed an optimization and no other thread is performing
         // an optimization, then the number of optimizations in progress is zero.
         // If there was a crash during a HOT optimization, this is how count_of_optimize_in_progress
-        // would be reset to zero on the disk after recovery from that crash.  
+        // would be reset to zero on the disk after recovery from that crash.
         if (ft->h->count_of_optimize_in_progress == ft->h->count_of_optimize_in_progress_read_from_disk)
             ft->h->count_of_optimize_in_progress = 0;
     }
@@ -656,7 +656,7 @@ dictionary_redirect_internal(const char *dst_fname_in_env, FT src_h, TOKUTXN txn
 
     FT dst_h = NULL;
     struct toku_list *list;
-    // open a dummy brt based off of 
+    // open a dummy brt based off of
     // dst_fname_in_env to get the header
     // then we will change all the brt's to have
     // their headers point to dst_h instead of src_h
@@ -733,31 +733,31 @@ toku_dictionary_redirect_abort(FT old_h, FT new_h, TOKUTXN txn) {
  *  if redirect connect src brt to txn (txn modified this brt)
  *  for each src brt
  *    open brt to dst file (create new brt struct)
- *    if redirect connect dst brt to txn 
+ *    if redirect connect dst brt to txn
  *    redirect db to new brt
  *    redirect cursors to new brt
  *  close all src brts
  *  if redirect make rollback log entry
- * 
+ *
  * on commit:
  *   nothing to do
  *
  *****/
 
-int 
+int
 toku_dictionary_redirect (const char *dst_fname_in_env, FT_HANDLE old_ft_h, TOKUTXN txn) {
 // Input args:
 //   new file name for dictionary (relative to env)
 //   old_ft_h is a live brt of open handle ({DB, BRT} pair) that currently refers to old dictionary file.
 //   (old_ft_h may be one of many handles to the dictionary.)
 //   txn that created the loader
-// Requires: 
+// Requires:
 //   multi operation lock is held.
 //   The brt is open.  (which implies there can be no zombies.)
 //   The new file must be a valid dictionary.
 //   The block size and flags in the new file must match the existing BRT.
 //   The new file must already have its descriptor in it (and it must match the existing descriptor).
-// Effect:   
+// Effect:
 //   Open new FTs (and related header and cachefile) to the new dictionary file with a new FILENUM.
 //   Redirect all DBs that point to brts that point to the old file to point to brts that point to the new file.
 //   Copy the dictionary id (dict_id) from the header of the original file to the header of the new file.
@@ -830,19 +830,19 @@ toku_ft_remove_txn_ref(FT ft) {
 }
 
 void toku_calculate_root_offset_pointer (
-    FT ft, 
-    CACHEKEY* root_key, 
+    FT ft,
+    CACHEKEY* root_key,
     uint32_t *roothash
-    ) 
+    )
 {
     *roothash = toku_cachetable_hash(ft->cf, ft->h->root_blocknum);
     *root_key = ft->h->root_blocknum;
 }
 
 void toku_ft_set_new_root_blocknum(
-    FT ft, 
+    FT ft,
     CACHEKEY new_root_key
-    ) 
+    )
 {
     ft->h->root_blocknum = new_root_key;
 }
@@ -851,7 +851,7 @@ LSN toku_ft_checkpoint_lsn(FT ft) {
     return ft->h->checkpoint_lsn;
 }
 
-void 
+void
 toku_ft_stat64 (FT ft, struct ftstat64_s *s) {
     s->fsize = toku_cachefile_size(ft->cf);
     // just use the in memory stats from the header
@@ -865,10 +865,10 @@ toku_ft_stat64 (FT ft, struct ftstat64_s *s) {
     if (n < 0) {
         n = 0;
     }
-    s->dsize = n; 
+    s->dsize = n;
     s->create_time_sec = ft->h->time_of_creation;
     s->modify_time_sec = ft->h->time_of_last_modification;
-    s->verify_time_sec = ft->h->time_of_last_verification;    
+    s->verify_time_sec = ft->h->time_of_last_verification;
 }
 
 void
@@ -881,11 +881,11 @@ int toku_ft_iterate_fractal_tree_block_map(FT ft, int (*iter)(uint64_t,int64_t,i
     return toku_blocktable_iterate_translation_tables(ft->blocktable, this_checkpoint_count, iter, iter_extra);
 }
 
-void 
-toku_ft_update_descriptor(FT ft, DESCRIPTOR d) 
+void
+toku_ft_update_descriptor(FT ft, DESCRIPTOR d)
 // Effect: Changes the descriptor in a tree (log the change, make sure it makes it to disk eventually).
 // requires: the ft is fully user-opened with a valid cachefile.
-//           descriptor updates cannot happen in parallel for an FT 
+//           descriptor updates cannot happen in parallel for an FT
 //           (ydb layer uses a row lock to enforce this)
 {
     assert(ft->cf);
@@ -915,14 +915,14 @@ toku_ft_update_descriptor_with_fd(FT ft, DESCRIPTOR d, int fd) {
     ft->descriptor.dbt.data = toku_memdup(d->dbt.data, d->dbt.size);
 }
 
-void 
+void
 toku_ft_update_cmp_descriptor(FT ft) {
     if (ft->cmp_descriptor.dbt.data != NULL) {
         toku_free(ft->cmp_descriptor.dbt.data);
     }
     ft->cmp_descriptor.dbt.size = ft->descriptor.dbt.size;
     ft->cmp_descriptor.dbt.data = toku_xmemdup(
-        ft->descriptor.dbt.data, 
+        ft->descriptor.dbt.data,
         ft->descriptor.dbt.size
         );
 }
@@ -970,7 +970,7 @@ toku_ft_remove_reference(FT ft, bool oplsn_valid, LSN oplsn, remove_ft_ref_callb
             // close header
             toku_ft_evict_from_memory(ft, oplsn_valid, oplsn);
         }
-    
+
         toku_ft_open_close_unlock();
     }
     else {
@@ -1147,10 +1147,13 @@ toku_single_process_lock(const char *lock_dir, const char *which, int *lockfd) {
     if (!lock_dir)
         return ENOENT;
     int namelen=strlen(lock_dir)+strlen(which);
-    char lockfname[namelen+sizeof("/_") + strlen(toku_product_name_strings.single_process_lock)];
+    /* YZJ: This is just to reduce the length of certain files which are used as lock.
+     * It previously to mare sure one physical sector can store all dentries of a directory.
+     */
+    char lockfname[namelen+sizeof("/")];
 
-    int l = snprintf(lockfname, sizeof(lockfname), "%s/%s_%s",
-                     lock_dir, toku_product_name_strings.single_process_lock, which);
+    int l = snprintf(lockfname, sizeof(lockfname), "%s/%s",
+                     lock_dir, which);
     assert(l+1 == (signed)(sizeof(lockfname)));
     *lockfd = toku_os_lock_file(lockfname);
     if (*lockfd < 0) {
@@ -1171,13 +1174,16 @@ toku_single_process_unlock(const char *lock_dir, const char *which, int *lockfd)
 	return 0;
     else if (!lock_dir)
         return ENOENT;
-    
-    int namelen=strlen(lock_dir)+strlen(which);
-    char lockfname[namelen+sizeof("/_") + strlen(toku_product_name_strings.single_process_lock)];
 
-    int l = snprintf(lockfname, sizeof(lockfname), "%s/%s_%s",
-                     lock_dir, toku_product_name_strings.single_process_lock, which);
-    assert(l+1 == (signed)(sizeof(lockfname)));    
+    int namelen=strlen(lock_dir)+strlen(which);
+    /* YZJ: This is just to reduce the length of certain files which are used as lock.
+     * It previously to mare sure one physical sector can store all dentries of a directory.
+     */
+    char lockfname[namelen+sizeof("/")];
+
+    int l = snprintf(lockfname, sizeof(lockfname), "%s/%s",
+                     lock_dir, which);
+    assert(l+1 == (signed)(sizeof(lockfname)));
     int fd = *lockfd;
     *lockfd = -1;
     int r = toku_os_unlock_file(fd, lockfname);
@@ -1202,4 +1208,3 @@ db_env_set_toku_product_name(const char *name) {
     }
     return 0;
 }
-

@@ -103,8 +103,6 @@ under this License.
 static TOKUTXN const null_txn = 0;
 static DB * const null_db = 0;
 
-extern "C" int fcopy(const char*, const char*);
-
 enum { NODESIZE = 1024, KSIZE=NODESIZE-100, TOKU_PSIZE=20 };
 
 static CACHETABLE cacheTable;
@@ -189,12 +187,13 @@ doit (bool after_split) {
 	toku_flusher_thread_set_callback(flusher_callback, &after_split);
 
 	toku_cachetable_create(&cacheTable, 500*1024*1024, ZERO_LSN, NULL_LOGGER);
-	unlink("foo4.ft_handle");
-	unlink("bar4.ft_handle");
+
+        r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+        assert(r==0);
 	// note the basement node size is 5 times the node size
 	// this is done to avoid rebalancing when writing a leaf
 	// node to disk
-	r = toku_open_ft_handle("foo4.ft_handle", 1, &ft_handle_t, NODESIZE, 5*NODESIZE, TOKU_DEFAULT_COMPRESSION_METHOD, cacheTable, null_txn, toku_builtin_compare_fun);
+	r = toku_open_ft_handle(TOKU_TEST_FILENAME_META, 1, &ft_handle_t, NODESIZE, 5*NODESIZE, TOKU_DEFAULT_COMPRESSION_METHOD, cacheTable, null_txn, toku_builtin_compare_fun);
 	assert(r==0);
 
 	toku_testsetup_initialize();  // must precede any other toku_testsetup calls
@@ -292,15 +291,20 @@ doit (bool after_split) {
 	// open it, and verify that the state of what is
 	// checkpointed is what we expect
 	//
-
-	r = fcopy("foo4.ft_handle", "bar4.ft_handle");
+	int64_t bt_size = toku_get_largest_used_size(ft_handle_t->ft->blocktable);
+	int64_t aligned_size = roundup_to_multiple(BLOCK_ALIGNMENT, bt_size);
+        if (ftfs_is_hdd()) {
+	    r = fcopy(TOKU_TEST_FILENAME_META, TOKU_TEST_FILENAME_DATA, aligned_size);
+        } else {
+	    r = fcopy_dio(TOKU_TEST_FILENAME_META, TOKU_TEST_FILENAME_DATA, aligned_size);
+        }
 	assert_zero(r);
 
 	FT_HANDLE c_ft;
 	// note the basement node size is 5 times the node size
 	// this is done to avoid rebalancing when writing a leaf
 	// node to disk
-	r = toku_open_ft_handle("bar4.ft_handle", 0, &c_ft, NODESIZE, 5*NODESIZE, TOKU_DEFAULT_COMPRESSION_METHOD, cacheTable, null_txn, toku_builtin_compare_fun);
+	r = toku_open_ft_handle(TOKU_TEST_FILENAME_DATA, 0, &c_ft, NODESIZE, 5*NODESIZE, TOKU_DEFAULT_COMPRESSION_METHOD, cacheTable, null_txn, toku_builtin_compare_fun);
 	assert(r==0);
 
 	//

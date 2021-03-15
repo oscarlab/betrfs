@@ -123,7 +123,8 @@ template<typename T> class GrowableArray {
     void deinit (void)
     // Effect: Deinitialize the array (freeing any memory it uses, for example).
     {
-	toku_free(m_array);
+        size_t bytes = m_size_limit * sizeof(T);
+        sb_free_sized(m_array, bytes);
 	m_array     =NULL;
 	m_size      =0;
 	m_size_limit=0;
@@ -147,12 +148,13 @@ template<typename T> class GrowableArray {
     // Implementation hint:  Double the size of the array when it gets too big so that the amortized cost stays constant.
     {
 	if (m_size>=m_size_limit) {
+            size_t old_size = m_size_limit;
 	    if (m_array==NULL) {
 		m_size_limit=1;
 	    } else {
 		m_size_limit*=2;
 	    }
-	    XREALLOC_N(m_size_limit, m_array);
+            XREALLOC_N(old_size, m_size_limit, m_array);
 	}
 	m_array[m_size++]=v;
     }

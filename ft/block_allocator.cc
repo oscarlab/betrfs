@@ -148,7 +148,8 @@ create_block_allocator (BLOCK_ALLOCATOR *ba, uint64_t reserve_at_beginning, uint
     result->alignment = alignment;
     result->n_blocks = 0;
     result->blocks_array_size = 1;
-    XMALLOC_N(result->blocks_array_size, result->blocks_array);
+    result->blocks_array = (struct block_allocator_blockpair *)
+        sb_malloc_sized(result->blocks_array_size * sizeof(struct block_allocator_blockpair), true);
     result->n_bytes_in_use = reserve_at_beginning;
     *ba = result;
     VALIDATE(result);
@@ -158,20 +159,22 @@ void
 destroy_block_allocator (BLOCK_ALLOCATOR *bap) {
     BLOCK_ALLOCATOR ba = *bap;
     *bap = 0;
-    toku_free(ba->blocks_array);
+    sb_free_sized(ba->blocks_array, ba->blocks_array_size * sizeof(struct block_allocator_blockpair));
     toku_free(ba);
 }
 
 static void
 grow_blocks_array_by (BLOCK_ALLOCATOR ba, uint64_t n_to_add) {
     if (ba->n_blocks + n_to_add > ba->blocks_array_size) {
+        size_t old_size = ba->blocks_array_size;
         uint64_t new_size = ba->n_blocks + n_to_add;
         uint64_t at_least = ba->blocks_array_size * 2;
         if (at_least > new_size) {
             new_size = at_least;
         }
+
         ba->blocks_array_size = new_size;
-        XREALLOC_N(ba->blocks_array_size, ba->blocks_array);
+        XREALLOC_N(old_size, ba->blocks_array_size, ba->blocks_array);
     }
 }
 
@@ -519,7 +522,7 @@ block_allocator_get_unused_statistics(BLOCK_ALLOCATOR ba, TOKU_DB_FRAGMENTATION 
 
 //if offset does not exist, abort
 //if offset exists, ref ++
-void 
+void
 block_allocator_get_block(BLOCK_ALLOCATOR ba, uint64_t offset) {
     VALIDATE(ba);
     int64_t bn = find_block(ba, offset);
@@ -529,7 +532,7 @@ block_allocator_get_block(BLOCK_ALLOCATOR ba, uint64_t offset) {
 }
 
 //if offset does not exist, allocate; ref ++
-void 
+void
 block_allocator_alloc_and_get_block(BLOCK_ALLOCATOR ba, uint64_t size, uint64_t * offset) {
 
     invariant(size > 0); //Allocator does not support size 0 blocks. See block_allocator_free_block.
@@ -605,4 +608,3 @@ block_allocator_put_block(BLOCK_ALLOCATOR ba, uint64_t offset) {
     }
     VALIDATE(ba);
 }
-

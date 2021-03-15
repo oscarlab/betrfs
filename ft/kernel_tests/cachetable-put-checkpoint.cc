@@ -548,8 +548,10 @@ cachetable_test (void) {
     int r;
 
     toku_cachetable_create(&ct, test_limit, ZERO_LSN, NULL_LOGGER);
-    const char *fname1 = TOKU_TEST_FILENAME;
-    unlink(fname1);
+    const char *fname1 = TOKU_TEST_FILENAME_DATA;
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
+
     r = toku_cachetable_openf(&f1, ct, fname1, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO); assert(r == 0);
 
     toku_cachefile_set_userdata(

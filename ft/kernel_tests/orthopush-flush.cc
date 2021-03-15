@@ -669,6 +669,9 @@ flush_to_internal_multiple(FT_HANDLE t) {
        toku_free(child_messages[i]);
     }
     destroy_nonleaf_childinfo(parent_bnc);
+    for (i = 0; i < 7; ++i) {
+        toku_cleanup_dbt(&child->childkeys[i]);
+    }
     toku_ftnode_free(&child);
     toku_free(parent_messages);
     toku_free(child_messages);
@@ -807,7 +810,7 @@ flush_to_leaf(FT_HANDLE t, bool make_leaf_up_to_date, bool use_flush) {
         struct ancestors ancestors = { .node = parentnode, .childnum = 0, .next = NULL };
         const struct pivot_bounds infinite_bounds = { .lower_bound_exclusive = NULL, .upper_bound_inclusive = NULL };
         bool msgs_applied;
-        toku_apply_ancestors_messages_to_node(t, child, &ancestors, &infinite_bounds, &msgs_applied, -1, nullptr);
+        toku_apply_ancestors_messages_to_node(t, child, &ancestors, &infinite_bounds, &msgs_applied, -1);
 #if 0
 
         FIFO_ITERATE(parent_bnc->buffer, key, keylen, val, vallen, type, msn, xids, is_fresh,
@@ -914,6 +917,9 @@ flush_to_leaf(FT_HANDLE t, bool make_leaf_up_to_date, bool use_flush) {
     for (i = 0; i < num_child_messages; ++i) {
         toku_free(child_messages[i]);
         toku_free(key_pointers[i]);
+    }
+    for (i = 0; i < 7; ++i) {
+        toku_cleanup_dbt(&child->childkeys[i]);
     }
     toku_ftnode_free(&child);
     toku_free(parent_messages);
@@ -1077,7 +1083,7 @@ flush_to_leaf_with_keyrange(FT_HANDLE t, bool make_leaf_up_to_date) {
         .upper_bound_inclusive = toku_clone_dbt(&ubi, childkeys[7])
     };
     bool msgs_applied;
-    toku_apply_ancestors_messages_to_node(t, child, &ancestors, &bounds, &msgs_applied, -1, nullptr);
+    toku_apply_ancestors_messages_to_node(t, child, &ancestors, &bounds, &msgs_applied, -1);
 
 //    FIFO_ITERATE(parent_bnc->buffer, key, keylen, val, vallen, type, msn, xids, is_fresh,
 struct iter_fn2_args args = {
@@ -1120,6 +1126,10 @@ struct iter_fn2_args args = {
         toku_free(child_messages[i]);
         toku_free(key_pointers[i]);
     }
+    for (i = 0; i < 7; ++i) {
+        toku_cleanup_dbt(&child->childkeys[i]);
+    }
+    toku_cleanup_dbt((DBT*)bounds.upper_bound_inclusive);
     toku_ftnode_free(&child);
     toku_free(parent_messages);
     toku_free(key_pointers);
@@ -1257,7 +1267,7 @@ compare_apply_and_flush(FT_HANDLE t, bool make_leaf_up_to_date) {
     struct ancestors ancestors = { .node = parentnode, .childnum = 0, .next = NULL };
     const struct pivot_bounds infinite_bounds = { .lower_bound_exclusive = NULL, .upper_bound_inclusive = NULL };
     bool msgs_applied;
-    toku_apply_ancestors_messages_to_node(t, child2, &ancestors, &infinite_bounds, &msgs_applied, -1, nullptr);
+    toku_apply_ancestors_messages_to_node(t, child2, &ancestors, &infinite_bounds, &msgs_applied, -1);
 #if 0
 
     FIFO_ITERATE(parent_bnc->buffer, key, keylen, val, vallen, type, msn, xids, is_fresh,
@@ -1321,6 +1331,10 @@ compare_apply_and_flush(FT_HANDLE t, bool make_leaf_up_to_date) {
         toku_free(key_pointers[i]);
         toku_free(child_messages[i]);
     }
+    for (i = 0; i < 7; ++i) {
+        toku_cleanup_dbt(&child1->childkeys[i]);
+        toku_cleanup_dbt(&child2->childkeys[i]);
+    }
     toku_ftnode_free(&child1);
     toku_ftnode_free(&child2);
     toku_free(parent_messages);
@@ -1337,13 +1351,16 @@ int test_orthopush_flush(void) {
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
 
-    fname = TOKU_TEST_FILENAME;
+    fname = TOKU_TEST_FILENAME_DATA;
     int r;
     CACHETABLE ct;
+
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r == 0);
     FT_HANDLE t;
-    r = toku_open_ft_handle(fname, 1, &t, 128*1024, 4096, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun); assert(r==0);
+    r = toku_open_ft_handle(fname, 1, &t, 128*1024, 4096, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
+    assert(r==0);
     toku_ft_set_update(t, orthopush_flush_update_fun);
     // HACK
     t->ft->update_fun = orthopush_flush_update_fun;

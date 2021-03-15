@@ -99,12 +99,12 @@ int test_mvcc_read_committed(void) {
     int r;
     pre_setup();
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r == 0);
     DB_ENV *env;
     r = db_env_create(&env, 0);                                                         CKERR(r);
     env->set_errfile(env, stderr);
-    r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                      CKERR(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                      CKERR(r);
     
     DB *db;
 
@@ -115,7 +115,7 @@ int test_mvcc_read_committed(void) {
     DB_TXN* txnc_child = NULL;
     r = env->txn_begin(env, NULL, &txna, 0);                                        CKERR(r);
     r = db_create(&db, env, 0);                                                     CKERR(r);
-    r = db->open(db, txna, "foo.db", NULL, DB_BTREE, DB_CREATE, 0666);              CKERR(r);
+    r = db->open(db, txna, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_CREATE, 0666);              CKERR(r);
     r = txna->commit(txna, 0);                                                      CKERR(r);
 
 

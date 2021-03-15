@@ -189,7 +189,6 @@ verify_rename(DB_ENV *env, DB *db, int nrows) {
                        &new_prefixdbt, 0); assert_zero(r);
         verify_locked(env, db, &max_kdbt);
         r = rmtxn->commit(rmtxn, 0); assert_zero(r);
-
     }
 
     verify_odd_to_even(env, db, nrows);
@@ -202,12 +201,12 @@ test_rename(int nrows) {
     DB_ENV *env = NULL;
     r = db_env_create(&env, 0); assert_zero(r);
 
-    r = env->open(env, TOKU_TEST_FILENAME, DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_TXN|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_TXN|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
 
     DB *db = NULL;
     r = db_create(&db, env, 0); assert_zero(r);
 
-    r = db->open(db, NULL, "test.db", NULL, DB_BTREE, DB_AUTO_COMMIT+DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
+    r = db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_AUTO_COMMIT+DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
 
     DB_TXN *txn = NULL;
     r = env->txn_begin(env, NULL, &txn, 0); assert_zero(r);
@@ -242,11 +241,10 @@ test_rename_simple(void) {
     int r;
     int nrows = 5000;
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
 
     test_rename(nrows);
-	post_teardown();
+    post_teardown();
     return 0;
 }
 

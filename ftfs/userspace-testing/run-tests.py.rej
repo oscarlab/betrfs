@@ -1,0 +1,126 @@
+diff a/ftfs/userspace-testing/run-tests.py b/ftfs/userspace-testing/run-tests.py	(rejected hunks)
+@@ -1,12 +1,32 @@
+ #!/usr/bin/python
+ 
+-import sys, os, string, subprocess, fileinput, random
++import sys, os, string, subprocess, fileinput, random, json
+ 
+ DEF_INTERP="default-interp.py"
+ DEF_PRE="default-pre.py"
+ DEF_POST="default-post.py"
+ procfile="/proc/toku_test"
+ 
++use_sfs = False
++DEF_PRE_SFS="default-pre.py --sfs"
++
++def format_sfs(cv):
++    print "Format SFS"
++    command = "./mkfs-sfs.sh {} ${{PWD}}/../../simplefs/tmp".format(cv["southbound device"])
++    ret = subprocess.call(command, shell=True)
++    if ret != 0 :
++        print "ERROR! Failed to format SFS"
++        exit(ret)
++
++def format_ext4(cv):
++    print "Format SFS"
++    command = "./mkfs-ext4.sh {} {}".format(cv["southbound device"], cv["ext4mntpnt"])
++    ret = subprocess.call(command, shell=True)
++    if ret != 0 :
++        print "ERROR! Failed to format ext4"
++        exit(ret)
++
++
+ def run_one_test(test, interp, pre, post):
+     """ the main testing worker
+     1. run any pre-test scripts (pre)
+@@ -15,7 +35,7 @@ def run_one_test(test, interp, pre, post):
+     4. run any post-test scripts to cleanup state (post)
+ 
+     """
+-    
++
+     # run pre-test script
+     command = "./{0} --test={1}".format(pre, test)
+     ret = subprocess.call(command, shell=True)
+@@ -60,20 +80,25 @@ def run_test_set(test_array):
+ 
+     for test in test_array :
+         if (len(test) == 1) :
+-            ret = run_one_test(test[0], DEF_INTERP, DEF_PRE, DEF_POST)
++	    if use_sfs == True:
++                ret = run_one_test(test[0], DEF_INTERP, DEF_PRE_SFS, DEF_POST)
++            else:
++                ret = run_one_test(test[0], DEF_INTERP, DEF_PRE, DEF_POST)
+         else :
+             ret = run_one_test(test[0], test[1], test[2], test[3])
+-        
++
+         if (ret) :
+             print "Test failed: " + test[0]
+             failure = failure + 1
++            # In our current testing environment, there is no reason to keep going if a test fails
++            break
+         else :
+             print "Test passed: " + test[0]
+             success = success + 1
+ 
+     print "Successes: {0}".format(success)
+     print "Failures:  {0}".format(failure)
+-    return 0
++    return failure
+ 
+ def scripts_exist(test_line) :
+     return (os.path.exists(test_line[1]) and os.path.exists(test_line[2]) \
+@@ -96,6 +121,9 @@ def run_all_tests(test_file, shuffle) :
+     test_array = []
+     testf = open(test_file, "r")
+     for line in testf:
++        # implement comments
++        if line.startswith("#"):
++            continue
+         test_line = string.split(line)
+         if (validate_testline(test_line)):
+             test_array.append(test_line)
+@@ -115,23 +143,34 @@ def run_all_tests(test_file, shuffle) :
+ ##################
+ 
+ def help() :
+-    print "Arguments: <testfile> [-s (optional, shuffles tests)]"
++    print "Arguments: <testfile> [fstype] [-s (optional, shuffles tests)]"
+ 
+ try:
+     if (len(sys.argv) <= 1):
+-        print "run-tests.py : No suffcient number of arguments." 
++        print "run-tests.py : No suffcient number of arguments."
+         help()
+-        exit()
+-
++        exit(-1)
+     shuffle = False
++    fd = open("test-config.json", 'r')
++    config_values = json.load(fd)
++    fd.close()
+     print "Running tests:", sys.argv
+     print "----"
+ 
+     test_file = sys.argv[1]
+-    if (len(sys.argv) == 3) :
+-        shuffle = True;
+-
+-    run_all_tests(test_file, shuffle)
++    for x in sys.argv[2:]:
++       if x == "--sfs":
++          use_sfs = True
++       if x == "-s":
++          shuffle = True;
++
++    if use_sfs:
++       format_sfs(config_values) 
++    else:
++       format_ext4(config_values)
++
++    ret = run_all_tests(test_file, shuffle)
++    sys.exit(ret)
+ 
+ except OSError, Argument:
+     print Argument;

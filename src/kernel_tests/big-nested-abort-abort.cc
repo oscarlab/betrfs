@@ -171,9 +171,8 @@ static void
 setup (void) {
     DB_TXN *txn;
     int r;
-    const char *dir = TOKU_TEST_FILENAME;
-    toku_os_recursive_delete(dir);
-    r=toku_os_mkdir(dir, S_IRWXU+S_IRWXG+S_IRWXO);       CKERR(r);
+    const char *dir = TOKU_TEST_ENV_DIR_NAME;
+    r=toku_fs_reset(dir, S_IRWXU+S_IRWXG+S_IRWXO);       CKERR(r);
 
     r=db_env_create(&env, 0); CKERR(r);
     
@@ -184,7 +183,7 @@ setup (void) {
     r=db_create(&db, env, 0); CKERR(r);
 
     r=env->txn_begin(env, 0, &txn, 0); assert(r==0);
-    r=db->open(db, txn, "foo.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r=db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r=txn->commit(txn, 0);    assert(r==0);
 }
 

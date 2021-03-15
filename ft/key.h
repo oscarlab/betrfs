@@ -101,8 +101,10 @@ void toku_test_keycompare (void) ;
 
 int toku_builtin_compare_fun (DB *, const DBT *, const DBT*) __attribute__((__visibility__("default")));
 
-int toku_builtin_rename_fun(const DBT *, const DBT *, const DBT *, void (*set_key)(const DBT *new_key, void *set_extra), void *set_extra) __attribute__((__visibility__("default")));
-
+int toku_builtin_rename_fun(DB *db, const DBT *old_prefix,
+                            const DBT *new_prefix, const DBT *old_key,
+                            void (*set_key)(const DBT *new_key, void *set_extra), void *set_extra)
+                            __attribute__((__visibility__("default")));
 void toku_builtin_print_fun(const DBT *, bool is_traceable_print) __attribute__((__visibility__("default")));
 
 #endif

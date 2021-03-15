@@ -216,8 +216,6 @@ struct toku_product_name_strings_struct {
     char rollback_cachefile[sizeof(toku_product_name) + sizeof(".rollback")];
 };
 
-void toku_ft_validate_kupserted_bns_in_order(FT ft, FTNODE node, int); 
-void toku_ft_validate_kupserted_per_bn_in_order(FT ft, FTNODE node, int); 
 int toku_ft_dump_ftnode(FT_HANDLE brt, BLOCKNUM b);
 extern struct toku_product_name_strings_struct toku_product_name_strings;
 extern int tokudb_num_envs;

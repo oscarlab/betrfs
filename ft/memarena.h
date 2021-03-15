@@ -110,9 +110,6 @@ MEMARENA memarena_create_presized (size_t initial_size);
 MEMARENA memarena_create (void);
 // Effect: Create a memarena with default initial size.  In case of ENOMEM, aborts.
 
-void memarena_clear (MEMARENA ma);
-// Effect: Reset the internal state so that the allocated memory can be used again.
-
 void* malloc_in_memarena (MEMARENA ma, size_t size);
 // Effect: Allocate some memory.  The returned value remains valid until the memarena is cleared or closed.
 //  In case of ENOMEM, aborts.

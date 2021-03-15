@@ -120,7 +120,7 @@ run_test(unsigned long eltsize, unsigned long nodesize, unsigned long repeat)
     XIDS xids_123;
     NONLEAF_CHILDINFO bnc;
     long int i = 0;
-    
+
     assert(keys);
     assert(vals);
 
@@ -129,7 +129,7 @@ run_test(unsigned long eltsize, unsigned long nodesize, unsigned long repeat)
 
         vals[i] = (char *) toku_xmalloc(eltsize - sizeof(keys[i]));
         assert(vals[i]);
-        
+
         unsigned int long j = 0;
         char *val = vals[i];
         for (;j< eltsize - sizeof(keys[i]) - sizeof(int); j+=sizeof(int)) {
@@ -139,7 +139,7 @@ run_test(unsigned long eltsize, unsigned long nodesize, unsigned long repeat)
         for (; j < eltsize - sizeof(keys[i]); ++j) {
             char *p = &val[j];
             *p =  (char) (rand() & 0xff);
-        }  
+        }
     }
 
     xids_0 = xids_get_root_xids();
@@ -172,6 +172,8 @@ run_test(unsigned long eltsize, unsigned long nodesize, unsigned long repeat)
         destroy_nonleaf_childinfo(bnc);
     }
     
+
+    xids_destroy(&xids_123);
 
     for (i=0; i< 1024; i++) {
 	if(vals[i] != NULL) 

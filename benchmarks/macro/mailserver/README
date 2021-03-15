@@ -14,7 +14,7 @@ sudo make install."
 
 
 2.add dovecot, dovenull and ftfstest users
-ftfstest user's passwd has to be ftfstest or change imap_punish.py
+ftfstest user's passwd has to be ftfstest@2009 or change imap_punish.py
 
 3 untar dovecont-conf.tar.gz under support-files and mv it to replace
 /usr/local/etc/dovecot/

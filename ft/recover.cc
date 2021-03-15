@@ -97,6 +97,7 @@ PATENT RIGHTS GRANT:
 #include "cachetable.h"
 #include "checkpoint.h"
 #include "txn_manager.h"
+#include "ft-ops.h"
 
 int tokudb_recovery_trace = 0;                    // turn on recovery tracing, default off.
 
@@ -823,19 +824,9 @@ static int toku_recover_fcreate (struct logtype_fcreate *l, RECOVER_ENV renv) {
     //unlink if it exists (recreate from scratch).
     char *iname = fixup_fname(&l->iname);
     char *iname_in_cwd = toku_cachetable_get_fname_in_cwd(renv->ct, iname);
-    r = unlink(iname_in_cwd);
-    if (r != 0) {
-#ifdef TOKU_LINUX_MODULE
-        int er =get_error_errno(r);
-#else
-        int er = get_error_errno();
-#endif
-        if (er != ENOENT) {
-            fprintf(stderr, "Tokudb recovery %s:%d unlink %s %d\n", __FUNCTION__, __LINE__, iname, er);
-            toku_free(iname);
-            return r;
-        }
-    }
+
+    assert(false);
+
     assert(0!=strcmp(iname, toku_product_name_strings.rollback_cachefile)); //Creation of rollback cachefile never gets logged.
     toku_free(iname_in_cwd);
     toku_free(iname);
@@ -1093,7 +1084,45 @@ static int toku_recover_backward_enq_delete_multi (struct logtype_enq_delete_mul
     return 0;
 }
 
-static int toku_recover_enq_rename (struct logtype_enq_rename *l, RECOVER_ENV UU(renv)) {
+static int
+toku_recover_enq_clone(struct logtype_enq_clone *l, RECOVER_ENV renv)
+{
+    int r;
+    TOKUTXN txn = NULL;
+    toku_txnid2txn(renv->logger, l->xid, &txn);
+    struct file_map_tuple *tuple = NULL;
+    r = file_map_find(&renv->fmap, l->filenum, &tuple);
+    if (r == 0) {
+        DBT minkeydbt;
+        toku_fill_dbt(&minkeydbt, l->minkeybs.data, l->minkeybs.len);
+        DBT maxkeydbt;
+        toku_fill_dbt(&maxkeydbt, l->maxkeybs.data, l->maxkeybs.len);
+        DBT newminkeydbt;
+        toku_fill_dbt(&newminkeydbt, l->newminkeybs.data, l->newminkeybs.len);
+        DBT newmaxkeydbt;
+        toku_fill_dbt(&newmaxkeydbt, l->newmaxkeybs.data, l->newmaxkeybs.len);
+        DBT oldprefixdbt;
+        toku_fill_dbt(&oldprefixdbt, l->oldprefixbs.data, l->oldprefixbs.len);
+        DBT newprefixdbt;
+        toku_fill_dbt(&newprefixdbt, l->newprefixbs.data, l->newprefixbs.len);
+
+        toku_ft_maybe_clone(tuple->ft_handle,
+                            &minkeydbt, &maxkeydbt,
+                            &newminkeydbt, &newmaxkeydbt,
+                            &oldprefixdbt, &newprefixdbt,
+                            txn, false);
+    }
+    return 0;
+}
+
+static int
+toku_recover_backward_enq_clone(struct logtype_enq_clone *UU(l),
+                                RECOVER_ENV UU(renv))
+{
+    return 0;
+}
+
+static int toku_recover_enq_rename (struct logtype_enq_rename *l, RECOVER_ENV renv) {
     int r;
     TOKUTXN txn = NULL;
     toku_txnid2txn(renv->logger, l->xid, &txn);
@@ -1114,12 +1143,12 @@ static int toku_recover_enq_rename (struct logtype_enq_rename *l, RECOVER_ENV UU
 
         DBT new_minkeydbt;
         toku_init_dbt(&new_minkeydbt);
-        r = toku_ft_transform_prefix(&renv->key_ops,
+        r = toku_ft_transform_prefix(NULL,//XXX: fixme, get some ft or change this to other things
                                      &oldprefixdbt, &newprefixdbt, &minkeydbt, &new_minkeydbt);
         assert(r != 0);
         DBT new_maxkeydbt;
         toku_init_dbt(&new_maxkeydbt);
-        r = toku_ft_transform_prefix(&renv->key_ops,
+        r = toku_ft_transform_prefix(NULL,//XXX: fixme, get some ft or change this to other things
                                      &oldprefixdbt, &newprefixdbt, &maxkeydbt, &new_maxkeydbt);
         assert(r != 0);
 
@@ -1744,7 +1773,9 @@ int tokudb_recover(DB_ENV *env,
         return r;
 
     int rr = 0;
-    if (tokudb_needs_recovery(log_dir, false)) {
+
+    bool ignore_log_empty = true;
+    if (tokudb_needs_recovery(log_dir, ignore_log_empty)) {
         struct recover_env renv;
         r = recover_env_init(&renv,
                              env_dir,

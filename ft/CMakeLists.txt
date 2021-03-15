@@ -39,7 +39,6 @@ set(FT_SOURCES
   ft-cachetable-wrappers
   ft-flusher
   ft-hot-flusher
-  ftloader
   ftloader-callback
   ft_msg
   ft_node-serialize

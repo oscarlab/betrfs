@@ -148,7 +148,7 @@ void toku_mempool_init(struct mempool *mp, void *base, size_t free_offset, size_
 void toku_mempool_construct(struct mempool *mp, size_t data_size) {
     if (data_size) {
         size_t mpsize = data_size + (data_size/4);     // allow 1/4 room for expansion (would be wasted if read-only)
-        mp->base = toku_xmalloc(mpsize);               // allocate buffer for mempool
+        mp->base = sb_malloc_sized(mpsize, true);     // allocate buffer for mempool
         mp->size = mpsize;
         mp->free_offset = 0;                     // address of first available memory for new data
         mp->frag_size = 0;                       // all allocated space is now in use
@@ -162,8 +162,9 @@ void toku_mempool_construct(struct mempool *mp, size_t data_size) {
 
 void toku_mempool_destroy(struct mempool *mp) {
     // printf("mempool_destroy %p %p %lu %lu\n", mp, mp->base, mp->size, mp->frag_size);
-    if (mp->base)
-        toku_free(mp->base);
+    if (mp->base) {
+        sb_free_sized(mp->base, mp->size);
+    }
     toku_mempool_zero(mp);
 }
 
@@ -222,16 +223,20 @@ void toku_mempool_mfree(struct mempool *mp, void *vp, size_t size) {
 
 /* get memory footprint */
 size_t toku_mempool_footprint(struct mempool *mp) {
-    void * base = mp->base;
-    size_t touched = mp->free_offset;
-    size_t rval = toku_memory_footprint(base, touched);
-    return rval;
+    // XXX DEP 11/12/19: I don't see any good reason not to just return mp->size here,
+    //                   and a lot of bad reasons to ask the kernel (namely, insanely high
+    //                   overheads to answer this question).
+    return mp->size;
 }
 
 void toku_mempool_clone(struct mempool* orig_mp, struct mempool* new_mp) {
     new_mp->frag_size = orig_mp->frag_size;
     new_mp->free_offset = orig_mp->free_offset;
     new_mp->size = orig_mp->free_offset; // only make the cloned mempool store what is needed
-    new_mp->base = toku_xmalloc(new_mp->size);
-    memcpy(new_mp->base, orig_mp->base, new_mp->size);
+    if (new_mp->size) {
+        new_mp->base = sb_malloc_sized(new_mp->size, true);     // allocate buffer for mempool
+        memcpy(new_mp->base, orig_mp->base, new_mp->size);
+    } else {
+        new_mp->base = NULL;
+    }
 }

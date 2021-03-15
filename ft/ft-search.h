@@ -135,8 +135,6 @@ typedef struct ft_search {
     //   no guarantee that we will get everything pinned again.  We ought to keep nodes pinned when we retry, except that on the
     //   way out with a DB_NOTFOUND we ought to unpin those nodes.  See #3528.
     DBT pivot_bound;
-
-    ANCESTORS kupsert_ancestors;
 } ft_search_t;
 
 static inline ft_search_t *
@@ -149,7 +147,6 @@ ft_search_init(ft_search_t *so, ft_search_compare_func_t compare,
     so->k = k;
     so->context = context;
     toku_init_dbt(&so->pivot_bound);
-    so->kupsert_ancestors = NULL;
     return so;
 }
 #endif

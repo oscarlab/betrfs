@@ -208,8 +208,7 @@ toku_pin_ftnode_batched(
     FTNODE_FETCH_EXTRA bfe,
     bool apply_ancestor_messages, // this bool is probably temporary, for #3972, once we know how range query estimates work, will revisit this
     FTNODE *node_p,
-    bool* msgs_applied,
-    ANCESTORS kupsert_ancestor)
+    bool* msgs_applied)
 {
     void *node_v;
     *msgs_applied = false;
@@ -248,8 +247,7 @@ toku_pin_ftnode_batched(
             ancestors,
             bounds,
             &max_msn_in_path,
-            bfe->child_to_read,
-	    kupsert_ancestor
+            bfe->child_to_read
             );
         if (needs_ancestors_messages) {
             toku_unpin_ftnode_read_only(brt->ft, node);
@@ -279,9 +277,7 @@ toku_pin_ftnode_batched(
                 ancestors,
                 bounds,
                 msgs_applied,
-                bfe->child_to_read,
-		kupsert_ancestor
-                );
+                bfe->child_to_read);
         } else {
             // At this point, we aren't going to run
             // toku_apply_ancestors_messages_to_node but that doesn't

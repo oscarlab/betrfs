@@ -126,7 +126,7 @@ static size_t do_fwrite (const void *ptr, size_t size, size_t nmemb, FILE *strea
 }
 
 
-// 1024 is the right size_factor for production.  
+// 1024 is the right size_factor for production.
 // Different values for these sizes may be used for testing.
 static uint32_t size_factor = 1024;
 static uint32_t default_loader_nodesize = FT_DEFAULT_NODE_SIZE;
@@ -148,7 +148,7 @@ toku_ft_loader_get_rowset_budget_for_testing (void)
 
 void ft_loader_lock_init(FTLOADER bl) {
     invariant(!bl->mutex_init);
-    toku_mutex_init(&bl->mutex, NULL); 
+    toku_mutex_init(&bl->mutex, NULL);
     bl->mutex_init = true;
 }
 
@@ -188,7 +188,7 @@ static int add_big_buffer(struct file_info *file) {
                 file->buffer = NULL;
             }
         }
-    } 
+    }
     return result;
 }
 
@@ -234,7 +234,7 @@ void ft_loader_fi_destroy (struct file_infos *fi, bool is_error)
         }
         if (fi->file_infos[i].is_extant) {
             invariant(is_error);
-            unlink(fi->file_infos[i].fname);
+            assert(false);
             toku_free(fi->file_infos[i].fname);
         }
         cleanup_big_buffer(&fi->file_infos[i]);
@@ -253,8 +253,8 @@ static int open_file_add (struct file_infos *fi,
     int result = 0;
     toku_mutex_lock(&fi->lock);
     if (fi->n_files >= fi->n_files_limit) {
+        XREALLOC_N(fi->n_files_limit, fi->n_files_limit * 2, fi->file_infos);
         fi->n_files_limit *=2;
-        XREALLOC_N(fi->n_files_limit, fi->file_infos);
     }
     invariant(fi->n_files < fi->n_files_limit);
     fi->file_infos[fi->n_files].is_open   = true;
@@ -283,7 +283,7 @@ int ft_loader_fi_reopen (struct file_infos *fi, FIDX idx, const char *mode) {
     invariant(!fi->file_infos[i].is_open);
     invariant(fi->file_infos[i].is_extant);
     fi->file_infos[i].file = toku_os_fopen(fi->file_infos[i].fname, mode);
-    if (fi->file_infos[i].file == NULL) { 
+    if (fi->file_infos[i].file == NULL) {
         result = ENOMEM;
     } else {
         fi->file_infos[i].is_open = true;
@@ -298,7 +298,7 @@ int ft_loader_fi_reopen (struct file_infos *fi, FIDX idx, const char *mode) {
 int ft_loader_fi_close (struct file_infos *fi, FIDX idx, bool require_open)
 {
     int result = 0;
-    toku_mutex_lock(&fi->lock); 
+    toku_mutex_lock(&fi->lock);
     invariant(idx.idx >=0 && idx.idx < fi->n_files);
     if (fi->file_infos[idx.idx].is_open) {
         invariant(fi->n_files_open>0);   // loader-cleanup-test failure
@@ -314,7 +314,7 @@ int ft_loader_fi_close (struct file_infos *fi, FIDX idx, bool require_open)
         cleanup_big_buffer(&fi->file_infos[idx.idx]);
     } else if (require_open)
         result = EINVAL;
-    toku_mutex_unlock(&fi->lock); 
+    toku_mutex_unlock(&fi->lock);
     return result;
 }
 
@@ -328,7 +328,8 @@ int ft_loader_fi_unlink (struct file_infos *fi, FIDX idx) {
         fi->n_files_extant--;
         invariant(!fi->file_infos[id].is_open); // must be closed before we unlink
         fi->file_infos[id].is_extant = false;
-        int r = unlink(fi->file_infos[id].fname);
+        int r = 0;
+        assert(false);
         if (r != 0)
 #ifdef TOKU_LINUX_MODULE
             result = get_error_errno(r);
@@ -366,12 +367,12 @@ int ft_loader_open_temp_file (FTLOADER bl, FIDX *file_idx)
     int result = 0;
     FILE *f = NULL;
     int fd = -1;
-    char *fname = toku_strdup(bl->temp_file_template);    
+    char *fname = toku_strdup(bl->temp_file_template);
     if (fname == NULL)
         result = ENOMEM;
     else {
         fd = mkstemp(fname);
-        if (fd < 0) { 
+        if (fd < 0) {
             result = 1;
         } else {
             f = toku_os_fdopen(fd, "r+");
@@ -384,7 +385,7 @@ int ft_loader_open_temp_file (FTLOADER bl, FIDX *file_idx)
     if (result != 0) {
         if (fd >= 0) {
             toku_os_close(fd);
-            unlink(fname);
+            assert(false);
         }
         if (f != NULL)
             toku_os_fclose(f);  // don't check for error because we're already in an error case
@@ -411,7 +412,7 @@ void toku_ft_loader_internal_destroy (FTLOADER bl, bool is_error) {
     toku_free((char*)bl->temp_file_template);
     ft_loader_fi_destroy(&bl->file_infos, is_error);
 
-    for (int i = 0; i < bl->N; i++) 
+    for (int i = 0; i < bl->N; i++)
         destroy_rowset(&bl->rows[i]);
     toku_free(bl->rows);
 
@@ -504,7 +505,7 @@ static void ft_loader_set_fractal_workers_count(FTLOADER bl) {
 //   DBUFIO_DEPTH buffers for double buffering.  Each buffer is of size at least MERGE_BUF_SIZE
 // so the memory is
 //   F*MERGE_BUF_SIZE*DBUFIO_DEPTH storage.
-// We use some additional space to buffer the outputs. 
+// We use some additional space to buffer the outputs.
 //  That's FILE_BUFFER_SIZE for writing to a merge file if we are writing to a mergefile.
 //  And we have FRACTAL_WRITER_ROWSETS*MERGE_BUF_SIZE per queue
 //  And if we are doing a fractal, each worker could have have a fractal tree that it's working on.
@@ -581,7 +582,7 @@ int toku_ft_loader_internal_init (/* out */ FTLOADER *blp,
     else {
         bl->load_root_xid = TXNID_NONE;
     }
-    
+
     ft_loader_init_error_callback(&bl->error_callback);
     ft_loader_init_poll_callback(&bl->poll_callback);
 
@@ -607,13 +608,13 @@ int toku_ft_loader_internal_init (/* out */ FTLOADER *blp,
     for (int i=0; i<N; i++) bl->fractal_threads_live[i] = false;
 
     {
-        int r = ft_loader_init_file_infos(&bl->file_infos); 
+        int r = ft_loader_init_file_infos(&bl->file_infos);
         if (r!=0) { toku_ft_loader_internal_destroy(bl, true); return r; }
     }
 
     SET_TO_MY_STRDUP(bl->temp_file_template, temp_file_template);
 
-    bl->n_rows   = 0; 
+    bl->n_rows   = 0;
     bl->progress = 0;
     bl->progress_callback_result = 0;
 
@@ -621,19 +622,19 @@ int toku_ft_loader_internal_init (/* out */ FTLOADER *blp,
     MY_CALLOC_N(N, bl->fs);
     MY_CALLOC_N(N, bl->last_key);
     for(int i=0;i<N;i++) {
-        { 
-            int r = init_rowset(&bl->rows[i], memory_per_rowset_during_extract(bl)); 
-            if (r!=0) { toku_ft_loader_internal_destroy(bl, true); return r; } 
+        {
+            int r = init_rowset(&bl->rows[i], memory_per_rowset_during_extract(bl));
+            if (r!=0) { toku_ft_loader_internal_destroy(bl, true); return r; }
         }
         init_merge_fileset(&bl->fs[i]);
         bl->last_key[i].flags = DB_DBT_REALLOC; // don't really need this, but it's nice to maintain it.  We use ulen to keep track of the realloced space.
     }
 
-    { 
-        int r = init_rowset(&bl->primary_rowset, memory_per_rowset_during_extract(bl)); 
+    {
+        int r = init_rowset(&bl->primary_rowset, memory_per_rowset_during_extract(bl));
         if (r!=0) { toku_ft_loader_internal_destroy(bl, true); return r; }
     }
-    {   int r = queue_create(&bl->primary_rowset_queue, EXTRACTOR_QUEUE_DEPTH); 
+    {   int r = queue_create(&bl->primary_rowset_queue, EXTRACTOR_QUEUE_DEPTH);
         if (r!=0) { toku_ft_loader_internal_destroy(bl, true); return r; }
     }
     //printf("%s:%d toku_pthread_create\n", __FILE__, __LINE__);
@@ -687,10 +688,10 @@ int toku_ft_loader_open (/* out */ FTLOADER *blp,
     }
     if (result==0) {
         FTLOADER bl = *blp;
-        int r = toku_pthread_create(&bl->extractor_thread, NULL, extractor_thread, (void*)bl); 
+        int r = toku_pthread_create(&bl->extractor_thread, NULL, extractor_thread, (void*)bl);
         if (r==0) {
             bl->extractor_live = true;
-        } else  { 
+        } else  {
             result = r;
             (void) toku_ft_loader_internal_destroy(bl, true);
         }
@@ -1011,7 +1012,7 @@ static int loader_read_row_from_dbufio (DBUFIO_FILESET bfs, int filenum, DBT *ke
 }
 
 
-int init_rowset (struct rowset *rows, uint64_t memory_budget) 
+int init_rowset (struct rowset *rows, uint64_t memory_budget)
 /* Effect: Initialize a collection of rows to be empty. */
 {
     int result = 0;
@@ -1054,7 +1055,7 @@ void destroy_rowset (struct rowset *rows) {
 }
 
 static int row_wont_fit (struct rowset *rows, size_t size)
-/* Effect: Return nonzero if adding a row of size SIZE would be too big (bigger than the buffer limit) */ 
+/* Effect: Return nonzero if adding a row of size SIZE would be too big (bigger than the buffer limit) */
 {
     // Account for the memory used by the data and also the row structures.
     size_t memory_in_use = (rows->n_rows*sizeof(struct row)
@@ -1069,8 +1070,8 @@ int add_row (struct rowset *rows, DBT *key, DBT *val)
     if (rows->n_rows >= rows->n_rows_limit) {
         struct row *old_rows = rows->rows;
         size_t old_n_rows_limit = rows->n_rows_limit;
+        REALLOC_N(rows->n_rows_limit, rows->n_rows_limit * 2, rows->rows);
         rows->n_rows_limit *= 2;
-        REALLOC_N(rows->n_rows_limit, rows->rows);
         if (rows->rows == NULL) {
             result = ENOMEM;
             rows->rows = old_rows;
@@ -1081,18 +1082,18 @@ int add_row (struct rowset *rows, DBT *key, DBT *val)
     size_t off      = rows->n_bytes;
     size_t next_off = off + key->size + val->size;
 
-    struct row newrow; 
+    struct row newrow;
     memset(&newrow, 0, sizeof newrow); newrow.off = off; newrow.klen = key->size; newrow.vlen = val->size;
 
     rows->rows[rows->n_rows++] = newrow;
     if (next_off > rows->n_bytes_limit) {
         size_t old_n_bytes_limit = rows->n_bytes_limit;
         while (next_off > rows->n_bytes_limit) {
-            rows->n_bytes_limit = rows->n_bytes_limit*2; 
+            rows->n_bytes_limit = rows->n_bytes_limit*2;
         }
         invariant(next_off <= rows->n_bytes_limit);
         char *old_data = rows->data;
-        REALLOC_N(rows->n_bytes_limit, rows->data);
+        REALLOC_N(rows->n_bytes_limit, old_n_bytes_limit, rows->data);
         if (rows->data == NULL) {
             result = ENOMEM;
             rows->data = old_data;
@@ -1159,10 +1160,10 @@ static void* extractor_thread (void *blv) {
 
     //printf("%s:%d extractor finishing\n", __FILE__, __LINE__);
     if (r == 0) {
-        r = finish_primary_rows(bl); 
-        if (r) 
+        r = finish_primary_rows(bl);
+        if (r)
             ft_loader_set_panic(bl, r, false, 0, nullptr, nullptr);
-        
+
     }
     return NULL;
 }
@@ -1173,7 +1174,7 @@ static void enqueue_for_extraction (FTLOADER bl) {
     *enqueue_me = bl->primary_rowset;
     zero_rowset(&bl->primary_rowset);
     int r = queue_enq(bl->primary_rowset_queue, (void*)enqueue_me, 1, NULL);
-    resource_assert_zero(r); 
+    resource_assert_zero(r);
 }
 
 static int loader_do_put(FTLOADER bl,
@@ -1187,16 +1188,16 @@ static int loader_do_put(FTLOADER bl,
         //printf("%s:%d please extract %ld\n", __FILE__, __LINE__, bl->primary_rowset.n_rows);
         enqueue_for_extraction(bl);
         {
-            int r = init_rowset(&bl->primary_rowset, memory_per_rowset_during_extract(bl)); 
+            int r = init_rowset(&bl->primary_rowset, memory_per_rowset_during_extract(bl));
             // bl->primary_rowset will get destroyed by toku_ft_loader_abort
-            if (r != 0) 
+            if (r != 0)
                 result = r;
         }
     }
     return result;
 }
 
-static int 
+static int
 finish_extractor (FTLOADER bl) {
     //printf("%s:%d now finishing extraction\n", __FILE__, __LINE__);
 
@@ -1216,7 +1217,7 @@ finish_extractor (FTLOADER bl) {
     {
         void *toku_pthread_retval;
         int r = toku_pthread_join(bl->extractor_thread, &toku_pthread_retval);
-        resource_assert_zero(r); 
+        resource_assert_zero(r);
         invariant(toku_pthread_retval == NULL);
         bl->extractor_live = false;
     }
@@ -1294,7 +1295,6 @@ static int process_primary_rows_internal (FTLOADER bl, struct rowset *primary_ro
             pval.data = primary_rowset->data + prow->off + prow->klen;
             pval.size = prow->vlen;
 
-
             DBT_ARRAY key_array;
             DBT_ARRAY val_array;
             if (bl->dbs[i] != bl->src_db) {
@@ -1357,7 +1357,7 @@ static int process_primary_rows_internal (FTLOADER bl, struct rowset *primary_ro
     }
     toku_dbt_array_destroy(&dest_keys);
     toku_dbt_array_destroy(&dest_vals);
-    
+
     destroy_rowset(primary_rowset);
     toku_free(primary_rowset);
     int r = 0;
@@ -1368,7 +1368,7 @@ static int process_primary_rows_internal (FTLOADER bl, struct rowset *primary_ro
                 ft_loader_set_panic(bl, r, false, i, nullptr, nullptr);
             }
         }
-        invariant(r); // found the error 
+        invariant(r); // found the error
     }
     toku_free(error_codes);
     return r;
@@ -1378,13 +1378,13 @@ static int process_primary_rows (FTLOADER bl, struct rowset *primary_rowset) {
     int r = process_primary_rows_internal (bl, primary_rowset);
     return r;
 }
- 
+
 int toku_ft_loader_put (FTLOADER bl, DBT *key, DBT *val)
 /* Effect: Put a key-value pair into the brt loader.  Called by DB_LOADER->put().
  * Return value: 0 on success, an error number otherwise.
  */
 {
-    if (ft_loader_get_error(&bl->error_callback)) 
+    if (ft_loader_get_error(&bl->error_callback))
         return EINVAL; // previous panic
     bl->n_rows++;
 //    return loader_write_row(key, val, bl->fprimary_rows, &bl->fprimary_offset, bl);
@@ -1401,7 +1401,7 @@ uint64_t toku_ft_loader_get_n_rows(FTLOADER bl) {
 
 int merge_row_arrays_base (struct row dest[/*an+bn*/], struct row a[/*an*/], int an, struct row b[/*bn*/], int bn,
                            int which_db, DB *dest_db, ft_compare_func compare,
-                           
+
                            FTLOADER bl,
                            struct rowset *rowset)
 /* Effect: Given two arrays of rows, a and b, merge them using the comparison function, and write them into dest.
@@ -1497,7 +1497,7 @@ static int binary_search (int *location,
         }
     }
 }
-                   
+
 
 #define SWAP(typ,x,y) { typ tmp = x; x=y; y=tmp; }
 
@@ -1556,7 +1556,7 @@ int mergesort_row_array (struct row rows[/*n*/], int n, int which_db, DB *dest_d
     if (r1!=0) return r1;
     if (r2!=0) return r2;
 
-    struct row *MALLOC_N(n, tmp); 
+    struct row *MALLOC_N(n, tmp);
     if (tmp == NULL) return ENOMEM;
     {
         int r = merge_row_arrays(tmp, rows, mid, rows+mid, n-mid, which_db, dest_db, compare, bl, rowset);
@@ -1570,7 +1570,7 @@ int mergesort_row_array (struct row rows[/*n*/], int n, int which_db, DB *dest_d
     return 0;
 }
 
-// C function for testing mergesort_row_array 
+// C function for testing mergesort_row_array
 int ft_loader_mergesort_row_array (struct row rows[/*n*/], int n, int which_db, DB *dest_db, ft_compare_func compare, FTLOADER bl, struct rowset *rowset) {
     return mergesort_row_array (rows, n, which_db, dest_db, compare, bl, rowset);
 }
@@ -1590,7 +1590,7 @@ static int sort_rows (struct rowset *rows, int which_db, DB *dest_db, ft_compare
  * These files have two parts, one is for the data rows, and the other is a collection of offsets so we an more easily parallelize the manipulation (e.g., by allowing us to find the offset of the ith row quickly). */
 
 void init_merge_fileset (struct merge_fileset *fs)
-/* Effect: Initialize a fileset */ 
+/* Effect: Initialize a fileset */
 {
     fs->have_sorted_output = false;
     fs->sorted_output      = FIDX_NULL;
@@ -1629,8 +1629,9 @@ static int extend_fileset (FTLOADER bl, struct merge_fileset *fs, FIDX*ffile)
     r = ft_loader_open_temp_file(bl, &sfile); if (r!=0) return r;
 
     if (fs->n_temp_files+1 > fs->n_temp_files_limit) {
+        int old_temp_files_limit = fs->n_temp_files_limit;
         fs->n_temp_files_limit = (fs->n_temp_files+1)*2;
-        XREALLOC_N(fs->n_temp_files_limit, fs->data_fidxs);
+        XREALLOC_N(old_temp_files_limit, fs->n_temp_files_limit, fs->data_fidxs);
     }
     fs->data_fidxs[fs->n_temp_files] = sfile;
     fs->n_temp_files++;
@@ -1682,7 +1683,7 @@ static int write_rowset_to_file (FTLOADER bl, FIDX sfile, const struct rowset ro
     for (size_t i=0; i<rows.n_rows; i++) {
         DBT skey = make_dbt(rows.data + rows.rows[i].off,                     rows.rows[i].klen);
         DBT sval = make_dbt(rows.data + rows.rows[i].off + rows.rows[i].klen, rows.rows[i].vlen);
-        
+
         uint64_t soffset=0; // don't really need this.
         r = loader_write_row(&skey, &sval, sfile, sstream, &soffset, &wb, bl);
         if (r != 0) {
@@ -1770,7 +1771,7 @@ int sort_and_write_rows (struct rowset rows, struct merge_fileset *fs, FTLOADER 
     destroy_rowset(&rows);
 
     //bl_time_t after_write = bl_time_now();
-    
+
     return result;
 }
 
@@ -1817,7 +1818,7 @@ int toku_merge_some_files_using_dbufio (const bool to_q, FIDX dest_data, QUEUE q
 
     if (result==0) {
         int r = pqueue_init(&pq, n_sources, which_db, dest_db, compare, &bl->error_callback);
-        if (r!=0) result = r; 
+        if (r!=0) result = r;
     }
 
     uint64_t n_rows = 0;
@@ -1867,12 +1868,12 @@ int toku_merge_some_files_using_dbufio (const bool to_q, FIDX dest_data, QUEUE q
         }
     }
     wbuf_init(&wb, uncompressed_buffer, MAX_UNCOMPRESSED_BUF);
-    
+
     //printf(" n_rows=%ld\n", n_rows);
     while (result==0 && pqueue_size(pq)>0) {
         int mini;
         {
-            // get the minimum 
+            // get the minimum
             pqueue_node_t *node;
             int r = pqueue_pop(pq, &node);
             if (r!=0) {
@@ -1894,7 +1895,7 @@ int toku_merge_some_files_using_dbufio (const bool to_q, FIDX dest_data, QUEUE q
                 XMALLOC(output_rowset); // freed in cleanup
                 {
                     int r = init_rowset(output_rowset, memory_per_rowset_during_merge(bl, n_sources, to_q));
-                    if (r!=0) {        
+                    if (r!=0) {
                         result = r;
                         break;
                     }
@@ -1915,9 +1916,9 @@ int toku_merge_some_files_using_dbufio (const bool to_q, FIDX dest_data, QUEUE q
                 break;
             }
         }
-        
+
         {
-            // read next row from file that just sourced min value 
+            // read next row from file that just sourced min value
             int r = loader_read_row_from_dbufio(bfs, mini, &keys[mini], &vals[mini]);
             if (r!=0) {
                 if (r==EOF) {
@@ -1941,7 +1942,7 @@ int toku_merge_some_files_using_dbufio (const bool to_q, FIDX dest_data, QUEUE q
                 }
             }
         }
- 
+
         n_rows_done++;
         const uint64_t rows_per_report = size_factor*1024;
         if (n_rows_done%rows_per_report==0) {
@@ -1961,9 +1962,9 @@ int toku_merge_some_files_using_dbufio (const bool to_q, FIDX dest_data, QUEUE q
 
     if (result==0 && to_q) {
         int r = queue_enq(q, (void*)output_rowset, 1, NULL);
-        if (r!=0) 
+        if (r!=0)
             result = r;
-        else 
+        else
             output_rowset = NULL;
     }
 
@@ -2010,7 +2011,7 @@ static int merge_some_files (const bool to_q, FIDX dest_data, QUEUE q, int n_sou
                 memory_per_rowset_during_merge(bl, n_sources, to_q), bl->compress_intermediates);
         if (r!=0) { result = r; }
     }
-        
+
     if (result==0) {
         int r = toku_merge_some_files_using_dbufio (to_q, dest_data, q, n_sources, bfs, srcs_fidxs, bl, which_db, dest_db, compare, progress_allocation);
         if (r!=0) { result = r; }
@@ -2185,8 +2186,8 @@ static void subtrees_info_destroy(struct subtrees_info *p) {
 
 static void allocate_node (struct subtrees_info *sts, int64_t b) {
     if (sts->n_subtrees >= sts->n_subtrees_limit) {
+        XREALLOC_N(sts->n_subtrees_limit, sts->n_subtrees_limit * 2, sts->subtrees);
         sts->n_subtrees_limit *= 2;
-        XREALLOC_N(sts->n_subtrees_limit, sts->subtrees);
     }
     sts->subtrees[sts->n_subtrees].block = b;
     sts->n_subtrees++;
@@ -2294,7 +2295,7 @@ static int allocate_block (struct dbout *out, int64_t *ret_block_number)
         } else {
             out->n_translations_limit *= 2;
         }
-        REALLOC_N(out->n_translations_limit, out->translation);
+        REALLOC_N(out->n_translations_limit, old_n_translations_limit, out->translation);
         if (out->translation == NULL) {
             result = ENOMEM;
             invariant(result);
@@ -2350,7 +2351,7 @@ static struct leaf_buf *start_leaf (struct dbout *out, const DESCRIPTOR UU(desc)
     lbuf->xids = xids_get_root_xids();
     if (xid != TXNID_NONE) {
         XIDS new_xids = NULL;
-        int r = xids_create_child(lbuf->xids, &new_xids, xid); 
+        int r = xids_create_child(lbuf->xids, &new_xids, xid);
         assert(r == 0 && new_xids);
         xids_destroy(&lbuf->xids);
         lbuf->xids = new_xids;
@@ -2431,8 +2432,8 @@ static int toku_loader_write_ft_from_q (FTLOADER bl,
 
     r = ft_loader_open_temp_file (bl, &pivots_file);
     if (r) {
-        result = r; 
-        drain_writer_q(q); 
+        result = r;
+        drain_writer_q(q);
         return result;
     }
     FILE *pivots_stream = toku_bl_fidx2file(bl, pivots_file);
@@ -2462,7 +2463,7 @@ static int toku_loader_write_ft_from_q (FTLOADER bl,
     }
 
     // The blocks_array will contain all the block numbers that correspond to the pivots.  Generally there should be one more block than pivot.
-    struct subtrees_info sts; 
+    struct subtrees_info sts;
     subtrees_info_init(&sts);
     sts.next_free_block  = 3;
     sts.n_subtrees       = 0;
@@ -2601,7 +2602,7 @@ static int toku_loader_write_ft_from_q (FTLOADER bl,
     {
         DBT key = make_dbt(0,0); // must write an extra DBT into the pivots file.
         r = bl_write_dbt(&key, pivots_stream, NULL, nullptr, bl);
-        if (r) { 
+        if (r) {
             result = r; goto error;
         }
     }
@@ -2704,7 +2705,6 @@ int toku_loader_write_brt_from_q_in_C (FTLOADER                bl,
     target_basementnodesize = target_basementnodesize == 0 ? default_loader_basementnodesize : target_basementnodesize;
     return toku_loader_write_ft_from_q (bl, descriptor, fd, progress_allocation, q, total_disksize_estimate, which_db, target_nodesize, target_basementnodesize, target_compression_method);
 }
-
 
 static void* fractal_thread (void *ftav) {
     struct fractal_thread_args *fta = (struct fractal_thread_args *)ftav;
@@ -2821,7 +2821,7 @@ static int toku_ft_loader_close_internal (FTLOADER bl)
             char *fname_in_cwd = toku_cachetable_get_fname_in_cwd(bl->cachetable, bl->new_fnames_in_env[i]);
             result = loader_do_i(bl, i, bl->dbs[i], bl->bt_compare_funs[i], bl->descriptors[i], fname_in_cwd, allocate_here);
             toku_free(fname_in_cwd);
-            if (result != 0) 
+            if (result != 0)
                 goto error;
             invariant(0 <= bl->progress && bl->progress <= PROGRESS_MAX);
         }
@@ -2894,7 +2894,7 @@ int toku_ft_loader_finish_extractor(FTLOADER bl) {
     return result;
 }
 
-int toku_ft_loader_abort(FTLOADER bl, bool is_error) 
+int toku_ft_loader_abort(FTLOADER bl, bool is_error)
 /* Effect : Abort the bulk loader, free ft_loader resources */
 {
     int result = 0;
@@ -2925,13 +2925,14 @@ static void add_pair_to_leafnode (struct leaf_buf *lbuf, unsigned char *key, int
     lbuf->dsize += keylen + vallen;
     lbuf->off += this_leafentry_size;
 
-    // append this key val pair to the leafnode 
+    // append this key val pair to the leafnode
     // #3588 TODO just make a clean ule and append it to the omt
     // #3588 TODO can do the rebalancing here and avoid a lot of work later
     FTNODE leafnode = lbuf->node;
     uint32_t idx = BLB_DATA(leafnode, 0)->omt_size();
-    DBT thekey = { .data = key, .size = (uint32_t) keylen }; 
+    DBT thekey = { .data = key, .size = (uint32_t) keylen };
     DBT theval = { .data = val, .size = (uint32_t) vallen };
+
     FT_MSG_S cmd;
     ft_msg_init(&cmd, FT_INSERT, ZERO_MSN,lbuf->xids,&thekey, &theval);
     uint64_t workdone=0;
@@ -3066,7 +3067,7 @@ static int read_some_pivots (FIDX pivots_file, int n_to_read, FTLOADER bl,
 }
 
 static void delete_pivots(DBT pivots[], int n) {
-    for (int i = 0; i < n; i++) 
+    for (int i = 0; i < n; i++)
         toku_free(pivots[i].data);
     toku_free(pivots);
 }
@@ -3091,7 +3092,7 @@ static int setup_nonleaf_block (int n_children,
     //printf("Nonleaf has children :"); for(int i=0; i<n_children; i++) printf(" %ld", subtrees->subtrees[i].block); printf("\n");
 
     int result = 0;
-    
+
     DBT *MALLOC_N(n_children, pivots);
     if (pivots == NULL) {
         result = ENOMEM;
@@ -3127,7 +3128,7 @@ static int setup_nonleaf_block (int n_children,
             result = r;
         } else {
             allocate_node(next_subtrees, *blocknum);
-            
+
             *pivots_p = pivots;
             *subtrees_info_p = subtrees_array;
         }
@@ -3161,7 +3162,7 @@ static void write_nonleaf_node (FTLOADER bl, struct dbout *out, int64_t blocknum
     }
     assert(node->bp);
     for (int i=0; i<n_children; i++) {
-        BP_BLOCKNUM(node,i)  = make_blocknum(subtree_info[i].block); 
+        BP_BLOCKNUM(node,i)  = make_blocknum(subtree_info[i].block);
         BP_STATE(node,i) = PT_AVAIL;
     }
 
@@ -3180,7 +3181,7 @@ static void write_nonleaf_node (FTLOADER bl, struct dbout *out, int64_t blocknum
             out->translation[blocknum_of_new_node].size = n_bytes;
             //fprintf(stderr, "Wrote internal node at %ld (%ld bytes)\n", out->current_off, n_bytes);
             //for (uint32_t i=0; i<n_bytes; i++) { unsigned char b = bytes[i]; printf("%d:%02x (%d) ('%c')\n", i, b, b, (b>=' ' && b<128) ? b : '*'); }
-            r = write_literal(out, bytes, n_bytes); 
+            r = write_literal(out, bytes, n_bytes);
             if (r)
                 result = r;
             else
@@ -3233,12 +3234,12 @@ static int write_nonleaves (FTLOADER bl, FIDX pivots_fidx, struct dbout *out, st
         }
 
         FIDX next_pivots_file;
-        { 
-            int r = ft_loader_open_temp_file (bl, &next_pivots_file); 
-            if (r != 0) { result = r; break; } 
+        {
+            int r = ft_loader_open_temp_file (bl, &next_pivots_file);
+            if (r != 0) { result = r; break; }
         }
 
-        struct subtrees_info next_sts; 
+        struct subtrees_info next_sts;
         subtrees_info_init(&next_sts);
         next_sts.n_subtrees = 0;
         next_sts.n_subtrees_limit = 1;
@@ -3290,7 +3291,7 @@ static int write_nonleaves (FTLOADER bl, FIDX pivots_fidx, struct dbout *out, st
             }
         }
         if (result == 0) {
-            // Write the last block. 
+            // Write the last block.
             DBT *pivots;
             int64_t blocknum_of_new_node;
             struct subtree_info *subtree_info;
@@ -3332,5 +3333,3 @@ static int write_nonleaves (FTLOADER bl, FIDX pivots_fidx, struct dbout *out, st
 void ft_loader_set_fractal_workers_count_from_c(FTLOADER bl) {
     ft_loader_set_fractal_workers_count (bl);
 }
-
-

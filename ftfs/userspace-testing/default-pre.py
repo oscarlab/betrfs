@@ -3,6 +3,7 @@
 import subprocess
 import sys
 import getopt
+import json
 
 def usage() :
     print "optional args:"
@@ -11,6 +12,9 @@ def usage() :
     print "\ts, --sfs: use sfs for unit tests"
 
 if __name__ == "__main__":
+    fd = open("test-config.json", 'r')
+    config_values = json.load(fd)
+    fd.close()
 
     test = ""
 
@@ -40,10 +44,20 @@ if __name__ == "__main__":
         print "ERROR!"
         exit(ret)
 
+    print "Check device type HDD or SSD"
+    blkdev = ''.join([i for i in config_values["southbound device"] if not i.isdigit()])
+    command="lsblk -d {}  -o name,rota  | tail -n 1".format(blkdev)
+    print command
+    is_rotational = subprocess.check_output(["lsblk", "-d", blkdev, "-o", "name,rota"])
+    is_rotational = is_rotational.replace("\n", " ").split()[3]
+    if not is_rotational in ["0", "1"]:
+       print "is_rotational: {} is invalid".format(is_rotational)
+       sys.exit(2)
+
     if use_sfs:
-       command = "insmod ftfs.ko sb_dev=/dev/sdb sb_fstype=sfs"
+       command = "insmod ftfs.ko sb_dev={} sb_fstype=sfs sb_is_rotational={}".format(config_values["southbound device"], is_rotational)
     else:
-       command = "insmod ftfs.ko sb_dev=/dev/sdb sb_fstype=ext4"
+       command = "insmod ftfs.ko sb_dev={} sb_fstype=ext4 sb_is_rotational={}".format(config_values["southbound device"], is_rotational)
 
     ret = subprocess.call(command, shell=True)
     if ret != 0 :

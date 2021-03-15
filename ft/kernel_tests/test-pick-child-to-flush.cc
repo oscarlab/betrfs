@@ -100,7 +100,6 @@ PATENT RIGHTS GRANT:
 #include "checkpoint.h"
 #include "helper.h"
 
-extern int ftfs_get_errno(void);
 static TOKUTXN const null_txn = 0;
 static DB * const null_db = 0;
 
@@ -170,7 +169,8 @@ static int doit (void) {
     assert(fname != NULL);
 
     toku_cachetable_create(&ct, 500*1024*1024, ZERO_LSN, NULL_LOGGER);
-    r = unlink(fname);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);
+    assert(r==0);
 
     r = toku_open_ft_handle(fname, 1, &t, NODESIZE, NODESIZE/2, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
     assert(r==0);
@@ -410,7 +410,7 @@ int test_pick_child_to_flush(void)
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
 
-    fname = TOKU_TEST_FILENAME;
+    fname = TOKU_TEST_FILENAME_DATA;
     int r = doit();
     sleep(1);
     toku_ft_layer_destroy();

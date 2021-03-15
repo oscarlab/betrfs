@@ -140,7 +140,7 @@ int toku_find_xid_by_xid (const TXNID &xid, const TXNID &xidfind);
 PAIR_ATTR rollback_memory_size(ROLLBACK_LOG_NODE log);
 
 // A high-level rollback log is made up of a chain of rollback log nodes.
-// Each rollback log node is represented (separately) in the cachetable by 
+// Each rollback log node is represented (separately) in the cachetable by
 // this structure. Each portion of the rollback log chain has a block num
 // and a hash to identify it.
 struct rollback_log_node {
@@ -151,13 +151,13 @@ struct rollback_log_node {
     int                dirty;
     // to which transaction does this node belong?
     TXNID_PAIR         txnid;
-    // sequentially, where in the rollback log chain is this node? 
+    // sequentially, where in the rollback log chain is this node?
     // the sequence is between 0 and totalnodes-1
     uint64_t           sequence;
     BLOCKNUM           blocknum; // on which block does this node live?
-    // which block number is the previous in the chain of rollback nodes 
+    // which block number is the previous in the chain of rollback nodes
     // that make up this rollback log?
-    BLOCKNUM           previous; 
+    BLOCKNUM           previous;
     struct roll_entry *oldest_logentry;
     struct roll_entry *newest_logentry;
     MEMARENA           rollentry_arena;
@@ -175,7 +175,7 @@ struct serialized_rollback_log_node {
 
 static inline void
 toku_static_serialized_rollback_log_destroy(SERIALIZED_ROLLBACK_LOG_NODE log) {
-    toku_free(log->data);
+    sb_free_sized(log->data, log->len * sizeof(*(log->data)));
 }
 
 static inline void

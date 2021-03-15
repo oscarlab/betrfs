@@ -281,6 +281,14 @@ random_acts(void * d) {
 
 uint64_t max_windows_cachesize = 256 << 20;
 
+static const char *dbname[5] = {
+    TOKU_TEST_DATA_DB_NAME,
+    TOKU_TEST_META_DB_NAME,
+    TOKU_TEST_ONE_DB_NAME,
+    TOKU_TEST_TWO_DB_NAME,
+    TOKU_TEST_THREE_DB_NAME
+};
+
 static void
 run_test (int iter, int die) {
 
@@ -288,9 +296,10 @@ run_test (int iter, int die) {
 
     int i;
 
-    if (iter == 0)
-	dir_create(TOKU_TEST_FILENAME);  // create directory if first time through
-    
+    if (iter == 0) {
+        int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+        assert(r==0);
+    }
     // Run with cachesize of 256 bytes per iteration
     // to force lots of disk I/O
     // (each iteration inserts about 4K rows/dictionary, 16 bytes/row, 4 dictionaries = 256K bytes inserted per iteration)
@@ -310,7 +319,7 @@ run_test (int iter, int die) {
         if ( iter != 0 )
             recovery_flags += DB_RECOVER;
     }
-    env_startup(TOKU_TEST_FILENAME, cachebytes, recovery_flags);
+    env_startup(TOKU_TEST_ENV_DIR_NAME, cachebytes, recovery_flags);
 
     // create array of dictionaries
     // for each dictionary verify previous iterations and perform new inserts
@@ -318,14 +327,12 @@ run_test (int iter, int die) {
     //DICTIONARY_S dictionaries[NUM_DICTIONARIES];
     DICTIONARY_S * dictionaries = (DICTIONARY_S *) toku_xmalloc(sizeof(DICTIONARY_S) * NUM_DICTIONARIES);
     for (i = 0; i < NUM_DICTIONARIES; i++) {
-	char name[32];
-	sprintf(name, "stress_%d", i);
-	init_dictionary(&dictionaries[i], flags, name);
+        assert(i < 5);
+	init_dictionary(&dictionaries[i], flags, dbname[i]);
 	db_startup(&dictionaries[i], NULL);
 	DB* db = dictionaries[i].db;
 	verify_and_insert(db, iter);
     }
-
     // take checkpoint (all dictionaries)
     snapshot(NULL, 1);    
 

@@ -93,8 +93,16 @@ PATENT RIGHTS GRANT:
 #include <db.h>
 #include <sys/stat.h>
 
-#define NFILES 1000
 #define NINSERTS_PER 1000
+
+#define NFILES 5
+static const char*dbname[5] = {
+   TOKU_TEST_DATA_DB_NAME,
+   TOKU_TEST_META_DB_NAME,
+   TOKU_TEST_ONE_DB_NAME,
+   TOKU_TEST_TWO_DB_NAME,
+   TOKU_TEST_THREE_DB_NAME
+};
 
 static DB_ENV *env;
 static DB *dbs[NFILES];
@@ -103,25 +111,22 @@ static DB_TXN *txn;
 static void
 test_setup (void) {
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r=toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);       CKERR(r);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);       CKERR(r);
 
     r=db_env_create(&env, 0); CKERR(r);
     env->set_errfile(env, stderr);
     multiply_locks_for_n_dbs(env, NFILES);
 
-    r=env->open(env, TOKU_TEST_FILENAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r=env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
 
     r=env->txn_begin(env, 0, &txn, 0); assert(r==0);
 
     int i;
 
     for (i=0; i<NFILES; i++) {
-	char fname[20];
-	snprintf(fname, sizeof(fname), "foo%d.db", i);
 	r=db_create(&dbs[i], env, 0); CKERR(r);
 	r = dbs[i]->set_pagesize(dbs[i], 4096);
-	r=dbs[i]->open(dbs[i], txn, fname, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+	r=dbs[i]->open(dbs[i], txn, dbname[i], 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     }
     r=txn->commit(txn, 0);    assert(r==0);
 }

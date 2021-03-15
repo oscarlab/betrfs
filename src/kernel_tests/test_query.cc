@@ -238,14 +238,12 @@ static void init_env(DB_ENV ** env, size_t ct_size)
         DB_INIT_LOCK | DB_INIT_LOG | DB_INIT_TXN | DB_PRIVATE;
 
     //printf("initializing environment\n");
-
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, 0755); { int chk_r = r; CKERR(chk_r); }
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0755); { int chk_r = r; CKERR(chk_r); }
 
     r = db_env_create(env, 0); { int chk_r = r; CKERR(chk_r); }
     assert(ct_size < 1024 * 1024 * 1024L);
     r = (*env)->set_cachesize(*env, 0, ct_size, 1); { int chk_r = r; CKERR(chk_r); }
-    r = (*env)->open(*env, TOKU_TEST_FILENAME, envflags, 0755); { int chk_r = r; CKERR(chk_r); }
+    r = (*env)->open(*env, TOKU_TEST_ENV_DIR_NAME, envflags, 0755); { int chk_r = r; CKERR(chk_r); }
 }
 
 static void init_db(DB_ENV * env, DB ** db)
@@ -261,7 +259,7 @@ static void init_db(DB_ENV * env, DB ** db)
     r = (*db)->set_readpagesize(*db, bn_size); { int chk_r = r; CKERR(chk_r); }
     r = (*db)->set_pagesize(*db, node_size); { int chk_r = r; CKERR(chk_r); }
     r = env->txn_begin(env, NULL, &txn, 0); { int chk_r = r; CKERR(chk_r); }
-    r = (*db)->open(*db, txn, "db", NULL, DB_BTREE, DB_CREATE, 0644); { int chk_r = r; CKERR(chk_r); }
+    r = (*db)->open(*db, txn, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_CREATE, 0644); { int chk_r = r; CKERR(chk_r); }
     r = txn->commit(txn, 0); { int chk_r = r; CKERR(chk_r); }
 }
 

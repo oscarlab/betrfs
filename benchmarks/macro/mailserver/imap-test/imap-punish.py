@@ -11,7 +11,7 @@ import types
 
 SERVER = "localhost"
 USER = "ftfstest"
-PASS = "ftfstest"
+PASS = "ftfstest@2009"
 
 def usage() :
     print sys.argv[0] + \
@@ -150,6 +150,7 @@ for i in range(opt_threads) :
 t2 = time.time()
 
 print "This experiment took %f seconds" % (t2 - t1)
+print "imap-publish, %f" % (t2 - t1)
 
 # Empty out the mailbox
 if 0:

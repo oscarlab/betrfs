@@ -154,8 +154,9 @@ static void cachetable_prefetch_checkpoint_test(int n, enum cachetable_dirty dir
     CACHETABLE_WRITE_CALLBACK wc = def_write_callback(NULL);
     wc.flush_callback = flush;
     toku_cachetable_create(&ct, test_limit, ZERO_LSN, NULL_LOGGER);
-    const char *fname1 = TOKU_TEST_FILENAME;
-    unlink(fname1);
+    const char *fname1 = TOKU_TEST_FILENAME_DATA;
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
+
     CACHEFILE f1;
     r = toku_cachetable_openf(&f1, ct, fname1, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO); assert(r == 0);
     create_dummy_functions(f1);

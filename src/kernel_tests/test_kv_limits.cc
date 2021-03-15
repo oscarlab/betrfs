@@ -106,15 +106,15 @@ static void test_key_size_limit (void) {
     if (verbose > 1) printf("%s\n", __FUNCTION__);
 
     DB_TXN * const null_txn = 0;
-    const char * const fname = "test.rand.insert.ft_handle";
+    const char * const fname = TOKU_TEST_DATA_DB_NAME;
     int r;
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r=toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
 
     DB_ENV *env;
     r = db_env_create(&env, 0); assert(r == 0);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL, 0); assert(r == 0);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL+DB_INIT_LOG+DB_INIT_TXN, 0); assert(r == 0);
 
     DB *db;
     r = db_create(&db, env, 0);
@@ -122,23 +122,27 @@ static void test_key_size_limit (void) {
     if (pagesize) {
         r = db->set_pagesize(db, pagesize); assert(r == 0);
     }
-    r = db->open(db, null_txn, fname, "main", DB_BTREE, DB_CREATE, 0666);
+    r = db->open(db, null_txn, fname, NULL, DB_BTREE, DB_CREATE, 0666);
     assert(r == 0);
 
     void *k = toku_malloc(0);
     void *v = toku_malloc(0);
     uint32_t lo = lorange, mi = 0, hi = hirange;
     uint32_t bigest = 0;
+    uint32_t ks = 0, old_ks = 0;
+    uint32_t vs = 0, old_vs = 0;
     while (lo <= hi) {
         mi = lo + (hi - lo) / 2;
         assert(lo <= mi && mi <= hi);
-        uint32_t ks = mi;
+        old_ks = ks;
+        ks = mi;
         if (verbose > 1) printf("trying %u %u %u ks=%u\n", lo, mi, hi, ks);
-        k = toku_realloc(k, ks); assert(k);
+        k = toku_realloc(k, old_ks, ks); assert(k);
         memset(k, 0, ks);
         memcpy(k, &ks, sizeof ks);
-        uint32_t vs = sizeof (uint32_t);
-        v = toku_realloc(v, vs); assert(v);
+        old_vs = vs;
+        vs = sizeof (uint32_t);
+        v = toku_realloc(v, old_vs, vs); assert(v);
         memset(v, 0, vs);
         memcpy(v, &vs, sizeof vs);
         DBT key, val;
@@ -164,15 +168,15 @@ static void test_data_size_limit (void) {
     if (verbose > 1) printf("%s\n", __FUNCTION__);
 
     DB_TXN * const null_txn = 0;
-    const char * const fname = "test.rand.insert.ft_handle";
+    const char * const fname = TOKU_TEST_DATA_DB_NAME;
     int r;
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r=toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
 
     DB_ENV *env;
     r = db_env_create(&env, 0); assert(r == 0);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL, 0); assert(r == 0);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL+DB_INIT_LOG+DB_INIT_TXN, 0); assert(r == 0);
 
     DB *db;
     r = db_create(&db, env, 0);
@@ -180,23 +184,27 @@ static void test_data_size_limit (void) {
     if (pagesize) {
         r = db->set_pagesize(db, pagesize); assert(r == 0);
     }
-    r = db->open(db, null_txn, fname, "main", DB_BTREE, DB_CREATE, 0666);
+    r = db->open(db, null_txn, fname, NULL, DB_BTREE, DB_CREATE, 0666);
     assert(r == 0);
 
     void *k = toku_malloc(0);
     void *v = toku_malloc(0);
     uint32_t lo = lorange, mi = 0, hi = hirange;
     uint32_t bigest = 0;
+    uint32_t ks = 0, old_ks = 0;
+    uint32_t vs = 0, old_vs = 0;
     while (lo <= hi) {
         mi = lo + (hi - lo) / 2;
         assert(lo <= mi && mi <= hi);
-        uint32_t ks = sizeof (uint32_t);
+        old_ks = ks;
+        ks = sizeof (uint32_t);
         if (verbose > 1) printf("trying %u %u %u ks=%u\n", lo, mi, hi, ks);
-        k = toku_realloc(k, ks); assert(k);
+        k = toku_realloc(k, old_ks, ks); assert(k);
         memset(k, 0, ks);
         memcpy(k, &ks, sizeof ks);
-        uint32_t vs = mi;
-        v = toku_realloc(v, vs); assert(v);
+        old_vs = vs;
+        vs = mi;
+        v = toku_realloc(v, old_vs, vs); assert(v);
         memset(v, 0, vs);
         memcpy(v, &vs, sizeof vs);
         DBT key, val;

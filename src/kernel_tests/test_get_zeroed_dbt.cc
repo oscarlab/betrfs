@@ -102,15 +102,15 @@ static void
 test_get (void) {
     DB_TXN * const null_txn = 0;
     DBT key,data;
-    char fname[] = "test.db";
+    char fname[] = TOKU_TEST_DATA_DB_NAME;
     int r;
     DB_ENV *env;
     r = db_env_create(&env, 0); assert(r == 0);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL, 0); assert(r == 0);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL+DB_INIT_LOG+DB_INIT_TXN, 0); assert(r == 0);
 
     DB *db;
     r = db_create (&db, env, 0);                                        assert(r == 0);
-    r = db->open(db, null_txn, fname, "main", DB_BTREE, DB_CREATE, 0666);    assert(r == 0);
+    r = db->open(db, null_txn, fname, NULL, DB_BTREE, DB_CREATE, 0666);    assert(r == 0);
     dbt_init(&key, "a", 2);
     r = db->put(db, null_txn, &key, dbt_init(&data, "b", 2), 0); assert(r==0);
     memset(&data, 0, sizeof(data));
@@ -123,8 +123,8 @@ test_get (void) {
 extern "C" int test_test_get_zeroed_dbt(void);
 int test_test_get_zeroed_dbt(void) {
     pre_setup();
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    int r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
 
     test_get();
     post_teardown();

@@ -21,4 +21,4 @@ sudo zpool create -f datastore $sb_dev
 
 # mount the file system
 sudo zfs create -o mountpoint=$mntpnt datastore/files
-chown -R betrfs:betrfs $mntpnt
+chown -R $user_owner $mntpnt
