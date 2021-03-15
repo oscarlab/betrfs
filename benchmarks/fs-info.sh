@@ -1,16 +1,13 @@
 #On Beakers /dev/sda is the fast connector and has the SSD
 #  and the root fs is installed on the HDD on /dev/sdb
 
-#sb_dev=/dev/sdb3
 sb_dev=/dev/sdb
 dummy_file=dummy.dev
 dummy_dev=/dev/loop0
 mntpnt=/mnt/benchmark
-defrepo=betrfs-private
-REPO=${REPO:-betrfs-private}
+REPO=${REPO:-betrfs}
 # This should just be set to whatever your user is
 user_owner=betrfs:betrfs
-#repo=master/betrfs-private
 clone_repo=linux
 circle_size=128
 CUR_MNTPNT=${CUR_MNTPNT:-/home/betrfs}

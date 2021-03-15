@@ -7,5 +7,5 @@ touch console.out
 sudo chown libvirt-qemu console.out
 
 vagrant up > /dev/null
-vagrant ssh -c 'cd /oscar/betrfs/ftfs/userspace-testing/; awk '\''NR % 5 == 1'\'' /oscar/betrfs/ftfs/userspace-testing/all.tests > test1.tests; sudo ./run-tests.py test1.tests'
+vagrant ssh -c 'cd /oscar/betrfs/ftfs/userspace-testing/; awk '\''NR % 5 == 1'\'' /oscar/betrfs/ftfs/userspace-testing/all.tests > test1.tests; sudo ./run-tests.py test1.tests --sfs'
 exit $?
