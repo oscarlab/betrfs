@@ -4,33 +4,33 @@ obj-m += ftfs.o
 
 ftfs-objs := \
 	ftfs_module.o \
-	toku_linkage.o \
-	ftfs_partitioned_counter.o \
-	ftfs_malloc.o \
-	ftfs_random.o \
-	ftfs_error.o \
-	ftfs_rwsem.o \
+	sb_linkage.o \
+	sb_partitioned_counter.o \
+	sb_malloc.o \
+	sb_random.o \
+	sb_error.o \
+	sb_rwsem.o \
 	ftfs_frwlock.o \
-	ftfs_pthread.o \
-	ftfs_files.o \
+	sb_pthread.o \
+	sb_files.o \
 	ftfs_southbound.o \
-	ftfs_dir.o \
-	ftfs_stat.o \
-	ftfs_assert.o \
+	sb_dir.o \
+	sb_stat.o \
+	sb_assert.o \
 	toku_memory.o \
-	ftfs_stdio.o \
-	toku_misc.o \
-	strerror.o \
-	ftfs_super.o \
-	ftfs_bstore.o \
-	toku_engine_status.o \
-	toku_checkpoint.o \
-	toku_flusher.o \
-	toku_dump_node.o \
-	toku_memleak_detect.o \
-	toku_zlib.o \
+	sb_stdio.o \
+	sb_misc.o \
+	sb_strerror.o \
+	nb_super.o \
+	nb_bstore.o \
+	nb_proc_toku_engine_status.o \
+	nb_proc_toku_checkpoint.o \
+	nb_proc_toku_flusher.o \
+	nb_proc_toku_dump_node.o \
+	nb_proc_toku_memleak_detect.o \
+	sb_zlib.o \
 	libftindex.o \
-	ftfs_toku_lock.o
+	sb_flock.o
 
 #KBUILD_CFLAGS += -DFTFS_CIRCLE
 KBUILD_CFLAGS += -DFTFS_RANGE_RENAME
