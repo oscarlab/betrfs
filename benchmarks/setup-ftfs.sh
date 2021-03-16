@@ -11,8 +11,6 @@ if [[ ! -d "$DIR" ]]; then DIR="$PWD"; fi
 . "$DIR/.rootcheck"
 . "$DIR/.mountcheck"
 
-#set -x
-
 echo "Setup Circle Size: $circle_size"
 sh -c 'echo "7" > /proc/sys/kernel/printk'
 
@@ -21,10 +19,13 @@ $DIR/mkfs.ftfs $sb_dev
 
 sudo sh -c "echo 7 > /proc/sys/kernel/printk"
 
+touch $DIR/$dummy_file
+losetup $dummy_dev $DIR/$dummy_file
+
 # mount the file system
 mkdir -p $mntpnt
 modprobe zlib
 echo "Insert module: $module"
 insmod $module
-mount -t ftfs -o max=$circle_size,sb_fstype=ext4 $sb_dev $mntpnt
+mount -t ftfs -o max=$circle_size,sb_fstype=ext4,d_dev=$dummy_dev $sb_dev $mntpnt
 chown -R betrfs:betrfs $mntpnt

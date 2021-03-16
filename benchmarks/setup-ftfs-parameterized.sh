@@ -20,6 +20,6 @@ $DIR/mkfs.ftfs $sb_dev
 mkdir -p $mntpnt
 modprobe zlib
 insmod $module
-mount -t ftfs -o max=$1,sb_fstype=ext4 $sb_dev $mntpnt
+mount -t ftfs -o max=$1,sb_fstype=ext4,d_dev=$dummy_dev $sb_dev $mntpnt
 #$circle_size
 chown -R betrfs:betrfs $mntpnt

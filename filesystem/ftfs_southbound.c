@@ -380,6 +380,7 @@ int __ftfs_private_umount(void)
 {
 	if (may_umount_tree(ftfs_vfs)) {
 		kern_unmount(ftfs_vfs);
+		ftfs_vfs = NULL;
 		return 0;
 	} else {
 		int cnt;

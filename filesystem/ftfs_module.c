@@ -97,6 +97,9 @@ static int __init ftfs_module_init(void)
 		return -EINVAL;
 	}
 
+	// Try manually init-ing this field
+	ftfs_vfs = NULL;
+
 	ret = resolve_ftfs_symbols();
 	if (ret) {
 		ftfs_error(__func__, "could not resolve all symbols!");

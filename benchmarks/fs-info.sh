@@ -2,6 +2,8 @@
 #  and the root fs is installed on the HDD on /dev/sdb
 
 sb_dev=/dev/sdb
+dummy_file=dummy.dev
+dummy_dev=/dev/loop0
 mntpnt=/mnt/benchmark
 REPO=${REPO:-betrfs}
 clone_repo=linux

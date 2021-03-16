@@ -13,9 +13,12 @@ set -x
 touch $DIR/$dummy_file
 losetup $dummy_dev $DIR/$dummy_file
 
+touch $DIR/$dummy_file
+losetup $dummy_dev $DIR/$dummy_file
+
 # mount the file system
 mkdir -p $mntpnt
 modprobe zlib
 insmod $module
-mount -t ftfs -o sb_fstype=ext4 $sb_dev $mntpnt
+mount -t ftfs -o sb_fstype=ext4,d_dev=$dummy_dev $sb_dev $mntpnt
 chown -R betrfs:betrfs $mntpnt

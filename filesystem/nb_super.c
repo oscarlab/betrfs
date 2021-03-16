@@ -2148,6 +2148,52 @@ no_delete:
 	clear_inode(inode);
 }
 
+int ftfs_cache_init(void)
+{
+	int ret;
+
+	ftfs_inode_cachep =
+		kmem_cache_create("ftfs_i",
+		                  sizeof(struct ftfs_inode), 0,
+		                  SLAB_RECLAIM_ACCOUNT | SLAB_MEM_SPREAD,
+		                  ftfs_i_init_once);
+	if (!ftfs_inode_cachep) {
+		printk(KERN_ERR "FTFS ERROR: Failed to initialize inode cache.\n");
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	ftfs_writepages_cachep =
+		kmem_cache_create("ftfs_wp",
+		                  sizeof(struct ftfs_wp_node), 0,
+		                  SLAB_RECLAIM_ACCOUNT | SLAB_MEM_SPREAD,
+		                  NULL);
+	if (!ftfs_writepages_cachep) {
+		printk(KERN_ERR "FTFS ERROR: Failed to initialize write page vec cache.\n");
+		ret = -ENOMEM;
+		goto out_free_inode_cachep;
+	}
+
+	return 0;
+
+out_free_inode_cachep:
+	kmem_cache_destroy(ftfs_inode_cachep);
+out:
+	return ret;
+}
+
+void ftfs_cache_destroy(void)
+{
+	if (ftfs_writepages_cachep)
+		kmem_cache_destroy(ftfs_writepages_cachep);
+
+	if (ftfs_inode_cachep)
+		kmem_cache_destroy(ftfs_inode_cachep);
+
+	ftfs_writepages_cachep = NULL;
+	ftfs_inode_cachep = NULL;
+}
+
 // called when VFS wishes to free sb (unmount), sync southbound here
 static void ftfs_put_super(struct super_block *sb)
 {
@@ -2166,6 +2212,7 @@ static void ftfs_put_super(struct super_block *sb)
 	/* Begin old module exit code */
 	destroy_ft_index();
 	destroy_ftfs_vmalloc_cache();
+	ftfs_cache_destroy();
 
 	put_ftfs_southbound();
 
@@ -2183,7 +2230,11 @@ static int ftfs_sync_fs(struct super_block *sb, int wait)
 {
 	struct ftfs_sb_info *sbi = sb->s_fs_info;
 
-	return ftfs_bstore_flush_log(sbi->db_env);
+	if (sbi) {
+		return ftfs_bstore_flush_log(sbi->db_env);
+	} else {
+		return 0;
+	}
 }
 
 static int ftfs_dir_release(struct inode *inode, struct file *filp)
@@ -2337,6 +2388,7 @@ enum {
 	Opt_circle_size,
 	Opt_sb_fstype,
 	Opt_sb_dev,
+	Opt_d_dev,
 	dummy_null
 };
 
@@ -2344,6 +2396,7 @@ static const match_table_t tokens = {
 	{Opt_circle_size, "max=%u"},
 	{Opt_sb_fstype, "sb_fstype=%s"},
 	{Opt_sb_dev, "sb_dev=%s"},
+	{Opt_d_dev, "d_dev=%s"},
 	{dummy_null, NULL}
 };
 
@@ -2401,6 +2454,9 @@ static int parse_options(char *options, struct ftfs_sb_info *sbi, char *sb_fstyp
 		case Opt_sb_dev:
 			*sb_dev = args[0].from;
 			break;
+		case Opt_d_dev:
+			// This is a real option but we don't need to use it here
+			break;
 		default:
 #ifdef FTFS_CIRCLE
 			goto out;
@@ -2417,6 +2473,43 @@ out:
 #endif
 	return 0;
 }
+
+static char *parse_d_dev(char *options)
+{
+	char *p;
+	char *original;
+	char *d_dev = NULL;
+	substring_t args[MAX_OPT_ARGS];
+
+	if (!options) {
+		ftfs_error(__func__, "No dummy block device specified at mount time");
+		return NULL;
+	}
+
+	original = options;
+
+	while ((p = strsep(&options, ",")) != NULL) {
+		int token;
+
+		if (!*p)
+			continue;
+
+		token = match_token(p, tokens, args);
+		if (token == Opt_d_dev) {
+			// This is silly and unsafe, maybe we should enforce a maximum length?
+			d_dev = kmalloc(strlen(args[0].from) + 1, GFP_KERNEL);
+			memcpy(d_dev, args[0].from, strlen(args[0].from) + 1);
+		}
+
+		/* strsep is destructive and we would like to parse this
+		string again in ftfs_fill_super so we repair the string */
+		if (options != original && options != NULL)
+			options[-1] = ',';
+	}
+	options = original;
+	return d_dev;
+}
+
 
 static int init_southbound_fs(const char *sb_dev, char * sb_fstype) {
 	int ret;
@@ -2519,12 +2612,16 @@ static int ftfs_fill_super(struct super_block *sb, void *data, int silent)
 	sb_dev = NULL;
 	memset(sb_fstype, 0, MAX_FS_LEN);
 	ret = parse_options(data, sbi, sb_fstype, &sb_dev);
-	if (ret)
+	if (ret) {
+		printk(KERN_ERR "ftfs_fill_super: parse_options failed\n");
 		goto err;
+	}
 
 	ret = init_southbound_fs(sb_dev, sb_fstype);
-	if (ret)
+	if (ret) {
+		printk(KERN_ERR "ftfs_fill_super: init_southboud_fs failed\n");
 		goto err;
+	}
 	ret = -ENOMEM;
 
 	sbi->s_ftfs_info = alloc_percpu(struct ftfs_info);
@@ -2534,15 +2631,16 @@ static int ftfs_fill_super(struct super_block *sb, void *data, int silent)
 
 	sb->s_fs_info = sbi;
 
-	sb->s_blocksize = FTFS_BSTORE_BLOCKSIZE;
-	sb->s_blocksize_bits = blksize_bits(FTFS_BSTORE_BLOCKSIZE);
+	sb_set_blocksize(sb, FTFS_BSTORE_BLOCKSIZE);
 
 	sb->s_op = &ftfs_super_ops;
 	sb->s_maxbytes = MAX_LFS_FILESIZE;
 
 	ret = ftfs_bstore_env_open(sbi);
-	if (ret)
+	if (ret) {
+		printk(KERN_ERR "ftfs_fill_super: ftfs_bstore_env_open failed\n");
 		goto err;
+	}
 
 	TXN_GOTO_LABEL(retry);
 	ftfs_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
@@ -2556,11 +2654,14 @@ static int ftfs_fill_super(struct super_block *sb, void *data, int silent)
 			                           &root_dbt,
 			                           txn, &meta);
 		}
-		if (ret)
+		if (ret) {
+			printk(KERN_ERR "ftfs_fill_super: db op error\n");
 			goto db_op_err;
+		}
 	}
 	ret = ftfs_bstore_get_ino(sbi->meta_db, txn, &ino);
 	if (ret) {
+		printk(KERN_ERR "ftfs_fill_super: ftfs_bstore_get_ino failed\n");
 db_op_err:
 		DBOP_JUMP_ON_CONFLICT(ret, retry);
 		ftfs_bstore_txn_abort(txn);
@@ -2580,12 +2681,14 @@ db_op_err:
 	root = ftfs_setup_inode(sb, &root_dbt, &meta);
 	if (IS_ERR(root)) {
 		ret = PTR_ERR(root);
+		printk(KERN_ERR "ftfs_fill_super: ftfs_setup_inodo failed\n");
 		goto err_close;
 	}
 
 	sb->s_root = d_make_root(root);
 	if (!sb->s_root) {
 		ret = -EINVAL;
+		printk(KERN_ERR "ftfs_fill_super: d_make_root failed\n");
 		goto err_close;
 	}
 
@@ -2599,49 +2702,71 @@ err:
 			free_percpu(sbi->s_ftfs_info);
 		kfree(sbi);
 	}
+	sb->s_fs_info = NULL;
 	return ret;
 }
 
 /*
- * mount ftfs, call kernel util mount_nodev
+ * mount ftfs, call kernel util mount_bdev
  * actual work of ftfs is done in ftfs_fill_super
  */
 static struct dentry *ftfs_mount(struct file_system_type *fs_type, int flags,
                                  const char *sb_dev, void *data)
 {
 	char *all_opts;
+	const char *dummy;
 	size_t size;
 	struct dentry *ret;
+	int rv;
 
 	if (ftfs_vfs != NULL) {
-		ftfs_error(__func__, "ftfs is about to crash! "
-					"This is most likely because you attempted to unmount and then "
-					"remount a ftfs filesystem without also removing and then "
-					"re-inserting the ftfs module. We are sorry for the inconvenience.");
+		/* This is the case where we get a second mount attempt without
+		 * an rmmod first. */
+		ftfs_cache_destroy();
+		if (rv = ftfs_private_umount()) {
+			ftfs_error(__func__, "unable to umount ftfs southbound");
+			ret = ERR_PTR(rv);
+			goto out;
+		}
+
+		ftfs_vfs = NULL;
+		ftfs_files = NULL;
+		ftfs_cred = NULL;
 	}
+
+	ftfs_cache_init();
 
 	// No options passed
 	if (data == NULL) {
-		size = 7 + strlen(sb_dev) + 1;
-		all_opts = kmalloc(size, GFP_KERNEL);
-		snprintf(all_opts, size, "sb_dev=%s", sb_dev);
-	} else {
-		size = strlen(data) + 8 + strlen(sb_dev) + 1;
-		all_opts = kmalloc(size, GFP_KERNEL);
-		snprintf(all_opts, size, "%s,sb_dev=%s", (char *)data, sb_dev);
+		ftfs_error(__func__, "You must pass a dummy block device to ftfs at mount time");
+		ret = ERR_PTR(-EINVAL);
+		goto out;
 	}
 
-	ret = mount_nodev(fs_type, flags, all_opts, ftfs_fill_super);
+	size = strlen(data) + 8 + strlen(sb_dev) + 1;
+	all_opts = kmalloc(size, GFP_KERNEL);
+	snprintf(all_opts, size, "%s,sb_dev=%s", (char *)data, sb_dev);
 
+	dummy = parse_d_dev(data);
+	if (!dummy) {
+		ret = ERR_PTR(-EINVAL);
+		goto out_free;
+	}
+
+	ret = mount_bdev(fs_type, flags, dummy, all_opts, ftfs_fill_super);
+
+	kfree(dummy);
+ out_free:
 	kfree(all_opts);
 
+ out:
 	return ret;
 }
 
 static void ftfs_kill_sb(struct super_block *sb)
 {
 	sync_filesystem(sb);
-	generic_shutdown_super(sb);
+	kill_block_super(sb);
 }
 
 static struct file_system_type ftfs_fs_type = {
@@ -2656,50 +2781,15 @@ int init_ftfs_fs(void)
 {
 	int ret;
 
-	ftfs_inode_cachep =
-		kmem_cache_create("ftfs_i",
-		                  sizeof(struct ftfs_inode), 0,
-		                  SLAB_RECLAIM_ACCOUNT | SLAB_MEM_SPREAD,
-		                  ftfs_i_init_once);
-	if (!ftfs_inode_cachep) {
-		printk(KERN_ERR "FTFS ERROR: Failed to initialize inode cache.\n");
-		ret = -ENOMEM;
-		goto out;
-	}
-
-	ftfs_writepages_cachep =
-		kmem_cache_create("ftfs_wp",
-		                  sizeof(struct ftfs_wp_node), 0,
-		                  SLAB_RECLAIM_ACCOUNT | SLAB_MEM_SPREAD,
-		                  NULL);
-	if (!ftfs_writepages_cachep) {
-		printk(KERN_ERR "FTFS ERROR: Failed to initialize write page vec cache.\n");
-		ret = -ENOMEM;
-		goto out_free_inode_cachep;
-	}
-
 	ret = register_filesystem(&ftfs_fs_type);
 	if (ret) {
 		printk(KERN_ERR "FTFS ERROR: Failed to register filesystem\n");
-		goto out_free_writepages_cachep;
 	}
 
-
-	return 0;
-
-out_free_writepages_cachep:
-	kmem_cache_destroy(ftfs_writepages_cachep);
-out_free_inode_cachep:
-	kmem_cache_destroy(ftfs_inode_cachep);
-out:
 	return ret;
 }
 
 void exit_ftfs_fs(void)
 {
 	unregister_filesystem(&ftfs_fs_type);
-
-	kmem_cache_destroy(ftfs_writepages_cachep);
-
-	kmem_cache_destroy(ftfs_inode_cachep);
 }
