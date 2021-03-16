@@ -15,13 +15,11 @@ echo "Setup Circle Size: $1"
 
 # prep file system
 $DIR/mkfs.ftfs $sb_dev
-touch $DIR/$dummy_file
-losetup $dummy_dev $DIR/$dummy_file 
 
 # mount the file system
 mkdir -p $mntpnt
 modprobe zlib
-insmod $module sb_dev=$sb_dev sb_fstype=ext4
-mount -t ftfs $dummy_dev $mntpnt -o max=$1
+insmod $module
+mount -t ftfs -o max=$1,sb_fstype=ext4 $sb_dev $mntpnt
 #$circle_size
 chown -R betrfs:betrfs $mntpnt

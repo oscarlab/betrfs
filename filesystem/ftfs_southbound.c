@@ -337,6 +337,11 @@ int ftfs_private_mount(const char *dev_name, const char *fs_type, void *data)
 	}
 
 	type = get_fs_type(fs_type);
+	// We didn't find the type we wanted
+	if (!type) {
+		printk(KERN_ERR "Invalid file system type [%s]\n", fs_type);
+		return -EINVAL;
+	}
 	vfs_mount = vfs_kern_mount(type, FTFS_MS_FLAGS, dev_name, data);
 	if (!IS_ERR(vfs_mount) && (type->fs_flags & FS_HAS_SUBTYPE) &&
             !vfs_mount->mnt_sb->s_subtype)

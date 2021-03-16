@@ -18,8 +18,6 @@ sh -c 'echo "7" > /proc/sys/kernel/printk'
 
 # prep file system
 $DIR/mkfs.ftfs $sb_dev
-touch $DIR/$dummy_file
-losetup $dummy_dev $DIR/$dummy_file
 
 sudo sh -c "echo 7 > /proc/sys/kernel/printk"
 
@@ -27,6 +25,6 @@ sudo sh -c "echo 7 > /proc/sys/kernel/printk"
 mkdir -p $mntpnt
 modprobe zlib
 echo "Insert module: $module"
-insmod $module sb_dev=$sb_dev sb_fstype=ext4
-mount -t ftfs $dummy_dev $mntpnt -o max=$circle_size
+insmod $module
+mount -t ftfs -o max=$circle_size,sb_fstype=ext4 $sb_dev $mntpnt
 chown -R betrfs:betrfs $mntpnt

@@ -12,11 +12,29 @@
 #include <linux/kallsyms.h>
 #include <linux/sched.h>
 
+#include <linux/blkdev.h>
+
+#include "ftfs_malloc.h"
+#include "ftfs.h"
+#include "toku_engine_status.h"
+#include "toku_checkpoint.h"
+#include "toku_flusher.h"
+#include "toku_memleak_detect.h"
+#include "toku_dump_node.h"
+
 #include "ftfs_northbound.h"
 
 static char root_meta_key[] = "m\x00\x00\x00\x00\x00\x00\x00\x00";
 
 static struct kmem_cache *ftfs_inode_cachep;
+
+/* For mounting/umounting purposes */
+extern int toku_ydb_init(void);
+long txn_count = 0;
+long seq_count = 0;
+long non_seq_count = 0;
+extern void printf_count_blindwrite(void);
+
 
 /*
  * ftfs_i_init_once is passed to kmem_cache_create
@@ -2144,6 +2162,21 @@ static void ftfs_put_super(struct super_block *sb)
 
 	free_percpu(sbi->s_ftfs_info);
 	kfree(sbi);
+
+	/* Begin old module exit code */
+	destroy_ft_index();
+	destroy_ftfs_vmalloc_cache();
+
+	put_ftfs_southbound();
+
+	TOKU_MEMLEAK_EXIT;
+	toku_engine_status_exit();
+	toku_checkpoint_exit();
+	toku_flusher_exit();
+	toku_dump_node_exit();
+	printf_count_blindwrite();
+
+	ftfs_error(__func__, "seq count = %ld, non seq count = %ld, txn count = %ld\n", seq_count, non_seq_count, txn_count);
 }
 
 static int ftfs_sync_fs(struct super_block *sb, int wait)
@@ -2300,25 +2333,41 @@ ftfs_setup_inode(struct super_block *sb, DBT *meta_dbt,
 	return i;
 }
 
-#ifdef FTFS_CIRCLE
 enum {
-	Opt_circle_size
+	Opt_circle_size,
+	Opt_sb_fstype,
+	Opt_sb_dev,
+	dummy_null
 };
 
 static const match_table_t tokens = {
-	{Opt_circle_size, "max=%u"}
+	{Opt_circle_size, "max=%u"},
+	{Opt_sb_fstype, "sb_fstype=%s"},
+	{Opt_sb_dev, "sb_dev=%s"},
+	{dummy_null, NULL}
 };
 
-static void parse_options(char *options, struct ftfs_sb_info *sbi)
+#define MAX_FS_LEN 20
+
+static int parse_options(char *options, struct ftfs_sb_info *sbi, char *sb_fstype, char **sb_dev)
 {
 	char *p;
 	substring_t args[MAX_OPT_ARGS];
+	int len;
+#ifdef FTFS_CIRLCE
 	int option;
 
 	sbi->max_circle_size = FTFS_DEFAULT_CIRCLE;
+#endif
 
-	if (!options)
+	if (!options) {
+#ifdef FTFS_CIRCLE
 		goto out;
+#else
+		ftfs_error(__func__, "No options passed at mount time");
+		return -EINVAL;
+#endif
+	}
 
 	while ((p = strsep(&options, ",")) != NULL) {
 		int token;
@@ -2329,20 +2378,120 @@ static void parse_options(char *options, struct ftfs_sb_info *sbi)
 		token = match_token(p, tokens, args);
 		switch (token) {
 		case Opt_circle_size:
-			if (match_int(&args[0], &option))
-				return;
+			// Go ahead and accept the circle size argument (easier scripting)
+			// But don't do anything
+#ifdef FTFS_CIRCLE
+			int r = match_int(&args[0], &option);
+			if (r)
+				return r;
 			sbi->max_circle_size = option;
+#else
+			printk(KERN_WARNING "FTFS: Zones are disabled in this build, but zone size option passed to mount.  This option will be ignored\n");
+#endif
+			break;
+
+		case Opt_sb_fstype:
+			len = strnlen(args[0].from, MAX_FS_LEN);
+			if (MAX_FS_LEN > len) {
+				memcpy(sb_fstype, args[0].from, len);
+			} else {
+				ftfs_error(__func__, "Name of southbound fs is too long");
+				return -EINVAL;
+			}
+		case Opt_sb_dev:
+			*sb_dev = args[0].from;
 			break;
 		default:
+#ifdef FTFS_CIRCLE
 			goto out;
+#else
+			ftfs_error(__func__, "Unrecognized option passed at mount time");
+#endif
 		}
 	}
+#ifdef FTFS_CIRCLE
 out:
 	sbi->max_file_size = (sbi->max_circle_size) ?
 	                     ((sbi->max_circle_size - 1) << FTFS_BSTORE_BLOCKSIZE_BITS) + 1 :
 	                     0;
+#endif
+	return 0;
 }
-#endif /* FTFS_CIRCLE */
+
+static int init_southbound_fs(const char *sb_dev, char * sb_fstype) {
+	int ret;
+	void *data = NULL;
+
+	if (!sb_dev || strlen(sb_dev) == 0) {
+		ftfs_error(__func__, "no mount device for ftfs_southbound!");
+		return -EINVAL;
+	}
+
+	if (!sb_fstype || strnlen(sb_fstype, MAX_FS_LEN) == 0) {
+		printk(KERN_INFO "No fstype specified, using default (ext4)");
+		sb_fstype = "ext4";
+	}
+
+	/*
+	 * Now we create a disconnected mount for our southbound file
+	 * system. It will not be inserted into any mount trees, but
+	 * we pin a global struct vfsmount that we use for all path
+	 * resolution.
+	 */
+
+	ret = ftfs_private_mount(sb_dev, sb_fstype, data);
+	if (ret) {
+		ftfs_error(__func__, "can't mount southbound");
+		return ret;
+	}
+
+	BUG_ON(ftfs_fs);
+	BUG_ON(ftfs_files);
+
+	/*
+	 * The southbound "file system context" needs to be created to
+	 * force all fractal tree worker threads to "see" our file
+	 * system as if they were running in user space.
+	 */
+
+	ret = init_ftfs_southbound();
+	if (ret) {
+		ftfs_error(__func__, "can't init southbound_fs");
+		return ret;
+	}
+
+	ret = toku_engine_status_init();
+	if (ret) {
+		ftfs_error(__func__, "can't init toku engine proc");
+		return ret;
+	}
+
+	ret = toku_checkpoint_init();
+	if (ret) {
+		ftfs_error(__func__, "can't init toku checkpoint proc");
+		return ret;
+	}
+
+	ret = toku_flusher_init();
+	if (ret) {
+		ftfs_error(__func__, "can't init toku flusher proc");
+		return ret;
+	}
+
+	ret = toku_dump_node_init();
+	if (ret) {
+		ftfs_error(__func__, "can't init toku dump node proc");
+		return ret;
+	}
+
+	ret = init_ftfs_vmalloc_cache();
+	if (ret) {
+		ftfs_error(__func__, "can't init vmalloc caches");
+		return ret;
+	}
+
+	return init_ft_index();
+}
 
 /*
  * fill in the superblock
@@ -2357,6 +2506,8 @@ static int ftfs_fill_super(struct super_block *sb, void *data, int silent)
 	struct ftfs_sb_info *sbi;
 	DBT root_dbt;
 	DB_TXN *txn;
+	char *sb_dev;
+	char sb_fstype[MAX_FS_LEN];
 
 	// FTFS specific info
 	ret = -ENOMEM;
@@ -2364,15 +2515,28 @@ static int ftfs_fill_super(struct super_block *sb, void *data, int silent)
 	if (!sbi)
 		goto err;
 
-#ifdef FTFS_CIRCLE
-	parse_options(data, sbi);
-#endif
+	// Setup southbound
+	sb_dev = NULL;
+	memset(sb_fstype, 0, MAX_FS_LEN);
+	ret = parse_options(data, sbi, sb_fstype, &sb_dev);
+	if (ret)
+		goto err;
+
+	ret = init_southbound_fs(sb_dev, sb_fstype);
+	if (ret)
+		goto err;
+	ret = -ENOMEM;
+
 	sbi->s_ftfs_info = alloc_percpu(struct ftfs_info);
+
 	if (!sbi->s_ftfs_info)
 		goto err;
 
 	sb->s_fs_info = sbi;
-	sb_set_blocksize(sb, FTFS_BSTORE_BLOCKSIZE);
+
+	sb->s_blocksize = FTFS_BSTORE_BLOCKSIZE;
+	sb->s_blocksize_bits = blksize_bits(FTFS_BSTORE_BLOCKSIZE);
+
 	sb->s_op = &ftfs_super_ops;
 	sb->s_maxbytes = MAX_LFS_FILESIZE;
 
@@ -2439,19 +2603,45 @@ err:
 }
 
 /*
- * mount ftfs, call kernel util mount_bdev
+ * mount ftfs, call kernel util mount_nodev
  * actual work of ftfs is done in ftfs_fill_super
  */
 static struct dentry *ftfs_mount(struct file_system_type *fs_type, int flags,
-                                 const char *dev_name, void *data)
+                                 const char *sb_dev, void *data)
 {
-	return mount_bdev(fs_type, flags, dev_name, data, ftfs_fill_super);
+	char *all_opts;
+	size_t size;
+	struct dentry *ret;
+
+	if (ftfs_vfs != NULL) {
+		ftfs_error(__func__, "ftfs is about to crash! "
+					"This is most likely because you attempted to unmount and then "
+					"remount a ftfs filesystem without also removing and then "
+					"re-inserting the ftfs module. We are sorry for the inconvenience.");
+	}
+
+	// No options passed
+	if (data == NULL) {
+		size = 7 + strlen(sb_dev) + 1;
+		all_opts = kmalloc(size, GFP_KERNEL);
+		snprintf(all_opts, size, "sb_dev=%s", sb_dev);
+	} else {
+		size = strlen(data) + 8 + strlen(sb_dev) + 1;
+		all_opts = kmalloc(size, GFP_KERNEL);
+		snprintf(all_opts, size, "%s,sb_dev=%s", (char *)data, sb_dev);
+	}
+
+	ret = mount_nodev(fs_type, flags, all_opts, ftfs_fill_super);
+
+	kfree(all_opts);
+
+	return ret;
 }
 
 static void ftfs_kill_sb(struct super_block *sb)
 {
 	sync_filesystem(sb);
-	kill_block_super(sb);
+	generic_shutdown_super(sb);
 }
 
 static struct file_system_type ftfs_fs_type = {
@@ -2493,6 +2683,7 @@ int init_ftfs_fs(void)
 		printk(KERN_ERR "FTFS ERROR: Failed to register filesystem\n");
 		goto out_free_writepages_cachep;
 	}
+
 
 	return 0;
 

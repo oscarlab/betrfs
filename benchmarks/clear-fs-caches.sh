@@ -35,8 +35,8 @@ then
     echo "removing $module and mounting/unmounting ftfs file system"
     umount $mntpnt
     rmmod $module
-    insmod $module sb_dev=$sb_dev sb_fstype=ext4
-    mount -t ftfs $dummy_dev $mntpnt -o max=$circle_size
+    insmod $module
+    mount -t ftfs -o sb_fstype=ext4,max=$circle_size $sb_dev $mntpnt
     echo "mounted: $fstype."
     exit 0
 else
