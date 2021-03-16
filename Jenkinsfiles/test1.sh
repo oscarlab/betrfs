@@ -1,5 +1,6 @@
 #!/bin/bash
 
+set -eux
 mkdir test1
 cd test1
 cp ../Vagrantfile.testing Vagrantfile
