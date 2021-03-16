@@ -9,29 +9,29 @@ ccflags-y += -fno-builtin
 
 ftfs-objs := \
 	ftfs_module.o \
-	toku_linkage.o \
-	ftfs_partitioned_counter.o \
-	ftfs_malloc.o \
-	ftfs_random.o \
-	ftfs_error.o \
-	ftfs_rwsem.o \
+	sb_linkage.o \
+	sb_partitioned_counter.o \
+	sb_malloc.o \
+	sb_random.o \
+	sb_error.o \
+	sb_rwsem.o \
 	ftfs_frwlock.o \
-	ftfs_pthread.o \
-	ftfs_files.o \
+	sb_pthread.o \
+	sb_files.o \
 	ftfs_southbound.o \
-	ftfs_dir.o \
-	ftfs_stat.o \
-	ftfs_assert.o \
+	sb_dir.o \
+	sb_stat.o \
+	sb_assert.o \
 	toku_memory.o \
-	ftfs_stdio.o \
+	sb_stdio.o \
 	toku_run_test.o \
 	toku_test_mempool.o \
 	toku_test_southbound.o \
-	toku_misc.o \
-	strerror.o \
-	toku_zlib.o \
+	sb_misc.o \
+	sb_strerror.o \
+	sb_zlib.o \
 	libftindex.o \
-	ftfs_toku_lock.o
+	sb_flock.o
 
 
 KBUILD_CFLAGS += -DSOUTHBOUND_TESTING
@@ -49,8 +49,8 @@ KBUILD_CFLAGS += -DSOUTHBOUND_TESTING
 # CFLAGS_ftfs_error.o = -g -O0
 # CFLAGS_REMOVE_ftfs_pthread.o = -O2
 # CFLAGS_ftfs_pthread.o = -g -O0
- CFLAGS_REMOVE_ftfs_files.o = -O2
- CFLAGS_ftfs_files.o = -g -O0
+ CFLAGS_REMOVE_sb_files.o = -O2
+ CFLAGS_sb_files.o = -g -O0
 # CFLAGS_REMOVE_ftfs_southbound.o = -O2
 # CFLAGS_ftfs_southbound.o = -g -O0
 # CFLAGS_REMOVE_ftfs_dir.o = -O2

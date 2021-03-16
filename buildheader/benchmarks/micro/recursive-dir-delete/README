@@ -1,4 +1,0 @@
-ftfs should be properly set before benchmarking recursive dir deletion. (by runing setup-ftfs.sh)
-
-just run
-sudo ./recur-del.sh

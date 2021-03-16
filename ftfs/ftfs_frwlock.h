@@ -2,7 +2,7 @@
 // vim: set tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab:
 #ifndef FTFS_FRWLOCK_H
 #define FTFS_FRWLOCK_H
-#include "ftfs_rwsem.h"
+#include "sb_rwsem.h"
 #include <linux/linkage.h>
 #include <linux/types.h>
 #include <linux/kernel.h>

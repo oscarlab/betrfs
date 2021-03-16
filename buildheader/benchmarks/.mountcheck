@@ -1,4 +1,0 @@
-if mountpoint -q $mntpnt; then
-   echo "$mntpnt already mounted!!!"
-   exit 0
-fi
