@@ -80,10 +80,10 @@ def run_test_set(test_array):
 
     for test in test_array :
         if (len(test) == 1) :
-	    if use_sfs == True:
+            if use_sfs == True:
                 ret = run_one_test(test[0], DEF_INTERP, DEF_PRE_SFS, DEF_POST)
             else:
-            ret = run_one_test(test[0], DEF_INTERP, DEF_PRE, DEF_POST)
+                ret = run_one_test(test[0], DEF_INTERP, DEF_PRE, DEF_POST)
         else :
             ret = run_one_test(test[0], test[1], test[2], test[3])
 
@@ -163,9 +163,9 @@ try:
           use_sfs = True
        if x == "-s":
           shuffle = True;
-    
+
     if use_sfs:
-       format_sfs(config_values) 
+       format_sfs(config_values)
     else:
        format_ext4(config_values)
 
