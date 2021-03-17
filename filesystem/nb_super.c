@@ -16,11 +16,11 @@
 
 #include "sb_malloc.h"
 #include "ftfs.h"
-#include "toku_engine_status.h"
-#include "toku_checkpoint.h"
-#include "toku_flusher.h"
-#include "toku_memleak_detect.h"
-#include "toku_dump_node.h"
+#include "nb_proc_toku_engine_status.h"
+#include "nb_proc_toku_checkpoint.h"
+#include "nb_proc_toku_flusher.h"
+#include "nb_proc_toku_memleak_detect.h"
+#include "nb_proc_toku_dump_node.h"
 
 #include "ftfs_northbound.h"
 
