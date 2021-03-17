@@ -14,7 +14,7 @@
 
 #include <linux/blkdev.h>
 
-#include "ftfs_malloc.h"
+#include "sb_malloc.h"
 #include "ftfs.h"
 #include "toku_engine_status.h"
 #include "toku_checkpoint.h"
