@@ -1,16 +1,13 @@
 #!/bin/bash
 
+set -e
 set -x
 
 DIR="${BASH_SOURCE%/*}"
 if [[ ! -d "$DIR" ]]; then DIR="$PWD"; fi
 
-echo "Dir is $DIR"
-
 . "$DIR/fs-info.sh"
-echo "Dir is $DIR"
 . "$DIR/.rootcheck"
-echo "Dir is $DIR"
 
 sync
 echo 3 > /proc/sys/vm/drop_caches # 1 frees pagecache
@@ -21,7 +18,6 @@ sync
 echo "caches freed via /proc/sys/vm/drop_caches"
 
 fstype=`grep "[[:space:]]$mntpnt[[:space:]]" /proc/mounts | cut -d' ' -f3`
-echo $fstype
 
 if [[ $fstype == "ext4" || $fstype == "btrfs" || $fstype == "xfs" ]]
 then
@@ -43,7 +39,7 @@ then
     umount $mntpnt
     rmmod $module
     insmod $module
-    mount -t ftfs -o sb_fstype=ext4,max=$circle_size $sb_dev $mntpnt
+    mount -t ftfs -o max=$circle_size,sb_fstype=ext4,d_dev=$dummy_dev $sb_dev $mntpnt
     echo "mounted: $fstype."
     exit 0
 else
