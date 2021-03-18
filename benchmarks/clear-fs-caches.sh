@@ -1,10 +1,16 @@
 #!/bin/bash
 
+set -x
+
 DIR="${BASH_SOURCE%/*}"
 if [[ ! -d "$DIR" ]]; then DIR="$PWD"; fi
 
+echo "Dir is $DIR"
+
 . "$DIR/fs-info.sh"
+echo "Dir is $DIR"
 . "$DIR/.rootcheck"
+echo "Dir is $DIR"
 
 sync
 echo 3 > /proc/sys/vm/drop_caches # 1 frees pagecache
