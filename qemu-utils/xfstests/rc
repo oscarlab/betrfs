@@ -564,10 +564,10 @@ _test_mount()
     _test_options mount
     # DEP 8/27/19: A hack to get the mount options in
     if [ $FSTYP = "ftfs" ]; then
-        dmesg
-	systemctl status systemd-modules-load.service
+        #dmesg
+	#systemctl status systemd-modules-load.service
         TEST_FS_MOUNT_OPTS="-o $MNTOPTS"
-        echo "Mounting [-t $FSTYP $TEST_OPTIONS $TEST_FS_MOUNT_OPTS $SELINUX_MOUNT_OPTIONS $* $TEST_DEV $TEST_DIR]"
+        #echo "Mounting [-t $FSTYP $TEST_OPTIONS $TEST_FS_MOUNT_OPTS $SELINUX_MOUNT_OPTIONS $* $TEST_DEV $TEST_DIR]"
         ## XXX Why doesn't _mount work?
 	mount -t $FSTYP $TEST_OPTIONS $TEST_FS_MOUNT_OPTS $SELINUX_MOUNT_OPTIONS $* $TEST_DEV $TEST_DIR
     else
