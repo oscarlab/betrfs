@@ -8,10 +8,17 @@ function check_filesystem()
 {
     local dev="$1"
     local ret
+    local file=`losetup --list --noheadings -O BACK-FILE $dev`
+
+    # Need to take down the loopback device
+    losetup -d $dev
 
     /sbin/e2fsck -fy "$dev"
     ret="$?"
     echo e2fsck exited with status "$ret"
+
+    # Put back the loopback device
+    losetup $dev $file || _fail "Cannot assign $file to loop device $dev"
     return "$ret"
 }
 
