@@ -10,13 +10,13 @@ pipeline {
   stages {
     stage('Testing') {
       steps {
-	timeout(time: 75, unit: 'MINUTES') {
+	timeout(time: 15, unit: 'MINUTES') {
            sh '''
 	     /usr/bin/sudo /bin/cp /host/playpen/btrfs/* /sbin/
 	     /usr/bin/sudo /bin/ln -s $(/bin/pwd) /oscar/betrfs
 	     cp -r /usr/src/linux-source-3.11.10-ftfs /oscar/betrfs/linux-3.11.10
 	     cd /oscar/betrfs/qemu-utils/xfstests/
-	     ./xfstests.sh --force-hdd
+	     ./xfstests.sh
            '''
 	}
       }

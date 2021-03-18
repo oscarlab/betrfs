@@ -3,28 +3,6 @@ set -e
 ## Uncomment for more debugging - but too verbose for now; losing useful other output
 #set -x
 
-## Check argument count
-if [ $# != 1 ] && [ $# != 2 ]; then
-	echo "Need one  or two arguments: [--force-hdd | --force-ssd] or kernel_version!"
-	echo "Example: xfstests.sh --force-hdd 4.19.99"
-	exit 1
-fi
-
-## Make sure the first argument is what is expected
-if [ $1 == "--force-hdd" ]; then
-	MNTOPTS="$MNTOPTS,is_rotational=1"
-elif [ $1 == "--force-ssd" ]; then
-	MNTOPTS="$MNTOPTS,is_rotational=0"
-else
-	echo "The argument should be --force-hdd or --force-ssd!"
-	exit 1
-fi
-
-## Set KERNEL_VERSION if there is a second argument
-if [[ $# -eq 2 ]]; then
-	KERNEL_VERSION=$2
-fi
-
 source config
 source common
 
