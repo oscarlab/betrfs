@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -eu
 
 DIR="${BASH_SOURCE%/*}"
 if [[ ! -d "$DIR" ]]; then DIR="$PWD"; fi
@@ -33,7 +33,6 @@ then
     zfs mount datastore/files
 elif [[ $fstype == "ftfs" ]]
 then
-    if [ -z ${module+x} ]; then echo "module is unset"; exit -1; fi
     echo "removing $module and mounting/unmounting ftfs file system"
     umount $mntpnt
     rmmod $module
