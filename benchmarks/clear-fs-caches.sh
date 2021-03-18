@@ -1,7 +1,6 @@
 #!/bin/bash
 
 set -e
-set -x
 
 DIR="${BASH_SOURCE%/*}"
 if [[ ! -d "$DIR" ]]; then DIR="$PWD"; fi
