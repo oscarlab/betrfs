@@ -667,11 +667,15 @@ int ftfs_bstore_env_open(struct ftfs_sb_info *sbi)
 	giga_bytes = db_cachesize / (1L << 30);
 	bytes = db_cachesize % (1L << 30);
 	r = db_env->set_cachesize(db_env, giga_bytes, bytes, 1);
-	if (r != 0)
+	if (r != 0) {
+		printk(KERN_ERR "ftfs_bstore_env_open: Failed to set the cachesize %d\n", r);
 		goto err;
+	}
 	r = db_env->set_key_ops(db_env, &ftfs_key_ops);
-	if (r != 0)
+	if (r != 0) {
+		printk(KERN_ERR "ftfs_bstore_env_open: Failed to set the key_ops %d\n", r);
 		goto err;
+	}
 
 	db_env->set_update(db_env, env_update_cb);
 
@@ -680,57 +684,74 @@ int ftfs_bstore_env_open(struct ftfs_sb_info *sbi)
 
 	r = db_env->open(db_env, DB_ENV_PATH, db_env_flags, 0755);
 	if (r) {
+		printk(KERN_ERR "ftfs_bstore_env_open: Failed to open the db %d\n", r);
 		r = -ENOENT;
 		goto err;
 	}
 
 	db_flags = DB_CREATE | DB_THREAD;
 	r = db_create(&sbi->data_db, db_env, 0);
-	if (r)
+	if (r) {
+		printk(KERN_ERR "ftfs_bstore_env_open: Failed to create the data db %d\n", r);
 		goto err_close_env;
+	}
 	r = db_create(&sbi->meta_db, db_env, 0);
-	if (r)
+	if (r) {
+		printk(KERN_ERR "ftfs_bstore_env_open: Failed to create the meta db %d\n", r);
 		goto err_close_env;
+	}
 
 	r = ftfs_bstore_txn_begin(db_env, NULL, &txn, 0);
-	if (r)
+	if (r) {
+		printk(KERN_ERR "ftfs_bstore_env_open: Failed to bstore txn begin %d\n", r);
 		goto err_close_env;
+	}
 	r = sbi->data_db->open(sbi->data_db, txn, DATA_DB_NAME, NULL,
 	                       DB_BTREE, db_flags, 0644);
 	if (r) {
+		printk(KERN_ERR "ftfs_bstore_env_open: Failed to open the data db %d\n", r);
 		ftfs_bstore_txn_abort(txn);
 		goto err_close_env;
 	}
 	r = sbi->data_db->change_descriptor(sbi->data_db, txn, &data_desc, DB_UPDATE_CMP_DESCRIPTOR);
 	if (r) {
+		printk(KERN_ERR "ftfs_bstore_env_open: Failed to change the data db descriptor %d\n", r);
 		ftfs_bstore_txn_abort(txn);
 		goto err_close_env;
 	}
 	r = sbi->meta_db->open(sbi->meta_db, txn, META_DB_NAME, NULL,
 	                       DB_BTREE, db_flags, 0644);
 	if (r) {
+		printk(KERN_ERR "ftfs_bstore_env_open: Failed to open the meta db %d\n", r);
 		ftfs_bstore_txn_abort(txn);
 		goto err_close_env;
 	}
 	r = sbi->meta_db->change_descriptor(sbi->meta_db, txn, &meta_desc, DB_UPDATE_CMP_DESCRIPTOR);
 	if (r) {
+		printk(KERN_ERR "ftfs_bstore_env_open: Failed to change the meta db descriptor %d\n", r);
 		ftfs_bstore_txn_abort(txn);
 		goto err_close_env;
 	}
 
 	r = ftfs_bstore_txn_commit(txn, DB_TXN_SYNC);
-	if (r)
+	if (r) {
+		printk(KERN_ERR "ftfs_bstore_env_open: Failed to bstore txn commit %d\n", r);
 		goto err_close_env;
+	}
 
 	/* set the cleaning and checkpointing thread periods */
 	db_env_flags = 60; /* 60 s */
 	r = db_env->checkpointing_set_period(db_env, db_env_flags);
-	if (r)
+	if (r) {
+		printk(KERN_ERR "ftfs_bstore_env_open: Failed to set the checkpoint period %d\n", r);
 		goto err_close;
+	}
 	db_env_flags = 1; /* 1s */
 	r = db_env->cleaner_set_period(db_env, db_env_flags);
-	if (r)
+	if (r) {
+		printk(KERN_ERR "ftfs_bstore_env_open: Failed to set the cleaner period %d\n", r);
 		goto err_close;
+	}
 	db_env_flags = 1000; /* 1000 ms */
 	db_env->change_fsync_log_period(db_env, db_env_flags);
 

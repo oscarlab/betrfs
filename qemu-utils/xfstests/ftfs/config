@@ -4,16 +4,10 @@
 
 DEFAULT_MKFS_OPTIONS=""
 
+#YZJ: 9/13/19 delete the code.
+#they are not useful for betrfs.
 function check_filesystem()
-{
-    local dev="$1"
-    local ret
-
-    /sbin/e2fsck -fy "$dev"
-    ret="$?"
-    echo e2fsck exited with status "$ret"
-    return "$ret"
-}
+{ :; }
 
 function format_filesystem()
 {
@@ -22,18 +16,15 @@ function format_filesystem()
     local ret
     local tmpdir="/ramses"
 
-    /sbin/mke2fs -F -E lazy_itable_init=0,lazy_journal_init=0 -q -t ext4 $opts "$dev"
-    ret="$?"
-
+    # YZJ: 9/11/2019 Keep the erro checking code
     # XXX: Do better error checking here
-    mkdir $tmpdir
-    mount $dev $tmpdir
-    cd $tmpdir; mkdir db; mkdir dev; touch dev/null; mkdir tmp; chmod 1777 tmp; cd -;
+    mkfs-sfs $dev
+    if [ $? -ne 0 ]; then
+       echo "mkfs-sfs failed"
+       return "$?"
+    fi
 
-    sleep 1
-
-    umount $tmpdir
-
+    ret="$?"
     return "$ret"
 }
 

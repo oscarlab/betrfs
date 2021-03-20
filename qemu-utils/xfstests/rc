@@ -115,6 +115,25 @@ then
     fi
 fi
 
+_dump_err()
+{
+    err_msg="$*"
+    echo "$err_msg"
+}
+
+_dump_err2()
+{
+    err_msg="$*"
+    >2& echo "$err_msg"
+}
+
+_log_err()
+{
+    err_msg="$*"
+    echo "$err_msg" | tee -a $seqres.full
+    echo "(see $seqres.full for details)"
+}
+
 # make sure we have a standard umask
 umask 022
 
@@ -143,21 +162,69 @@ case "$FSTYP" in
 	 [ "$MKFS_F2FS_PROG" = "" ] && _fatal "mkfs.f2fs not found"
 	 ;;
     nfs)
+	 . ./common/nfs
 	 ;;
     cifs)
 	 ;;
     ceph)
+	 ;;
+    glusterfs)
 	 ;;
     overlay)
 	 ;;
     reiser4)
 	 [ "$MKFS_REISER4_PROG" = "" ] && _fatal "mkfs.reiser4 not found"
 	 ;;
+    pvfs2)
+	;;
+    ubifs)
+	[ "$UBIUPDATEVOL_PROG" = "" ] && _fatal "ubiupdatevol not found"
+	;;
 esac
+
+if [ ! -z "$REPORT_LIST" ]; then
+	. ./common/report
+	_assert_report_list
+fi
 
 _mount()
 {
     $MOUNT_PROG `_mount_ops_filter $*`
+}
+
+# Call _mount to do mount operation but also save mountpoint to
+# MOUNTED_POINT_STACK. Note that the mount point must be the last parameter
+_get_mount()
+{
+	local mnt_point=${!#}
+
+	_mount $*
+	if [ $? -eq 0 ]; then
+		MOUNTED_POINT_STACK="$mnt_point $MOUNTED_POINT_STACK"
+	else
+		return 1
+	fi
+}
+
+# Unmount the last mounted mountpoint in MOUNTED_POINT_STACK
+# and return it to caller
+_put_mount()
+{
+	local last_mnt=`echo $MOUNTED_POINT_STACK | awk '{print $1}'`
+
+	if [ -n "$last_mnt" ]; then
+		$UMOUNT_PROG $last_mnt
+	fi
+	MOUNTED_POINT_STACK=`echo $MOUNTED_POINT_STACK | cut -d\  -f2-`
+}
+
+# Unmount all mountpoints in MOUNTED_POINT_STACK and clear the stack
+_clear_mount_stack()
+{
+	if [ -n "$MOUNTED_POINT_STACK" ]; then
+		$UMOUNT_PROG $MOUNTED_POINT_STACK
+	fi
+	MOUNTED_POINT_STACK=""
 }
 
 _scratch_options()
@@ -242,7 +309,7 @@ _common_dev_mount_options()
 
 _overlay_basic_mount_options()
 {
-	echo "-o lowerdir=$1/$OVERLAY_LOWER_DIR,upperdir=$1/$OVERLAY_UPPER_DIR,workdir=$1/$OVERLAY_WORK_DIR"
+	echo "-o lowerdir=$1/$OVL_LOWER,upperdir=$1/$OVL_UPPER,workdir=$1/$OVL_WORK"
 }
 
 _overlay_mount_options()
@@ -257,7 +324,7 @@ _scratch_mount_options()
 	_scratch_options mount
 
 	if [ "$FSTYP" == "overlay" ]; then
-		echo `_overlay_mount_options $SCRATCH_DEV`
+		echo `_overlay_mount_options $OVL_BASE_SCRATCH_MNT`
 		return 0
 	fi
 	echo `_common_dev_mount_options $*` $SCRATCH_OPTIONS \
@@ -268,14 +335,14 @@ _supports_filetype()
 {
 	local dir=$1
 
-	local fstyp=$(df --output=fstype $dir | tail -1)
+	local fstyp=`$DF_PROG $dir | tail -1 | $AWK_PROG '{print $2}'`
 	case "$fstyp" in
 	xfs)
 		xfs_info $dir | grep -q "ftype=1"
 		;;
 	ext2|ext3|ext4)
-		tune2fs -l $(df --output=source $dir | tail -1) | \
-		   grep -q filetype
+		local dev=`$DF_PROG $dir | tail -1 | $AWK_PROG '{print $1}'`
+		tune2fs -l $dev | grep -q filetype
 		;;
 	*)
 		local testfile=$dir/$$.ftype
@@ -301,7 +368,17 @@ _overlay_mount_dirs()
 		    -o workdir=$workdir $*
 }
 
-# Given a dir, set up 3 subdirectories and mount on the given mnt.
+_overlay_mkdirs()
+{
+	local dir=$1
+
+	mkdir -p $dir/$OVL_UPPER
+	mkdir -p $dir/$OVL_LOWER
+	mkdir -p $dir/$OVL_WORK
+	mkdir -p $dir/$OVL_MNT
+}
+
+# Given a base fs dir, set up overlay directories and mount on the given mnt.
 # The dir is used as the mount device so it can be seen from df or mount
 _overlay_mount()
 {
@@ -311,44 +388,98 @@ _overlay_mount()
 
 	_supports_filetype $dir || _notrun "upper fs needs to support d_type"
 
-	mkdir -p $dir/$OVERLAY_UPPER_DIR
-	mkdir -p $dir/$OVERLAY_LOWER_DIR
-	mkdir -p $dir/$OVERLAY_WORK_DIR
+	_overlay_mkdirs $dir
 
-	_overlay_mount_dirs $dir/$OVERLAY_LOWER_DIR $dir/$OVERLAY_UPPER_DIR \
-			    $dir/$OVERLAY_WORK_DIR $OVERLAY_MOUNT_OPTIONS \
+	_overlay_mount_dirs $dir/$OVL_LOWER $dir/$OVL_UPPER \
+			    $dir/$OVL_WORK $OVERLAY_MOUNT_OPTIONS \
 			    $SELINUX_MOUNT_OPTIONS $* $dir $mnt
+}
+
+_overlay_base_test_mount()
+{
+	if [ -z "$OVL_BASE_TEST_DEV" -o -z "$OVL_BASE_TEST_DIR" ] || \
+		_check_mounted_on OVL_BASE_TEST_DEV $OVL_BASE_TEST_DEV \
+				OVL_BASE_TEST_DIR $OVL_BASE_TEST_DIR
+	then
+		# no base fs or already mounted
+		return 0
+	elif [ $? -ne 1 ]
+	then
+		# base fs mounted but not on mount point
+		return 1
+	fi
+
+	_mount $TEST_FS_MOUNT_OPTS \
+		$SELINUX_MOUNT_OPTIONS \
+		$OVL_BASE_TEST_DEV $OVL_BASE_TEST_DIR
 }
 
 _overlay_test_mount()
 {
-	_overlay_mount $TEST_DEV $TEST_DIR $*
+	_overlay_base_test_mount && \
+		_overlay_mount $OVL_BASE_TEST_DIR $TEST_DIR $*
+}
+
+_overlay_base_scratch_mount()
+{
+	if [ -z "$OVL_BASE_SCRATCH_DEV" -o -z "$OVL_BASE_SCRATCH_MNT" ] || \
+		_check_mounted_on OVL_BASE_SCRATCH_DEV $OVL_BASE_SCRATCH_DEV \
+				OVL_BASE_SCRATCH_MNT $OVL_BASE_SCRATCH_MNT
+	then
+		# no base fs or already mounted
+		return 0
+	elif [ $? -ne 1 ]
+	then
+		# base fs mounted but not on mount point
+		return 1
+	fi
+
+	_mount $OVL_BASE_MOUNT_OPTIONS \
+		$SELINUX_MOUNT_OPTIONS \
+		$OVL_BASE_SCRATCH_DEV $OVL_BASE_SCRATCH_MNT
+}
+
+_overlay_base_scratch_unmount()
+{
+	[ -n "$OVL_BASE_SCRATCH_DEV" -a -n "$OVL_BASE_SCRATCH_MNT" ] || return 0
+
+	$UMOUNT_PROG $OVL_BASE_SCRATCH_MNT
 }
 
 _overlay_scratch_mount()
 {
-	_overlay_mount $SCRATCH_DEV $SCRATCH_MNT $*
+	_overlay_base_scratch_mount && \
+		_overlay_mount $OVL_BASE_SCRATCH_MNT $SCRATCH_MNT $*
+}
+
+_overlay_base_test_unmount()
+{
+	[ -n "$OVL_BASE_TEST_DEV" -a -n "$OVL_BASE_TEST_DIR" ] || return 0
+
+	$UMOUNT_PROG $OVL_BASE_TEST_DIR
 }
 
 _overlay_test_unmount()
 {
 	$UMOUNT_PROG $TEST_DIR
+	_overlay_base_test_unmount
 }
 
 _overlay_scratch_unmount()
 {
 	$UMOUNT_PROG $SCRATCH_MNT
+	_overlay_base_scratch_unmount
 }
 
 _scratch_mount()
 {
     ## DEP: 8/28/19: ftfs can only mount one volume at a time right now
-    ##   for now, set the scratch volume as ext4
+    ##   for now, set the scratch volume as another FS
     ## It would be nice to change this eventually, but it is valid to
     ## do this, as the scratch volume is not the volume under test
     if [ "$FSTYP" == "ftfs" ] ; then
 	PREVFSTYP=ftfs
-	FSTYP=ext4
+	FSTYP=btrfs
     fi
 
     if [ "$FSTYP" == "overlay" ]; then
@@ -365,10 +496,10 @@ _scratch_mount()
 
 _scratch_unmount()
 {
-	#For ftfs, set fstyp as ext4 for scratch device
+	#For ftfs, set fstyp as another FS for scratch device
 	if [ "$FSTYP" == "ftfs" ] ; then
 		PREVFSTYP=ftfs
-		FSTYP=ext4
+		FSTYP=btrfs
     	fi
 
 	case "$FSTYP" in
@@ -391,10 +522,10 @@ _scratch_unmount()
 
 _scratch_remount()
 {
-    #For ftfs, set fstyp as ext4 for scratch device
+    #For ftfs, set fstyp as another FS for scratch device
     if [ "$FSTYP" == "ftfs" ] ; then
 	PREVFSTYP=ftfs
-	FSTYP=ext4
+	FSTYP=btrfs
     fi
 
     local opts="$1"
@@ -433,6 +564,8 @@ _test_mount()
     _test_options mount
     # DEP 8/27/19: A hack to get the mount options in
     if [ $FSTYP = "ftfs" ]; then
+        #dmesg
+	#systemctl status systemd-modules-load.service
         TEST_FS_MOUNT_OPTS="-o $MNTOPTS"
         #echo "Mounting [-t $FSTYP $TEST_OPTIONS $TEST_FS_MOUNT_OPTS $SELINUX_MOUNT_OPTIONS $* $TEST_DEV $TEST_DIR]"
         ## XXX Why doesn't _mount work?
@@ -515,12 +648,13 @@ _scratch_do_mkfs()
 _scratch_metadump()
 {
 	dumpfile=$1
+	shift
 	options=
 
 	[ "$USE_EXTERNAL" = yes -a ! -z "$SCRATCH_LOGDEV" ] && \
 		options="-l $SCRATCH_LOGDEV"
 
-	xfs_metadump $options $SCRATCH_DEV $dumpfile
+	xfs_metadump $options "$@" $SCRATCH_DEV $dumpfile
 }
 
 _setup_large_ext4_fs()
@@ -591,6 +725,9 @@ _scratch_mkfs_ext4()
 	local tmp=`mktemp`
 	local mkfs_status
 
+	[ "$USE_EXTERNAL" = yes -a ! -z "$SCRATCH_LOGDEV" ] && \
+	    $mkfs_cmd -O journal_dev $MKFS_OPTIONS $SCRATCH_LOGDEV && \
+	    mkfs_cmd="$mkfs_cmd -J device=$SCRATCH_LOGDEV"
 
 	_scratch_do_mkfs "$mkfs_cmd" "$mkfs_filter" $* 2>$tmp.mkfserr 1>$tmp.mkfsstd
 	mkfs_status=$?
@@ -626,8 +763,14 @@ _test_mkfs()
     ceph)
 	# do nothing for ceph
 	;;
+    glusterfs)
+	# do nothing for glusterfs
+	;;
     overlay)
 	# do nothing for overlay
+	;;
+    pvfs2)
+	# do nothing for pvfs2
 	;;
     udf)
         $MKFS_UDF_PROG $MKFS_OPTIONS $* $TEST_DEV > /dev/null
@@ -652,6 +795,9 @@ _mkfs_dev()
 	;;
     overlay)
 	# do nothing for overlay
+	;;
+    pvfs2)
+	# do nothing for pvfs2
 	;;
     udf)
         $MKFS_UDF_PROG $MKFS_OPTIONS $* 2>$tmp_dir.mkfserr 1>$tmp_dir.mkfsstd
@@ -685,10 +831,15 @@ _scratch_cleanup_files()
 {
 	case $FSTYP in
 	overlay)
-		# $SCRATCH_DEV is a valid directory in overlay case
-		rm -rf $SCRATCH_DEV/*
+		# Avoid rm -rf /* if we messed up
+		[ -n "$OVL_BASE_SCRATCH_MNT" ] || return 1
+		_overlay_base_scratch_mount || return 1
+		rm -rf $OVL_BASE_SCRATCH_MNT/* || return 1
+		_overlay_mkdirs $OVL_BASE_SCRATCH_MNT
+		# leave base fs mouted so tests can setup lower/upper dir files
 		;;
 	*)
+		[ -n "$SCRATCH_MNT" ] || return 1
 		_scratch_mount
 		rm -rf $SCRATCH_MNT/*
 		_scratch_unmount
@@ -705,19 +856,24 @@ _scratch_mkfs()
 	#For ftfs, set fstyp as ext4 for scratch device
 	if [ "$FSTYP" == "ftfs" ] ; then
 	   PREVFSTYP=ftfs
-	   FSTYP=ext4
+	   FSTYP=btrfs
 	fi
 
 	case $FSTYP in
-	nfs*|cifs|ceph|overlay)
+	nfs*|cifs|ceph|overlay|glusterfs|pvfs2)
 		# unable to re-create this fstyp, just remove all files in
 		# $SCRATCH_MNT to avoid EEXIST caused by the leftover files
 		# created in previous runs
 		_scratch_cleanup_files
-		return 0
+		return $?
 		;;
 	tmpfs)
 		# do nothing for tmpfs
+		return 0
+		;;
+	ubifs)
+		# erase the UBI volume; reformated automatically on next mount
+		$UBIUPDATEVOL_PROG ${SCRATCH_DEV} -t
 		return 0
 		;;
 	ext4)
@@ -736,7 +892,16 @@ _scratch_mkfs()
 		mkfs_cmd="$MKFS_BTRFS_PROG"
 		mkfs_filter="cat"
 		;;
-	ext2|ext3)
+	ext3)
+		mkfs_cmd="$MKFS_PROG -t $FSTYP -- -F"
+		mkfs_filter="grep -v -e ^Warning: -e \"^mke2fs \""
+
+		# put journal on separate device?
+		[ "$USE_EXTERNAL" = yes -a ! -z "$SCRATCH_LOGDEV" ] && \
+		$mkfs_cmd -O journal_dev $MKFS_OPTIONS $SCRATCH_LOGDEV && \
+		mkfs_cmd="$mkfs_cmd -J device=$SCRATCH_LOGDEV"
+		;;
+	ext2)
 		mkfs_cmd="$MKFS_PROG -t $FSTYP -- -F"
 		mkfs_filter="grep -v -e ^Warning: -e \"^mke2fs \""
 		;;
@@ -759,7 +924,6 @@ _scratch_mkfs()
 	if [ "$PREVFSTYP" == "ftfs" ] ; then
 	   FSTYP=ftfs
 	fi
-
 	return $?
 }
 
@@ -803,7 +967,7 @@ _spare_dev_get()
 		_notrun "All devs used no spare"
 	fi
 	# Get a dev that is not used
-	local devs[]="( $SCRATCH_DEV_POOL_SAVED )"
+	local -a devs="( $SCRATCH_DEV_POOL_SAVED )"
 	SPARE_DEV=${devs[@]:$ndevs:1}
 	export SPARE_DEV
 }
@@ -845,7 +1009,7 @@ _scratch_dev_pool_get()
 
 	local test_ndevs=$1
 	local config_ndevs=`echo $SCRATCH_DEV_POOL| wc -w`
-	local devs[]="( $SCRATCH_DEV_POOL )"
+	local -a devs="( $SCRATCH_DEV_POOL )"
 
 	typeset -p config_ndevs >/dev/null 2>&1
 	if [ $? -ne 0 ]; then
@@ -905,10 +1069,10 @@ _free_memory_bytes()
 # _scratch_mkfs_sized <size in bytes> [optional blocksize]
 _scratch_mkfs_sized()
 {
-    #For ftfs, set fstyp as ext4 for scratch device
+    #For ftfs, set fstyp as another FS for scratch device
     if [ "$FSTYP" == "ftfs" ] ; then
         PREVFSTYP=ftfs
-        FSTYP=ext4
+        FSTYP=btrfs
     fi
 
     fssize=$1
@@ -920,6 +1084,9 @@ _scratch_mkfs_sized()
 	;;
     ext2|ext3|ext4|ext4dev|udf|btrfs|reiser4|ocfs2)
 	def_blksz=`echo $MKFS_OPTIONS| sed -rn 's/.*-b ?+([0-9]+).*/\1/p'`
+	;;
+    jfs)
+	def_blksz=4096
 	;;
     esac
 
@@ -965,6 +1132,9 @@ _scratch_mkfs_sized()
 	local mixed_opt=
 	(( fssize <= 100 * 1024 * 1024 )) && mixed_opt='--mixed'
 	$MKFS_BTRFS_PROG $MKFS_OPTIONS $mixed_opt -b $fssize $SCRATCH_DEV
+	;;
+    jfs)
+	${MKFS_PROG}.$FSTYP $MKFS_OPTIONS $SCRATCH_DEV $blocks
 	;;
     reiser4)
 	# mkfs.resier4 requires size in KB as input for creating filesystem
@@ -1039,7 +1209,7 @@ _scratch_mkfs_blocksized()
 	${MKFS_PROG}.$FSTYP -F $MKFS_OPTIONS -b $blocksize $SCRATCH_DEV
 	;;
     ocfs2)
-	yes | ${MKFS_PROG}.$FSTYP -F $MKFS_OPTIONS -b $blocksize $SCRATCH_DEV
+	yes | ${MKFS_PROG}.$FSTYP -F $MKFS_OPTIONS -b $blocksize -C $blocksize $SCRATCH_DEV
 	;;
     *)
 	_notrun "Filesystem $FSTYP not supported in _scratch_mkfs_blocksized"
@@ -1082,7 +1252,9 @@ _repair_scratch_fs()
 		_scratch_xfs_repair "$@" 2>&1
 		res=$?
 	fi
-	test $res -ne 0 && >&2 echo "xfs_repair failed, err=$res"
+	if [ $res -ne 0 ]; then
+		_dump_err2 "xfs_repair failed, err=$res"
+	fi
 	return $res
         ;;
     *)
@@ -1094,7 +1266,7 @@ _repair_scratch_fs()
 		res=0
 		;;
 	*)
-		>&2 echo "fsck.$FSTYP failed, err=$res"
+		_dump_err2 "fsck.$FSTYP failed, err=$res"
 		;;
 	esac
 	return $res
@@ -1242,7 +1414,8 @@ _fs_type()
     # Fix the filesystem type up here so that the callers don't
     # have to bother with this quirk.
     #
-    _df_device $1 | $AWK_PROG '{ print $2 }' | sed -e 's/nfs4/nfs/'
+    _df_device $1 | $AWK_PROG '{ print $2 }' | \
+        sed -e 's/nfs4/nfs/' -e 's/fuse.glusterfs/glusterfs/'
 }
 
 # return the FS mount options of a mounted device
@@ -1282,6 +1455,25 @@ _is_block_dev()
     if [ -b "${_dev}" ]; then
         src/lstat64 "${_dev}" | $AWK_PROG '/Device type:/ { print $9 }'
     fi
+}
+
+# returns device number if a file is a character device
+#
+_is_char_dev()
+{
+	if [ $# -ne 1 ]; then
+		echo "Usage: _is_char_dev dev" 1>&2
+		exit 1
+	fi
+
+	_dev=$1
+	if [ -L "${_dev}" ]; then
+		_dev=`readlink -f "${_dev}"`
+	fi
+
+	if [ -c "${_dev}" ]; then
+		src/lstat64 "${_dev}" | $AWK_PROG '/Device type:/ { print $9 }'
+	fi
 }
 
 # Do a command, log it to $seqres.full, optionally test return status
@@ -1384,14 +1576,66 @@ _supported_os()
     _notrun "not suitable for this OS: $HOSTOS"
 }
 
+# check if a FS on a device is mounted
+# if so, verify that it is mounted on mount point
+# if fstype is given as argument, verify that it is also
+# mounted with correct fs type
+#
+_check_mounted_on()
+{
+	local devname=$1
+	local dev=$2
+	local mntname=$3
+	local mnt=$4
+	local type=$5
+
+	# find $dev as the source, and print result in "$dev $mnt" format
+	local mount_rec=`findmnt -rncv -S $dev -o SOURCE,TARGET`
+	[ -n "$mount_rec" ] || return 1 # 1 = not mounted
+
+	# if it's mounted, make sure its on $mnt
+	if [ "$mount_rec" != "$dev $mnt" ]; then
+		echo "$devname=$dev is mounted but not on $mntname=$mnt - aborting"
+		echo "Already mounted result:"
+		echo $mount_rec
+		return 2 # 2 = mounted on wrong mnt
+	fi
+
+	if [ -n "$type" -a "`_fs_type $dev`" != "$type" ]; then
+		echo "$devname=$dev is mounted but not a type $type filesystem"
+		# raw $DF_PROG cannot handle NFS/CIFS/overlay correctly
+		_df_device $dev
+		return 3 # 3 = mounted as wrong type
+	fi
+	return 0 # 0 = mounted as expected
+}
+
 # this test needs a scratch partition - check we're ok & unmount it
 # No post-test check of the device is required. e.g. the test intentionally
 # finishes the test with the filesystem in a corrupt state
 _require_scratch_nocheck()
 {
     case "$FSTYP" in
+	glusterfs)
+		echo $SCRATCH_DEV | egrep -q ":/?" > /dev/null 2>&1
+		if [ -z "$SCRATCH_DEV" -o "$?" != "0" ]; then
+			_notrun "this test requires a valid \$SCRATCH_DEV"
+		fi
+		if [ ! -d "$SCRATCH_MNT" ]; then
+			_notrun "this test requires a valid \$SCRATCH_MNT"
+		fi
+		;;
 	nfs*|ceph)
 		echo $SCRATCH_DEV | grep -q ":/" > /dev/null 2>&1
+		if [ -z "$SCRATCH_DEV" -o "$?" != "0" ]; then
+			_notrun "this test requires a valid \$SCRATCH_DEV"
+		fi
+		if [ ! -d "$SCRATCH_MNT" ]; then
+			_notrun "this test requires a valid \$SCRATCH_MNT"
+		fi
+		;;
+	pvfs2)
+		echo $SCRATCH_DEV | grep -q "://" > /dev/null 2>&1
 		if [ -z "$SCRATCH_DEV" -o "$?" != "0" ]; then
 			_notrun "this test requires a valid \$SCRATCH_DEV"
 		fi
@@ -1409,10 +1653,13 @@ _require_scratch_nocheck()
 		fi
 		;;
 	overlay)
-		if [ -z "$SCRATCH_DEV" -o ! -d "$SCRATCH_DEV" ]; then
-			_notrun "this test requires a valid \$SCRATCH_DEV as ovl base dir"
+		if [ -z "$OVL_BASE_SCRATCH_MNT" -o ! -d "$OVL_BASE_SCRATCH_MNT" ]; then
+			_notrun "this test requires a valid \$OVL_BASE_SCRATCH_MNT as ovl base dir"
 		fi
-		if [ ! -d "$SCRATCH_MNT" ]; then
+		# if $SCRATCH_MNT is derived from $OVL_BASE_SCRATCH_MNT then
+		# don't check $SCRATCH_MNT dir here because base fs may not be mounted
+		# and we will create the mount point anyway on _overlay_mount
+		if [ "$SCRATCH_MNT" != "$OVL_BASE_SCRATCH_MNT/$OVL_MNT" -a ! -d "$SCRATCH_MNT" ]; then
 			_notrun "this test requires a valid \$SCRATCH_MNT"
 		fi
 		;;
@@ -1420,6 +1667,15 @@ _require_scratch_nocheck()
 		if [ -z "$SCRATCH_DEV" -o ! -d "$SCRATCH_MNT" ];
 		then
 		    _notrun "this test requires a valid \$SCRATCH_MNT and unique $SCRATCH_DEV"
+		fi
+		;;
+	ubifs)
+		# ubifs needs an UBI volume. This will be a char device, not a block device.
+		if [ ! -c "$SCRATCH_DEV" ]; then
+			_notrun "this test requires a valid UBI volume for \$SCRATCH_DEV"
+		fi
+		if [ ! -d "$SCRATCH_MNT" ]; then
+			_notrun "this test requires a valid \$SCRATCH_MNT"
 		fi
 		;;
 	*)
@@ -1438,21 +1694,12 @@ _require_scratch_nocheck()
 		 ;;
     esac
 
-    # mounted?
-    # Note that we use -F here so grep doesn't try to interpret an NFS over
-    # IPv6 server as a regular expression.
-    mount_rec=`_mount | grep -F $SCRATCH_DEV`
-    if [ "$mount_rec" ]
+    _check_mounted_on SCRATCH_DEV $SCRATCH_DEV SCRATCH_MNT $SCRATCH_MNT
+    local err=$?
+    [ $err -le 1 ] || exit 1
+    if [ $err -eq 0 ]
     then
-        # if it's mounted, make sure its on $SCRATCH_MNT
-        if ! echo $mount_rec | grep -q $SCRATCH_MNT
-        then
-            echo "\$SCRATCH_DEV=$SCRATCH_DEV is mounted but not on \$SCRATCH_MNT=$SCRATCH_MNT - aborting"
-            echo "Already mounted result:"
-            echo $mount_rec
-            exit 1
-        fi
-        # and then unmount it
+        # if it's mounted, unmount it
         if ! _scratch_unmount
         then
             echo "failed to unmount $SCRATCH_DEV"
@@ -1475,6 +1722,15 @@ _require_scratch()
 _require_test()
 {
     case "$FSTYP" in
+	glusterfs)
+		echo $TEST_DEV | egrep -q ":/?" > /dev/null 2>&1
+		if [ -z "$TEST_DEV" -o "$?" != "0" ]; then
+			_notrun "this test requires a valid \$TEST_DEV"
+		fi
+		if [ ! -d "$TEST_DIR" ]; then
+			_notrun "this test requires a valid \$TEST_DIR"
+		fi
+		;;
 	nfs*|ceph)
 		echo $TEST_DEV | grep -q ":/" > /dev/null 2>&1
 		if [ -z "$TEST_DEV" -o "$?" != "0" ]; then
@@ -1493,9 +1749,18 @@ _require_test()
 		     _notrun "this test requires a valid \$TEST_DIR"
 		fi
 		;;
+	pvfs2)
+		echo $TEST_DEV | grep -q "://" > /dev/null 2>&1
+		if [ -z "$TEST_DEV" -o "$?" != "0" ]; then
+			_notrun "this test requires a valid \$TEST_DIR"
+		fi
+		if [ ! -d "$TEST_DIR" ]; then
+			_notrun "this test requires a valid \$TEST_DIR"
+		fi
+		;;
 	overlay)
-		if [ -z "$TEST_DEV" -o ! -d "$TEST_DEV" ]; then
-			_notrun "this test requires a valid \$TEST_DEV as ovl base dir"
+		if [ -z "$OVL_BASE_TEST_DIR" -o ! -d "$OVL_BASE_TEST_DIR" ]; then
+			_notrun "this test requires a valid \$TEST_DIR as ovl base dir"
 		fi
 		if [ ! -d "$TEST_DIR" ]; then
 			_notrun "this test requires a valid \$TEST_DIR"
@@ -1505,6 +1770,15 @@ _require_test()
 		if [ -z "$TEST_DEV" -o ! -d "$TEST_DIR" ];
 		then
 		    _notrun "this test requires a valid \$TEST_DIR and unique $TEST_DEV"
+		fi
+		;;
+	ubifs)
+		# ubifs needs an UBI volume. This will be a char device, not a block device.
+		if [ ! -c "$TEST_DEV" ]; then
+			_notrun "this test requires a valid UBI volume for \$TEST_DEV"
+		fi
+		if [ ! -d "$TEST_DIR" ]; then
+			_notrun "this test requires a valid \$TEST_DIR"
 		fi
 		;;
 	*)
@@ -1523,28 +1797,27 @@ _require_test()
 		 ;;
     esac
 
-    # mounted?
-    # Note that we use -F here so grep doesn't try to interpret an NFS over
-    # IPv6 server as a regular expression.
-    mount_rec=`_mount | grep -F $TEST_DEV`
-    if [ "$mount_rec" ]
+    _check_mounted_on TEST_DEV $TEST_DEV TEST_DIR $TEST_DIR
+    local err=$?
+    [ $err -le 1 ] || exit 1
+    if [ $err -ne 0 ]
     then
-        # if it's mounted, make sure its on $TEST_DIR
-        if ! echo $mount_rec | grep -q $TEST_DIR
-        then
-            echo "\$TEST_DEV=$TEST_DEV is mounted but not on \$TEST_DIR=$TEST_DIR - aborting"
-            echo "Already mounted result:"
-            echo $mount_rec
-            exit 1
-        fi
-    else
-	out=`_mount_or_remount_rw "$MOUNT_OPTIONS" $TEST_DEV $TEST_DIR`
-	if [ $? -ne 1 ]; then
-		echo $out
+	if ! _test_mount
+	then
+		echo "!!! failed to mount $TEST_DEV on $TEST_DIR"
 		exit 1
 	fi
     fi
     touch ${RESULT_DIR}/require_test
+}
+
+_has_logdev()
+{
+	local ret=0
+	[ -z "$SCRATCH_LOGDEV" -o ! -b "$SCRATCH_LOGDEV" ] && ret=1
+	[ "$USE_EXTERNAL" != yes ] && ret=1
+
+	return $ret
 }
 
 # this test needs a logdev
@@ -1594,6 +1867,15 @@ _require_ext2()
     else
 	_notrun "This test requires ext2 filesystem support"
     fi
+}
+
+# this test requires tmpfs filesystem support
+#
+_require_tmpfs()
+{
+	modprobe tmpfs >/dev/null 2>&1
+	grep -q tmpfs /proc/filesystems ||
+		_notrun "this test requires tmpfs support"
 }
 
 # this test requires that (large) loopback device files are not in use
@@ -1649,6 +1931,23 @@ _require_block_device()
 	fi
 }
 
+# this test requires a path to refere to a local block or character device
+# $1 - device
+_require_local_device()
+{
+	if [ -z "$1" ]; then
+		echo "Usage: _require_local_device <dev>" 1>&2
+		exit 1
+	fi
+	if [ "`_is_block_dev "$1"`" != "" ]; then
+		return 0
+	fi
+	if [ "`_is_char_dev "$1"`" != "" ]; then
+		return 0
+	fi
+	_notrun "require $1 to be local device"
+}
+
 # brd based ram disks erase the device when they receive a flush command when no
 # active references are present. This causes problems for DM devices sitting on
 # top of brd devices as DM doesn't hold active references to the brd device.
@@ -1690,12 +1989,22 @@ _require_scratch_ext4_crc()
 	_scratch_unmount
 }
 
-# this test requires the bigalloc feature to be available in mkfs.ext4
-#
-_require_ext4_mkfs_bigalloc()
+# Check the specified feature whether it is available in mkfs.ext4 or not.
+_require_ext4_mkfs_feature()
 {
-	$MKFS_EXT4_PROG -F -O bigalloc -n $SCRATCH_DEV 512m >/dev/null 2>&1 \
-	   || _notrun "mkfs.ext4 doesn't have bigalloc feature"
+	local feature=$1
+	local testfile=/tmp/$$.ext4_mkfs
+
+	if [ -z "$feature" ]; then
+                echo "Usage: _require_ext4_mkfs_feature feature"
+                exit 1
+        fi
+
+	touch $testfile
+	local result=$($MKFS_EXT4_PROG -F -O $feature -n $testfile 512m 2>&1)
+	rm -f $testfile
+	echo $result | grep -q "Invalid filesystem option" && \
+		_notrun "mkfs.ext4 doesn't support $feature feature"
 }
 
 # this test requires the ext4 kernel support bigalloc feature
@@ -1716,7 +2025,24 @@ _require_nonexternal()
 	_notrun "External device testing in progress, skipped this test"
 }
 
+# this test requires that the kernel supports asynchronous I/O
+_require_aio()
+{
+	$here/src/feature -A
+	case $? in
+	0)
+		;;
+	1)
+		_notrun "kernel does not support asynchronous I/O"
+		;;
+	*)
+		_fail "unexpected error testing for asynchronous I/O support"
+		;;
+	esac
+}
+
 # this test requires that a (specified) aio-dio executable exists
+# and that the kernel supports asynchronous I/O.
 # $1 - command (optional)
 #
 _require_aiodio()
@@ -1729,6 +2055,7 @@ _require_aiodio()
         AIO_TEST=src/aio-dio-regress/$1
         [ -x $AIO_TEST ] || _notrun "$AIO_TEST not built"
     fi
+    _require_aio
     _require_odirect
 }
 
@@ -1813,7 +2140,7 @@ _yp_active()
 {
 	local dn
 	dn=$(domainname 2>/dev/null)
-	test -n "${dn}" -a "${dn}" != "(none)"
+	test -n "${dn}" -a "${dn}" != "(none)" -a "${dn}" != "localdomain"
 	echo $?
 }
 
@@ -1856,7 +2183,7 @@ _require_group()
         qa_group=$1
     fi
     _cat_group | grep -q $qa_group
-    [ "$?" == "0" ] || _notrun "$qa_group user not defined."
+    [ "$?" == "0" ] || _notrun "$qa_group group not defined."
 }
 
 _filter_user_do()
@@ -1875,7 +2202,7 @@ _user_do()
 	then
 	echo $1 | /bin/bash "su $qa_user 2>&1" | _filter_user_do
     else
-	echo $1 | su $qa_user 2>&1 | _filter_user_do
+	echo $1 | su -s /bin/bash $qa_user 2>&1 | _filter_user_do
     fi
 }
 
@@ -1886,17 +2213,25 @@ _require_xfs_io_command()
 		echo "Usage: _require_xfs_io_command command [switch]" 1>&2
 		exit 1
 	fi
-	command=$1
+	local command=$1
 	shift
-	param="$*"
+	local param="$*"
+	local param_checked=0
 
 	testfile=$TEST_DIR/$$.xfs_io
 	case $command in
 	"chproj")
 		testio=`$XFS_IO_PROG -F -f -c "chproj 0" $testfile 2>&1`
 		;;
+	"copy_range")
+		testcopy=$TEST_DIR/$$.copy.xfs_io
+		$XFS_IO_PROG -F -f -c "pwrite 0 4k" $testfile > /dev/null 2>&1
+		testio=`$XFS_IO_PROG -F -f -c "copy_range $testfile" $testcopy 2>&1`
+		rm -f $testcopy > /dev/null 2>&1
+		;;
 	"falloc" )
-		testio=`$XFS_IO_PROG -F -f -c "falloc 0 1m" $testfile 2>&1`
+		testio=`$XFS_IO_PROG -F -f -c "falloc $param 0 1m" $testfile 2>&1`
+		param_checked=1
 		;;
 	"fpunch" | "fcollapse" | "zero" | "fzero" | "finsert" | "funshare")
 		testio=`$XFS_IO_PROG -F -f -c "pwrite 0 20k" -c "fsync" \
@@ -1904,7 +2239,8 @@ _require_xfs_io_command()
 		;;
 	"fiemap")
 		testio=`$XFS_IO_PROG -F -f -c "pwrite 0 20k" -c "fsync" \
-			-c "fiemap -v" $testfile 2>&1`
+			-c "fiemap -v $param" $testfile 2>&1`
+		param_checked=1
 		;;
 	"flink" )
 		testio=`$XFS_IO_PROG -T -F -c "flink $testfile" \
@@ -1925,11 +2261,16 @@ _require_xfs_io_command()
 		echo $testio | egrep -q "invalid option" && \
 			_notrun "xfs_io $command support is missing"
 		;;
+	"scrub"|"repair")
+		testio=`$XFS_IO_PROG -x -c "$command dummy 0" $TEST_DIR 2>&1`
+		echo $testio | egrep -q "Inappropriate ioctl" && \
+			_notrun "xfs_io $command support is missing"
+		;;
 	"utimes" )
 		testio=`$XFS_IO_PROG -f -c "utimes" 0 0 0 0 $testfile 2>&1`
 		;;
 	*)
-		testio=`$XFS_IO_PROG -c "$command help" 2>&1`
+		testio=`$XFS_IO_PROG -c "help $command" 2>&1`
 	esac
 
 	rm -f $testfile 2>&1 > /dev/null
@@ -1937,12 +2278,17 @@ _require_xfs_io_command()
 		_notrun "xfs_io $command support is missing"
 	echo $testio | grep -q "Operation not supported" && \
 		_notrun "xfs_io $command failed (old kernel/wrong fs?)"
+	echo $testio | grep -q "Invalid" && \
+		_notrun "xfs_io $command failed (old kernel/wrong fs/bad args?)"
 	echo $testio | grep -q "foreign file active" && \
 		_notrun "xfs_io $command not supported on $FSTYP"
+	echo $testio | egrep -q "Function not implemented" && \
+		_notrun "xfs_io $command support is missing (missing syscall?)"
 
-	test -z "$param" && return
-	$XFS_IO_PROG -c "help $command" | grep -q "^ $param --" || \
-		_notrun "xfs_io $command doesn't support $param"
+	if [ -n "$param" -a $param_checked -eq 0 ]; then
+		$XFS_IO_PROG -c "help $command" | grep -q "^ $param --" || \
+			_notrun "xfs_io $command doesn't support $param"
+	fi
 }
 
 # check that kernel and filesystem support direct I/O
@@ -2203,7 +2549,7 @@ _mount_or_remount_rw()
 			_overlay_mount $device $mountpoint
 		fi
 		if [ $? -ne 0 ]; then
-			echo "!!! failed to remount $device on $mountpoint"
+			_dump_err "!!! failed to remount $device on $mountpoint"
 			return 0 # ok=0
 		fi
 	else
@@ -2237,9 +2583,7 @@ _check_generic_filesystem()
     fsck -t $FSTYP $FSCK_OPTIONS $device >$tmp.fsck 2>&1
     if [ $? -ne 0 ]
     then
-        echo "_check_generic_filesystem: filesystem on $device is inconsistent (see $seqres.full)"
-
-        echo "_check_generic filesystem: filesystem on $device is inconsistent" >>$seqres.full
+	_log_err "_check_generic_filesystem: filesystem on $device is inconsistent"
         echo "*** fsck.$FSTYP output ***"	>>$seqres.full
         cat $tmp.fsck				>>$seqres.full
         echo "*** end fsck.$FSTYP output"	>>$seqres.full
@@ -2329,8 +2673,13 @@ _check_test_fs()
     ceph)
 	# no way to check consistency for CephFS
 	;;
+    glusterfs)
+	# no way to check consistency for GlusterFS
+	;;
     overlay)
 	# no way to check consistency for overlay
+	;;
+    pvfs2)
 	;;
     udf)
 	# do nothing for now
@@ -2340,6 +2689,9 @@ _check_test_fs()
 	;;
     tmpfs)
 	# no way to check consistency for tmpfs
+	;;
+    ubifs)
+	# there is no fsck program for ubifs yet
 	;;
     *)
 	_check_generic_filesystem $TEST_DEV
@@ -2376,14 +2728,22 @@ _check_scratch_fs()
     ceph)
 	# no way to check consistency for CephFS
 	;;
+    glusterfs)
+	# no way to check consistency for GlusterFS
+	;;
     overlay)
 	# no way to check consistency for overlay
+	;;
+    pvfs2)
 	;;
     btrfs)
 	_check_btrfs_filesystem $device
 	;;
     tmpfs)
 	# no way to check consistency for tmpfs
+	;;
+    ubifs)
+	# there is no fsck program for ubifs yet
 	;;
     *)
 	_check_generic_filesystem $device
@@ -2487,6 +2847,12 @@ _die()
         exit 1
 }
 
+# convert urandom incompressible data to compressible text data
+_ddt()
+{
+	od /dev/urandom | dd iflag=fullblock ${*}
+}
+
 #takes files, randomdata
 _nfiles()
 {
@@ -2498,6 +2864,8 @@ _nfiles()
                 if [ $size -gt 0 ]; then
                     if [ "$2" == "false" ]; then
                         dd if=/dev/zero of=$file bs=1024 count=$size 2>&1 | _filter_dd
+                    elif [ "$2" == "comp" ]; then
+                        _ddt of=$file bs=1024 count=$size 2>&1 | _filter_dd
                     else
                         dd if=/dev/urandom of=$file bs=1024 count=$size 2>&1 | _filter_dd
                     fi
@@ -2542,10 +2910,10 @@ _populate_fs()
     depth=2         # depth of tree from root to leaves
     verbose=false
     root=root       # path of initial root of directory tree
-    randomdata=false # -x data type urandom or zero
+    randomdata=false # -x data type urandom, zero or compressible
 
     OPTIND=1
-    while getopts "d:f:n:r:s:v:x" c
+    while getopts "d:f:n:r:s:v:x:c" c
     do
         case $c in
         d)      depth=$OPTARG;;
@@ -2555,6 +2923,7 @@ _populate_fs()
         v)      verbose=true;;
         r)      root=$OPTARG;;
         x)      randomdata=true;;
+        c)      randomdata=comp;;
         esac
     done
 
@@ -2694,6 +3063,16 @@ _require_freeze()
 	[ $result -eq 0 ] || _notrun "$FSTYP does not support freezing"
 }
 
+# Does NFS export work on this fs?
+_require_exportfs()
+{
+	_require_test_program "open_by_handle"
+	mkdir -p "$TEST_DIR"/exportfs_test
+	$here/src/open_by_handle -c "$TEST_DIR"/exportfs_test 2>&1 \
+		|| _notrun "$FSTYP does not support NFS export"
+}
+
+
 # Does shutdown work on this fs?
 _require_scratch_shutdown()
 {
@@ -2703,6 +3082,19 @@ _require_scratch_shutdown()
 	_scratch_mount
 	src/godown -f $SCRATCH_MNT 2>&1 \
 		|| _notrun "$FSTYP does not support shutdown"
+	_scratch_unmount
+}
+
+# Does dax mount option work on this dev/fs?
+_require_scratch_dax()
+{
+	_require_scratch
+	_scratch_mkfs > /dev/null 2>&1
+	_scratch_mount -o dax
+	# Check options to be sure. XFS ignores dax option
+	# and goes on if dev underneath does not support dax.
+	_fs_options $SCRATCH_DEV | grep -qw "dax" || \
+		_notrun "$SCRATCH_DEV $FSTYP does not support -o dax"
 	_scratch_unmount
 }
 
@@ -2731,7 +3123,7 @@ _require_metadata_journaling()
 	fi
 
 	case "$FSTYP" in
-	ext2|vfat|msdos)
+	ext2|vfat|msdos|udf)
 		_notrun "$FSTYP does not support metadata journaling"
 		;;
 	ext4)
@@ -2748,12 +3140,6 @@ _require_metadata_journaling()
 	esac
 }
 
-# Does fiemap support?
-_require_fiemap()
-{
-	_require_xfs_io_command "fiemap"
-}
-
 _count_extents()
 {
 	$XFS_IO_PROG -c "fiemap" $1 | tail -n +2 | grep -v hole | wc -l
@@ -2762,6 +3148,11 @@ _count_extents()
 _count_holes()
 {
 	$XFS_IO_PROG -c "fiemap" $1 | tail -n +2 | grep hole | wc -l
+}
+
+_count_attr_extents()
+{
+	$XFS_IO_PROG -c "fiemap -a" $1 | tail -n +2 | grep -v hole | wc -l
 }
 
 # arg 1 is dev to remove and is output of the below eg.
@@ -2990,18 +3381,21 @@ _require_test_lsattr()
 
 _require_chattr()
 {
-    attribute=$1
+	if [ -z "$1" ]; then
+		echo "Usage: _require_chattr <attr>"
+		exit 1
+	fi
+	local attribute=$1
 
-    touch $TEST_DIR/syscalltest
-    chattr "+$attribute" $TEST_DIR/syscalltest > $TEST_DIR/syscalltest.out 2>&1
-    status=$?
-    chattr "-$attribute" $TEST_DIR/syscalltest > $TEST_DIR/syscalltest.out 2>&1
-    if [ "$status" -ne 0 ]; then
-      _notrun "file system doesn't support chattr +$attribute"
-    fi
-    cat $TEST_DIR/syscalltest.out >> $seqres.full
-
-    rm -f $TEST_DIR/syscalltest.out
+	touch $TEST_DIR/syscalltest
+	chattr "+$attribute" $TEST_DIR/syscalltest > $TEST_DIR/syscalltest.out 2>&1
+	status=$?
+	chattr "-$attribute" $TEST_DIR/syscalltest > $TEST_DIR/syscalltest.out 2>&1
+	if [ "$status" -ne 0 ]; then
+		_notrun "file system doesn't support chattr +$attribute"
+	fi
+	cat $TEST_DIR/syscalltest.out >> $seqres.full
+	rm -f $TEST_DIR/syscalltest.out
 }
 
 _get_total_inode()
@@ -3085,18 +3479,18 @@ _check_dmesg()
 	# use sed \cregexpc address type, since $seqnum contains "/"
 	dmesg | tac | sed -ne "0,\#run fstests $seqnum at $date_time#p" | \
 		tac | $filter >$seqres.dmesg
-	grep -q -e "kernel BUG at" \
+	egrep -q -e "kernel BUG at" \
 	     -e "WARNING:" \
 	     -e "BUG:" \
 	     -e "Oops:" \
 	     -e "possible recursive locking detected" \
 	     -e "Internal error" \
-	     -e "INFO: suspicious RCU usage" \
+	     -e "(INFO|ERR): suspicious RCU usage" \
 	     -e "INFO: possible circular locking dependency detected" \
 	     -e "general protection fault:" \
 	     $seqres.dmesg
 	if [ $? -eq 0 ]; then
-		echo "_check_dmesg: something found in dmesg (see $seqres.dmesg)"
+		_dump_err "_check_dmesg: something found in dmesg (see $seqres.dmesg)"
 		return 1
 	else
 		rm -f $seqres.dmesg
@@ -3139,15 +3533,17 @@ init_rc()
 		fi
 	fi
 
-	# XXX DEP 8/27/19 I don't understand why this isn't working.
-	# This code gets removed in newer versions; try commenting for now
-#	if [ "`_fs_type $TEST_DEV`" != "$FSTYP" ]
-#	then
-#		echo "common/rc: Error: \$TEST_DEV ($TEST_DEV) is not a MOUNTED $FSTYP filesystem"
-#		# raw $DF_PROG cannot handle NFS/CIFS/overlay correctly
-#		_df_device $TEST_DEV
-#		exit 1
-#	fi
+	# Sanity check that TEST partition is not mounted at another mount point
+	# or as another fs type
+	_check_mounted_on TEST_DEV $TEST_DEV TEST_DIR $TEST_DIR $FSTYP || exit 1
+	if [ -n "$SCRATCH_DEV" ]; then
+		# Sanity check that SCRATCH partition is not mounted at another
+		# mount point, because it is about to be unmounted and formatted.
+		# Another fs type for scratch is fine (bye bye old fs type).
+		_check_mounted_on SCRATCH_DEV $SCRATCH_DEV SCRATCH_MNT $SCRATCH_MNT
+		[ $? -le 1 ] || exit 1
+	fi
+
 	# Figure out if we need to add -F ("foreign", deprecated) option to xfs_io
 	$XFS_IO_PROG -c stat $TEST_DIR 2>&1 | grep -q "is not on an XFS filesystem" && \
 		export XFS_IO_PROG="$XFS_IO_PROG -F"
@@ -3201,13 +3597,30 @@ _sysfs_dev()
 	echo /sys/dev/block/$_maj:$_min
 }
 
-get_block_size()
+# Get the minimum block size of a file.  Usually this is the
+# minimum fs block size, but some filesystems (ocfs2) do block
+# mappings in larger units.
+_get_file_block_size()
 {
 	if [ -z $1 ] || [ ! -d $1 ]; then
-		echo "Missing mount point argument for get_block_size"
+		echo "Missing mount point argument for _get_file_block_size"
 		exit 1
 	fi
-	echo `stat -f -c %S $1`
+	if [ "$FSTYP" = "ocfs2" ]; then
+		stat -c '%o' $1
+	else
+		_get_block_size $1
+	fi
+}
+
+# Get the minimum block size of an fs.
+_get_block_size()
+{
+	if [ -z $1 ] || [ ! -d $1 ]; then
+		echo "Missing mount point argument for _get_block_size"
+		exit 1
+	fi
+	stat -f -c %S $1
 }
 
 get_page_size()
@@ -3249,6 +3662,12 @@ _require_fs_sysfs()
 	if [ ! -e /sys/fs/${FSTYP}/${dname}/${attr} ];then
 		_notrun "This test requires /sys/fs/${FSTYP}/${dname}/${attr}"
 	fi
+}
+
+_require_statx()
+{
+	$here/src/stat_test --check-statx ||
+	_notrun "This test requires the statx system call"
 }
 
 # Write "content" into /sys/fs/$FSTYP/$DEV/$ATTR
@@ -3297,6 +3716,53 @@ _get_fs_sysfs_attr()
 	cat /sys/fs/${FSTYP}/${dname}/${attr}
 }
 
+# Print the value of a filesystem module parameter
+# at /sys/module/$FSTYP/parameters/$PARAM
+#
+# Usage example (FSTYP=overlay):
+#   _get_fs_module_param index
+_get_fs_module_param()
+{
+	cat /sys/module/${FSTYP}/parameters/${1} 2>/dev/null
+}
+
+# Generic test for specific filesystem feature.
+# Currently only implemented to test overlayfs features.
+_require_scratch_feature()
+{
+	local feature=$1
+
+	case "$FSTYP" in
+	overlay)
+		# overalyfs features (e.g. redirect_dir, index) are
+		# configurable from Kconfig (the build default), by module
+		# parameter (the system default) and per mount by mount
+		# option ${feature}=[on|off].
+		#
+		# If the module parameter does not exist then there is no
+		# point in checking the mount option.
+		local default=`_get_fs_module_param ${feature}`
+		[ "$default" = Y ] || [ "$default" = N ] || \
+			_notrun "feature '${feature}' not supported by ${FSTYP}"
+
+		_scratch_mkfs > /dev/null 2>&1
+		_scratch_mount -o ${feature}=on || \
+			_notrun "${FSTYP} feature '${feature}' cannot be enabled on ${SCRATCH_DEV}"
+		# Check options to be sure. For example, Overlayfs will fallback to
+		# index=off if underlying fs does not support file handles.
+		# Overlayfs only displays mount option if it differs from the default.
+		# Overlayfs may enable the feature, but fallback to read-only mount.
+		((( [ "$default" = N ] && _fs_options $SCRATCH_DEV | grep -q "${feature}=on" ) || \
+		  ( [ "$default" = Y ] && ! _fs_options $SCRATCH_DEV | grep -q "${feature}=off" )) && \
+		    touch $SCRATCH_MNT/foo 2>/dev/null ) || \
+		        _notrun "${FSTYP} feature '${feature}' cannot be enabled on ${SCRATCH_DEV}"
+		_scratch_unmount
+		;;
+	*)
+		_fail "Test for feature '${feature}' of ${FSTYP} is not implemented"
+		;;
+	esac
+}
 
 
 init_rc

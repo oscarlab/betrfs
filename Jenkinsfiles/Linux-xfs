@@ -1,0 +1,38 @@
+#!/usr/bin/env groovy
+
+pipeline {
+  agent {
+    dockerfile { filename 'Jenkinsfiles/Dockerfile-xfstests'
+	args '--privileged --cap-add SYS_ADMIN -v /playpen/btrfs:/host/playpen/btrfs:ro -v /lib/modules:/lib/modules:ro -v /etc/group:/etc/group:ro -v /etc/passwd:/etc/passwd:ro -v /etc/shadow:/etc/shadow:ro -v /etc/sudoers:/etc/sudoers:ro -v /playpen/linux-source-3.11.10-ftfs:/usr/src/linux-source-3.11.10-ftfs -h betrfs-dev'
+	label 'betrfs-xfstests'}
+  }
+
+  stages {
+    stage('Testing') {
+      steps {
+	timeout(time: 15, unit: 'MINUTES') {
+           sh '''
+	     /usr/bin/sudo /bin/cp /host/playpen/btrfs/* /sbin/
+	     /usr/bin/sudo /bin/ln -s $(/bin/pwd) /oscar/betrfs
+	     cp -r /usr/src/linux-source-3.11.10-ftfs /oscar/betrfs/linux-3.11.10
+	     cd /oscar/betrfs/qemu-utils/xfstests/
+	     ./xfstests.sh
+           '''
+	}
+      }
+    }
+  }
+
+  post {
+    always {
+      sh '''
+	cd /oscar/betrfs/qemu-utils/xfstests/fstests/kvm-xfstests
+	/usr/bin/sudo /usr/bin/find . -user root -exec /bin/chown jenkins:jenkins {} \\;
+      '''
+      findText regexp: 'Passed\\sall\\s[1-9]\\d*\\stests', alsoCheckConsoleOutput: true, succeedIfFound: true
+      findText regexp: 'Failed\\s[1-9]\\d*\\sof\\s\\d*\\stests', alsoCheckConsoleOutput: true, unstableIfFound: true
+      findText regexp: 'Not\\srun:\\s\\S', alsoCheckConsoleOutput: true, unstableIfFound: true
+      //findText regexp: 'ftfs\\serror', alsoCheckConsoleOutput: true, unstableIfFound: true
+    }
+  }
+}

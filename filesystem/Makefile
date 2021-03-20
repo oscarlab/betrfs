@@ -40,6 +40,14 @@ KBUILD_CFLAGS += -DFTFS_NO_PRINT
 #KBUILD_CFLAGS += -DFTFS_DEBUG #-DSOUTHBOUND_DEBUG #-DFTFS_MEM_DEBUG # -DFTFS_DEBUG_PTRS
 #include $(PWD)/.turnoff-opts.mkinclude
 
+debug: KBUILD_CFLAGS += -DFTFS_DEBUG
+#debug: KBUILD_CFLAGS += -DFTFS_MEM_DEBUG
+#debug: KBUILD_CFLAGS += -DTOKU_DEBUG_PTRS
+#debug: KBUILD_CFLAGS += -DSOUTHBOUND_DEBUG
+#debug: KBUILD_CFLAGS += -DTOKU_MEMLEAK_DETECT
+#debug: KBUILD_CFLAGS += -DFTFS_EMPTY_DIR_VERIFY
+#debug: KBUILD_CFLAGS += -DFT_INDIRECT_DEBUG
+
 LIBSRC-OBJS = \
 libsrc/ydb.cc.o \
 libsrc/ydb_cursor.cc.o \
@@ -207,6 +215,12 @@ LIBLZMA-OBJS = \
 	liblzma/liblzma_la-block_util.o \
 
 all: libftindex.o
+	make -C $(MOD_KERN_SOURCE) M=$(PWD) modules
+
+bench: libftindex.o
+	make -C $(MOD_KERN_SOURCE) M=$(PWD) modules
+
+debug: libftindex.o
 	make -C $(MOD_KERN_SOURCE) M=$(PWD) modules
 
 libftindex.o: $(LIBPORTABILITY-OBJS) $(LIBFT-OBJS) $(LIBUTIL-OBJS) $(LIBLOCKTREE-OBJS) $(LIBSRC-OBJS) $(LIBLZMA-OBJS)
