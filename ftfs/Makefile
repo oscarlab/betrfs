@@ -648,12 +648,12 @@ libft/test/cachetable-clone-partial-fetch-pinned-node.cc.o \
 libft/test/quicklz-test.cc.o \
 libft/test/test-pick-child-to-flush.cc.o \
 libft/test/test-ft-overflow.cc.o \
-libft/test/test-range-del.cc.o \
-libft/test/test-range-del2.cc.o \
 libft/test/recovery-range-delete.cc.o \
 libft/test/test-ubi-root-chkpt.cc.o
-#libft/test/test_unbound_insert_lists.cc.o
 
+#libft/test/test_unbound_insert_lists.cc.o
+#libft/test/test-range-del.cc.o \
+#libft/test/test-range-del2.cc.o \
 #libft/compress.cc.o \
 # Not needed in kernel, according to Leif
 #libft/ftloader.cc.o \

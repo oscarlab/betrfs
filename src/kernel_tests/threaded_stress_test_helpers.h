@@ -1661,7 +1661,15 @@ static int UU() hot_op(DB_TXN *UU(txn), ARG UU(arg), void* UU(operation_extra), 
 
 static void
 get_ith_table_name(char *buf, size_t len, int i) {
-    snprintf(buf, len, "main%d", i);
+    const char *dbname[5];
+    assert(i <= 4);
+    dbname[0] = TOKU_TEST_DATA_DB_NAME;
+    dbname[1] = TOKU_TEST_META_DB_NAME;
+    dbname[2] = TOKU_TEST_SFS_ONE_NAME;
+    dbname[3] = TOKU_TEST_SFS_TWO_NAME;
+    dbname[4] = TOKU_TEST_SFS_THREE_NAME;
+    assert(len >= strlen(dbname[i]) + 1);
+    memcpy(buf, dbname[i], strlen(dbname[i]) + 1);
 }
 
 static DB_TXN * const null_txn = 0;
@@ -1975,11 +1983,11 @@ static int create_tables(DB_ENV **env_res, DB **db_res, int num_DBs,
 ) {
     int r;
     struct env_args env_args = cli_args->env_args;
-    toku_os_recursive_delete(env_args.envdir);
+    r = toku_fs_reset(env_args.envdir, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
+    assert(r==0);
     struct toku_db_key_operations key_ops;
     memset(&key_ops, 0, sizeof(key_ops));
     key_ops.keycmp = bt_compare;
-    r = toku_os_mkdir(env_args.envdir, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
 
     DB_ENV *env;
     db_env_set_num_bucket_mutexes(env_args.num_bucket_mutexes);
@@ -2305,7 +2313,7 @@ static struct cli_args UU() get_default_args(void) {
         .disperse_keys = false,
         .direct_io = false,
         };
-    DEFAULT_ARGS.env_args.envdir = TOKU_TEST_FILENAME;
+    DEFAULT_ARGS.env_args.envdir = TOKU_TEST_ENV_DIR_NAME;
     return DEFAULT_ARGS;
 }
 
@@ -2313,7 +2321,7 @@ static struct cli_args UU() get_default_args_for_perf(void) {
     struct cli_args args = get_default_args();
     args.num_elements = 1000000; //default of 1M
     args.env_args = DEFAULT_PERF_ENV_ARGS;
-    args.env_args.envdir = TOKU_TEST_FILENAME;
+    args.env_args.envdir = TOKU_TEST_ENV_DIR_NAME;
     return args;
 }
 

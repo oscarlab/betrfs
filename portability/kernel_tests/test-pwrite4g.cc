@@ -108,8 +108,9 @@ extern "C" int test_pwrite4g(void);
 
 int test_pwrite4g(void) {
     int r;
-    unlink(TOKU_TEST_FILENAME);
-    int fd = open(TOKU_TEST_FILENAME, O_RDWR | O_CREAT | O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
+    int fd = open(TOKU_TEST_FILENAME_DATA, O_RDWR | O_CREAT | O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO);
     assert(fd>=0);
     char *XMALLOC_N_ALIGNED(512, 512, buf);
     memset(buf, 0, 512);

@@ -24,8 +24,8 @@
 #include "ftfs.h"
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Stony Brook University");
-MODULE_DESCRIPTION("Fractal Tree File System");
+MODULE_AUTHOR("BetrFS.org");
+MODULE_DESCRIPTION("B^e-tree file system");
 
 static char *sb_dev = NULL;
 module_param(sb_dev, charp, 0);

@@ -127,24 +127,23 @@ static void do_1381_maybe_lock (int _do_loader, uint64_t *raw_count) {
     if(_do_loader == 1) do_loader = 0;
     #endif
     
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
-
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
 
     // Create an empty file
     {
 	DB_ENV *env;
 	DB *db;
 	
-	const int envflags = DB_CREATE|DB_INIT_MPOOL|DB_INIT_TXN|DB_INIT_LOCK|DB_THREAD|DB_PRIVATE;
+	const int envflags = DB_CREATE|DB_INIT_MPOOL|DB_INIT_LOG|DB_INIT_TXN|DB_INIT_LOCK|DB_THREAD|DB_PRIVATE;
 
 	r = db_env_create(&env, 0);                                           CKERR(r);
 	r = env->set_redzone(env, 0);                                         CKERR(r);
         r = env->set_generate_row_callback_for_put(env, generate_row_for_put); CKERR(r);
-	r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);        CKERR(r);
+	r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);        CKERR(r);
 
 	r = db_create(&db, env, 0);                                           CKERR(r);
-	r = db->open(db, null_txn, "main", 0,     DB_BTREE, DB_CREATE, 0666); CKERR(r);
+	r = db->open(db, null_txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, 0666); CKERR(r);
 
 	r = db->close(db, 0);                                                 CKERR(r);
 	r = env->close(env, 0);                                               CKERR(r);
@@ -153,15 +152,15 @@ static void do_1381_maybe_lock (int _do_loader, uint64_t *raw_count) {
     {
 	DB_ENV *env;
 	DB *db;
-	const int envflags = DB_CREATE|DB_INIT_MPOOL|DB_INIT_TXN|DB_INIT_LOCK|DB_THREAD |DB_PRIVATE;
+	const int envflags = DB_CREATE|DB_INIT_MPOOL|DB_INIT_LOG|DB_INIT_TXN|DB_INIT_LOCK|DB_THREAD |DB_PRIVATE;
 	
 	r = db_env_create(&env, 0);                                           CKERR(r);
 	r = env->set_redzone(env, 0);                                         CKERR(r);
         r = env->set_generate_row_callback_for_put(env, generate_row_for_put); CKERR(r);
-	r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);        CKERR(r);
+	r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);        CKERR(r);
 
 	r = db_create(&db, env, 0);                                           CKERR(r);
-	r = db->open(db, null_txn, "main", 0,     DB_BTREE, 0, 0666);         CKERR(r);
+	r = db->open(db, null_txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, 0, 0666); CKERR(r);
 
 	DB_TXN *txn;
 	r = env->txn_begin(env, 0, &txn, 0);                              CKERR(r);

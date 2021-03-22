@@ -97,7 +97,7 @@ PATENT RIGHTS GRANT:
 #include <db.h>
 #include <memory.h>
 
-static const char *dbfile = "test.db";
+static const char *dbfile = TOKU_TEST_DATA_DB_NAME;
 static const char *dbname = 0;
 
 static int
@@ -132,11 +132,9 @@ static void
 test_db_create (void) {
     int r;
 
-    unlink(dbfile);
-
     DB_ENV *env;
     r = db_env_create(&env, 0); assert(r == 0);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL, 0); assert(r == 0);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL+DB_INIT_LOG+DB_INIT_TXN, 0); assert(r == 0);
 
     DB *db;
     r = db_create(&db, env, 0); assert(r == 0);
@@ -152,12 +150,10 @@ test_db_create (void) {
 static void
 test_db_thread (void) {
     int r;
-   // pre_setup();
-    unlink(dbfile);
 
     DB_ENV *env;
     r = db_env_create(&env, 0); assert(r == 0);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL+DB_THREAD, 0); assert(r == 0);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL+DB_THREAD+DB_INIT_LOG+DB_INIT_TXN, 0); assert(r == 0);
 
     DB *db;
     r = db_create(&db, env, 0); assert(r == 0);
@@ -175,9 +171,12 @@ test_db_thread (void) {
 extern "C" int test_test_thread_flags(void);
 int test_test_thread_flags(void) {
     pre_setup();
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    int r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
     test_db_create();
+
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
     test_db_thread();
     post_teardown();
     return 0;

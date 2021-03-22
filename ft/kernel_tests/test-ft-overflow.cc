@@ -105,7 +105,9 @@ test_overflow (void) {
     CACHETABLE ct;
     uint32_t nodesize = 1<<20; 
     int r;
-    unlink(fname);
+
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
+
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
     r = toku_open_ft_handle(fname, 1, &t, nodesize, nodesize / 8, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun); assert(r==0);
 
@@ -129,7 +131,7 @@ test_ft_overflow (void) {
     initialize_dummymsn();
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
-    fname = TOKU_TEST_FILENAME;
+    fname = TOKU_TEST_FILENAME_DATA;
     test_overflow();
     toku_ft_layer_destroy();
     return 0;

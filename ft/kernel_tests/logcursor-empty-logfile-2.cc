@@ -98,8 +98,7 @@ int
 test_logcursor_empty_logfile_2 (void) {
 
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU);    assert(r==0);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);    assert(r==0);
     TOKULOGGER logger;
     LSN lsn = ZERO_LSN;
 
@@ -110,7 +109,7 @@ test_logcursor_empty_logfile_2 (void) {
         r = toku_logger_create(&logger);
         assert(r == 0);
 
-        r = toku_logger_open(TOKU_TEST_FILENAME, logger);
+        r = toku_logger_open(TOKU_TEST_ENV_DIR_NAME, logger);
         assert(r == 0);
 
         r = toku_logger_close(&logger);
@@ -122,7 +121,7 @@ test_logcursor_empty_logfile_2 (void) {
         r = toku_logger_create(&logger);
         assert(r == 0);
 
-        r = toku_logger_open(TOKU_TEST_FILENAME, logger);
+        r = toku_logger_open(TOKU_TEST_ENV_DIR_NAME, logger);
         assert(r == 0);
 
         char str[32];
@@ -139,7 +138,7 @@ test_logcursor_empty_logfile_2 (void) {
         r = toku_logger_create(&logger);
         assert(r == 0);
 
-        r = toku_logger_open(TOKU_TEST_FILENAME, logger);
+        r = toku_logger_open(TOKU_TEST_ENV_DIR_NAME, logger);
         assert(r == 0);
 
         r = toku_logger_close(&logger);
@@ -150,7 +149,7 @@ test_logcursor_empty_logfile_2 (void) {
     TOKULOGCURSOR lc = NULL;
     struct log_entry *le;
 
-    r = toku_logcursor_create(&lc, TOKU_TEST_FILENAME);
+    r = toku_logcursor_create(&lc, TOKU_TEST_ENV_DIR_NAME);
     assert(r == 0 && lc != NULL);
 
     helloseq = 0;
@@ -170,7 +169,7 @@ test_logcursor_empty_logfile_2 (void) {
     assert(r == 0 && lc == NULL);
 
     // verify the log backwards
-    r = toku_logcursor_create(&lc, TOKU_TEST_FILENAME);
+    r = toku_logcursor_create(&lc, TOKU_TEST_ENV_DIR_NAME);
     assert(r == 0 && lc != NULL);
 
     helloseq = N;
@@ -189,7 +188,7 @@ test_logcursor_empty_logfile_2 (void) {
     r = toku_logcursor_destroy(&lc);
     assert(r == 0 && lc == NULL);
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);    assert(r==0);
 
     return 0;
 }

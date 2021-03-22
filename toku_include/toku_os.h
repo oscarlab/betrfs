@@ -137,6 +137,8 @@ int toku_os_lock_file(const char *name);
 int toku_os_unlock_file(int fildes, const char *name);
 
 int toku_os_mkdir(const char *pathname, mode_t mode) __attribute__((__visibility__("default")));
+int toku_fs_reset(const char *pathname, mode_t mode) __attribute__((__visibility__("default")));
+int toku_update_logfile_size(uint64_t size) __attribute__((__visibility__("default")));
 
 // Get the current process user and kernel use times
 int toku_os_get_process_times(struct timeval *usertime, struct timeval *kerneltime);

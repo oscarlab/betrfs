@@ -104,10 +104,8 @@ test_txn_recover3 (int nrows) {
     if (verbose) printf("test_txn_recover1:%d\n", nrows);
 
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
-    char dirname[TOKU_PATH_MAX+1];
-    toku_os_mkdir(toku_path_join(dirname, 2, TOKU_TEST_FILENAME, "t.tokudb"), S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
 
     DB_ENV *env;
     DB *mdb, *sdb;
@@ -117,12 +115,12 @@ test_txn_recover3 (int nrows) {
 
     r = db_env_create(&env, 0);        assert(r == 0);
     env->set_errfile(env, stderr);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE|DB_INIT_MPOOL|DB_INIT_TXN|DB_INIT_LOCK|DB_INIT_LOG |DB_THREAD |DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE|DB_INIT_MPOOL|DB_INIT_TXN|DB_INIT_LOCK|DB_INIT_LOG |DB_THREAD |DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r = env->close(env, 0); CKERR(r);
 
     r = db_env_create(&env, 0);        assert(r == 0);
     env->set_errfile(env, stderr);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE|DB_INIT_MPOOL|DB_INIT_TXN|DB_INIT_LOCK|DB_INIT_LOG |DB_THREAD |DB_PRIVATE | DB_RECOVER, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE|DB_INIT_MPOOL|DB_INIT_TXN|DB_INIT_LOCK|DB_INIT_LOG |DB_THREAD |DB_PRIVATE | DB_RECOVER, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
 
     r = db_create(&mdb, env, 0); assert(r == 0);
     mdb->set_errfile(mdb,stderr); // Turn off those annoying errors
@@ -176,7 +174,7 @@ test_txn_recover3 (int nrows) {
 
     r = db_env_create(&env, 0);        assert(r == 0);
     env->set_errfile(env, stderr);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE|DB_INIT_MPOOL|DB_INIT_TXN|DB_INIT_LOCK|DB_INIT_LOG |DB_THREAD |DB_PRIVATE | DB_RECOVER, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE|DB_INIT_MPOOL|DB_INIT_TXN|DB_INIT_LOCK|DB_INIT_LOG |DB_THREAD |DB_PRIVATE | DB_RECOVER, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r = env->close(env, 0); assert(r == 0);
 }
 

@@ -97,14 +97,14 @@ PATENT RIGHTS GRANT:
 static void
 check_logmax (int max) {
     int any_too_big=0;
-    DIR *dir = opendir(TOKU_TEST_FILENAME);
+    DIR *dir = opendir(TOKU_TEST_ENV_DIR_NAME);
     struct dirent *ent;
     while ((ent=readdir(dir))) {
 	if ((ent->d_type==DT_REG || ent->d_type==DT_UNKNOWN) && strncmp(ent->d_name, "log", 3)==0) {
 	    // It is a "log*" file
 	    char full_fname[TOKU_PATH_MAX+1];
 	    toku_struct_stat sbuf;
-	    int r = toku_stat(toku_path_join(full_fname, 2, TOKU_TEST_FILENAME, ent->d_name), &sbuf);
+	    int r = toku_stat(toku_path_join(full_fname, 2, TOKU_TEST_ENV_DIR_NAME, ent->d_name), &sbuf);
 	    assert(r==0);
 	    if (verbose)
 		printf("%s is of size %" PRId64 "\n", ent->d_name, (int64_t)sbuf.st_size);
@@ -123,14 +123,13 @@ test_logmax (int logmax) {
     DB *db;
     DB_TXN *tid;
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r=toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);       assert(r==0);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);       assert(r==0);
     r=db_env_create(&env, 0); assert(r==0);
     if (logmax>0) {
 	r=env->set_lg_max(env, logmax);
 	assert(r==0);
     }
-    r=env->open(env, TOKU_TEST_FILENAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r=env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     {
 	uint32_t lmax;
 	r=env->get_lg_max(env, &lmax);
@@ -144,7 +143,7 @@ test_logmax (int logmax) {
     }
     r=db_create(&db, env, 0); CKERR(r);
     r=env->txn_begin(env, 0, &tid, 0); assert(r==0);
-    r=db->open(db, tid, "foo.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r=db->open(db, tid, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r=tid->commit(tid, 0);    assert(r==0);
 
     int i;

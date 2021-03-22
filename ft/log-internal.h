@@ -115,7 +115,8 @@ using namespace toku;
 // Locking for the logger
 //  For most purposes we use the big ydb lock.
 // To log: grab the buf lock
-//  If the buf would overflow, then grab the file lock, swap file&buf, release buf lock, write the file, write the entry, release the file lock
+//  If the buf would overflow, then grab the file lock, swap file&buf,
+//  release buf lock, write the file, write the entry, release the file lock
 //  else append to buf & release lock
 #define LOGGER_MIN_BUF_SIZE (1<<26)
 struct mylock {
@@ -210,9 +211,14 @@ struct tokulogger {
     struct mylock  input_lock;
 
     toku_cond_t input_swapped;
-    toku_mutex_t output_condition_lock; // if you need both this lock and input_lock, acquire the output_lock first, then input_lock. More typical is to get the output_is_available condition to be false, and then acquire the input_lock.
+    toku_mutex_t output_condition_lock; // if you need both this lock and input_lock,
+                                        // acquire the output_lock first, then input_lock.
+                                        // More typical is to get the output_is_available condition to be false,
+                                        // and then acquire the input_lock.
     toku_cond_t  output_condition;      //
-    bool output_is_available;           // this is part of the predicate for the output condition.  It's true if no thread is modifying the output (either doing an fsync or otherwise fiddling with the output).
+    bool output_is_available;           // this is part of the predicate for the output condition.
+                                        // It's true if no thread is modifying the output (either doing an
+                                        // fsync or otherwise fiddling with the output).
 
     bool is_open;
     bool write_log_files;
@@ -229,7 +235,9 @@ struct tokulogger {
     
     // To access these, you must have the output condition lock.
     LSN written_lsn; // the last lsn written
-    LSN fsynced_lsn; // What is the LSN of the highest fsynced log entry  (accessed only while holding the output lock, and updated only when the output lock and output permission are held)
+    LSN fsynced_lsn; // What is the LSN of the highest fsynced log entry
+                     // accessed only while holding the output lock,
+                     // and updated only when the output lock and output permission are held)
     LSN last_completed_checkpoint_lsn;     // What is the LSN of the most recent completed checkpoint.
     long long next_log_file_number;
     struct logbuf outbuf; // data being written to the file
@@ -257,7 +265,8 @@ struct tokulogger {
     tokutime_t time_spent_writing_to_disk; // how much tokutime did we spend writing to disk?
 
     void (*remove_finalize_callback) (DICTIONARY_ID, void*);  // ydb-level callback to be called when a transaction that ...
-    void * remove_finalize_callback_extra;                    // ... deletes a file is committed or when one that creates a file is aborted.
+    void * remove_finalize_callback_extra;                    // ... deletes a file is committed or
+                                                              // when one that creates a file is aborted.
     CACHEFILE rollback_cachefile;
     rollback_log_node_cache rollback_cache;
     TXN_MANAGER txn_manager;

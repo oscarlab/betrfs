@@ -524,7 +524,12 @@ int toku_loader_cleanup_temp_files(DB_ENV *env) {
             char fname[fnamelen];
             int l = snprintf(fname, fnamelen, "%s/%s", dir, de->d_name);
             assert(l+1 == fnamelen);
+#ifndef USE_SFS
             r = unlink(fname);
+#else
+            // YZJ: It seems loader is never used
+            assert(false);
+#endif
             if (r!=0) {
 #ifdef TOKU_LINUX_MODULE
                 result = get_error_errno(r);

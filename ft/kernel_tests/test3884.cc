@@ -194,9 +194,10 @@ test_split_on_boundary(void)
 {
     struct ftnode sn;
 
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r == 0);
+
     int fd = open(fname, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
 
-    int r;
 
     setup_ftnode_header(&sn);
     const int nelts = 2 * nodesize / eltsize;
@@ -214,7 +215,6 @@ test_split_on_boundary(void)
     }
 
     close(fd);
-    unlink(fname);
     CACHETABLE ct;
     FT_HANDLE brt;
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
@@ -254,9 +254,9 @@ test_split_with_everything_on_the_left(void)
 {
     struct ftnode sn;
 
-    int fd = open(fname, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r == 0);
 
-    int r;
+    int fd = open(fname, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
 
     setup_ftnode_header(&sn);
     const int nelts = 2 * nodesize / eltsize;
@@ -284,7 +284,6 @@ test_split_with_everything_on_the_left(void)
         }
     }
     close(fd);
-    unlink(fname);
     CACHETABLE ct;
     FT_HANDLE brt;
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
@@ -321,9 +320,9 @@ test_split_on_boundary_of_last_node(void)
 {
     struct ftnode sn;
 
-    int fd = open(fname, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r == 0);
 
-    int r;
+    int fd = open(fname, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
 
     setup_ftnode_header(&sn);
     const int nelts = 2 * nodesize / eltsize;
@@ -355,7 +354,6 @@ test_split_on_boundary_of_last_node(void)
         }
     }
     close(fd);
-    unlink(fname);
     CACHETABLE ct;
     FT_HANDLE brt;
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
@@ -382,9 +380,9 @@ test_split_at_begin(void)
 {
     struct ftnode sn;
 
-    int fd = open(fname, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r == 0);
 
-    int r;
+    int fd = open(fname, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
 
     setup_ftnode_header(&sn);
     const int nelts = 2 * nodesize / eltsize;
@@ -420,7 +418,6 @@ test_split_at_begin(void)
     }
 
     close(fd);
-    unlink(fname);
     CACHETABLE ct;
     FT_HANDLE brt;
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
@@ -447,9 +444,9 @@ test_split_at_end(void)
 {
     struct ftnode sn;
 
-    int fd = open(fname, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r == 0);
 
-    int r;
+    int fd = open(fname, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
 
     setup_ftnode_header(&sn);
     const int nelts = 2 * nodesize / eltsize;
@@ -481,7 +478,6 @@ test_split_at_end(void)
     }
 
     close(fd);
-    unlink(fname);
     CACHETABLE ct;
     FT_HANDLE brt;
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
@@ -514,10 +510,10 @@ test_split_odd_nodes(void)
 {
     struct ftnode sn;
 
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r == 0);
+
     int fd = open(fname, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO);
     assert(fd >= 0);
-
-    int r;
 
     setup_ftnode_header(&sn);
     // This will give us 9 children.
@@ -536,7 +532,6 @@ test_split_odd_nodes(void)
     }
 
     close(fd);
-    unlink(fname);
     CACHETABLE ct;
     FT_HANDLE brt;
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
@@ -567,7 +562,7 @@ test_3884 (void) {
     initialize_dummymsn();
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
-    fname = TOKU_TEST_FILENAME;
+    fname = TOKU_TEST_FILENAME_DATA;
 
     test_split_on_boundary();
     test_split_with_everything_on_the_left();

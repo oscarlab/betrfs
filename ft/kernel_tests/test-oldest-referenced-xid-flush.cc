@@ -132,8 +132,10 @@ static void test_oldest_referenced_xid_gets_propogated(void) {
     BLOCKNUM grandchild_leaf_blocknum, child_nonleaf_blocknum, root_blocknum;
 
     toku_cachetable_create(&ct, 500*1024*1024, ZERO_LSN, NULL_LOGGER);
-    unlink("foo1.ft_handle");
-    r = toku_open_ft_handle("foo1.ft_handle", 1, &t, NODESIZE, NODESIZE/2, TOKU_DEFAULT_COMPRESSION_METHOD, ct, nullptr, toku_builtin_compare_fun);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);
+    assert(r==0);
+
+    r = toku_open_ft_handle(TOKU_TEST_FILENAME_DATA, 1, &t, NODESIZE, NODESIZE/2, TOKU_DEFAULT_COMPRESSION_METHOD, ct, nullptr, toku_builtin_compare_fun);
     assert(r==0);
 
     toku_testsetup_initialize();  // must precede any other toku_testsetup calls

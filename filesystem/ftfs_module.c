@@ -30,8 +30,8 @@
 #include "nb_proc_toku_dump_node.h"
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Stony Brook University");
-MODULE_DESCRIPTION("Fractal Tree File System");
+MODULE_AUTHOR("BetrFS.org");
+MODULE_DESCRIPTION("B^e-tree file system");
 
 int toku_ncpus = (1<<30);
 module_param(toku_ncpus, int, 0);

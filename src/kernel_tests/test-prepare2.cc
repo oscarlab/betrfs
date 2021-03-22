@@ -94,13 +94,7 @@ PATENT RIGHTS GRANT:
 // Verify that if tokudb crashes during recovery, then the prepared transactions are still prepared.
 
 static void clean_env (const char *envdir) {
-    /*const int len = strlen(envdir)+100;
-    char cmd[len];
-    snprintf(cmd, len, "rm -rf %s", envdir);
-    int r = system(cmd);*/
-    toku_os_recursive_delete(envdir);    
-    //CKERR(r);
-    CKERR(toku_os_mkdir(envdir, S_IRWXU+S_IRWXG+S_IRWXO));
+    CKERR(toku_fs_reset(envdir, S_IRWXU+S_IRWXG+S_IRWXO));
 }
 
 static void setup_env (DB_ENV **envp, const char *envdir) {

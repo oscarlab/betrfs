@@ -189,12 +189,13 @@ doit (bool after_split) {
 	toku_flusher_thread_set_callback(flusher_callback, &after_split);
 
 	toku_cachetable_create(&cacheTable, 500*1024*1024, ZERO_LSN, NULL_LOGGER);
-	unlink("foo4.ft_handle");
-	unlink("bar4.ft_handle");
+
+        r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+        assert(r==0);
 	// note the basement node size is 5 times the node size
 	// this is done to avoid rebalancing when writing a leaf
 	// node to disk
-	r = toku_open_ft_handle("foo4.ft_handle", 1, &ft_handle_t, NODESIZE, 5*NODESIZE, TOKU_DEFAULT_COMPRESSION_METHOD, cacheTable, null_txn, toku_builtin_compare_fun);
+	r = toku_open_ft_handle(TOKU_TEST_FILENAME_DATA, 1, &ft_handle_t, NODESIZE, 5*NODESIZE, TOKU_DEFAULT_COMPRESSION_METHOD, cacheTable, null_txn, toku_builtin_compare_fun);
 	assert(r==0);
 
 	toku_testsetup_initialize();  // must precede any other toku_testsetup calls
@@ -293,14 +294,14 @@ doit (bool after_split) {
 	// checkpointed is what we expect
 	//
 
-	r = fcopy("foo4.ft_handle", "bar4.ft_handle");
+	r = fcopy(TOKU_TEST_FILENAME_DATA, TOKU_TEST_FILENAME_META);
 	assert_zero(r);
 
 	FT_HANDLE c_ft;
 	// note the basement node size is 5 times the node size
 	// this is done to avoid rebalancing when writing a leaf
 	// node to disk
-	r = toku_open_ft_handle("bar4.ft_handle", 0, &c_ft, NODESIZE, 5*NODESIZE, TOKU_DEFAULT_COMPRESSION_METHOD, cacheTable, null_txn, toku_builtin_compare_fun);
+	r = toku_open_ft_handle(TOKU_TEST_FILENAME_META, 0, &c_ft, NODESIZE, 5*NODESIZE, TOKU_DEFAULT_COMPRESSION_METHOD, cacheTable, null_txn, toku_builtin_compare_fun);
 	assert(r==0);
 
 	//

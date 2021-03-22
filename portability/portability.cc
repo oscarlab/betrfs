@@ -131,6 +131,7 @@ PATENT RIGHTS GRANT:
 #include "toku_portability.h"
 #include "toku_os.h"
 #include "toku_time.h"
+#include "toku_path.h"
 #include "memory.h"
 #include <portability/toku_atomic.h>
 #include <util/partitioned_counter.h>
@@ -330,6 +331,85 @@ toku_os_mkdir(const char *pathname, mode_t mode) {
     int r = mkdir(pathname, mode); 
     return r;
 }
+#endif
+
+#ifndef USE_SFS
+/* YZJ: return 0 on success; positive errno on failure */
+int toku_fs_reset(const char *pathname, mode_t mode) {
+    toku_os_recursive_delete(pathname);
+    int r = toku_os_mkdir(pathname, mode);
+    if (r!= 0) {
+       printf("%s: toku_os_mkdir failed\n", __func__);
+    }
+    return r;
+}
+#else
+/* YZJ: return 0 on success; positive errno on failure */
+static int set_file_header_to_zero(const char *name)
+{
+    int fd = open(name, O_RDWR, S_IRUSR | S_IWUSR);
+    if (fd < 0) {
+        printf("%s: open failed ret=%d\n", __func__, fd);
+        return get_error_errno(fd);
+    }
+    char *buf = (char *) malloc(4096*5);
+    assert(buf != NULL);
+    memset(buf, 0, 4096*5);
+    ssize_t ret = toku_os_pwrite(fd, buf, 4096*5, 0);
+    if (ret != 0) {
+        printf("%s: toku_os_pwrite failed, ret=%ld\n", __func__, ret);
+        return ret;
+    }
+    close(fd);
+    return ret;
+}
+
+/* YZJ: return 0 on success; positive errno on failure */
+int toku_fs_reset(const char *pathname, mode_t mode) {
+   (void) pathname;
+   (void) mode;
+   int ret = 0;
+   int line_num = 0;
+
+   ret = set_file_header_to_zero(TOKU_SFS_DATA_FILE);
+   if (ret != 0) {line_num = __LINE__; goto out;}
+
+   ret = set_file_header_to_zero(TOKU_SFS_META_FILE);
+   if (ret != 0) {line_num = __LINE__; goto out;}
+
+   ret = set_file_header_to_zero(TOKU_SFS_TEST_FILE_1);
+   if (ret != 0) {line_num = __LINE__; goto out;}
+
+   ret = set_file_header_to_zero(TOKU_SFS_TEST_FILE_2);
+   if (ret != 0) {line_num = __LINE__; goto out;}
+
+   ret = set_file_header_to_zero(TOKU_SFS_TEST_FILE_3);
+   if (ret != 0) {line_num = __LINE__; goto out;}
+
+   ret = set_file_header_to_zero(TOKU_SFS_DIR_FILE);
+   if (ret != 0) {line_num = __LINE__; goto out;}
+
+   ret = set_file_header_to_zero(TOKU_SFS_ENV_FILE);
+   if (ret != 0) {line_num = __LINE__; goto out;}
+
+   ret = set_file_header_to_zero(TOKU_SFS_ROLLBACK_FILE);
+   if (ret != 0) {line_num = __LINE__; goto out;}
+
+   ret = set_file_header_to_zero(TOKU_SFS_LOG_FILE);
+   if (ret != 0) {line_num = __LINE__; goto out;}
+out:
+   if (ret != 0) {
+       printf("%s: set_file_header_to_zero (line=%d) failed, ret=%d\n", __func__, line_num-1, ret);
+   }
+
+   return ret;
+}
+
+int toku_update_logfile_size(uint64_t size, int fd)
+{
+   assert(false && size == 0 && fd == 0);
+}
+
 #endif
 
 #ifdef TOKU_LINUX_MODULE

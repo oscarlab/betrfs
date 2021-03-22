@@ -108,13 +108,12 @@ int test_test_db_subdb_different_flags(void) {
     int r;
 
     pre_setup();
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
 
-    r=toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
 
     r=db_env_create(&env, 0);   assert(r==0);
     // Note: without DB_INIT_MPOOL the BDB library will fail on db->open().
-    r=env->open(env, TOKU_TEST_FILENAME, DB_INIT_MPOOL|DB_PRIVATE|DB_CREATE|DB_INIT_LOG|DB_INIT_TXN, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
+    r=env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL|DB_PRIVATE|DB_CREATE|DB_INIT_LOG|DB_INIT_TXN, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
 
     r = db_create(&db, env, 0);                                              CKERR(r);
     r = db->open(db, null_txn, fname, "main", DB_BTREE, DB_CREATE, 0666);    CKERR(r);

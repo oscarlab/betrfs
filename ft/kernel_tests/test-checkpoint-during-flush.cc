@@ -188,8 +188,10 @@ doit (bool after_child_pin) {
     toku_flusher_thread_set_callback(flusher_callback, &after_child_pin);
 
     toku_cachetable_create(&ct, 500*1024*1024, ZERO_LSN, NULL_LOGGER);
-    unlink("foo1.ft_handle");
-    r = toku_open_ft_handle("foo1.ft_handle", 1, &t, NODESIZE, NODESIZE/2, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
+
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r == 0);
+
+    r = toku_open_ft_handle(TOKU_TEST_DATA_DB_NAME, 1, &t, NODESIZE, NODESIZE/2, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
     assert(r==0);
 
     toku_testsetup_initialize();  // must precede any other toku_testsetup calls
@@ -278,11 +280,11 @@ doit (bool after_child_pin) {
     // checkpointed is what we expect
     //
 
-    r = fcopy("foo1.ft_handle","bar1.ft_handle");
+    r = fcopy(TOKU_TEST_DATA_DB_NAME, TOKU_TEST_META_DB_NAME);
     assert_zero(r);
 
     FT_HANDLE c_ft;
-    r = toku_open_ft_handle("bar1.ft_handle", 0, &c_ft, NODESIZE, NODESIZE/2, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
+    r = toku_open_ft_handle(TOKU_TEST_META_DB_NAME, 0, &c_ft, NODESIZE, NODESIZE/2, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
     assert(r==0);
 
     //

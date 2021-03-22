@@ -176,13 +176,11 @@ static void
 test_bulk_fetch (uint64_t n, bool prelock, bool disable_prefetching) {
     if (verbose) printf("test_rand_insert:%" PRId64 " \n", n);
 
-    DB_TXN * const null_txn = 0;
-    const char * const fname = "test.bulk_fetch.ft_handle";
+    DB_TXN *null_txn = 0;
+    const char * const fname = TOKU_TEST_DATA_DB_NAME;
     int r;
     
-
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r=toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
 
     /* create the dup database file */
     DB_ENV *env;
@@ -195,7 +193,9 @@ test_bulk_fetch (uint64_t n, bool prelock, bool disable_prefetching) {
     // goal is to make it small enough such that all of data 
     // does not fit in cachetable, but not so small that we get thrashing
     r = env->set_cachesize(env, 0, (uint32_t)4*n, 1); assert(r == 0);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL, 0); assert(r == 0);
+
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL+DB_INIT_LOG+DB_INIT_TXN, 0); assert(r == 0);
+    r = env->txn_begin(env, NULL, &null_txn, 0); assert_zero(r);
 
     DB *db;
     r = db_create(&db, env, 0);
@@ -206,7 +206,7 @@ test_bulk_fetch (uint64_t n, bool prelock, bool disable_prefetching) {
     assert(r == 0);
     r = db->set_readpagesize(db, 1024);
     assert(r == 0);
-    r = db->open(db, null_txn, fname, "main", DB_BTREE, DB_CREATE, 0666);
+    r = db->open(db, null_txn, fname, NULL, DB_BTREE, DB_CREATE, 0666);
     assert(r == 0);
 
     //uint64_t keys[n];
@@ -232,7 +232,7 @@ test_bulk_fetch (uint64_t n, bool prelock, bool disable_prefetching) {
     if (disable_prefetching) {
         init_eng_stat_vars(env);
     }
-    r = db->cursor(db, NULL, &cursor, flags);
+    r = db->cursor(db, null_txn, &cursor, flags);
     CKERR(r);
     if (prelock) {
         r = cursor->c_set_bounds(
@@ -261,7 +261,7 @@ test_bulk_fetch (uint64_t n, bool prelock, bool disable_prefetching) {
     if (disable_prefetching) {
         init_eng_stat_vars(env);
     }
-    r = db->cursor(db, NULL, &cursor, flags);
+    r = db->cursor(db, null_txn, &cursor, flags);
     CKERR(r);
     if (prelock) {
         r = cursor->c_set_bounds(
@@ -290,7 +290,7 @@ test_bulk_fetch (uint64_t n, bool prelock, bool disable_prefetching) {
     if (disable_prefetching) {
         init_eng_stat_vars(env);
     }
-    r = db->cursor(db, NULL, &cursor, flags);
+    r = db->cursor(db, null_txn, &cursor, flags);
     CKERR(r);
     if (prelock) {
         r = cursor->c_set_bounds(
@@ -319,7 +319,7 @@ test_bulk_fetch (uint64_t n, bool prelock, bool disable_prefetching) {
     if (disable_prefetching) {
         init_eng_stat_vars(env);
     }
-    r = db->cursor(db, NULL, &cursor, flags);
+    r = db->cursor(db, null_txn, &cursor, flags);
     CKERR(r);
     if (prelock) {
         r = cursor->c_set_bounds(
@@ -346,6 +346,7 @@ test_bulk_fetch (uint64_t n, bool prelock, bool disable_prefetching) {
 
 
     r = db->close(db, 0); CKERR(r);
+    r = null_txn->commit(null_txn, 0); assert_zero(r);
     r = env->close(env, 0); CKERR(r);
     toku_free(keys);
         

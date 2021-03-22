@@ -173,28 +173,11 @@ char *free_me = NULL;
 static void run_test(void) 
 {
     int r;
-    const char *env_dir = TOKU_TEST_FILENAME; // the default env_dir.
+    const char *env_dir = TOKU_TEST_ENV_DIR_NAME; // the default env_dir.
 
     pre_setup();
-    toku_os_recursive_delete(env_dir);
-//  r = toku_os_mkdir(env_dir, S_IRWXU | S_IRWXG | S_IRWXO);   
-//  DBG;
-//  INT(r);
-    r = toku_os_mkdir(env_dir, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH); 
-    if(r) return; 
-	
+    r = toku_fs_reset(env_dir, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
     assert(r == 0);
-
-
-
-
-
-
-    if (r)
-	return;	
-
-        CKERR(r);
-	DBG;
 
     r = db_env_create(&env, 0);                                                                               CKERR(r);
 //    r = env->set_default_bt_compare(env, uint_dbt_cmp);                                                       CKERR(r);

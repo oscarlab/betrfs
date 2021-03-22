@@ -100,8 +100,7 @@ int test_log5 (void)
 {
     int r;
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU);    assert(r==0);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);    assert(r==0);
     printf("I am here0 %lu\n", sizeof(TOKULOGGER));
 
     TOKULOGGER logger;
@@ -117,7 +116,7 @@ int test_log5 (void)
 	assert(n==LSIZE);
     }
     printf("I am here1\n");
-    r = toku_logger_open(TOKU_TEST_FILENAME, logger);
+    r = toku_logger_open(TOKU_TEST_ENV_DIR_NAME, logger);
     assert(r == 0); 
     int i;
     for (i=0; i<1000; i++) {
@@ -143,14 +142,14 @@ int test_log5 (void)
     assert(r == 0);
 
     {
-	DIR *dir=opendir(TOKU_TEST_FILENAME);
+	DIR *dir=opendir(TOKU_TEST_ENV_DIR_NAME);
 	assert(dir);
 	struct dirent *dirent;
 	while ((dirent=readdir(dir))) {
 	    if (strncmp(dirent->d_name, "log", 3)!=0) continue;
 	    char fname[TOKU_PATH_MAX];
 
-            toku_path_join(fname, 2, TOKU_TEST_FILENAME, dirent->d_name);    /*
+            toku_path_join(fname, 2, TOKU_TEST_ENV_DIR_NAME, dirent->d_name);    /*
 	    toku_struct_stat statbuf;
 	    r = toku_stat(fname, &statbuf);
 	    assert(r==0);
@@ -160,6 +159,6 @@ int test_log5 (void)
 	assert(r==0);
     }
     printf("I am here3\n");
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);    assert(r==0);
     return 0;
 }

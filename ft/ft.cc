@@ -1147,10 +1147,21 @@ toku_single_process_lock(const char *lock_dir, const char *which, int *lockfd) {
     if (!lock_dir)
         return ENOENT;
     int namelen=strlen(lock_dir)+strlen(which);
+
+#ifndef USE_SFS
     char lockfname[namelen+sizeof("/_") + strlen(toku_product_name_strings.single_process_lock)];
 
     int l = snprintf(lockfname, sizeof(lockfname), "%s/%s_%s",
                      lock_dir, toku_product_name_strings.single_process_lock, which);
+#else
+    /* YZJ: This is just to reduce the length of certain files which are used as lock.
+     * It previously to mare sure one physical sector can store all dentries of a directory.
+     */
+    char lockfname[namelen+sizeof("/")];
+
+    int l = snprintf(lockfname, sizeof(lockfname), "%s/%s",
+                     lock_dir, which);
+#endif
     assert(l+1 == (signed)(sizeof(lockfname)));
     *lockfd = toku_os_lock_file(lockfname);
     if (*lockfd < 0) {
@@ -1173,10 +1184,20 @@ toku_single_process_unlock(const char *lock_dir, const char *which, int *lockfd)
         return ENOENT;
     
     int namelen=strlen(lock_dir)+strlen(which);
+#ifndef USE_SFS
     char lockfname[namelen+sizeof("/_") + strlen(toku_product_name_strings.single_process_lock)];
 
     int l = snprintf(lockfname, sizeof(lockfname), "%s/%s_%s",
                      lock_dir, toku_product_name_strings.single_process_lock, which);
+#else
+    /* YZJ: This is just to reduce the length of certain files which are used as lock.
+     * It previously to mare sure one physical sector can store all dentries of a directory.
+     */
+    char lockfname[namelen+sizeof("/")];
+
+    int l = snprintf(lockfname, sizeof(lockfname), "%s/%s",
+                     lock_dir, which);
+#endif
     assert(l+1 == (signed)(sizeof(lockfname)));    
     int fd = *lockfd;
     *lockfd = -1;

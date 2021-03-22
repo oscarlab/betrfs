@@ -98,15 +98,14 @@ extern "C" int test_log_3(void);
 
 int test_log_3 (void) {
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU);    assert(r==0);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);    assert(r==0);
     TOKULOGGER logger;
     r = toku_logger_create(&logger);
     assert(r == 0);
-    r = toku_logger_open(TOKU_TEST_FILENAME, logger);
+    r = toku_logger_open(TOKU_TEST_ENV_DIR_NAME, logger);
     assert(r == 0);
     r = toku_logger_close(&logger);
     assert(r == 0);
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);    assert(r==0);
     return 0;
 }

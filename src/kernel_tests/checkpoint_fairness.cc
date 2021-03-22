@@ -146,22 +146,21 @@ int test_checkpoint_fairness(void) {
     pre_setup();
     reader_start_count = 0;
     writer_done_count = 0;
-    env_dir = TOKU_TEST_FILENAME;
+    env_dir = TOKU_TEST_ENV_DIR_NAME;
    
 // try to starve the checkpoint
     { int chk_r = db_env_create(&env, 0); CKERR(chk_r); }
 #ifdef USE_TDB
     { int chk_r = env->set_redzone(env, 0); CKERR(chk_r); }
 #endif
-    toku_os_recursive_delete(env_dir);    
-    { int chk_r = toku_os_mkdir(env_dir, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
+    { int chk_r = toku_fs_reset(env_dir, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
 
     const int envflags = DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_TXN|DB_PRIVATE | DB_RECOVER;
     { int chk_r = env->open(env, env_dir, envflags, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
 
     { int chk_r = db_create(&db, env, 0); CKERR(chk_r); }
 
-    { int chk_r = db->open(db, NULL, "db", NULL, DB_BTREE, DB_CREATE|DB_AUTO_COMMIT, 0666); CKERR(chk_r); }
+    { int chk_r = db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_CREATE|DB_AUTO_COMMIT, 0666); CKERR(chk_r); }
 
     pthread_t *thds = (pthread_t *)toku_xmalloc(n_threads * sizeof *thds);
     int       ids[n_threads];

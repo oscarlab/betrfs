@@ -171,8 +171,12 @@ toku_maybe_truncate_file (int fd, uint64_t size_used, uint64_t expected_size, ui
         toku_off_t new_size = alignup64(size_used, (2*FILE_CHANGE_INCREMENT)); //Truncate to new size_used.
         invariant(new_size < file_size);
         invariant(new_size >= 0);
+#ifndef USE_SFS
+        // YZJ: just do not truncate the file. But we still want new_size to be
+        // returned to update bt->safe_file_size.
         int r = ftruncate(fd, new_size);
         lazy_assert_zero(r);
+#endif
         *new_sizep = new_size;
     }
     else {
@@ -225,8 +229,13 @@ toku_maybe_preallocate_in_file (int fd, int64_t size, int64_t expected_size, int
 	
         toku_off_t start_write = alignup64(file_size, stripe_width);
         invariant(start_write >= file_size);
+#ifndef USE_SFS
         int r = fallocate(fd,0,start_write, to_write);
         lazy_assert_zero(r);
+#else
+        // YZJ: This should not happen for SFS
+        assert(false);
+#endif
 	*new_size = start_write + to_write;
     }
     else {

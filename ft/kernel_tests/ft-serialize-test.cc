@@ -269,9 +269,9 @@ test_serialize_leaf_check_msn(enum ftnode_verify_type bft, bool do_clone) {
     //    struct ft_handle source_ft;
     struct ftnode sn, *dn;
 
-    int fd = open(TOKU_TEST_FILENAME, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
-    int r;
+    int fd = open(TOKU_TEST_FILENAME_DATA, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
 
 #define PRESERIALIZE_MSN_ON_DISK ((MSN) { MIN_MSN.msn + 42 })
 #define POSTSERIALIZE_MSN_ON_DISK ((MSN) { MIN_MSN.msn + 84 })
@@ -316,8 +316,9 @@ test_serialize_leaf_check_msn(enum ftnode_verify_type bft, bool do_clone) {
                  TOKU_DEFAULT_COMPRESSION_METHOD);
     brt->ft = brt_h;
     toku_blocktable_create_new(&brt_h->blocktable);
+#ifndef USE_SFS
     { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
-
+#endif
     //Want to use block #20
     BLOCKNUM b = make_blocknum(0);
     while (b.b < 20) {
@@ -416,7 +417,9 @@ test_serialize_leaf_with_large_pivots(enum ftnode_verify_type bft, bool do_clone
     const int keylens = 256*1024, vallens = 0;
     const uint32_t nrows = 8;
     // assert(val_size > BN_MAX_SIZE);  // BN_MAX_SIZE isn't visible
-    int fd = open(TOKU_TEST_FILENAME, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
+
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
+    int fd = open(TOKU_TEST_FILENAME_DATA, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
 
     snp->max_msn_applied_to_node_on_disk.msn = 0;
     toku_init_dbt(&snp->bound_l);
@@ -466,7 +469,9 @@ test_serialize_leaf_with_large_pivots(enum ftnode_verify_type bft, bool do_clone
                  TOKU_DEFAULT_COMPRESSION_METHOD);
     brt->ft = brt_h;
     toku_blocktable_create_new(&brt_h->blocktable);
+#ifndef USE_SFS
     { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
+#endif
     //Want to use block #20
     BLOCKNUM b = make_blocknum(0);
     while (b.b < 20) {
@@ -575,7 +580,9 @@ test_serialize_leaf_with_many_rows(enum ftnode_verify_type bft, bool do_clone) {
     struct ftnode * dn;
     const int keylens = sizeof(int), vallens = sizeof(int);
     const uint32_t nrows = 196*1024;
-    int fd = open(TOKU_TEST_FILENAME, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
+
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
+    int fd = open(TOKU_TEST_FILENAME_DATA, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
 
     snp->max_msn_applied_to_node_on_disk.msn = 0;
     toku_init_dbt(&snp->bound_l);
@@ -615,7 +622,9 @@ test_serialize_leaf_with_many_rows(enum ftnode_verify_type bft, bool do_clone) {
     brt->ft = brt_h;
 
     toku_blocktable_create_new(&brt_h->blocktable);
+#ifndef USE_SFS
     { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
+#endif
     //Want to use block #20
     BLOCKNUM b = make_blocknum(0);
     while (b.b < 20) {
@@ -724,7 +733,8 @@ test_serialize_leaf_with_large_rows(enum ftnode_verify_type bft, bool do_clone) 
     const size_t key_size = 8;
     const size_t val_size = 512*1024;
     // assert(val_size > BN_MAX_SIZE);  // BN_MAX_SIZE isn't visible
-    int fd = open(TOKU_TEST_FILENAME, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
+    int fd = open(TOKU_TEST_FILENAME_DATA, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
 
     snp->max_msn_applied_to_node_on_disk.msn = 0;
     toku_init_dbt(&snp->bound_l);
@@ -772,7 +782,9 @@ test_serialize_leaf_with_large_rows(enum ftnode_verify_type bft, bool do_clone) 
     brt->ft = brt_h;
 
     toku_blocktable_create_new(&brt_h->blocktable);
+#ifndef USE_SFS
     { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
+#endif
     //Want to use block #20
     BLOCKNUM b = make_blocknum(0);
     while (b.b < 20) {
@@ -881,9 +893,8 @@ static void
 test_serialize_leaf_with_empty_basement_nodes(enum ftnode_verify_type bft, bool do_clone) {
     struct ftnode sn, *dn;
 
-    int fd = open(TOKU_TEST_FILENAME, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
-
-    int r;
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
+    int fd = open(TOKU_TEST_FILENAME_DATA, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
 
     sn.max_msn_applied_to_node_on_disk.msn = 0;
     toku_init_dbt(&sn.bound_l);
@@ -929,7 +940,9 @@ test_serialize_leaf_with_empty_basement_nodes(enum ftnode_verify_type bft, bool 
     brt->ft = brt_h;
 
     toku_blocktable_create_new(&brt_h->blocktable);
+#ifndef USE_SFS
     { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
+#endif
     //Want to use block #20
     BLOCKNUM b = make_blocknum(0);
     while (b.b < 20) {
@@ -1020,10 +1033,8 @@ test_serialize_leaf_with_empty_basement_nodes(enum ftnode_verify_type bft, bool 
 static void
 test_serialize_leaf_with_multiple_empty_basement_nodes(enum ftnode_verify_type bft, bool do_clone) {
     struct ftnode sn, *dn;
-
-    int fd = open(TOKU_TEST_FILENAME, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
-
-    int r;
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
+    int fd = open(TOKU_TEST_FILENAME_DATA, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
 
     sn.max_msn_applied_to_node_on_disk.msn = 0;
     toku_init_dbt(&sn.bound_l);
@@ -1061,7 +1072,9 @@ test_serialize_leaf_with_multiple_empty_basement_nodes(enum ftnode_verify_type b
     brt->ft = brt_h;
 
     toku_blocktable_create_new(&brt_h->blocktable);
+#ifndef USE_SFS
     { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
+#endif
     //Want to use block #20
     BLOCKNUM b = make_blocknum(0);
     while (b.b < 20) {
@@ -1133,10 +1146,9 @@ test_serialize_nonleaf(enum ftnode_verify_type bft, bool do_clone) {
     //    struct ft_handle source_ft;
     struct ftnode sn, *dn;
 
-    int fd = open(TOKU_TEST_FILENAME, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
-    int r;
-
+    int fd = open(TOKU_TEST_FILENAME_DATA, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
     //    source_ft.fd=fd;
     sn.max_msn_applied_to_node_on_disk.msn = 0;
     toku_init_dbt(&sn.bound_l);
@@ -1204,7 +1216,9 @@ test_serialize_nonleaf(enum ftnode_verify_type bft, bool do_clone) {
     brt->ft = brt_h;
 
     toku_blocktable_create_new(&brt_h->blocktable);
+#ifndef USE_SFS
     { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
+#endif
     //Want to use block #20
     BLOCKNUM b = make_blocknum(0);
     while (b.b < 20) {

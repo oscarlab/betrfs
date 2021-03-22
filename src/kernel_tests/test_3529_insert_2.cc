@@ -178,7 +178,7 @@ run_test(void) {
     r = db->set_pagesize(db, db_page_size);
     DB_TXN *txn = NULL;
     r = env->txn_begin(env, 0, &txn, 0); CKERR(r);
-    r = db->open(db, txn, "foo.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r = txn->commit(txn, 0);    CKERR(r);
 
     // build a tree with 2 leaf nodes
@@ -209,7 +209,7 @@ run_test(void) {
     r = db->close(db, 0);     CKERR(r);
     r = db_create(&db, env, 0); CKERR(r);
     r = env->txn_begin(env, 0, &txn, 0); CKERR(r);
-    r = db->open(db, txn, "foo.db", 0, DB_BTREE, 0, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, 0, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r = txn->commit(txn, 0);    CKERR(r);
 
     // create a txn that will try to insert key 2 while the serializable cursor is walking through the tree
@@ -238,11 +238,10 @@ run_test(void) {
 
 extern "C" int test_test_3529_insert_2(void);
 int test_test_3529_insert_2(void) {
-    envdir = TOKU_TEST_FILENAME;
+    envdir = TOKU_TEST_ENV_DIR_NAME;
     pre_setup();
-    toku_os_recursive_delete(envdir);    
     int r;
-    r = toku_os_mkdir(envdir, S_IRWXU+S_IRWXG+S_IRWXO);       CKERR(r);
+    r = toku_fs_reset(envdir, S_IRWXU+S_IRWXG+S_IRWXO);       CKERR(r);
 
     run_test();
 

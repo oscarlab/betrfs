@@ -96,10 +96,11 @@ test_oexcl (void) {
    initialize_dummymsn();
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
-    unlink(TOKU_TEST_FILENAME);
-    int fd0 = open (TOKU_TEST_FILENAME, O_RDWR|O_CREAT|O_EXCL, S_IRWXU|S_IRWXG|S_IRWXO);
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
+    int fd0 = open (TOKU_TEST_FILENAME_DATA, O_RDWR|O_CREAT|O_EXCL, S_IRWXU|S_IRWXG|S_IRWXO);
     assert(fd0>=0);
-    int fd1 = open (TOKU_TEST_FILENAME, O_RDWR|O_CREAT|O_EXCL, S_IRWXU|S_IRWXG|S_IRWXO);
+    int fd1 = open (TOKU_TEST_FILENAME_DATA, O_RDWR|O_CREAT|O_EXCL, S_IRWXU|S_IRWXG|S_IRWXO);
     assert(fd1==-EEXIST);
     toku_ft_layer_destroy();
     return 0;

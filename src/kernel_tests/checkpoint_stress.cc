@@ -288,9 +288,10 @@ run_test (int iter, int die) {
 
     int i;
 
-    if (iter == 0)
-	dir_create(TOKU_TEST_FILENAME);  // create directory if first time through
-    
+    if (iter == 0) {
+        int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+        assert(r==0);
+    }
     // Run with cachesize of 256 bytes per iteration
     // to force lots of disk I/O
     // (each iteration inserts about 4K rows/dictionary, 16 bytes/row, 4 dictionaries = 256K bytes inserted per iteration)
@@ -310,7 +311,7 @@ run_test (int iter, int die) {
         if ( iter != 0 )
             recovery_flags += DB_RECOVER;
     }
-    env_startup(TOKU_TEST_FILENAME, cachebytes, recovery_flags);
+    env_startup(TOKU_TEST_ENV_DIR_NAME, cachebytes, recovery_flags);
 
     // create array of dictionaries
     // for each dictionary verify previous iterations and perform new inserts

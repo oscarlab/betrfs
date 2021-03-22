@@ -97,8 +97,7 @@ extern "C" int test_log6(void);
 char logname[PATH_MAX];
 int test_log6(void) {
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU);    assert(r==0);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);    assert(r==0);
     TOKULOGGER logger;
     r = toku_logger_create(&logger);
     assert(r == 0);
@@ -108,7 +107,7 @@ int test_log6(void) {
 	r = toku_logger_get_lg_max(logger, &n);
 	assert(n==LSIZE);
     }
-    r = toku_logger_open(TOKU_TEST_FILENAME, logger);
+    r = toku_logger_open(TOKU_TEST_ENV_DIR_NAME, logger);
     assert(r == 0);
 
     {
@@ -138,12 +137,12 @@ int test_log6(void) {
    
     {
        toku_struct_stat statbuf;
-        sprintf(logname, "%s/log000000000000.tokulog%d", TOKU_TEST_FILENAME, TOKU_LOG_VERSION);
+        sprintf(logname, "%s/log000000000000.tokulog%d", TOKU_TEST_ENV_DIR_NAME, TOKU_LOG_VERSION);
 	r = toku_stat(logname, &statbuf);
 	assert(r==0);
 	assert(statbuf.st_size<=LSIZE);
     }
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
 
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);    assert(r==0);
     return 0;
 }

@@ -443,8 +443,12 @@ int toku_logger_close(TOKULOGGER *loggerp) {
     grab_output(logger, &fsynced_lsn);
     logger_write_buffer(logger, &fsynced_lsn);
     if (logger->fd!=-1) {
+#ifndef USE_SFS
         off_t pos = lseek(logger->fd, 0, SEEK_CUR);
         r = ftruncate(logger->fd, pos);
+#else
+        assert(false);
+#endif
         assert(r == 0);
         if ( logger->write_log_files ) {
             toku_file_fsync_without_accounting(logger->fd);
@@ -1152,8 +1156,10 @@ static void delete_logfile(TOKULOGGER logger, long long index, uint32_t version)
     int fnamelen = strlen(logger->directory)+50;
     char fname[fnamelen];
     snprintf(fname, fnamelen, "%s/log%012lld.tokulog%d", logger->directory, index, version);
+#ifndef USE_SFS
     int r = remove(fname);
     invariant_zero(r);
+#endif
 }
 
 void toku_logger_maybe_trim_log(TOKULOGGER logger, LSN trim_lsn)

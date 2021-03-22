@@ -120,8 +120,7 @@ static const char *env_dir; // the default env_dir.
 static void run_cachetable_race_test(void) 
 {
     int r;
-    toku_os_recursive_delete(env_dir);
-    r = toku_os_mkdir(env_dir, S_IRWXU+S_IRWXG+S_IRWXO);                                                      CKERR(r);
+    r = toku_fs_reset(env_dir, S_IRWXU+S_IRWXG+S_IRWXO);                                                      CKERR(r);
 
     r = db_env_create(&env, 0);                                                                               CKERR(r);
     env->set_errfile(env, stderr);
@@ -168,7 +167,7 @@ static void do_args(void) {
 
 extern "C" int test_cachetable_race(void);
 int test_cachetable_race(void) {
-    env_dir = TOKU_TEST_FILENAME;
+    env_dir = TOKU_TEST_ENV_DIR_NAME;
     pre_setup();
     do_args();
     run_cachetable_race_test();

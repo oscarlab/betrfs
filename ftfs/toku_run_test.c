@@ -302,8 +302,8 @@ extern int test_ft_overflow(void);
 extern int test_cachetable_simple_unpin_remove_checkpoint(void);
 extern int test_ft_serialize(void);
 extern int test_orthopush_flush(void);
-extern int test_range_del(void);
-extern int test_range_del2(void);
+//extern int test_range_del(void);
+//extern int test_range_del2(void);
 extern int test_recovery_range_delete(void);
 
 /* src tests */
@@ -630,6 +630,18 @@ struct {
 } tests[] = {
 	//{ "fail", test_fail , 5},
 	//{"logger-lists", logger_test_tables, 5},
+#ifndef USE_SFS
+	{ "mkdir", test_mkdir, 5},
+	{ "remove", test_remove, 5},
+	{ "dio", test_directio, 5},
+	{ "mkrmdir", test_mkrmdir, 5},
+	{ "unlink", test_unlink, 5},
+	{ "readlink", test_readlink, 5},
+	{ "openclose-dir", test_openclose_dir, 5},
+	{ "recursive-deletion", test_recursive_deletion, 5},
+	{ "trunc", test_trunc, 5},
+	{ "ftrunc", test_ftrunc, 5},
+#endif
 	{"seq-write-perf", perf_test_sequential_writes, 5},
 	{"seq-read-perf", perf_test_sequential_reads, 5},
 	{"ubi-root-chkpt", test_ubi_root_chkpt, 5},
@@ -826,16 +838,11 @@ struct {
 	{ "manager_lm", test_manager_lm, 5},
 	{ "manager-status", test_manager_status, 5},
 	{ "omt-test", test_omt, 5},
-	{ "mkdir", test_mkdir, 5},
-	{ "remove", test_remove, 5},
 	{ "slab", test_slab, 5},
 	{ "assert", test_assert, 5},
 	{ "posix-memalign", test_posix_memalign, 5},
-	{ "dio", test_directio, 5},
 	{ "realloc", test_ftfs_realloc, 5},
-	{ "mkrmdir", test_mkrmdir, 5},
 	{ "verify-unsorted-leaf", test_verify_unsorted_leaf, 5},
-	{ "unlink", test_unlink, 5},
 	{ "getdents64", test_getdents64, 5},
 	{ "openclose", test_openclose, 5},
 	{ "stat_ftfs", test_stat_ftfs, 5},
@@ -844,7 +851,6 @@ struct {
 	{ "readwrite", test_readwrite, 5},
 	{ "pwrite", test_pwrite, 5},
 	{ "write", test_write, 5},
-	{ "readlink", test_readlink, 5},
 	{ "f-all", test_f_all, 5},
 	{ "shortcut", test_shortcut, 5},
 	{ "bug1381", test_bug1381, 5},
@@ -855,10 +861,6 @@ struct {
 	{ "redirect", test_redirect, 5},
 	//{ "create-datadir", test_create_datadir, 5},
 	{ "isolation-read-committed", test_isolation_read_committed, 5},
-	{ "openclose-dir", test_openclose_dir, 5},
-	{ "recursive-deletion", test_recursive_deletion, 5},
-	{ "trunc", test_trunc, 5},
-	{ "ftrunc", test_ftrunc, 5},
 	{ "fsync", test_fsync, 5},
 	{ "fcopy", test_fcopy, 5},
 	{ "test_locktree_overlapping", test_locktree_overlapping, 5},
@@ -1234,9 +1236,8 @@ struct {
 	{"verify-misrouted-msgs",test_verify_misrouted_msgs, 5},
 	{"queries_with_deletes", test_queries_with_deletes, 5},
 	{"seqwrite_no_txn", test_seqwrite_no_txn, 5},
-	{"range-del",test_range_del, 5},
-	{"range-del2",test_range_del2, 5},
-	{"range-del2",test_range_del2, 5},
+	//{"range-del",test_range_del, 5},
+	//{"range-del2",test_range_del2, 5},
 	{"rename-simple",test_rename_simple, 5},
 	{"recovery-range-delete",test_recovery_range_delete, 5}
 };

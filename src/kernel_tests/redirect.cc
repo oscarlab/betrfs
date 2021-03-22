@@ -115,8 +115,8 @@ PATENT RIGHTS GRANT:
                 if c ==1 commit else abort
 */
 
-#define DICT_0 "dict_0.db"
-#define DICT_1 "dict_1.db"
+#define DICT_0 TOKU_TEST_DATA_DB_NAME
+#define DICT_1 TOKU_TEST_META_DB_NAME
 enum {MAX_DBS = 3};
 static DB_ENV *env = NULL;
 static DB_TXN *txn = NULL;
@@ -135,12 +135,11 @@ static void
 start_env(void) {
     assert(env==NULL);
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
-
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
     r = db_env_create(&env, 0);
     CKERR(r);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
 
     dname = DICT_0;

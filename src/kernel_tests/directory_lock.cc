@@ -273,8 +273,8 @@ int test_directory_lock(void) {
     in_val.flags = DB_DBT_USERMEM;
     in_key.ulen = sizeof(in_key_data);
     in_val.ulen = sizeof(in_val_data);
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
     DB_ENV *env;
     //DB_LOADER* loader = NULL;
     //uint32_t put_flags = 0;
@@ -286,7 +286,7 @@ int test_directory_lock(void) {
     r = env->set_generate_row_callback_for_del(env, del_multiple_callback);
     CKERR(r);
     env->set_update(env, update_fun);
-    r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                      CKERR(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                      CKERR(r);
     
     DB* db;
     DB* db2;

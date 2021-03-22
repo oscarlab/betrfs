@@ -195,7 +195,7 @@ env_startup(const char *envdir, int64_t bytes, int recovery_flags) {
 	r = env->set_cachesize(env, bytes >> 30, bytes % (1<<30), 1);
         CKERR(r);
     }
-    int envflags = DB_INIT_LOCK | DB_INIT_MPOOL | DB_INIT_TXN | DB_CREATE | DB_PRIVATE | recovery_flags;
+    int envflags = DB_INIT_LOCK | DB_INIT_MPOOL | DB_INIT_LOG | DB_INIT_TXN | DB_CREATE | DB_PRIVATE | recovery_flags;
     r = env->open(env, envdir, envflags, S_IRWXU+S_IRWXG+S_IRWXO);
         CKERR(r);
     env->set_errfile(env, stderr);

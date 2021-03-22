@@ -342,14 +342,13 @@ static char *free_me = NULL;
 static void run_test(void) 
 {
     int r;
-    const char *env_dir = TOKU_TEST_FILENAME; // the default env_dir.
+    const char *env_dir = TOKU_TEST_ENV_DIR_NAME; // the default env_dir.
     struct toku_db_key_operations key_ops;
     memset(&key_ops, 0, sizeof(key_ops));
     key_ops.keycmp = uint_dbt_cmp;
     pre_setup();
-    toku_os_recursive_delete(env_dir);    
 
-    r = toku_os_mkdir(env_dir, S_IRWXU+S_IRWXG+S_IRWXO);                                                      CKERR(r);
+    r = toku_fs_reset(env_dir, S_IRWXU+S_IRWXG+S_IRWXO);                                                      CKERR(r);
 
     r = db_env_create(&env, 0);                                                                               CKERR(r);
     r = env->set_key_ops(env, &key_ops); CKERR(r);
@@ -407,7 +406,8 @@ static void run_test(void)
     toku_free(idx);
     toku_free(name);
 
-    toku_os_recursive_delete(env_dir);    
+    r = toku_fs_reset(env_dir, S_IRWXU+S_IRWXG+S_IRWXO);
+    CKERR(r);
 
     post_teardown();
 }

@@ -108,8 +108,8 @@ extern "C" int test_test_4657(void);
 int test_test_4657(void) {
   int r;
   pre_setup();
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-  toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+  r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+  CKERR(r);
   DB_ENV *env;
   r = db_env_create(&env, 0);                                                         CKERR(r);
   env->set_errfile(env, stderr);
@@ -117,7 +117,7 @@ int test_test_4657(void) {
     memset(&key_ops, 0, sizeof(key_ops));
     key_ops.keycmp = int64_dbt_cmp;
     r = env->set_key_ops(env, &key_ops); CKERR(r);
-  r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                      CKERR(r);
+  r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                      CKERR(r);
     
   DB *db;
   {
@@ -126,7 +126,7 @@ int test_test_4657(void) {
 
     r = db_create(&db, env, 0);                                                     CKERR(r);
     CKERR(r);
-    r = db->open(db, txna, "foo.db", NULL, DB_BTREE, DB_CREATE, 0666);              CKERR(r);
+    r = db->open(db, txna, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_CREATE, 0666);              CKERR(r);
 
     r = txna->commit(txna, 0);                                                      CKERR(r);
   }
@@ -166,7 +166,7 @@ int test_test_4657(void) {
   // now reopen 
   r = db_create(&db, env, 0);
   CKERR(r);
-  r = db->open(db, NULL, "foo.db", NULL, DB_BTREE, DB_THREAD, 0666);
+  r = db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_THREAD, 0666);
   CKERR(r);
   DB_BTREE_STAT64 dict_stats;
   r = db->stat64(

@@ -139,9 +139,7 @@ test_restrict (int64_t n, int offset, int error_to_expect) {
     DB_TXN * const null_txn = 0;
     int r;
 
-
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r=toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
 
     /* create the dup database file */
     DB_ENV *env;
@@ -150,7 +148,7 @@ test_restrict (int64_t n, int offset, int error_to_expect) {
     memset(&key_ops, 0, sizeof(key_ops));
     key_ops.keycmp = int64_dbt_cmp;
     r = env->set_key_ops(env, &key_ops); CKERR(r);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL, 0); assert(r == 0);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL, 0); assert(r == 0);
 
     DB *db;
     r = db_create(&db, env, 0);

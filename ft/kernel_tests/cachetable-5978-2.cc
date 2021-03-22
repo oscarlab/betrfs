@@ -211,8 +211,10 @@ cachetable_test (void) {
     toku_pair_list_set_lock_size(2); // set two bucket mutexes
     CACHETABLE ct;
     toku_cachetable_create(&ct, test_limit, ZERO_LSN, NULL_LOGGER);
-    const char *fname1 = TOKU_TEST_FILENAME;
-    unlink(fname1);
+
+    const char *fname1 = TOKU_TEST_FILENAME_DATA;
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
+
     r = toku_cachetable_openf(&f1, ct, fname1, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO); assert(r == 0);
 
     void* v1;

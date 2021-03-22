@@ -94,7 +94,7 @@ PATENT RIGHTS GRANT:
 #include "checkpoint.h"
 #include "helper.h"
 
-static int
+static int 
 run_test(void) {
     // leave this many bytes in file
     const int magic_begin_end_checkpoint_sz =
@@ -109,8 +109,7 @@ run_test(void) {
 
     while ( 1 ) {
         // setup the test dir
-        toku_os_recursive_delete(TOKU_TEST_FILENAME);
-        r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU); assert(r == 0);
+        r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r == 0);
 
         // create the log
         TOKULOGGER logger;
@@ -118,7 +117,7 @@ run_test(void) {
         BYTESTRING world = { (uint32_t) strlen("world"), (char *) "world" };
         BYTESTRING there = { (uint32_t) strlen("there"), (char *) "there" };
         r = toku_logger_create(&logger); assert(r == 0);
-        r = toku_logger_open(TOKU_TEST_FILENAME, logger); assert(r == 0);
+        r = toku_logger_open(TOKU_TEST_ENV_DIR_NAME, logger); assert(r == 0);
         LSN beginlsn;
         // all logs must contain a valid checkpoint
         toku_log_begin_checkpoint(logger, &beginlsn, true, 0, 0);
@@ -139,12 +138,17 @@ run_test(void) {
         r = close(devnul);                      assert(r==0);
 	#endif
         char fname[TOKU_PATH_MAX+1];
-        sprintf(fname, "%s/%s%d", TOKU_TEST_FILENAME, "log000000000000.tokulog", TOKU_LOG_VERSION);
+        sprintf(fname, "%s/%s%d", TOKU_TEST_ENV_DIR_NAME, "log000000000000.tokulog", TOKU_LOG_VERSION);
 
         r = toku_stat(fname, &st); assert(r==0);
         if ( st.st_size - trim > magic_begin_end_checkpoint_sz ) {
+#ifndef USE_SFS
             r = truncate(fname, st.st_size - trim);
             CKERR(r);
+#else
+            r = toku_update_logfile_size(false);
+            CKERR(r);
+#endif
         }
         else
             break;
@@ -156,13 +160,12 @@ run_test(void) {
 			   NULL_prepared_txn_callback,
 			   NULL_keep_cachetable_callback,
 			   NULL_logger,
-			   TOKU_TEST_FILENAME,
-                           TOKU_TEST_FILENAME, &dummy_ftfs_key_ops, 0, 0, NULL, 0);
+			   TOKU_TEST_ENV_DIR_NAME, 
+                           TOKU_TEST_ENV_DIR_NAME, &dummy_ftfs_key_ops, 0, 0, NULL, 0); 
         assert(r == 0);
-
         trim += 1;
     }
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r == 0);
     return 0;
 }
 
@@ -173,7 +176,7 @@ int recovery_bad_last_entry(void){
     initialize_dummymsn();
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
-
+ 
     r = run_test();
     toku_ft_layer_destroy();
     return r;

@@ -29,6 +29,65 @@
 #include "sb_malloc.h"
 
 extern int usleep(unsigned long);
+#ifndef USE_SFS
+extern int recursive_delete(char * path);
+int ftfs_fs_reset(char *pathname, mode_t mode) {
+	int r;
+	recursive_delete(pathname);
+	r = mkdir(pathname, mode);
+	if (r!= 0) {
+		printk(KERN_ALERT "%s: toku_os_mkdir failed\n", __func__);
+	}
+	return r;
+}
+
+static int _teardown_f_test(void){
+    int r = ftfs_fs_reset("/db", 0777);
+    BUG_ON(r != 0);
+    return 0;
+}
+
+//testing recursive deletion....
+int test_recursive_deletion(void) {
+    int ret = 0;
+    int fd;
+    ret = mkdir("test_recursive", 0755);
+    if(ret) {
+	ftfs_error(__func__, "failed to mkdir test_recursive");
+	return -1;
+    }
+    ret = mkdir("test_recursive/1",0755);
+    if(ret) {
+	ftfs_error(__func__, "failed to mkdir test_recursive/1");
+	return -1;
+    }
+    ret = mkdir("test_recursive/1/2",0755);
+    if(ret) {
+	ftfs_error(__func__, "failed to mkdir test_recursive/1/2");
+	return -1;
+    }
+    ret = mkdir("test_recursive/1/2/3",0755);
+    if(ret) {
+	ftfs_error(__func__, "failed to mkdir test_recursive/1/2/3");
+	return -1;
+    }
+
+    ret = mkdir("test_recursive/1/2/4",0755);
+    if(ret) {
+	ftfs_error(__func__, "failed to mkdir test_recursive/1/2/3");
+	return -1;
+    }
+    fd = open64( "test_recursive/1/2/test_file" , O_RDWR | O_CREAT,0755);
+    if(fd < 0) {
+        ftfs_error(__func__, "can not create test file ...");
+    }
+    ret = recursive_delete("test_recursive");
+    if(ret) {
+	ftfs_error(__func__, "failed to recursively delete test_recursive");
+	return -1;
+    }
+    return 0;
+}
 
 int test_trunc(void)
 {
@@ -109,49 +168,61 @@ int test_ftrunc(void)
 	return err;
 }
 
+//DIR stream based
+int test_openclose_dir(void) {
+	int ret = 0;
+	DIR * dirp;
+	struct dirent64 * de;
+	int fd;
 
-int test_openclose(void)
-{
-	int fd, ret;
+	/* positive test */
+	ret = mkdir("test_readdir", 0755);
+	ret = mkdir("test_readdir/1",0755);
+	ret = mkdir("test_readdir/2",0755);
+	ret = mkdir("test_readdir/3",0755);
 
-	fd = open64("//.././test-open", O_CREAT|O_RDWR, 0755);
+	dirp = opendir("test_readdir");
+	if(!dirp) {
+		ftfs_error(__func__, "opendir failed");
+		return -1;
+	}
+
+	fd = dirfd(dirp);
 	if(fd < 0) {
-		ftfs_error(__func__, "open(%s): %d\n", "test-open", fd);
-		return fd;
+		ftfs_error(__func__, "dirfd failed: %d", fd);
+		return -1;
 	}
 
-	ret = close(fd);
-	if (fd)
-		ftfs_error(__func__, "close(%d): %d\n", fd, ret);
-
-	return 0;
-}
-
-int test_preadwrite(void)
-{
-	int fd, len, ret, i;
-	const char *test = "test_preadwrite";
-	char buf[16];
-
-	fd = open64(test, O_CREAT | O_RDWR, 0755);
-	if (fd < 0) {
-		ftfs_error(__func__, "open(%s): %d", test, fd);
-		return fd;
+	while((de = readdir64(dirp)) != NULL) {
+		ftfs_log(__func__,"readdir output: %s", de->d_name);
 	}
+	closedir(dirp);
 
-	len = strlen(test);
-	for (i = 0; i < 10; i++) {
-		ret = pwrite64(fd, test, len, i);
-		if (ret != len)
-			return ret;
-		ret = pread64(fd, buf, len, i);
-		if (ret != len)
-			return ret;
-		if (memcmp(test, buf, len))
-			return -EIO;
+	rmdir("test_readdir/1");
+	rmdir("test_readdir/2");
+	rmdir("test_readdir/3");
+	rmdir("test_readdir");
+
+	/* negative test */
+	fd = open64( "test_file" , O_RDWR | O_CREAT, 0755);
+	if(fd < 0) {
+		ftfs_error(__func__, "can not open test file ...");
+		return -1;
 	}
-
 	close(fd);
+
+	dirp = opendir("test_file");
+	if(dirp) {
+		ftfs_error(__func__, "ERROR! opendir should not open "
+			   "regular file \"test_file\"");
+		ret = -1;
+	}
+	ftfs_log(__func__, "opendir correctly failed on \"test_file\", "
+		 "which is not a dir.");
+
+	unlink("test_file");
+
+	closedir(dirp);
 
 	return 0;
 }
@@ -242,7 +313,6 @@ int test_directio_kmalloc(void)
 	return 0;
 }
 
-
 int test_directio(void)
 {
 	int ret;
@@ -251,6 +321,7 @@ int test_directio(void)
 	//	ftfs_error(__func__, "directio_kmalloc: %d", ret);
 	//	return ret;
 	//}
+
 	ret = test_directio_vmalloc();
 	if (ret) {
 		ftfs_error(__func__, "directio_vmalloc: %d", ret);
@@ -258,412 +329,6 @@ int test_directio(void)
 	}
 
 	return 0;
-}
-
-int test_readwrite(void)
-{
-	int fd, len, ret, i;
-	const char *test = "test_readwrite";
-	char buf[16];
-
-	fd = open64(test, O_CREAT | O_RDWR, 0755);
-	if (fd < 0) {
-		ftfs_error(__func__, "open(%s): %d", test, fd);
-		return fd;
-	}
-
-	len = strlen(test);
-	for (i = 0; i < 10; i++) {
-		ret = pwrite64(fd, test, len, i*len);
-		if (ret != len)
-			return ret;
-		ret = read(fd, buf, len);
-		if (ret != len)
-			return ret;
-		if (memcmp(test, buf, len))
-			return -EIO;
-	}
-
-	close(fd);
-
-	return 0;
-}
-
-
-
-int test_pwrite(void)
-{
-	int fd, len, ret, i;
-	const char *test = "test_pwrite";
-
-	fd = open64(test, O_CREAT | O_RDWR, 0755);
-	if (fd < 0) {
-		ftfs_error(__func__, "open(%s): %d", test, fd);
-		return fd;
-	}
-
-	len = strlen(test);
-	for (i = 0; i < 10; i++) {
-		ret = pwrite64(fd, test, len, i);
-		if (ret != len)
-			return ret;
-	}
-
-	close(fd);
-
-	return 0;
-}
-
-int test_write(void)
-{
-	int fd, len, ret, i;
-	const char *test = "test_write";
-
-	fd = open64(test, O_CREAT | O_RDWR, 0755);
-	if (fd < 0) {
-		ftfs_error(__func__, "open(%s): %d", test, fd);
-		return fd;
-	}
-
-	len = strlen(test);
-	for (i = 0; i < 10; i++) {
-		ret = write(fd, test, len);
-		if (ret != len)
-			return ret;
-	}
-
-	close(fd);
-	return 0;
-}
-
-extern int feof(FILE *f);
-int test_fgetc(void)
-{
-	FILE *fp;
-	int fd, i, ret;
-	int ch;
-	const char * test = "0123456789ABCDEFGHIJ0123456789";
-	fd = open64("test-fopen", O_RDWR|O_CREAT, 0755);
-	for(i = 0; i < 10000; i++) {
-		write(fd, "0123456789ABCDEFGHIJ0123456789" , 30);
-	}
-	close(fd);
-
-	fp = fopen64("test-fopen", "r");
-	if(!fp) {
-		return -EBADF;
-	}
-
-	ch = i = ret = 0;
-	ch = fgetc(fp);
-	if (ch == EOF)
-		goto out;
-	do {
-		if ((char)ch != test[i % 30]) {
-			ftfs_error(__func__, "Expected %c, got %c. i=%i",
-				   (char)ch, test[i % 30], i);
-			ret = -1;
-			goto out;
-		}
-		i++;
-		ch = fgetc(fp);
-	} while (ch != EOF);
-
-	if (feof(fp))
-		printk(KERN_DEBUG "End of file reached.\n");
-	else
-		ftfs_error(__func__, "Something went wrong. feof() expected");
-out:
-	fclose(fp);
-	unlink("test-fopen");
-	return ret;
-
-}
-
-
-static int _setup_f_test(void){
-    int fd, i;
-    fd = open64("test-fopen", O_RDWR|O_CREAT, 0755);
-    if(fd < 0)
-	return -1;
-    for(i = 0; i < 10000; i++) {
-      write(fd, "0123456789ABCDEFGHIJ0123456789" , 30);
-    }
-    close(fd);
-    return 0;
-}
-
-static int _teardown_f_test(void){
-    return unlink("test-fopen");
-}
-//a big test for fopen/fclose/ftell/fseek/fread/fwrite/ftello64
-int test_f_all(void) {
-    FILE * fp;
-    int ret = 0;
-    long res1 = 0;
-    off64_t res2 = 0;
-    char * buf;
-    _setup_f_test();
-
-    fp = fopen64("test-fopen", "r+b");
-    if(!fp) goto open_fail;
-
-    ret = fseek(fp,900, SEEK_SET);
-    if(ret) goto seek_fail;
-
-    res1 = ftell(fp);
-    if(res1 != 900) {
-        ftfs_error(__func__, "!!ftell is not reporting the correct value:%ld, expected 900", res1);
-        ret = -1;
-        goto cleanup;
-    }
-    // now we are in the middle of the file, let's play fread and fwrite
-
-    ftfs_log(__func__, "before reading the offset = %d", res1);
-    buf = (char *) kzalloc(sizeof(char)*61, GFP_KERNEL);
-    ret = fread(buf, 1, 60, fp);
-    if(ret != 60) {
-	ftfs_error(__func__, "!!1st fread failed to read:%d", ret);
-        ret = -1;
-        goto cleanup;
-    }
-    ftfs_log(__func__, "1st fread succeeded:%s", buf);
-    fseek(fp, -60, SEEK_CUR);
-    ret = ftello64(fp);
-    ftfs_log(__func__, "after reading 60 bytes and move backward 60 bytes the offset = %d", ret);
-
-    fwrite("9876543210JIHGFEDCBA9876543210",1,30,fp);
-    fwrite("9876543210JIHGFEDCBA9876543210",1,30,fp); // buffered write should be practiced...
-
-    // WARN: use fseek to force flush write first or you may not get the right position.
-    fseek(fp,0,SEEK_CUR);
-    ret = ftello64(fp);
-    ftfs_log(__func__, "after writing 60 bytes the offset = %d", ret);
-
-    fseek(fp, -60, SEEK_CUR);
-    ret = ftello64(fp);
-    ftfs_log(__func__, "again move backward 60 bytes the offset = %d", ret);
-
-    ret = fread(buf, 1, 60, fp);
-    if(ret != 60) {
-	ftfs_error(__func__, "!!2nd fread failed to read:%d", ret);
-        ret = -1;
-        goto cleanup;
-    }
-    ftfs_log(__func__, "2nd fread succeeded:%s", buf);
-     ret = ftello64(fp);
-    ftfs_log(__func__, "after 2nd reading of 60bytes the offset = %d", ret);
-
-
-    ret = fseek(fp, 0, SEEK_END);
-    if(ret) goto seek_fail;
-
-    res2 = ftello64(fp);
-    if(res2 != 300000) {
-        ftfs_error(__func__, "!!ftello64 is not reporting the correct value:%ld, expected file size", res2);
-        ret = -1;
-        goto cleanup;
-    }
-
-    ret = fseek(fp, -100000, SEEK_CUR);
-    if(ret) goto seek_fail;
-
-    res2 = ftello64(fp);
-    if(res2 != 200000) {
-        ftfs_error(__func__, "!!ftello64 is not reporting the correct value:%ld, expected 200000", res2);
-        ret = -1;
-    }
-    goto cleanup;
-
-open_fail:
-    ftfs_error(__func__, "fseek failed for open-fopen");
-    goto cleanup;
-seek_fail:
-    ftfs_error(__func__, "fseek failed for test-fopen");
-cleanup:
-    kfree(buf);
-    fclose(fp);
-    _teardown_f_test();
-    return ret;
-
-}
-//testing recursive deletion....
-extern int recursive_delete(char * path);
-int test_recursive_deletion(void) {
-    int ret = 0;
-    int fd;
-    ret = mkdir("test_recursive", 0755);
-    if(ret) {
-	ftfs_error(__func__, "failed to mkdir test_recursive");
-	return -1;
-    }
-    ret = mkdir("test_recursive/1",0755);
-    if(ret) {
-	ftfs_error(__func__, "failed to mkdir test_recursive/1");
-	return -1;
-    }
-    ret = mkdir("test_recursive/1/2",0755);
-    if(ret) {
-	ftfs_error(__func__, "failed to mkdir test_recursive/1/2");
-	return -1;
-    }
-    ret = mkdir("test_recursive/1/2/3",0755);
-    if(ret) {
-	ftfs_error(__func__, "failed to mkdir test_recursive/1/2/3");
-	return -1;
-    }
-
-    ret = mkdir("test_recursive/1/2/4",0755);
-    if(ret) {
-	ftfs_error(__func__, "failed to mkdir test_recursive/1/2/3");
-	return -1;
-    }
-    fd = open64( "test_recursive/1/2/test_file" , O_RDWR | O_CREAT,0755);
-    if(fd < 0) {
-        ftfs_error(__func__, "can not create test file ...");
-    }
-    ret = recursive_delete("test_recursive");
-    if(ret) {
-	ftfs_error(__func__, "failed to recursively delete test_recursive");
-	return -1;
-    }
-    return 0;
-}
-
-//DIR stream based
-int test_openclose_dir(void) {
-	int ret = 0;
-	DIR * dirp;
-	struct dirent64 * de;
-	int fd;
-
-	/* positive test */
-	ret = mkdir("test_readdir", 0755);
-	ret = mkdir("test_readdir/1",0755);
-	ret = mkdir("test_readdir/2",0755);
-	ret = mkdir("test_readdir/3",0755);
-
-	dirp = opendir("test_readdir");
-	if(!dirp) {
-		ftfs_error(__func__, "opendir failed");
-		return -1;
-	}
-
-	fd = dirfd(dirp);
-	if(fd < 0) {
-		ftfs_error(__func__, "dirfd failed: %d", fd);
-		return -1;
-	}
-
-	while((de = readdir64(dirp)) != NULL) {
-		ftfs_log(__func__,"readdir output: %s", de->d_name);
-	}
-	closedir(dirp);
-
-	rmdir("test_readdir/1");
-	rmdir("test_readdir/2");
-	rmdir("test_readdir/3");
-	rmdir("test_readdir");
-
-	/* negative test */
-	fd = open64( "test_file" , O_RDWR | O_CREAT, 0755);
-	if(fd < 0) {
-		ftfs_error(__func__, "can not open test file ...");
-		return -1;
-	}
-	close(fd);
-
-	dirp = opendir("test_file");
-	if(dirp) {
-		ftfs_error(__func__, "ERROR! opendir should not open "
-			   "regular file \"test_file\"");
-		ret = -1;
-	}
-	ftfs_log(__func__, "opendir correctly failed on \"test_file\", "
-		 "which is not a dir.");
-
-	unlink("test_file");
-
-	closedir(dirp);
-
-	return 0;
-}
-
-extern int test_no_fsync(void);
-
-int test_fsync(void)
-{
-	int ret = 0;
-	int wrlen = 0;
-	int to_write = 10*1000;
-	int i;
-	int fd = open64( "test_fsync" , O_RDWR | O_CREAT,0755);
-	if(fd < 0)
-		goto open_fail;
-
-	ftfs_log(__func__, "fsync is expensive, taking a while to write "
-		 "through the large records...\n"
-		 "You can check manually the disk writethrough of file "
-		 "test_fsync by mounting the loop device");
-
-	for(i = 0; i < to_write; i++) {
-		wrlen = write(fd, "0123456789ABCDEFGHIJ0123456789" , 30);
-		if(wrlen != 30)
-			goto write_fail;
-
-		ret = fsync(fd);
-		if(ret)
-			goto fsync_fail;
-	}
-	goto clean;
-
-open_fail:
-	ftfs_error(__func__, "open failed for: test_fsync");
-	return fd;
-
-write_fail:
-	ftfs_error(__func__, "write failed for fd: %d", fd);
-	goto clean;
-
-fsync_fail:
-	ftfs_error(__func__, "fsync failed for fd: %d", fd);
-clean:
-	close (fd);
-	unlink("test_fsync");
-	return ret;
-}
-
-//this is just to compare with test_sync.
-int test_no_fsync(void)
-{
-	int ret = 0;
-	int wrlen = 0;
-	int to_write = 10*1000;
-	int i;
-	int fd = open64( "test_no_fsync" , O_RDWR | O_CREAT,0755);
-	if(fd < 0)
-		goto open_fail;
-
-	ftfs_log(__func__, "this is simply to do a comparision with fsync");
-	for(i = 0; i < to_write; i++) {
-		wrlen = write(fd, "0123456789ABCDEFGHIJ0123456789" , 30);
-		if(wrlen != 30)
-			goto write_fail;
-	}
-	goto clean;
-
-open_fail:
-	ftfs_error(__func__, "open failed for: test_fsync");
-	return fd;
-
-write_fail:
-	ftfs_error(__func__, "write failed for fd: %d", fd);
-	goto clean;
-
-clean:
-	close (fd);
-	unlink("test_no_fsync");
-	return ret;
 }
 
 int test_readlink(void) {
@@ -753,7 +418,7 @@ int test_mkrmdir(void)
 		usleep(1000);
 		err = test_rmdir();
 		if (err) break;
- 	}
+	}
 	printk(KERN_ALERT "mkrmdir test finished: err=%d\n", err);
 	return err;
 }
@@ -780,21 +445,21 @@ static int delete_files(void)
 {
 	int ret, num = 1;
 
-	ret = unlink("/test/1");
+	ret = unlink("/db/1");
 	if (ret)
 		goto err;
 
 	num = 2;
-	ret = unlink("/test/2");
+	ret = unlink("/db/2");
 	if (ret)
 		goto err;
 
 	num = 3;
-	ret = unlink("/test/3");
+	ret = unlink("/db/3");
 	if (ret)
 		goto err;
 
-	ret = rmdir("/test/");
+	ret = rmdir("/db/");
 	if (ret) {
 		ftfs_error(__func__, "delete dir /test failed");
 		return -1;
@@ -811,25 +476,25 @@ static int create_files(void)
 {
 	int ret, num = 1;
 
-	ret = mkdir("/test/", 0755);
+	ret = ftfs_fs_reset("/db/", 0777);
 	if (ret) {
 		ftfs_error(__func__, "mkdir failed for err: %d", ret);
 		return -1;
 	}
 
-	ret = open64("/test/1", O_CREAT|O_RDWR, 0755);
+	ret = open64("/db/1", O_CREAT|O_RDWR, 0755);
 	if (ret < 0)
 		goto err;
 	close(ret);
 
 	num = 2;
-	ret = open64("/test/2", O_CREAT|O_RDWR, 0755);
+	ret = open64("/db/2", O_CREAT|O_RDWR, 0755);
 	if (ret < 0)
 		goto err;
 	close(ret);
 
 	num = 3;
-	ret = open64("/test/3", O_CREAT|O_RDWR, 0755);
+	ret = open64("/db/3", O_CREAT|O_RDWR, 0755);
 	if (ret < 0)
 		goto err;
 	close(ret);
@@ -840,6 +505,482 @@ err:
 	ftfs_error(__func__, "open file /test/%d failed", num);
 	return -1;
 }
+
+int test_remove(void)
+{
+	int ret;
+
+	ret = create_files();
+	if (ret < 0) {
+		set_errno(ret);
+		perror("test_remove");
+	}
+
+	ret = remove("/db/1");
+	if (ret < 0) {
+		set_errno(ret);
+		perror("test_remove");
+	}
+	ret = remove("/db/2");
+	if (ret < 0) {
+		set_errno(ret);
+		perror("test_remove");
+	}
+	ret = remove("/db/3");
+	if (ret < 0) {
+		set_errno(ret);
+		perror("test_remove");
+	}
+
+	ret = remove("/db/");
+	if (ret < 0) {
+		set_errno(ret);
+		perror("test_remove /test/");
+	}
+
+	return ret;
+
+}
+#else
+static int ftfs_zero_out_file(const char *pathname)
+{
+	int header_size = 4096 * 5;
+	char *buf = kmalloc(header_size, GFP_KERNEL);
+	int fd;
+	int ret;
+
+	BUG_ON(buf == NULL);
+	memset(buf, 0, header_size);
+
+	fd = open64(pathname, O_RDWR, 0755);
+	if (fd < 0) {
+		ftfs_error(__func__, "open(%s): %d", pathname, fd);
+		return fd;
+	}
+
+	ret = pwrite64(fd, buf, header_size, 0);
+	/* Suppose pwrite64 succeed in one shot */
+	BUG_ON(ret != header_size);
+	kfree(buf);
+	close(fd);
+	return 0;
+}
+
+int ftfs_fs_reset(const char *pathname, mode_t mode)
+{
+	int r;
+	r = ftfs_zero_out_file("/db/ftfs_data_2_1_19.tokudb");
+	BUG_ON(r != 0);
+	r = ftfs_zero_out_file("/db/ftfs_meta_2_1_19.tokudb");
+	BUG_ON(r != 0);
+	return 0;
+}
+#endif /* USE_SFS */
+
+static int _setup_f_test(void){
+    int fd, i;
+
+    int r = ftfs_fs_reset("/db", 0777);
+    BUG_ON(r != 0);
+
+    fd = open64("/db/ftfs_data_2_1_19.tokudb", O_RDWR|O_CREAT, 0755);
+    if(fd < 0)
+	return -1;
+    for(i = 0; i < 10000; i++) {
+      write(fd, "0123456789ABCDEFGHIJ0123456789" , 30);
+    }
+    close(fd);
+    return 0;
+}
+
+int test_openclose(void)
+{
+	int fd, ret;
+
+	int r = ftfs_fs_reset("/db", 0777);
+	BUG_ON(r != 0);
+
+	fd = open64("/db/ftfs_data_2_1_19.tokudb", O_CREAT|O_RDWR, 0755);
+	if(fd < 0) {
+		ftfs_error(__func__, "open(%s): %d\n", "/db/ftfs_data_2_1_19.tokudb", fd);
+		return fd;
+	}
+
+	ret = close(fd);
+	if (fd)
+		ftfs_error(__func__, "close(%d): %d\n", fd, ret);
+
+	return 0;
+}
+
+int test_preadwrite(void)
+{
+	int fd, len, ret, i;
+	const char *test = "/db/ftfs_data_2_1_19.tokudb";
+	char buf[64];
+	int r;
+
+	r = ftfs_fs_reset("/db", 0777);
+	BUG_ON(r != 0);
+
+	fd = open64(test, O_CREAT | O_RDWR, 0755);
+	if (fd < 0) {
+		ftfs_error(__func__, "open(%s): %d", test, fd);
+		return fd;
+	}
+
+	len = strlen(test);
+	for (i = 0; i < 10; i++) {
+		ret = pwrite64(fd, test, len, i);
+		if (ret != len)
+			return ret;
+		ret = pread64(fd, buf, len, i);
+		if (ret != len)
+			return ret;
+		if (memcmp(test, buf, len))
+			return -EIO;
+	}
+
+	close(fd);
+
+	return 0;
+}
+
+int test_readwrite(void)
+{
+	int fd, len, ret, i;
+	const char *test = "/db/ftfs_data_2_1_19.tokudb";
+	char buf[64];
+
+	ret = ftfs_fs_reset("/db", 0777);
+	BUG_ON(ret != 0);
+
+	fd = open64(test, O_CREAT | O_RDWR, 0755);
+	if (fd < 0) {
+		ftfs_error(__func__, "open(%s): %d", test, fd);
+		return fd;
+	}
+
+	len = strlen(test);
+	for (i = 0; i < 10; i++) {
+		ret = pwrite64(fd, test, len, i*len);
+		if (ret != len)
+			return ret;
+		ret = read(fd, buf, len);
+		if (ret != len)
+			return ret;
+		if (memcmp(test, buf, len))
+			return -EIO;
+	}
+
+	close(fd);
+
+	return 0;
+}
+
+int test_pwrite(void)
+{
+	int fd, len, ret, i;
+	const char *test = "/db/ftfs_data_2_1_19.tokudb";
+
+	ret = ftfs_fs_reset("/db", 0777);
+	BUG_ON(ret != 0);
+
+	fd = open64(test, O_CREAT | O_RDWR, 0755);
+	if (fd < 0) {
+		ftfs_error(__func__, "open(%s): %d", test, fd);
+		return fd;
+	}
+
+	len = strlen(test);
+	for (i = 0; i < 10; i++) {
+		ret = pwrite64(fd, test, len, i);
+		if (ret != len)
+			return ret;
+	}
+
+	close(fd);
+
+	return 0;
+}
+
+int test_write(void)
+{
+	int fd, len, ret, i;
+	const char *test = "/db/ftfs_data_2_1_19.tokudb";
+
+	ret = ftfs_fs_reset("/db", 0777);
+	BUG_ON(ret != 0);
+
+	fd = open64(test, O_CREAT | O_RDWR, 0755);
+	if (fd < 0) {
+		ftfs_error(__func__, "open(%s): %d", test, fd);
+		return fd;
+	}
+
+	len = strlen(test);
+	for (i = 0; i < 10; i++) {
+		ret = write(fd, test, len);
+		if (ret != len)
+			return ret;
+	}
+
+	close(fd);
+	return 0;
+}
+
+extern int feof(FILE *f);
+int test_fgetc(void)
+{
+	FILE *fp;
+	int fd, i, ret;
+	int ch;
+	const char * test = "0123456789ABCDEFGHIJ0123456789";
+#ifdef USE_SFS
+	int total_written_bytes = 0;
+#endif
+
+	ret = ftfs_fs_reset("/db", 0777);
+	BUG_ON(ret != 0);
+
+	fd = open64("/db/ftfs_data_2_1_19.tokudb", O_RDWR|O_CREAT, 0755);
+	for(i = 0; i < 10000; i++) {
+		write(fd, "0123456789ABCDEFGHIJ0123456789" , 30);
+	}
+	close(fd);
+#ifdef USE_SFS
+	total_written_bytes = 30 * 10000;
+#endif
+	fp = fopen64("/db/ftfs_data_2_1_19.tokudb", "r");
+	if(!fp) {
+		return -EBADF;
+	}
+
+	ch = i = ret = 0;
+	ch = fgetc(fp);
+	if (ch == EOF)
+		goto out;
+	do {
+		if ((char)ch != test[i % 30]) {
+			ftfs_error(__func__, "Expected %c, got %c. i=%i",
+				   (char)ch, test[i % 30], i);
+			ret = -1;
+			goto out;
+		}
+		i++;
+		ch = fgetc(fp);
+#ifdef USE_SFS
+		if (i >= total_written_bytes)
+			break;
+#endif
+	} while (ch != EOF);
+
+	if (feof(fp))
+		printk(KERN_DEBUG "End of file reached.\n");
+	else
+		ftfs_error(__func__, "Something went wrong. feof() expected");
+out:
+	fclose(fp);
+#ifndef USE_SFS
+	unlink("/db/ftfs_data_2_1_19.tokudb");
+#endif
+	return ret;
+}
+
+
+//a big test for fopen/fclose/ftell/fseek/fread/fwrite/ftello64
+int test_f_all(void) {
+    FILE * fp;
+    int ret = 0;
+    long res1 = 0;
+    off64_t res2 = 0;
+    char * buf;
+
+    ret = _setup_f_test();
+    BUG_ON(ret != 0);
+
+    fp = fopen64("/db/ftfs_data_2_1_19.tokudb", "r+b");
+    if(!fp) goto open_fail;
+
+    ret = fseek(fp,900, SEEK_SET);
+    if(ret) goto seek_fail;
+
+    res1 = ftell(fp);
+    if(res1 != 900) {
+        ftfs_error(__func__, "!!ftell is not reporting the correct value:%ld, expected 900", res1);
+        ret = -1;
+        goto cleanup;
+    }
+    // now we are in the middle of the file, let's play fread and fwrite
+
+    ftfs_log(__func__, "before reading the offset = %d", res1);
+    buf = (char *) kzalloc(sizeof(char)*61, GFP_KERNEL);
+    ret = fread(buf, 1, 60, fp);
+    if(ret != 60) {
+	ftfs_error(__func__, "!!1st fread failed to read:%d", ret);
+        ret = -1;
+        goto cleanup;
+    }
+    ftfs_log(__func__, "1st fread succeeded:%s", buf);
+    fseek(fp, -60, SEEK_CUR);
+    ret = ftello64(fp);
+    ftfs_log(__func__, "after reading 60 bytes and move backward 60 bytes the offset = %d", ret);
+
+    fwrite("9876543210JIHGFEDCBA9876543210",1,30,fp);
+    fwrite("9876543210JIHGFEDCBA9876543210",1,30,fp); // buffered write should be practiced...
+
+    // WARN: use fseek to force flush write first or you may not get the right position.
+    fseek(fp,0,SEEK_CUR);
+    ret = ftello64(fp);
+    ftfs_log(__func__, "after writing 60 bytes the offset = %d", ret);
+
+    fseek(fp, -60, SEEK_CUR);
+    ret = ftello64(fp);
+    ftfs_log(__func__, "again move backward 60 bytes the offset = %d", ret);
+
+    ret = fread(buf, 1, 60, fp);
+    if(ret != 60) {
+	ftfs_error(__func__, "!!2nd fread failed to read:%d", ret);
+        ret = -1;
+        goto cleanup;
+    }
+    ftfs_log(__func__, "2nd fread succeeded:%s", buf);
+     ret = ftello64(fp);
+    ftfs_log(__func__, "after 2nd reading of 60bytes the offset = %d", ret);
+
+#ifndef USE_SFS
+    ret = fseek(fp, 0, SEEK_END);
+    if(ret) goto seek_fail;
+#else
+    // The file in SFS has more then 300000 bytes because of the pre-allocation
+    ret = fseek(fp, 300000, SEEK_SET);
+    if(ret) goto seek_fail;
+#endif
+    res2 = ftello64(fp);
+    if(res2 != 300000) {
+        ftfs_error(__func__, "!!ftello64 is not reporting the correct value:%ld, expected file size", res2);
+        ret = -1;
+        goto cleanup;
+    }
+
+    ret = fseek(fp, -100000, SEEK_CUR);
+    if(ret) goto seek_fail;
+
+    res2 = ftello64(fp);
+    if(res2 != 200000) {
+        ftfs_error(__func__, "!!ftello64 is not reporting the correct value:%ld, expected 200000", res2);
+        ret = -1;
+    }
+    goto cleanup;
+
+open_fail:
+    ftfs_error(__func__, "fseek failed for open-fopen");
+    goto cleanup;
+seek_fail:
+    ftfs_error(__func__, "fseek failed for test-fopen");
+cleanup:
+    kfree(buf);
+    fclose(fp);
+#ifndef USE_SFS
+    ret = _teardown_f_test();
+    BUG_ON(ret != 0);
+#endif
+    return ret;
+}
+
+extern int test_no_fsync(void);
+
+int test_fsync(void)
+{
+	int ret = 0;
+	int wrlen = 0;
+	int to_write = 10*1000;
+	int i;
+	int fd;
+
+	ret = ftfs_fs_reset("/db", 0777);
+	BUG_ON(ret != 0);
+
+	fd = open64( "/db/ftfs_data_2_1_19.tokudb" , O_RDWR | O_CREAT,0755);
+	if(fd < 0)
+		goto open_fail;
+
+	ftfs_log(__func__, "fsync is expensive, taking a while to write "
+		 "through the large records...\n"
+		 "You can check manually the disk writethrough of file "
+		 "test_fsync by mounting the loop device");
+
+	for(i = 0; i < to_write; i++) {
+		wrlen = write(fd, "0123456789ABCDEFGHIJ0123456789" , 30);
+		if(wrlen != 30)
+			goto write_fail;
+
+		ret = fsync(fd);
+		if(ret)
+			goto fsync_fail;
+	}
+	goto clean;
+
+open_fail:
+	ftfs_error(__func__, "open failed for: test_fsync");
+	return fd;
+
+write_fail:
+	ftfs_error(__func__, "write failed for fd: %d", fd);
+	goto clean;
+
+fsync_fail:
+	ftfs_error(__func__, "fsync failed for fd: %d", fd);
+clean:
+	close (fd);
+
+	ret = ftfs_fs_reset("/db", 0777);
+	BUG_ON(ret != 0);
+
+	return ret;
+}
+
+//this is just to compare with test_sync.
+int test_no_fsync(void)
+{
+	int ret = 0;
+	int wrlen = 0;
+	int to_write = 10*1000;
+	int i;
+	int fd;
+
+	ret = ftfs_fs_reset("/db", 0777);
+	BUG_ON(ret != 0);
+
+	fd = open64( "/db/ftfs_data_2_1_19.tokudb" , O_RDWR | O_CREAT,0755);
+	if(fd < 0)
+		goto open_fail;
+
+	ftfs_log(__func__, "this is simply to do a comparision with fsync");
+	for(i = 0; i < to_write; i++) {
+		wrlen = write(fd, "0123456789ABCDEFGHIJ0123456789" , 30);
+		if(wrlen != 30)
+			goto write_fail;
+	}
+	goto clean;
+
+open_fail:
+	ftfs_error(__func__, "open failed for: test_fsync");
+	return fd;
+
+write_fail:
+	ftfs_error(__func__, "write failed for fd: %d", fd);
+	goto clean;
+
+clean:
+	close (fd);
+
+	ret = ftfs_fs_reset("/db", 0777);
+	BUG_ON(ret != 0);
+
+	return ret;
+}
+
 
 static void print_stat(struct stat *statbuf)
 {
@@ -860,7 +1001,6 @@ static void print_stat(struct stat *statbuf)
 
 }
 
-
 int test_stat_ftfs(void)
 {
         int ret = -1;
@@ -868,7 +1008,10 @@ int test_stat_ftfs(void)
         struct stat buf1;
         struct stat buf2;
 
-        fd = open64("/test_stat", O_CREAT|O_RDWR, 0755);
+	ret = ftfs_fs_reset("/db", 0777);
+	BUG_ON(ret != 0);
+
+        fd = open64("/db/ftfs_data_2_1_19.tokudb", O_CREAT|O_RDWR, 0755);
         if (fd < 0)
                 goto exit;
         ret = stat("/", &buf1);
@@ -897,11 +1040,6 @@ int test_stat_ftfs(void)
         printk(KERN_ALERT "ino: %lu\n", buf2.st_ino);
         printk(KERN_ALERT "uid: %u\n", buf2.st_uid);
 	close(fd);
-
-
-
-
-
 exit:
         if (fd > 0)
                 close(fd);
@@ -954,26 +1092,29 @@ exit:
 int test_getdents64(void)
 {
 
-	int fd, ret, cnt, status = 0;
-	struct linux_dirent64 dent, *p;
-
-	ret = create_files();
+	int fd, cnt, status = 0;
+	struct linux_dirent64 *dent, *p;
+#ifndef USE_SFS
+	int ret = create_files();
 	if (ret < 0)
 		return ret;
-
-	fd = open64("/test/", O_RDONLY, 0777);
+#endif
+	fd = open64("/db/", O_RDONLY, 0777);
 	if (fd < 0)
 		return fd;
 
+	dent = (struct linux_dirent64*) kmalloc(4096, GFP_KERNEL);
+	BUG_ON(dent == NULL);
+
 	while (1) {
-		status = getdents64(fd, &dent, sizeof(struct linux_dirent64));
+		status = getdents64(fd, dent, 4096);
 		if (status < 0) {
-			ftfs_error(__func__, "getdents64 failed!");
+			ftfs_error(__func__, "getdents64 failed: status=%d!", status);
 			break;
 		} else if (status == 0)
 			break;
 
-		for (cnt=0, p=&dent; cnt<status; ) {
+		for (cnt=0, p = dent; cnt<status; ) {
 			printk(KERN_INFO "inode number: %llu\n", p->d_ino);
 			printk(KERN_INFO "offset: %lld\n", p->d_off);
 			printk(KERN_INFO "len: %u\n", p->d_reclen);
@@ -984,43 +1125,10 @@ int test_getdents64(void)
 	}
 
 	close(fd);
+#ifndef USE_SFS
 	delete_files();
+#endif
 	return status;
-}
-
-int test_remove(void)
-{
-	int ret;
-	ret = create_files();
-	if (ret < 0) {
-		set_errno(ret);
-		perror("test_remove");
-	}
-
-	ret = remove("/test/1");
-	if (ret < 0) {
-		set_errno(ret);
-		perror("test_remove");
-	}
-	ret = remove("/test/2");
-	if (ret < 0) {
-		set_errno(ret);
-		perror("test_remove");
-	}
-	ret = remove("/test/3");
-	if (ret < 0) {
-		set_errno(ret);
-		perror("test_remove");
-	}
-
-	ret = remove("/test/");
-	if (ret < 0) {
-		set_errno(ret);
-		perror("test_remove /test/");
-	}
-
-	return ret;
-
 }
 
 int test_ftfs_realloc(void)
@@ -1126,12 +1234,18 @@ int test_posix_memalign(void) {
 
 int test_fcopy(void) {
 	int r;
-	_setup_f_test();
-	r = fcopy("test-fopen","test-fopen-copy");
-	_teardown_f_test();
+
+	r = _setup_f_test();
+	BUG_ON(r != 0);
+
+	/* YZJ: copy small file to larger file */
+	r = fcopy("/db/ftfs_meta_2_1_19.tokudb", "/db/ftfs_data_2_1_19.tokudb");
 	if(r != 0) {
 		 ftfs_log(__func__, "test fcopy failed");
 	}
-	unlink("test-fopen-copy");
+#ifndef USE_SFS
+	r = _teardown_f_test();
+	BUG_ON(r != 0);
+#endif
 	return r;
 }

@@ -122,6 +122,10 @@ const char *toku_copyright_string = "Copyright (c) 2007-2013 Tokutek Inc.  All r
 #include <ft/ft.h>
 #include <ft/txn_manager.h>
 
+#ifdef USE_SFS
+#include <ft/log-internal.h>
+#endif
+
 #include "ydb.h"
 #include "ydb-internal.h"
 #include "ydb_cursor.h"
@@ -948,7 +952,12 @@ env_open(DB_ENV * env, const char *home, uint32_t flags, int mode) {
         // and there is no value in upgrading it.  It is simpler to just create a new one.
         char* rollback_filename = toku_construct_full_name(2, env->i->dir, toku_product_name_strings.rollback_cachefile);
         assert(rollback_filename);
+#ifndef USE_SFS
         r = unlink(rollback_filename);
+#else
+        // YZJ: upgrade should never happen
+        assert(false);
+#endif
         if (r != 0) {
 #ifdef TOKU_LINUX_MODULE
             assert(get_error_errno(r) == ENOENT);
@@ -986,10 +995,15 @@ env_open(DB_ENV * env, const char *home, uint32_t flags, int mode) {
         assert(env->i->logger);
         toku_logger_write_log_files(env->i->logger, (bool)((flags & DB_INIT_LOG) != 0));
         if (!toku_logger_is_open(env->i->logger)) {
+            /* YZJ: 05/04/2018 In current setting, this will create a new log file */
             r = toku_logger_open(env->i->real_log_dir, env->i->logger);
             if (r!=0) {
                 toku_ydb_do_error(env, r, "Could not open logger\n");
             }
+#ifdef USE_SFS
+            /* YZJ: Let the logger tell us whether we need a new env */
+            newenv=env->i->logger->new_env;
+#endif
         }
     } else {
         r = toku_logger_close(&env->i->logger); // if no logging system, then kill the logger

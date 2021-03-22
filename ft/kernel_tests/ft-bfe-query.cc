@@ -365,9 +365,9 @@ test_prefetching(void) {
     //    struct ft_handle source_ft;
     struct ftnode sn;
 
-    int fd = open(TOKU_TEST_FILENAME, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
-    int r;
+    int fd = open(TOKU_TEST_FILENAME_DATA, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
 
     //    source_ft.fd=fd;
     sn.max_msn_applied_to_node_on_disk.msn = 0;
@@ -428,7 +428,10 @@ test_prefetching(void) {
                  TOKU_DEFAULT_COMPRESSION_METHOD);
     brt->ft = brt_h;
     toku_blocktable_create_new(&brt_h->blocktable);
+#ifndef USE_SFS
+    // YZJ: for SFS, toku_fs_reset already zeros out the block table
     { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
+#endif
     //Want to use block #20
     BLOCKNUM b = make_blocknum(0);
     while (b.b < 20) {

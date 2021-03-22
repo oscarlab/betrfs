@@ -99,8 +99,9 @@ static void cachetable_debug_test (int n)
 	int r;
 	CACHETABLE ct;
 	toku_cachetable_create(&ct, test_limit, ZERO_LSN, NULL_LOGGER);
-	const char *fname1 = TOKU_TEST_FILENAME;
-	unlink(fname1);
+	const char *fname1 = TOKU_TEST_FILENAME_DATA;
+        r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
+
 	CACHEFILE f1;
 	r = toku_cachetable_openf(&f1, ct, fname1, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO); assert(r == 0);
 

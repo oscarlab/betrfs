@@ -149,8 +149,9 @@ static void simple_test(bool unlink_on_close)
 	int r;
 	CACHETABLE ct;
 	toku_cachetable_create(&ct, test_limit, ZERO_LSN, NULL_LOGGER);
-	const char *fname1 = TOKU_TEST_FILENAME;
-	unlink(fname1);
+	const char *fname1 = TOKU_TEST_FILENAME_DATA;
+        r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
+
 	CACHEFILE f1;
 	r = toku_cachetable_openf(&f1, ct, fname1, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO); assert(r == 0);
 	set_cf_userdata(f1);
@@ -220,8 +221,11 @@ static void test_pair_stays_in_cache(enum cachetable_dirty dirty)
 	int r;
 	CACHETABLE ct;
 	toku_cachetable_create(&ct, test_limit, ZERO_LSN, NULL_LOGGER);
-	const char *fname1 = TOKU_TEST_FILENAME;
-	unlink(fname1);
+
+	const char *fname1 = TOKU_TEST_FILENAME_DATA;
+	r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+	assert(r==0);
+
 	CACHEFILE f1;
 
 	r = toku_cachetable_openf(&f1, ct, fname1, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO); assert(r == 0);
@@ -253,19 +257,12 @@ static void test_multiple_cachefiles(bool use_same_hash)
 		CACHETABLE ct;
 		toku_cachetable_create(&ct, test_limit, ZERO_LSN, NULL_LOGGER);
 
-		char fname1[strlen(TOKU_TEST_FILENAME) + sizeof("_1")];    
-		strcpy(fname1, TOKU_TEST_FILENAME);
-		strncat(fname1, "_1", sizeof("_1"));
-		char fname2[strlen(TOKU_TEST_FILENAME) + sizeof("_2")];    
-		strcpy(fname2, TOKU_TEST_FILENAME);
-		strncat(fname2, "_2", sizeof("_2"));
-		char fname3[strlen(TOKU_TEST_FILENAME) + sizeof("_3")];    
-		strcpy(fname3, TOKU_TEST_FILENAME);
-		strncat(fname3, "_3", sizeof("_3"));
+                r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+                assert(r==0);
+                const char *fname1 = TOKU_TEST_FILENAME_DATA;
+                const char *fname2 = TOKU_TEST_FILENAME_META;
+                const char *fname3 = TOKU_TEST_FILENAME_ONE;
 
-		unlink(fname1);
-		unlink(fname2);
-		unlink(fname3);
 		CACHEFILE f1;
 		CACHEFILE f2;
 		CACHEFILE f3;
@@ -305,7 +302,7 @@ static void test_multiple_cachefiles(bool use_same_hash)
 		toku_cachefile_close(&f2, false, ZERO_LSN);
 		toku_cachefile_close(&f3, false, ZERO_LSN);
 
-		char* fname_to_open = NULL;
+		const char* fname_to_open = NULL;
 		if (iter == 0) {
 			fname_to_open  = fname1;
 		}
@@ -342,15 +339,12 @@ static void test_evictor(void)
 	CACHETABLE ct;
 	toku_cachetable_create(&ct, test_limit, ZERO_LSN, NULL_LOGGER);
 
-	char fname1[strlen(TOKU_TEST_FILENAME) + sizeof("_1")];    
-	strcpy(fname1, TOKU_TEST_FILENAME);
-	strncat(fname1, "_1", sizeof("_1"));
-	char fname2[strlen(TOKU_TEST_FILENAME) + sizeof("_2")];    
-	strcpy(fname2, TOKU_TEST_FILENAME);
-	strncat(fname2, "_2", sizeof("_2"));
+	r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+        assert(r==0);
 
-	unlink(fname1);
-	unlink(fname2);
+	const char *fname1 = TOKU_TEST_FILENAME_DATA;
+	const char *fname2 = TOKU_TEST_FILENAME_META;
+
 	CACHEFILE f1;
 	CACHEFILE f2;
 

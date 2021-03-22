@@ -123,13 +123,12 @@ setup (uint32_t flags) {
     int r;
     if (env)
         test_shutdown();
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r=toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
     r=db_env_create(&env, 0); 
     CKERR(r);
     env->set_errfile(env, stderr);
-    r=env->open(env, TOKU_TEST_FILENAME, flags, mode); 
+    r=env->open(env, TOKU_TEST_ENV_DIR_NAME, flags, mode);
     CKERR(r);
 }
 
@@ -150,18 +149,19 @@ reopen_env(uint32_t flags, int expected_r) {
         test_shutdown();
     r = db_env_create(&env, 0);                                           
     CKERR(r);
-    r = env->open(env, TOKU_TEST_FILENAME, flags, mode);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, flags, mode);
     CKERR2(r, expected_r);
 }
 
 static void
 delete_persistent(void) {
     char *cmd = (char *)toku_xmalloc(1024 * sizeof *cmd);
-    sprintf(cmd, "%s%s%s", TOKU_TEST_FILENAME, "/", "tokudb.environment");
-//    int r = system(cmd);
-//    CKERR(r);
-
-    toku_os_recursive_delete(cmd);    
+    sprintf(cmd, "%s%s%s", TOKU_TEST_ENV_DIR_NAME, "/", "tokudb.environment");
+#ifndef USE_SFS
+    // YZJ: cmd is a file and we cannot use toku_fs_reset
+    // because the test is supposed to remove a file.
+    unlink(cmd);
+#endif
     toku_free(cmd);
 }
 
@@ -169,19 +169,14 @@ delete_persistent(void) {
 static void
 delete_directory(void) {
     char *cmd = (char *)toku_xmalloc(1024 * sizeof *cmd);
-    sprintf(cmd, "%s%s%s", TOKU_TEST_FILENAME, "/", "tokudb.directory");
-//    int r = system(cmd);
-//    CKERR(r);
-
-
-    toku_os_recursive_delete(cmd);    
+    sprintf(cmd, "%s%s%s", TOKU_TEST_ENV_DIR_NAME, "/", "tokudb.directory");
+#ifndef USE_SFS
+    // YZJ: cmd is a file and we cannot use toku_fs_reset
+    // because the test is supposed to remove a file.
+    unlink(cmd);
+#endif
     toku_free(cmd);
 }
-
-
-/*  YZJ: We dont the exact file name of log file
-    thus need to check, assume that only one log dir
-    exist */
 
 static char *get_log_filename(char *buf)
 {
@@ -191,7 +186,7 @@ static char *get_log_filename(char *buf)
 	int fd;
         const char *log = "tokulog";
 
-	dirp = opendir(TOKU_TEST_FILENAME);
+	dirp = opendir(TOKU_TEST_ENV_DIR_NAME);
 	if(!dirp) {
 		abort();
 	}
@@ -223,12 +218,10 @@ delete_log(void) {
     if (log == NULL)
             abort();
 
-    sprintf(cmd, "%s%s%s", TOKU_TEST_FILENAME, "/", log);
-    STR(cmd);
-//    int r = system(cmd);
-//    CKERR(r);
-
-    toku_os_recursive_delete(cmd);    
+    sprintf(cmd, "%s%s%s", TOKU_TEST_ENV_DIR_NAME, "/", log);
+#ifndef USE_SFS
+    unlink(cmd);
+#endif
     toku_free(buf);
     toku_free(cmd);
 }
@@ -256,13 +249,11 @@ __test_env_startup(int logging) {
 
     // delete persistent info and try to reopen
     delete_persistent();
-    DBG;
     reopen_env(flags, ENOENT);
 
     // recreate, then try to open with missing fileops directory
     create_env(flags);
     delete_directory();
-    DBG;
     reopen_env(flags, ENOENT);
     
 
@@ -270,7 +261,6 @@ __test_env_startup(int logging) {
 	// recreate, then try to open with missing recovery log
 	create_env(flags);
 	delete_log();
-        DBG;
 	reopen_env(flags, ENOENT);
 
 	
@@ -280,35 +270,34 @@ __test_env_startup(int logging) {
 	create_env(flags);
 	delete_persistent();
 	delete_directory();
-        DBG;
 	reopen_env(flags, ENOENT);
 
 	// persistent env is only item present
 	create_env(flags);
 	delete_log();
 	delete_directory();
-        DBG;
 	reopen_env(flags, ENOENT);
 	
 	// directory is only item present
 	create_env(flags);
 	delete_persistent();
 	delete_log();
-        DBG;
 	reopen_env(flags, ENOENT);
     }
 
     test_shutdown();
 }
 
-
+// YZJ: This test is to create an env, then delete
+// a file belonging to this env and reopen this env.
+// It is expected to return ENOENT.
+// In general, this test is not well-suited for SFS.
 extern "C" int test_env_startup(void);
 int test_env_startup(void) {
 
     pre_setup();
 
     __test_env_startup(0);  // transactionless env
-    DBG;
     __test_env_startup(1);  // with transactions and logging
 
     post_teardown();
