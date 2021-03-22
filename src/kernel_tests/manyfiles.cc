@@ -95,18 +95,7 @@ PATENT RIGHTS GRANT:
 
 #define NINSERTS_PER 1000
 
-#ifdef USE_SFS
-#define NFILES 5
-static const char*dbname[5] = {
-   TOKU_TEST_DATA_DB_NAME,
-   TOKU_TEST_META_DB_NAME,
-   TOKU_TEST_SFS_ONE_NAME,
-   TOKU_TEST_SFS_TWO_NAME,
-   TOKU_TEST_SFS_THREE_NAME
-};
-#else
 #define NFILES 1000
-#endif
 static DB_ENV *env;
 static DB *dbs[NFILES];
 static DB_TXN *txn;
@@ -129,13 +118,9 @@ test_setup (void) {
     for (i=0; i<NFILES; i++) {
 	r=db_create(&dbs[i], env, 0); CKERR(r);
 	r = dbs[i]->set_pagesize(dbs[i], 4096);
-#ifndef USE_SFS
         char fname[20];
         snprintf(fname, sizeof(fname), "foo%d.db", i);
 	r=dbs[i]->open(dbs[i], txn, fname, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
-#else
-	r=dbs[i]->open(dbs[i], txn, dbname[i], 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
-#endif
     }
     r=txn->commit(txn, 0);    assert(r==0);
 }

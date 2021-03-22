@@ -29,7 +29,6 @@
 #include "sb_malloc.h"
 
 extern int usleep(unsigned long);
-#ifndef USE_SFS
 extern int recursive_delete(char * path);
 int ftfs_fs_reset(char *pathname, mode_t mode) {
 	int r;
@@ -541,41 +540,6 @@ int test_remove(void)
 	return ret;
 
 }
-#else
-static int ftfs_zero_out_file(const char *pathname)
-{
-	int header_size = 4096 * 5;
-	char *buf = kmalloc(header_size, GFP_KERNEL);
-	int fd;
-	int ret;
-
-	BUG_ON(buf == NULL);
-	memset(buf, 0, header_size);
-
-	fd = open64(pathname, O_RDWR, 0755);
-	if (fd < 0) {
-		ftfs_error(__func__, "open(%s): %d", pathname, fd);
-		return fd;
-	}
-
-	ret = pwrite64(fd, buf, header_size, 0);
-	/* Suppose pwrite64 succeed in one shot */
-	BUG_ON(ret != header_size);
-	kfree(buf);
-	close(fd);
-	return 0;
-}
-
-int ftfs_fs_reset(const char *pathname, mode_t mode)
-{
-	int r;
-	r = ftfs_zero_out_file("/db/ftfs_data_2_1_19.tokudb");
-	BUG_ON(r != 0);
-	r = ftfs_zero_out_file("/db/ftfs_meta_2_1_19.tokudb");
-	BUG_ON(r != 0);
-	return 0;
-}
-#endif /* USE_SFS */
 
 static int _setup_f_test(void){
     int fd, i;
@@ -736,9 +700,6 @@ int test_fgetc(void)
 	int fd, i, ret;
 	int ch;
 	const char * test = "0123456789ABCDEFGHIJ0123456789";
-#ifdef USE_SFS
-	int total_written_bytes = 0;
-#endif
 
 	ret = ftfs_fs_reset("/db", 0777);
 	BUG_ON(ret != 0);
@@ -748,9 +709,6 @@ int test_fgetc(void)
 		write(fd, "0123456789ABCDEFGHIJ0123456789" , 30);
 	}
 	close(fd);
-#ifdef USE_SFS
-	total_written_bytes = 30 * 10000;
-#endif
 	fp = fopen64("/db/ftfs_data_2_1_19.tokudb", "r");
 	if(!fp) {
 		return -EBADF;
@@ -769,10 +727,6 @@ int test_fgetc(void)
 		}
 		i++;
 		ch = fgetc(fp);
-#ifdef USE_SFS
-		if (i >= total_written_bytes)
-			break;
-#endif
 	} while (ch != EOF);
 
 	if (feof(fp))
@@ -781,9 +735,7 @@ int test_fgetc(void)
 		ftfs_error(__func__, "Something went wrong. feof() expected");
 out:
 	fclose(fp);
-#ifndef USE_SFS
 	unlink("/db/ftfs_data_2_1_19.tokudb");
-#endif
 	return ret;
 }
 
@@ -848,14 +800,8 @@ int test_f_all(void) {
      ret = ftello64(fp);
     ftfs_log(__func__, "after 2nd reading of 60bytes the offset = %d", ret);
 
-#ifndef USE_SFS
     ret = fseek(fp, 0, SEEK_END);
     if(ret) goto seek_fail;
-#else
-    // The file in SFS has more then 300000 bytes because of the pre-allocation
-    ret = fseek(fp, 300000, SEEK_SET);
-    if(ret) goto seek_fail;
-#endif
     res2 = ftello64(fp);
     if(res2 != 300000) {
         ftfs_error(__func__, "!!ftello64 is not reporting the correct value:%ld, expected file size", res2);
@@ -881,10 +827,8 @@ seek_fail:
 cleanup:
     kfree(buf);
     fclose(fp);
-#ifndef USE_SFS
     ret = _teardown_f_test();
     BUG_ON(ret != 0);
-#endif
     return ret;
 }
 
@@ -1094,11 +1038,9 @@ int test_getdents64(void)
 
 	int fd, cnt, status = 0;
 	struct linux_dirent64 *dent, *p;
-#ifndef USE_SFS
 	int ret = create_files();
 	if (ret < 0)
 		return ret;
-#endif
 	fd = open64("/db/", O_RDONLY, 0777);
 	if (fd < 0)
 		return fd;
@@ -1125,9 +1067,7 @@ int test_getdents64(void)
 	}
 
 	close(fd);
-#ifndef USE_SFS
 	delete_files();
-#endif
 	return status;
 }
 
@@ -1243,9 +1183,7 @@ int test_fcopy(void) {
 	if(r != 0) {
 		 ftfs_log(__func__, "test fcopy failed");
 	}
-#ifndef USE_SFS
 	r = _teardown_f_test();
 	BUG_ON(r != 0);
-#endif
 	return r;
 }

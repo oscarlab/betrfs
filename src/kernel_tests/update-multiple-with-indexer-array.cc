@@ -414,15 +414,6 @@ done:
     r = txn->commit(txn, 0); assert_zero(r);
 }
 
-#ifdef USE_SFS
-static const char *dbname[5] = {
-   TOKU_TEST_DATA_DB_NAME,
-   TOKU_TEST_META_DB_NAME,
-   TOKU_TEST_SFS_ONE_NAME,
-   TOKU_TEST_SFS_TWO_NAME,
-   TOKU_TEST_SFS_THREE_NAME
-};
-#endif
 
 static void
 run_test(int ndbs, int nrows) {
@@ -440,12 +431,8 @@ run_test(int ndbs, int nrows) {
         r = db_create(&db[dbnum], env, 0); assert_zero(r);
 
         DBT dbt_dbnum; dbt_init(&dbt_dbnum, &dbnum, sizeof dbnum);
-#ifndef USE_SFS
         char dbname[32]; sprintf(dbname, "%d.tdb", dbnum);
         r = db[dbnum]->open(db[dbnum], NULL, dbname, NULL, DB_BTREE, DB_AUTO_COMMIT+DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
-#else
-        r = db[dbnum]->open(db[dbnum], NULL, dbname[dbnum], NULL, DB_BTREE, DB_AUTO_COMMIT+DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
-#endif
         IN_TXN_COMMIT(env, NULL, txn_desc, 0, {
                 { int chk_r = db[dbnum]->change_descriptor(db[dbnum], txn_desc, &dbt_dbnum, 0); CKERR(chk_r); }
         });
@@ -487,11 +474,7 @@ extern "C" int test_update_multiple_with_indexer_array(void);
 int
 test_update_multiple_with_indexer_array(void) {
     int r;
-#ifdef USE_SFS
-    int ndbs = 5;
-#else
     int ndbs = 10;
-#endif
     int nrows = MAX_KEYS*(1<<5)*4;
     pre_setup();
     // parse_args(argc, argv);

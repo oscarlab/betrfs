@@ -823,7 +823,6 @@ static int toku_recover_fcreate (struct logtype_fcreate *l, RECOVER_ENV renv) {
     //unlink if it exists (recreate from scratch).
     char *iname = fixup_fname(&l->iname);
     char *iname_in_cwd = toku_cachetable_get_fname_in_cwd(renv->ct, iname);
-#ifndef USE_SFS
     r = unlink(iname_in_cwd);
     if (r != 0) {
 #ifdef TOKU_LINUX_MODULE
@@ -837,9 +836,6 @@ static int toku_recover_fcreate (struct logtype_fcreate *l, RECOVER_ENV renv) {
             return r;
         }
     }
-#else
-    assert(false);
-#endif
     assert(0!=strcmp(iname, toku_product_name_strings.rollback_cachefile)); //Creation of rollback cachefile never gets logged.
     toku_free(iname_in_cwd);
     toku_free(iname);
@@ -1749,11 +1745,7 @@ int tokudb_recover(DB_ENV *env,
 
     int rr = 0;
 
-#ifndef USE_SFS
     bool ignore_log_empty = true;
-#else
-    bool ignore_log_empty = false;
-#endif
     if (tokudb_needs_recovery(log_dir, ignore_log_empty)) {
         struct recover_env renv;
         r = recover_env_init(&renv,

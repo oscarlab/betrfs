@@ -157,11 +157,9 @@ static void
 delete_persistent(void) {
     char *cmd = (char *)toku_xmalloc(1024 * sizeof *cmd);
     sprintf(cmd, "%s%s%s", TOKU_TEST_ENV_DIR_NAME, "/", "tokudb.environment");
-#ifndef USE_SFS
     // YZJ: cmd is a file and we cannot use toku_fs_reset
     // because the test is supposed to remove a file.
     unlink(cmd);
-#endif
     toku_free(cmd);
 }
 
@@ -170,11 +168,9 @@ static void
 delete_directory(void) {
     char *cmd = (char *)toku_xmalloc(1024 * sizeof *cmd);
     sprintf(cmd, "%s%s%s", TOKU_TEST_ENV_DIR_NAME, "/", "tokudb.directory");
-#ifndef USE_SFS
     // YZJ: cmd is a file and we cannot use toku_fs_reset
     // because the test is supposed to remove a file.
     unlink(cmd);
-#endif
     toku_free(cmd);
 }
 
@@ -219,9 +215,7 @@ delete_log(void) {
             abort();
 
     sprintf(cmd, "%s%s%s", TOKU_TEST_ENV_DIR_NAME, "/", log);
-#ifndef USE_SFS
     unlink(cmd);
-#endif
     toku_free(buf);
     toku_free(cmd);
 }

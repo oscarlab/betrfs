@@ -630,7 +630,6 @@ struct {
 } tests[] = {
 	//{ "fail", test_fail , 5},
 	//{"logger-lists", logger_test_tables, 5},
-#ifndef USE_SFS
 	{ "mkdir", test_mkdir, 5},
 	{ "remove", test_remove, 5},
 	{ "dio", test_directio, 5},
@@ -641,7 +640,6 @@ struct {
 	{ "recursive-deletion", test_recursive_deletion, 5},
 	{ "trunc", test_trunc, 5},
 	{ "ftrunc", test_ftrunc, 5},
-#endif
 	{"seq-write-perf", perf_test_sequential_writes, 5},
 	{"seq-read-perf", perf_test_sequential_reads, 5},
 	{"ubi-root-chkpt", test_ubi_root_chkpt, 5},

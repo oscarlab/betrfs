@@ -195,10 +195,8 @@ test_serialize_leaf(int valsize, int nelts, double entropy) {
 
     brt_h->key_ops.keycmp = long_key_cmp;
     toku_blocktable_create_new(&brt_h->blocktable);
-#ifndef USE_SFS
     // YZJ: for SFS, toku_fs_reset already zero-out bbt
     { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
-#endif
     //Want to use block #20
     BLOCKNUM b = make_blocknum(0);
     while (b.b < 20) {
@@ -336,9 +334,7 @@ test_serialize_nonleaf(int valsize, int nelts, double entropy) {
 
     brt_h->key_ops.keycmp = long_key_cmp;
     toku_blocktable_create_new(&brt_h->blocktable);
-#ifndef USE_SFS
     { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
-#endif
     //Want to use block #20
     BLOCKNUM b = make_blocknum(0);
     while (b.b < 20) {

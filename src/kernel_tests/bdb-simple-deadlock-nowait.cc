@@ -162,9 +162,6 @@ int test_bdb_simple_deadlock_nowait(void) {
     if (!do_txn)
         db_env_open_flags &= ~(DB_INIT_TXN | DB_INIT_LOG);
     r = db_env->open(db_env, db_env_dir, db_env_open_flags, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH); assert(r == 0);
-#if 0 && defined(USE_BDB)
-    r = db_env->set_lk_detect(db_env, DB_LOCK_YOUNGEST); assert(r == 0);
-#endif
 
     // run test
     simple_deadlock(db_env);

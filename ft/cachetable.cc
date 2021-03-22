@@ -584,7 +584,6 @@ void toku_cachefile_close(CACHEFILE *cfp, bool oplsn_valid, LSN oplsn) {
     // remove the cf from the list of active cachefiles
     ct->cf_list.remove_cf(cf);
 
-#ifndef USE_SFS
     // Unlink the file if the bit was set
     // YZJ: for SFS, when the db is close when are not
     //      able to delete the file of this db
@@ -595,7 +594,6 @@ void toku_cachefile_close(CACHEFILE *cfp, bool oplsn_valid, LSN oplsn) {
         assert_zero(r);
         toku_free(fname_in_cwd);
     }
-#endif
     toku_free(cf->fname_in_env);
     cf->fname_in_env = NULL;
 

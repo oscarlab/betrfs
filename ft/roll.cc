@@ -803,11 +803,7 @@ toku_rollback_load (FILENUM    UU(old_filenum),
         // It's possible the new iname was never created, so just try to 
         // unlink it if it's there and ignore the error if it's not.
         char *fname_in_cwd = toku_cachetable_get_fname_in_cwd(ct, fname_in_env);
-#ifndef USE_SFS
         r = unlink(fname_in_cwd);
-#else
-        assert(false);
-#endif
 
 #ifdef TOKU_LINUX_MODULE
         assert(r == 0 || get_error_errno(r) == ENOENT);

@@ -185,23 +185,12 @@ ft_set_dirty(FT ft, bool for_checkpoint){
     }
 }
 
-#ifdef USE_SFS
-static void update_safe_file_size(int fd, BLOCK_TABLE bt) {
-    int64_t file_size;
-    int r = toku_os_get_file_size(fd, &file_size);
-    lazy_assert_zero(r);
-    bt->safe_file_size = file_size;
-}
-#endif
 
 static void
 maybe_truncate_file(BLOCK_TABLE bt, int fd, uint64_t size_needed_before) {
     toku_mutex_assert_locked(&bt->mutex);
     uint64_t new_size_needed = block_allocator_allocated_limit(bt->block_allocator);
     //Save a call to toku_os_get_file_size (kernel call) if unlikely to be useful.
-#ifdef USE_SFS
-    update_safe_file_size(fd, bt);
-#endif
     if (new_size_needed < size_needed_before && new_size_needed < bt->safe_file_size) {
         nb_mutex_lock(&bt->safe_file_size_lock, &bt->mutex);
 
@@ -398,9 +387,7 @@ void
 toku_block_translation_note_end_checkpoint (BLOCK_TABLE bt, int UU(fd)) {
     // Free unused blocks
     lock_for_blocktable(bt);
-#ifndef USE_SFS
     uint64_t allocated_limit_at_start = block_allocator_allocated_limit(bt->block_allocator);
-#endif
     paranoid_invariant_notnull(bt->inprogress.block_translation);
     if (bt->checkpoint_skipped) {
         toku_free(bt->inprogress.block_translation);
@@ -430,9 +417,7 @@ toku_block_translation_note_end_checkpoint (BLOCK_TABLE bt, int UU(fd)) {
         bt->checkpointed = bt->inprogress;
         bt->checkpointed.type = TRANSLATION_CHECKPOINTED;
         memset(&bt->inprogress, 0, sizeof(bt->inprogress));
-#ifndef USE_SFS
         maybe_truncate_file(bt, fd, allocated_limit_at_start);
-#endif
         //be noted the bt->checkpointed.log_block_log is the old inprogress lbl, aka, the frozen blb.
         block_table_log_block_log_put_blocks(bt->block_allocator, bt->checkpointed.log_block_log);
         //dealias the current lbl
@@ -577,7 +562,6 @@ ensure_safe_write_unlocked(BLOCK_TABLE bt, int fd, DISKOFF block_size, DISKOFF b
     // Requires: holding bt->mutex
     uint64_t size_needed = block_size + block_offset;
     if (size_needed > bt->safe_file_size) {
-#ifndef USE_SFS
         // Must hold safe_file_size_lock to change safe_file_size.
         nb_mutex_lock(&bt->safe_file_size_lock, &bt->mutex);
         if (size_needed > bt->safe_file_size) {
@@ -588,16 +572,6 @@ ensure_safe_write_unlocked(BLOCK_TABLE bt, int fd, DISKOFF block_size, DISKOFF b
             bt->safe_file_size = size_after;
         }
         nb_mutex_unlock(&bt->safe_file_size_lock);
-#else
-        update_safe_file_size(fd, bt);
-        if (block_size == 0) {
-            assert(block_offset == diskoff_unused);
-        } else if (block_size != 0 && bt->safe_file_size < size_needed) {
-            printf("%s:safe_file_size=%lu, size_needed=%lu\n", __func__, bt->safe_file_size, size_needed);
-            // YZJ: consider return ENOSPC in the future
-            assert(false);
-        }
-#endif
     }
 }
 

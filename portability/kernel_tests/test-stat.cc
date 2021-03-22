@@ -181,7 +181,6 @@ int test_stat(void)
     test_stat("testdir/", -1, ENOENT);
 
 
-#ifndef USE_SFS
     r = toku_os_mkdir("/testdir/", 0777);
     assert(r == 0);
 
@@ -197,7 +196,6 @@ int test_stat(void)
     test_stat("testdir",    0, 0);
     test_stat("./testdir",  0, 0);
     test_stat("./testdir/", 0, 0);
-#endif
     int fd = open(TOKU_TEST_FILENAME_DATA, O_CREAT, 0644);
     assert(fd >= 0);
     test_fstat(fd, 0, 0);

@@ -351,22 +351,12 @@ toku_db_open(DB * db, DB_TXN * txn, const char *fname, const char *dbname, DBTYP
         // create iname and make entry in directory
         uint64_t id1 = 0;
         uint64_t id2 = 0;
-#ifndef USE_SFS
         if (txn) {
             id1 = toku_txn_get_txnid(db_txn_struct_i(txn)->tokutxn).parent_id64;
             id2 = toku_txn_get_txnid(db_txn_struct_i(txn)->tokutxn).child_id64;
         } else {
             id1 = toku_sync_fetch_and_add(&nontransactional_open_id, 1);
         }
-#else
-        if (txn) {
-            id1 = 2;
-            id2 = 1;
-        } else {
-            id1 = toku_sync_fetch_and_add(&nontransactional_open_id, 1);
-        }
-	printf("id1=%ld, id2=%ld\n", id1, id2);
-#endif
         create_iname_hint(dname, hint);
         iname = create_iname(db->dbenv, id1, id2, hint, NULL, -1);  // allocated memory for iname
         toku_fill_dbt(&iname_dbt, iname, strlen(iname) + 1);

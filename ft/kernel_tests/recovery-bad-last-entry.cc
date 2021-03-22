@@ -142,13 +142,8 @@ run_test(void) {
 
         r = toku_stat(fname, &st); assert(r==0);
         if ( st.st_size - trim > magic_begin_end_checkpoint_sz ) {
-#ifndef USE_SFS
             r = truncate(fname, st.st_size - trim);
             CKERR(r);
-#else
-            r = toku_update_logfile_size(false);
-            CKERR(r);
-#endif
         }
         else
             break;

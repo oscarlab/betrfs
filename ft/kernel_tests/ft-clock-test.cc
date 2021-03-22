@@ -377,10 +377,8 @@ test_serialize_nonleaf(void) {
     brt->ft = brt_h;
     
     toku_blocktable_create_new(&brt_h->blocktable);
-#ifndef USE_SFS
     // YZJ: for SFS, toku_fs_reset already does zeroing out
     { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
-#endif
     //Want to use block #20
     BLOCKNUM b = make_blocknum(0);
     while (b.b < 20) {
@@ -469,10 +467,8 @@ test_serialize_leaf(void) {
     brt->ft = brt_h;
   
     toku_blocktable_create_new(&brt_h->blocktable);
-#ifndef USE_SFS
     // YZJ: for SFS, toku_fs_reset already does zeroing out
     { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
-#endif
     //Want to use block #20
     BLOCKNUM b = make_blocknum(0);
     while (b.b < 20) {

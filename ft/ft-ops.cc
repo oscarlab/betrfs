@@ -5762,15 +5762,11 @@ ft_handle_open(FT_HANDLE ft_h, const char *fname_in_env, int is_create, int only
         assert(txn);
         toku_txn_maybe_note_ft(txn, ft);
     }
-#ifndef USE_SFS
     //Opening a brt may restore to previous checkpoint.         Truncate if necessary.
     {
         int fd = toku_cachefile_get_fd (ft->cf);
         toku_maybe_truncate_file_on_open(ft->blocktable, fd);
     }
-#else
-    // YZJ: No need to truncate db file when it it just opened 	
-#endif
 
     r = 0;
 exit:

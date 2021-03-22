@@ -115,13 +115,7 @@ run_test(void) {
 		       NULL_prepared_txn_callback,
 		       NULL_keep_cachetable_callback,
 		       NULL_logger, TOKU_TEST_ENV_DIR_NAME, TOKU_TEST_ENV_DIR_NAME, &dummy_ftfs_key_ops, 0, 0, NULL, 0);
-#ifndef USE_SFS
     assert(r == 0);
-#else
-    // YZJ: For SFS we do not ignore empty log -- check recover.cc (tokudb_recover).
-    // This changes the return value of this unit test.
-    assert(r != 0);
-#endif
     r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r == 0);
 
     return 0;

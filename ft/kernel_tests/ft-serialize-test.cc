@@ -316,9 +316,7 @@ test_serialize_leaf_check_msn(enum ftnode_verify_type bft, bool do_clone) {
                  TOKU_DEFAULT_COMPRESSION_METHOD);
     brt->ft = brt_h;
     toku_blocktable_create_new(&brt_h->blocktable);
-#ifndef USE_SFS
     { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
-#endif
     //Want to use block #20
     BLOCKNUM b = make_blocknum(0);
     while (b.b < 20) {
@@ -469,9 +467,7 @@ test_serialize_leaf_with_large_pivots(enum ftnode_verify_type bft, bool do_clone
                  TOKU_DEFAULT_COMPRESSION_METHOD);
     brt->ft = brt_h;
     toku_blocktable_create_new(&brt_h->blocktable);
-#ifndef USE_SFS
     { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
-#endif
     //Want to use block #20
     BLOCKNUM b = make_blocknum(0);
     while (b.b < 20) {
@@ -622,9 +618,7 @@ test_serialize_leaf_with_many_rows(enum ftnode_verify_type bft, bool do_clone) {
     brt->ft = brt_h;
 
     toku_blocktable_create_new(&brt_h->blocktable);
-#ifndef USE_SFS
     { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
-#endif
     //Want to use block #20
     BLOCKNUM b = make_blocknum(0);
     while (b.b < 20) {
@@ -782,9 +776,7 @@ test_serialize_leaf_with_large_rows(enum ftnode_verify_type bft, bool do_clone) 
     brt->ft = brt_h;
 
     toku_blocktable_create_new(&brt_h->blocktable);
-#ifndef USE_SFS
     { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
-#endif
     //Want to use block #20
     BLOCKNUM b = make_blocknum(0);
     while (b.b < 20) {
@@ -940,9 +932,7 @@ test_serialize_leaf_with_empty_basement_nodes(enum ftnode_verify_type bft, bool 
     brt->ft = brt_h;
 
     toku_blocktable_create_new(&brt_h->blocktable);
-#ifndef USE_SFS
     { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
-#endif
     //Want to use block #20
     BLOCKNUM b = make_blocknum(0);
     while (b.b < 20) {
@@ -1072,9 +1062,7 @@ test_serialize_leaf_with_multiple_empty_basement_nodes(enum ftnode_verify_type b
     brt->ft = brt_h;
 
     toku_blocktable_create_new(&brt_h->blocktable);
-#ifndef USE_SFS
     { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
-#endif
     //Want to use block #20
     BLOCKNUM b = make_blocknum(0);
     while (b.b < 20) {
@@ -1216,9 +1204,7 @@ test_serialize_nonleaf(enum ftnode_verify_type bft, bool do_clone) {
     brt->ft = brt_h;
 
     toku_blocktable_create_new(&brt_h->blocktable);
-#ifndef USE_SFS
     { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
-#endif
     //Want to use block #20
     BLOCKNUM b = make_blocknum(0);
     while (b.b < 20) {

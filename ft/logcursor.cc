@@ -548,11 +548,7 @@ static int lc_fix_bad_logfile(TOKULOGCURSOR lc) {
     r = lc_close_cur_logfile(lc);                                   
     if ( r!=0 ) 
         return r;
-#ifndef USE_SFS
     r = truncate(lc->logfiles[lc->n_logfiles - 1], last_good_pos);  
-#else
-    assert(false);
-#endif
     if ( r!=0 ) 
         return r;
     r = lc_open_logfile(lc, lc->n_logfiles-1);                      

@@ -275,11 +275,7 @@ static void test_multi_filehandles (void)
 
     toku_cachetable_create(&t, 4, ZERO_LSN, NULL_LOGGER);
     r = toku_cachetable_openf(&f1, t, fname1, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO);   assert(r==0);
-#ifndef USE_SFS
     r = link(fname1, fname2);                                     assert(r==0);
-#else
-    assert(false);
-#endif
     r = toku_cachetable_openf(&f2, t, fname2, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO);   assert(r==0);
     r = toku_cachetable_openf(&f3, t, fname3, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO);   assert(r==0);
 

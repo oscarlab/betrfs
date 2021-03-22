@@ -401,7 +401,6 @@ toku_os_pread (int fd, void *buf, size_t count, off_t offset) {
     return r;
 }
 
-#ifndef USE_SFS
 extern "C" int recursive_delete(const char *);
 void toku_os_recursive_delete(const char *path) {
 #ifdef TOKU_LINUX_MODULE
@@ -417,7 +416,6 @@ void toku_os_recursive_delete(const char *path) {
     free(buf);
 #endif
 }
-#endif
 // fsync logic:
 
 // t_fsync exists for testing purposes only
@@ -568,8 +566,6 @@ int toku_fsync_directory(const char *fname) {
     toku_free(dirname);
     return result;
 }
-#ifndef USE_SFS
 int toku_fallocate(int fd, off_t offset, off_t len) {
 	return fallocate(fd, 0, offset, len);
 }
-#endif
