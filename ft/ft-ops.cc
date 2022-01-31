@@ -6656,7 +6656,7 @@ bool toku_ft_leaf_needs_ancestors_messages(
     paranoid_invariant(node->height == 0);
     bool needs_ancestors_messages = false;
     // child_to_read may be -1 in test cases
-#if 1
+#if 0
     if (!node->dirty && child_to_read >= 0) {
         paranoid_invariant(BP_STATE(node, child_to_read) == PT_AVAIL);
         needs_ancestors_messages = bn_needs_ancestors_messages(

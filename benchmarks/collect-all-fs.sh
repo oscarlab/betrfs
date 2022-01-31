@@ -34,9 +34,6 @@ cd micro/tokubench
 ./collect-all-fs.sh
 cd -
 
-# application benchmarks are not run on individual FestiFS optimizations
-exit 0
-
 #### applications ###
 cd macro/mailserver/imap-test/
 ./collect-all-fs.sh
