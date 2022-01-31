@@ -180,9 +180,9 @@ struct leafentry {
 
 #ifdef FT_INDIRECT
     uint32_t *indirect_insert_offsets; // le_pack should allocate space and assign values to it
-    uint8_t num_indirect_inserts; // how many ubi in this leaf entry
+    uint32_t num_indirect_inserts; // how many ubi in this leaf entry
 #endif
-    uint8_t  type;    // type is LE_CLEAN or LE_MVCC
+    uint8_t type;    // type is LE_CLEAN or LE_MVCC
 
     union __attribute__ ((__packed__)) {
         struct leafentry_clean clean;
@@ -208,8 +208,8 @@ static_assert(1 == __builtin_offsetof(leafentry, u), "union is in the wrong plac
     +sizeof(uint32_t))                          /* length+bit */ 
 
 #else
-static_assert(16 == sizeof(leafentry), "leafentry size is wrong");
-static_assert(10 == __builtin_offsetof(leafentry, u), "union is in the wrong place");
+static_assert(24 == sizeof(leafentry), "leafentry size is wrong");
+static_assert(13 == __builtin_offsetof(leafentry, u), "union is in the wrong place");
 
 #define LE_CLEAN_MEMSIZE(_vallen)                                        		\
     (sizeof(((LEAFENTRY)NULL)->indirect_insert_offsets) /* indirect insert offsets */	\

@@ -443,6 +443,9 @@ int nb_bstore_env_close(struct ftfs_sb_info *sbi);
 
 int nb_bstore_meta_get(DB *meta_db, DBT *meta_dbt, DB_TXN *txn,
 		       struct ftfs_metadata *metadata);
+int nb_bstore_meta_lookup_create(DB *meta_db, DBT *meta_dbt, DB_TXN *txn,
+		       struct ftfs_metadata *metadata);
+
 int nb_bstore_meta_put(DB *meta_db, DBT *meta_dbt, DB_TXN *txn,
 		       struct ftfs_metadata *metadata);
 int nb_bstore_meta_del(DB *meta_db, DBT *meta_dbt, DB_TXN *txn);
@@ -483,6 +486,9 @@ int nb_bstore_scan_pages(DB *data_db, DBT *meta_dbt, DB_TXN *txn,
                            struct ftio *ftio);
 
 int nb_dir_is_empty(DB *meta_db, DBT *meta_dbt, DB_TXN *txn, int *ret);
+
+struct inode *nb_setup_inode(struct super_block *sb, DBT *meta_dbt,
+			     struct ftfs_metadata *meta);
 
 enum ftfs_bstore_move_type {
 	FTFS_BSTORE_MOVE_DIR,

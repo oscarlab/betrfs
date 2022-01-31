@@ -340,6 +340,7 @@ static void print_defines (void) {
         dodefine_from_track(txn_flags, DB_SERIALIZABLE);
         dodefine_from_track(txn_flags, DB_TXN_READ_ONLY);
         dodefine_from_track(txn_flags, DB_SEQ_READ);
+        dodefine_from_track(txn_flags, DB_LOOKUP_CREATE);
     }
 
     /* TOKUDB specific error codes*/

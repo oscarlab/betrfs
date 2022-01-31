@@ -292,7 +292,7 @@ int wbufwriteleafentry(const void* key, const uint32_t keylen, const LEAFENTRY &
     uint32_t le_disk_size = leafentry_disksize(le);
     wbuf_nocrc_uint8_t(wb, le->type);
 #ifdef FT_INDIRECT
-    wbuf_nocrc_uint8_t(wb, le->num_indirect_inserts);
+    wbuf_nocrc_uint32_t(wb, le->num_indirect_inserts);
 #endif
     wbuf_nocrc_uint32_t(wb, keylen);
 
@@ -329,7 +329,7 @@ int wbufwriteleafentry(const void* key, const uint32_t keylen, const LEAFENTRY &
         wbuf_nocrc_literal_bytes(wb, key, keylen);
 #ifdef FT_INDIRECT
         // Do not have ubi_val_offset + type + num_ubi_vals + num_cxrs + num_pxrs
-        wbuf_nocrc_literal_bytes(wb, le->u.mvcc.xrs, le_disk_size - (1 + 1 + 4 + 1));
+        wbuf_nocrc_literal_bytes(wb, le->u.mvcc.xrs, le_disk_size - (1 + 4 + 4 + 1));
 #else
         wbuf_nocrc_literal_bytes(wb, le->u.mvcc.xrs, le_disk_size - (1 + 4 + 1));
 #endif

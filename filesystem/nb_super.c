@@ -830,15 +830,18 @@ retry:
 					txn,
 					msg_val);
 			ftfs_free_msg_val(msg_val);
-			if (page_mapped(page)) {
+			/* Retry if ret != 0 */
+			if (page_mapped(page) && !ret) {
 				end_page_writeback(page);
 				unlock_page(page);
 			} else {
-				if (PageWriteback(page)) {
+				/* BUG only when ret == 0 */
+				if (PageWriteback(page) && !ret) {
 					/* We definitely clear up wb flag.
 					 * Ft code also locks page.
 					 * We do not test lock flag
 					 */
+					printk("%s:ret=%d\n", __func__, ret);
 					ftfs_print_page(page_to_pfn(page));
 					BUG();
 				}
@@ -1132,7 +1135,10 @@ struct page *ftfs_grab_cache_page_write_begin(
 			BUG();
 		}
 		/* post-checking the refcount */
-		BUG_ON(ftfs_read_page_count(page) != 2);
+		//if (ftfs_read_page_count(page) != 2) {
+		//	ftfs_print_page(page_to_pfn(page));
+		//	BUG();
+		//}
 	}
 	return page;
 }
@@ -1467,6 +1473,20 @@ nb_mknod(struct inode *dir, struct dentry *dentry, umode_t mode, dev_t rdev)
 	ino_t ino;
 	DB_TXN *txn;
 
+	if (dentry->d_fsdata) {
+		//trace_printk("%s: dentry->d_inode=%pK\n", __func__, dentry->d_inode);
+		inode = (struct inode*) dentry->d_fsdata;
+		inc_nlink(dir);
+		mark_inode_dirty(dir);
+		d_instantiate(dentry, inode);
+		mark_inode_dirty(inode);
+		dentry->d_fsdata = NULL;
+		if ((mode | S_IFDIR ) == mode) {
+			inc_nlink(inode);
+		}
+		return 0;
+	}
+
 	dir_meta_dbt = nb_get_read_lock(FTFS_I(dir));
 	ret = alloc_child_meta_dbt_from_meta_dbt(&meta_dbt, dir_meta_dbt,
 	                                         dentry->d_name.name);
@@ -1634,6 +1654,11 @@ nb_symlink(struct inode *dir, struct dentry *dentry, const char *symname)
 	ino_t ino;
 	DB_TXN *txn;
 
+	if (dentry->d_fsdata) {
+		inode = (struct inode *)dentry->d_fsdata;
+		iput(inode);
+		//printk("%s: ftfs_inode=%p\n", __func__, FTFS_I(inode));
+	}
 	if (len > FTFS_BSTORE_BLOCKSIZE)
 		return -ENAMETOOLONG;
 
@@ -1659,6 +1684,7 @@ free_data_out:
 	}
 	ftfs_nb_setup_metadata(&meta, S_IFLNK | S_IRWXUGO, len, 0, ino);
 	inode = nb_setup_inode(dir->i_sb, &meta_dbt, &meta);
+	//printk("%s: ftfs_inode=%p\n", __func__, FTFS_I(inode));
 	if (IS_ERR(inode)) {
 		ret = PTR_ERR(inode);
 		goto free_data_out;
@@ -1768,7 +1794,14 @@ static int nb_unlink(struct inode *dir, struct dentry *dentry)
 	DB_TXN *txn;
 
 	dir_meta_dbt = nb_get_read_lock(FTFS_I(dir));
-	meta_dbt = nb_get_read_lock(FTFS_I(inode));
+	meta_dbt = nb_get_write_lock(FTFS_I(inode));
+
+	if (FTFS_I(inode)->ftfs_flags & FTFS_FLAG_DELETED) {
+		//toku_dump_hex("nb_unlink meta:", meta_dbt->data, meta_dbt->size);
+		nb_put_write_lock(FTFS_I(inode));
+		nb_put_read_lock(FTFS_I(dir));
+		return 0;
+	}
 
 	ret = alloc_child_meta_dbt_from_meta_dbt(&indirect_dbt, dir_meta_dbt, dentry->d_name.name);
 	if (ret)
@@ -1780,7 +1813,7 @@ static int nb_unlink(struct inode *dir, struct dentry *dentry)
 		DBOP_JUMP_ON_CONFLICT(ret, retry);
 		nb_bstore_txn_abort(txn);
 	} else {
-		drop_nlink (dir);
+		drop_nlink(dir);
 		mark_inode_dirty(dir);
 		if (dir->i_nlink  < 2) {
 			printk(KERN_ERR "Warning: nlink < 2 for parent of unlinked file. If parent is root, ignore warning");
@@ -1800,7 +1833,7 @@ static int nb_unlink(struct inode *dir, struct dentry *dentry)
 	 */
 	FTFS_I(inode)->ftfs_flags |= FTFS_FLAG_DELETED;
 out:
-	nb_put_read_lock(FTFS_I(inode));
+	nb_put_write_lock(FTFS_I(inode));
 	nb_put_read_lock(FTFS_I(dir));
 
 	if (ret)
@@ -1821,6 +1854,9 @@ nb_lookup(struct inode *dir, struct dentry *dentry, unsigned int flags)
 	DBT *dir_meta_dbt, meta_dbt;
 	DB_TXN *txn;
 	struct ftfs_metadata meta;
+	ino_t ino;
+	bool is_lookup_create = (flags & LOOKUP_CREATE);
+	bool is_dir = (flags & LOOKUP_DIRECTORY);
 
 	dir_meta_dbt = nb_get_read_lock(FTFS_I(dir));
 
@@ -1831,13 +1867,42 @@ nb_lookup(struct inode *dir, struct dentry *dentry, unsigned int flags)
 		goto out;
 	}
 
+	///////////////////////////////////////////////////
+	if (is_lookup_create) {
+		//trace_printk("%s: name=%s, is_dir=%d\n", __func__, dentry->d_name.name, is_dir);
+		r = nb_next_ino(sbi, &ino);
+		if (!r) {
+			umode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IRGRP | S_IROTH;
+			if (!is_dir) {
+				mode = mode | S_IFREG;
+			} else {
+				mode = mode | S_IFDIR;
+			}
+			mode = mode | 0777;
+			ftfs_nb_setup_metadata(&meta, mode, 0, 0, ino);
+		}
+	}
+	///////////////////////////////////////////////////
 	TXN_GOTO_LABEL(retry);
-	nb_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_READONLY);
+	if (is_lookup_create) {
+		nb_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
+		r = nb_bstore_meta_lookup_create(sbi->meta_db, &meta_dbt, txn, &meta);
+		//r = nb_bstore_meta_get(sbi->meta_db, &meta_dbt, txn, &meta);
+		//printk("%s: r=%d, ENOENT=%d\n", __func__, r, ENOENT);
+	} else {
+		nb_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_READONLY);
+		r = nb_bstore_meta_get(sbi->meta_db, &meta_dbt, txn, &meta);
+	}
 
-	r = nb_bstore_meta_get(sbi->meta_db, &meta_dbt, txn, &meta);
 	if (r == -ENOENT) {
-		inode = NULL;
-		dbt_destroy(&meta_dbt);
+		/*
+		 * for the case of lookup_create
+		 * ft code will create the entry
+		 */
+		if (!is_lookup_create) {
+			inode = NULL;
+			dbt_destroy(&meta_dbt);
+		}
 	} else if (r) {
 		inode = ERR_PTR(r);
 		nb_bstore_txn_abort(txn);
@@ -1851,7 +1916,7 @@ nb_lookup(struct inode *dir, struct dentry *dentry, unsigned int flags)
 	// r == -ENOENT, inode == 0
 	// r == 0, get meta, need to setup inode
 	// r == err, error, will not execute this code
-	if (r == 0) {
+	if (r == 0 || (is_lookup_create && r == -ENOENT)) {
 		inode = nb_setup_inode(dir->i_sb, &meta_dbt, &meta);
 		if (IS_ERR(inode)) {
 			dbt_destroy(&meta_dbt);
@@ -1860,6 +1925,11 @@ nb_lookup(struct inode *dir, struct dentry *dentry, unsigned int flags)
 
 out:
 	nb_put_read_lock(FTFS_I(dir));
+	if (is_lookup_create && r == -ENOENT) {
+		dentry->d_fsdata = (void*)inode;
+		inode = NULL;
+		//printk("%s: dentry->d_fsdata=%pK\n", __func__, dentry->d_fsdata);
+	}
 	ret = d_splice_alias(inode, dentry);
 	return ret;
 }
@@ -2199,10 +2269,14 @@ static void nb_evict_inode(struct inode *inode)
 	DBT *meta_dbt;
 	DB_TXN *txn;
 
-	if (inode->i_nlink || (FTFS_I(inode)->ftfs_flags & FTFS_FLAG_DELETED))
+	if (inode->i_nlink)
 		goto no_delete;
 
 	meta_dbt = nb_get_read_lock(FTFS_I(inode));
+
+	if (FTFS_I(inode)->ftfs_flags & FTFS_FLAG_DELETED) {
+		goto unlock;
+	}
 
 	TXN_GOTO_LABEL(retry);
 	nb_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
@@ -2215,8 +2289,8 @@ static void nb_evict_inode(struct inode *inode)
 		COMMIT_JUMP_ON_CONFLICT(ret, retry);
 	}
 
+unlock:
 	nb_put_read_lock(FTFS_I(inode));
-
 no_delete:
 	truncate_inode_pages(&inode->i_data, 0);
 	invalidate_inode_buffers(inode);
@@ -3126,6 +3200,12 @@ static struct file_system_type ftfs_fs_type = {
 int init_ftfs_fs(void)
 {
 	int ret;
+
+	ret = proc_pfn_init();
+	if (ret) {
+		printk(KERN_ERR "FTFS ERROR: Failed to create proc file\n");
+		return ret;
+	}
 
 	ret = proc_pfn_init();
 	if (ret) {

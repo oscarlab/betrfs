@@ -44,7 +44,6 @@ KBUILD_CFLAGS += -DFTFS_PFSPLIT
 KBUILD_CFLAGS += -DFTFS_NO_PRINT
 KBUILD_CFLAGS += -DRMDIR_RANGE_DELETE
 KBUILD_CFLAGS += -DFT_INDIRECT
-KBUILD_CFLAGS += -DREAD_DIR_OPT
 
 # TODO: couldn't figure out how to set KBUILD_CFLAGS only for debug target. So,
 # just create a debug flags variables, and use it directly in the debug target.

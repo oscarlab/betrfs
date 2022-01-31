@@ -95,6 +95,7 @@ PATENT RIGHTS GRANT:
 #include <db.h>
 #include "toku_assert.h"
 #include "ydb-internal.h"
+#include "ydb.h"
 #include "ydb_cursor.h"
 #include "ydb_row_lock.h"
 
@@ -197,6 +198,12 @@ typedef struct query_context_with_input_t {
     DBT                  *input_key;
     DBT                  *input_val;
 } *QUERY_CONTEXT_WITH_INPUT, QUERY_CONTEXT_WITH_INPUT_S;
+
+void* toku_get_lookup_create_query_val(void *extra) {
+    QUERY_CONTEXT_BASE b = (QUERY_CONTEXT_BASE) extra;
+    QUERY_CONTEXT_WRAPPED w = (QUERY_CONTEXT_WRAPPED) b->f_extra;
+    return w->val;
+}
 
 static void
 query_context_base_init(QUERY_CONTEXT_BASE context, DBC *c, uint32_t flag, bool is_write_op, YDB_CALLBACK_FUNCTION f, void *extra) {
@@ -547,6 +554,7 @@ toku_c_getf_set(DBC *c, uint32_t flag, DBT *key, YDB_CALLBACK_FUNCTION f, void *
     int r = 0;
     QUERY_CONTEXT_WITH_INPUT_S context; //Describes the context of this query.
     query_context_with_input_init(&context, c, flag, key, NULL, f, extra); 
+    toku_get_lookup_create_query_val(&context);
     while (r == 0) {
         //toku_ft_cursor_set will call c_getf_set_callback(..., context) (if query is successful)
         r = toku_ft_cursor_set(dbc_struct_i(c)->c, key, c_getf_set_callback, &context);
@@ -831,7 +839,7 @@ toku_db_cursor_internal(DB * db, DB_TXN * txn, DBC ** c, uint32_t flags, int is_
     HANDLE_DB_ILLEGAL_WORKING_PARENT_TXN(db, txn);
     DB_ENV* env = db->dbenv;
 
-    if (flags & ~(DB_SERIALIZABLE | DB_INHERIT_ISOLATION | DB_RMW | DBC_DISABLE_PREFETCHING | DB_SEQ_READ)) {
+    if (flags & ~(DB_SERIALIZABLE | DB_INHERIT_ISOLATION | DB_RMW | DBC_DISABLE_PREFETCHING | DB_SEQ_READ | DB_LOOKUP_CREATE)) {
         return toku_ydb_do_error(
             env, 
             EINVAL, 
@@ -902,7 +910,9 @@ toku_db_cursor_internal(DB * db, DB_TXN * txn, DBC ** c, uint32_t flags, int is_
         if ((flags & DB_SEQ_READ) != 0) {
             toku_ft_cursor_set_seqread(dbc_struct_i(result)->c);
         }
-
+        if ((flags & DB_LOOKUP_CREATE) != 0) {
+            toku_ft_cursor_set_lookup_create(dbc_struct_i(result)->c);
+        }
         *c = result;
     }
     else {

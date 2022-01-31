@@ -937,6 +937,7 @@ struct ft_cursor {
     bool disable_prefetching;
     bool is_temporary;
     bool is_seqread;
+    bool is_lookup_create;
     int out_of_range_error;
     int direction;
     TOKUTXN ttxn;

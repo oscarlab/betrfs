@@ -338,6 +338,7 @@ static void
 ule_simple_garbage_collection(ULE ule, TXNID oldest_referenced_xid, GC_INFO gc_info) {
     uint32_t curr_index = 0;
     uint32_t num_entries;
+
 #ifndef FT_INDIRECT
     if(ule_contains_unbound_uxr(ule)) {
         goto done;
@@ -631,6 +632,7 @@ toku_le_apply_msg(FT_MSG   msg,
         oldnumbytes = ule_get_innermost_numbytes(ule, keylen);
     }
     msg_modify_ule(ule, msg);          // modify unpacked leafentry
+
     ule_simple_garbage_collection(ule, oldest_referenced_xid, gc_info);
 
     int rval = le_pack(
@@ -725,9 +727,9 @@ bool toku_le_worth_running_garbage_collection(LEAFENTRY le, TXNID oldest_referen
 
 void
 toku_le_flip_uxr_type(LEAFENTRY old_leaf_entry,
-		      bn_data * data_buffer,
-        	      uint32_t idx,
-	              void* keyp,
+                      bn_data * data_buffer,
+                      uint32_t idx,
+                      void* keyp,
                       uint32_t keylen,
                       LEAFENTRY *new_leaf_entry
 ) {
@@ -756,11 +758,11 @@ toku_le_flip_uxr_type(LEAFENTRY old_leaf_entry,
     uint32_t old_mem_size = leafentry_memsize(old_leaf_entry);
 
     for(uint32_t i = 0; i<ule->num_cuxrs+ule->num_puxrs; i++) {
-		UXR uxr = &ule->uxrs[i];
-		if(uxr->type == XR_UNBOUND_INSERT) {
-			uxr->type =XR_INSERT;
-		}
-	}
+        UXR uxr = &ule->uxrs[i];
+        if (uxr->type == XR_UNBOUND_INSERT) {
+            uxr->type =XR_INSERT;
+        }
+    }
 
     int r = le_pack(
         ule,
@@ -1030,7 +1032,8 @@ void
 ule_cleanup(ULE ule) {
     invariant(ule->uxrs);
     if (ule->uxrs != ule->uxrs_static) {
-        toku_free(ule->uxrs);
+        int size = (ule->num_cuxrs + 1 + MAX_TRANSACTION_RECORDS) * sizeof(UXR_S);
+        sb_free_sized(ule->uxrs, size);
         ule->uxrs = NULL;
     }
 }
@@ -1076,9 +1079,9 @@ le_unpack(ULE ule, LEAFENTRY le) {
             //Dynamic memory
             if (ule->num_cuxrs < MAX_TRANSACTION_RECORDS) {
                 ule->uxrs = ule->uxrs_static;
-            }
-            else {
-                XMALLOC_N(ule->num_cuxrs + 1 + MAX_TRANSACTION_RECORDS, ule->uxrs);
+            } else {
+                int size = (ule->num_cuxrs + 1 + MAX_TRANSACTION_RECORDS) * sizeof(UXR_S);
+                ule->uxrs = (UXR) sb_malloc_sized(size, true);
             }
             p = le->u.mvcc.xrs;
 
@@ -1409,10 +1412,11 @@ found_insert:;
 
         //pack interesting values inner to outer
 #ifdef FT_INDIRECT
-        if (ule->num_puxrs!=0) {
+        if (ule->num_puxrs != 0) {
             UXR innermost = ule->uxrs + ule->num_cuxrs + ule->num_puxrs - 1;
             int index = ule->num_cuxrs + ule->num_puxrs - 1;
             if (uxr_is_unbound_insert(innermost)) {
+                toku_trace_printk("%s: cuxrs=%d, puxrs=%d, offsets=%p, index=%d\n",  __func__, ule->num_cuxrs, ule->num_puxrs, new_leafentry->indirect_insert_offsets, index);
                 new_leafentry->indirect_insert_offsets[index] = p - p_begin;
                 p += uxr_pack_data(innermost, p);
             } else { 
@@ -1541,7 +1545,7 @@ le_memsize_from_ule (ULE ule) {
         invariant(uxr_is_insert(committed));
 #ifdef FT_INDIRECT
         rval = 8                    //indirect_insert_offsets
-              +1                    //num_indirect_inserts
+              +4                    //num_indirect_inserts
               +1                    //type
               +4                    //vallen
               +committed->vallen;   //actual val
@@ -1554,7 +1558,7 @@ le_memsize_from_ule (ULE ule) {
     else {
 #ifdef FT_INDIRECT
         rval = 8                    //indirect_insert_offsets
-              +1                    //num_indirect_inserts
+              +4                    //num_indirect_inserts
               +1                    //type
               +4                    //num_cuxrs
               +1                    //num_puxrs
@@ -1802,7 +1806,7 @@ leafentry_memsize (LEAFENTRY le) {
 
 size_t
 leafentry_disksize (LEAFENTRY le) {
-     return leafentry_memsize(le);
+    return leafentry_memsize(le);
 }
 
 bool

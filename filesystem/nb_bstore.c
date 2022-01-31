@@ -1048,6 +1048,21 @@ int nb_bstore_meta_get(DB *meta_db, DBT *meta_dbt, DB_TXN *txn,
 	return ret;
 }
 
+int
+nb_bstore_meta_lookup_create(DB *meta_db, DBT *meta_dbt, DB_TXN *txn,
+                             struct ftfs_metadata *metadata)
+{
+	int ret;
+	DBT value;
+	dbt_setup(&value, metadata, sizeof(*metadata));
+
+	ret = meta_db->get(meta_db, txn, meta_dbt, &value, DB_GET_FLAGS | DB_LOOKUP_CREATE);
+	if (ret == DB_NOTFOUND)
+		ret = -ENOENT;
+
+	return ret;
+}
+
 int nb_bstore_meta_put(DB *meta_db, DBT *meta_dbt, DB_TXN *txn,
                          struct ftfs_metadata *metadata)
 {
@@ -1077,17 +1092,15 @@ int nb_bstore_meta_readdir(struct super_block *sb, struct dentry *parent,
 	int ret, r;
 	char *child_meta_key;
 	struct ftfs_metadata meta;
-#ifdef READ_DIR_OPT
-	struct dentry *child_dentry;
-	struct qstr this;
-	bool dentry_cached;
 	struct inode *inode;
-#endif
+	struct dentry *child_dentry;
 	DBT child_meta_dbt, metadata_dbt;
 	DBC *cursor;
 	char *name;
 	u64 ino;
 	unsigned type;
+	struct qstr this;
+	bool dentry_cached;
 
 	if (ctx->pos == 2) {
 		child_meta_key = sb_malloc(META_KEY_MAX_LEN);
@@ -1127,7 +1140,6 @@ int nb_bstore_meta_readdir(struct super_block *sb, struct dentry *parent,
 		type = nb_get_type(meta.st.st_mode);
 		name = strrchr(nb_key_path(child_meta_key), '\x01') + 1;
 
-#ifdef READ_DIR_OPT
 		dentry_cached = true;
 		this.name = name;
 		this.len = strlen(name);
@@ -1177,7 +1189,6 @@ int nb_bstore_meta_readdir(struct super_block *sb, struct dentry *parent,
 		if (dentry_cached) {
 			dput(child_dentry);
 		}
-#endif
 		if (!dir_emit(ctx, name, strlen(name), ino, type))
 			break;
 		r = cursor->c_get(cursor, &child_meta_dbt, &metadata_dbt, DB_NEXT);

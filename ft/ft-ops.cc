@@ -2823,8 +2823,6 @@ toku_ft_bn_apply_cmd (
                 toku_fill_dbt(&curr_keydbt, curr_keyp, curr_keylen);
                 FT_MSG_S curr_msg;
                 ft_msg_init(&curr_msg, ft_msg_get_type(cmd), ft_msg_get_msn(cmd),ft_msg_get_xids(cmd), &curr_keydbt, cmd->val);
-                /*ft_msg curr_msg(toku_fill_dbt(&curr_keydbt, curr_keyp, curr_keylen),
-                                msg.vdbt(), msg.type(), msg.msn(), msg.xids());*/
                 toku_ft_bn_apply_cmd_once(bn, nullptr, &curr_msg, idx, storeddata, oldest_referenced_xid_known, gc_info, workdone, stats_to_update);
                 // at this point, we cannot trust msg.kdbt to be valid.
                 uint32_t new_omt_size = bn->data_buffer.omt_size();
@@ -3965,7 +3963,7 @@ void toku_ft_leaf_apply_cmd(
                 // only be non-null when an unbound insert has not been
                 // written to disk yet. If an ubi is re-read from disk,
                 // the value is persisted already, and the logger need not
-                //track this ubi count. So, we can safely elide this update.
+                // track this ubi count. So, we can safely elide this update.
             }
 #else
             if (cmd->type == FT_UNBOUND_INSERT) {
@@ -5879,6 +5877,7 @@ int toku_ft_cursor (
     cursor->disable_prefetching = disable_prefetching;
     cursor->is_temporary = false;
     cursor->is_seqread = false;
+    cursor->is_lookup_create = false;
     *cursorptr = cursor;
     return 0;
 }
@@ -5896,6 +5895,11 @@ toku_ft_cursor_set_temporary(FT_CURSOR ftcursor) {
 void
 toku_ft_cursor_set_seqread(FT_CURSOR ftcursor) {
     ftcursor->is_seqread = true;
+}
+
+void
+toku_ft_cursor_set_lookup_create(FT_CURSOR ftcursor) {
+    ftcursor->is_lookup_create = true;
 }
 
 void
@@ -6287,7 +6291,7 @@ bnc_apply_messages_to_basement_node(
     // unbound inserts. do node accounting now.
     // No we are not, as we are not detaching the bn here, we use
     //max_msn to check if the msgs are already applied. -JYM
-   if (bnc->unbound_insert_count) {
+    if (bnc->unbound_insert_count) {
         paranoid_invariant(ancestor->unbound_insert_count >= bnc->unbound_insert_count);
         //ancestor->unbound_insert_count -= bnc->unbound_insert_count;
     }
@@ -6322,8 +6326,7 @@ bnc_apply_messages_to_basement_node(
         const int buffer_size = ((stale_ube - stale_lbi) + (fresh_ube -
                                                             fresh_lbi) +
                                  bnc->broadcast_list.size());
-
-
+        bool only_broadcast_list = ((stale_ube == stale_lbi) && (fresh_ube == fresh_lbi));
         int32_t *XMALLOC_N(buffer_size, offsets);
         struct store_fifo_offset_extra sfo_extra = { .offsets = offsets, .i = 0 };
 
@@ -6340,9 +6343,13 @@ bnc_apply_messages_to_basement_node(
         assert_zero(r);
         invariant(sfo_extra.i == buffer_size);
 
-        // Sort by MSN.
-        r = toku::sort<int32_t, FIFO, fifo_offset_msn_cmp>::mergesort_r(offsets, buffer_size, bnc->buffer);
-        assert_zero(r);
+        // Sort by MSN. If only broadcast messges are needed,
+        // then no need to do the sorting, because the broadcast
+        // list is sorted by MSN already.
+        if (!only_broadcast_list) {
+            r = toku::sort<int32_t, FIFO, fifo_offset_msn_cmp>::mergesort_r(offsets, buffer_size, bnc->buffer);
+            assert_zero(r);
+        }
 
         // Apply the messages in MSN order.
         for (int i = 0; i < buffer_size; ++i) {
@@ -6352,7 +6359,6 @@ bnc_apply_messages_to_basement_node(
                             oldest_referenced_xid, &workdone_this_ancestor,
                             &stats_delta, node);
         }
-
         toku_free(offsets);
     } else if (stale_lbi == stale_ube) {
         // No stale messages to apply, we just apply fresh messages, and mark them to be moved to stale later.
@@ -6650,6 +6656,7 @@ bool toku_ft_leaf_needs_ancestors_messages(
     paranoid_invariant(node->height == 0);
     bool needs_ancestors_messages = false;
     // child_to_read may be -1 in test cases
+#if 1
     if (!node->dirty && child_to_read >= 0) {
         paranoid_invariant(BP_STATE(node, child_to_read) == PT_AVAIL);
         needs_ancestors_messages = bn_needs_ancestors_messages(
@@ -6660,8 +6667,7 @@ bool toku_ft_leaf_needs_ancestors_messages(
             ancestors,
             max_msn_in_path
             );
-    }
-    else {
+    } else {
         for (int i = 0; i < node->n_children; ++i) {
             if (BP_STATE(node, i) != PT_AVAIL) { continue; }
             needs_ancestors_messages = bn_needs_ancestors_messages(
@@ -6678,6 +6684,19 @@ bool toku_ft_leaf_needs_ancestors_messages(
         }
     }
 cleanup:
+#else
+    if (child_to_read >= 0) {
+        paranoid_invariant(BP_STATE(node, child_to_read) == PT_AVAIL);
+        needs_ancestors_messages = bn_needs_ancestors_messages(
+            ft,
+            node,
+            child_to_read,
+            bounds,
+            ancestors,
+            max_msn_in_path
+            );
+    }
+#endif
     return needs_ancestors_messages;
 }
 
@@ -6803,6 +6822,17 @@ toku_ft_unlift_with_ancestors(FT ft, ANCESTORS ancestors,
     }
 }
 
+extern "C" void *toku_get_lookup_create_query_val(void *extra);
+
+struct ft_cursor_search_struct {
+    FT_GET_CALLBACK_FUNCTION getf;
+    void *getf_v;
+    FT_CURSOR cursor;
+    ft_search_t *search;
+};
+
+#define FTFS_METADATA_SIZE (144)
+
 // This is a bottom layer of the search functions.
 static int
 ft_search_basement_node(
@@ -6838,7 +6868,6 @@ ok: ;
         &keylen,
         &idx
         );
-
     if (r!=0) {
         return r;
     }
@@ -6891,6 +6920,38 @@ got_a_good_value:
                 toku_ft_unlift_with_ancestors(ft, ancestors,
                                               &unlifted_key, &unlifted_keylen);
             r = getf(unlifted_keylen, unlifted_key, vallen, val, getf_v, false, is_indirect);
+            /////////// Implement conditional insert /////////////////
+            if (ftcursor->is_lookup_create) {
+                TOKUTXN txn = ftcursor->ttxn;
+                TXNID_PAIR xid = toku_txn_get_txnid(txn);
+                //XIDS xids = toku_txn_get_xids(txn);
+
+                TOKULOGGER logger = toku_txn_logger(txn);
+                assert(logger);
+                BYTESTRING keybs = {.len=unlifted_keylen, .data=(char *) unlifted_key};
+                struct ft_cursor_search_struct *CAST_FROM_VOIDP(bcss, getf_v);
+                DBT *input = (DBT *)toku_get_lookup_create_query_val(bcss->getf_v);
+                BYTESTRING valbs = {.len=FTFS_METADATA_SIZE, .data=(char *) input->data};
+                toku_log_enq_insert(logger, (LSN*)0, 0, txn, toku_cachefile_filenum(ft->cf), xid, keybs, valbs);
+                //printf("%s: conditional insert is done\n", __func__);
+                /*
+                TXNID oldest_referenced_xid = txn->oldest_referenced_xid;
+                DBT newkey, newval;
+                toku_fill_dbt(&newkey, unlifted_key, unlifted_keylen);
+                toku_fill_dbt(&newval, unlifted_key, unlifted_keylen);
+
+                FT_MSG_S ftcmd;
+                ft_msg_init(&ftcmd, FT_INSERT, ZERO_MSN, xids, &newkey, &newval);
+                ftcmd.msn.msn = toku_sync_add_and_fetch(&ft->h->max_msn_in_ft.msn, 1);
+
+                STAT64INFO_S stats_delta = {0,0};
+                uint64_t workdone;
+                toku_ft_bn_apply_cmd_once(bn, nullptr, &ftcmd, idx, nullptr,
+                                          oldest_referenced_xid,
+                                          make_gc_info(false),
+                                          &workdone, &stats_delta);
+                */
+            }
         }
         if (r == 0 || r == TOKUDB_CURSOR_CONTINUE) {
             //
@@ -6922,7 +6983,6 @@ got_a_good_value:
     if (r == TOKUDB_CURSOR_CONTINUE) {
         r = 0;
     }
-
     return r;
 }
 
@@ -7589,13 +7649,6 @@ try_again:
     return r;
 }
 
-struct ft_cursor_search_struct {
-    FT_GET_CALLBACK_FUNCTION getf;
-    void *getf_v;
-    FT_CURSOR cursor;
-    ft_search_t *search;
-};
-
 /* search for the first kv pair that matches the search object */
 static int
 ft_cursor_search(FT_CURSOR cursor, ft_search_t *search, FT_GET_CALLBACK_FUNCTION getf, void *getf_v, bool can_bulk_fetch)
@@ -7856,7 +7909,7 @@ toku_ft_cursor_set_range_reverse(FT_CURSOR cursor, DBT *key, FT_GET_CALLBACK_FUN
 //TODO: When tests have been rewritten, get rid of this function.
 //Only used by tests.
 int
-toku_ft_cursor_get (FT_CURSOR cursor, DBT *key, FT_GET_CALLBACK_FUNCTION getf, void *getf_v, int get_flags)
+toku_ft_cursor_get(FT_CURSOR cursor, DBT *key, FT_GET_CALLBACK_FUNCTION getf, void *getf_v, int get_flags)
 {
     int op = get_flags & DB_OPFLAGS_MASK;
     if (get_flags & ~DB_OPFLAGS_MASK)

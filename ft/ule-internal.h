@@ -133,7 +133,7 @@ typedef struct ule {     // unpacked leaf entry
     uint32_t  num_puxrs;   // how many of uxrs[] are provisional
     uint32_t  num_cuxrs;   // how many of uxrs[] are committed
 #ifdef FT_INDIRECT
-    uint8_t   num_indirect_inserts; // for verification
+    uint32_t  num_indirect_inserts; // for verification
 #endif
     UXR_S     uxrs_static[MAX_TRANSACTION_RECORDS*2];    // uxrs[0] is oldest committed (txn commit time, not txn start time), uxrs[num_cuxrs] is outermost provisional value (if any exist/num_puxrs > 0)
     UXR       uxrs;                                      //If num_cuxrs < MAX_TRANSACTION_RECORDS then &uxrs_static[0].

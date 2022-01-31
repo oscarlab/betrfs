@@ -306,6 +306,7 @@ void toku_ft_cursor_set_leaf_mode(FT_CURSOR);
 // the cursor duing a one query.
 void toku_ft_cursor_set_temporary(FT_CURSOR);
 void toku_ft_cursor_set_seqread(FT_CURSOR);
+void toku_ft_cursor_set_lookup_create(FT_CURSOR);
 void toku_ft_cursor_remove_restriction(FT_CURSOR);
 int toku_ft_cursor_is_leaf_mode(FT_CURSOR);
 void toku_ft_cursor_set_range_lock(FT_CURSOR, const DBT *, const DBT *, bool, bool, int);

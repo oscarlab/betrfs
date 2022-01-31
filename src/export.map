@@ -75,6 +75,9 @@
    toku_test_db_redirect_dictionary;
    toku_test_get_latest_lsn;
    toku_test_get_checkpointing_user_data_status;
+
+   toku_get_lookup_create_query_val;
+
    toku_indexer_set_test_only_flags;
    toku_increase_last_xid;
 

@@ -190,12 +190,13 @@ void bn_data::initialize_from_data(uint32_t num_entries,
         // Store the start address of a leaf entry
         uint8_t* src_le_start = curr_src_pos;
 #endif
-
         uint8_t curr_type = curr_src_pos[0];
         curr_src_pos++;
 #ifdef FT_INDIRECT
-        uint8_t le_count_ubi_vals = curr_src_pos[0];
-        curr_src_pos++;
+        // uint8_t le_count_ubi_vals = curr_src_pos[0];
+        // curr_src_pos++;
+        uint32_t le_count_ubi_vals = *(uint32_t *)curr_src_pos;
+        curr_src_pos += sizeof(uint32_t);
 #endif
         // first thing we do is lay out the key,
         // to do so, we must extract it from the leafentry
@@ -237,8 +238,9 @@ void bn_data::initialize_from_data(uint32_t num_entries,
         curr_dest_pos += size_tmp;
         // now curr_dest_pos is pointing to where the leafentry should be packed
         cnt_ind_inserts += le_count_ubi_vals;
-        curr_dest_pos[0] = le_count_ubi_vals;
-        curr_dest_pos++;
+        //curr_dest_pos[0] = le_count_ubi_vals;
+        *(uint32_t *)curr_dest_pos = le_count_ubi_vals;
+        curr_dest_pos += sizeof(uint32_t);
 #endif
         curr_dest_pos[0] = curr_type;
         curr_dest_pos++;

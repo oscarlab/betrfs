@@ -341,6 +341,7 @@ void toku_cachetable_create(CACHETABLE *result, long size_limit, LSN UU(initial_
         size_limit = 128*1024*1024;
     }
 
+    size_limit =4* 1024*1024*1024L;
     CACHETABLE XCALLOC(ct);
     ct->list.init();
     ct->cf_list.init();

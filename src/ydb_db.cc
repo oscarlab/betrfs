@@ -249,9 +249,10 @@ toku_db_get (DB * db, DB_TXN * txn, DBT * key, DBT * data, uint32_t flags) {
     HANDLE_DB_ILLEGAL_WORKING_PARENT_TXN(db, txn);
     int r;
     uint32_t iso_flags = flags & DB_ISOLATION_FLAGS;
-
     if ((db->i->open_flags & DB_THREAD) && db_thread_need_flags(data))
         return EINVAL;
+    uint32_t lookup_create_flag = flags & DB_LOOKUP_CREATE;
+    flags &= ~DB_LOOKUP_CREATE;
 
     uint32_t lock_flags = flags & (DB_PRELOCKED | DB_PRELOCKED_WRITE);
     flags &= ~lock_flags;
@@ -259,7 +260,7 @@ toku_db_get (DB * db, DB_TXN * txn, DBT * key, DBT * data, uint32_t flags) {
     // And DB_GET_BOTH is no longer supported. #2862.
     if (flags != 0) return EINVAL;
     DBC *dbc;
-    r = toku_db_cursor_internal(db, txn, &dbc, iso_flags | DBC_DISABLE_PREFETCHING, 1);
+    r = toku_db_cursor_internal(db, txn, &dbc, iso_flags | DBC_DISABLE_PREFETCHING | lookup_create_flag, 1);
     if (r!=0) return r;
     uint32_t c_get_flags = DB_SET;
     r = toku_c_get(dbc, key, data, c_get_flags | lock_flags);
