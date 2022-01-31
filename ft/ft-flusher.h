@@ -255,7 +255,6 @@ void toku_ft_flush_this_child(
     FTNODE node,
     FTNODE childnode,
     int childnum) ;
-
 // This next chunk is basically an elaborate assert, only for debugging
 static inline void printf_slice_key(DBT * UU(key), FT UU(ft)) {
 	bool is_meta = false;
@@ -310,4 +309,5 @@ static inline void ft_verify_pivots(FTNODE UU(node), FT UU(ft)) {
     }
 #endif //FT_DEBUGGING
 }
+
 #endif // End of header guardian.

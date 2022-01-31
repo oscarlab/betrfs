@@ -7062,7 +7062,6 @@ ft_search_child(FT_HANDLE brt, FTNODE node, int childnum, ft_search_t *search,
             //  and it is bound to match the prefix. 
             assert_zero(r);
 	}
-
         ft_search_init(&next_search, search->compare, search->direction,
                        &lifted_k, search->context);
         if (search->pivot_bound.data) {

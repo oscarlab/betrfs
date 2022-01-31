@@ -1,8 +1,5 @@
-ifdef M
-       include $(M)/.mkinclude
-else
-       include $(PWD)/.mkinclude
-endif
+include $(PWD)/.mkinclude
+
 
 obj-m += ftfs.o
 
@@ -35,16 +32,17 @@ ftfs-objs := \
 	sb_flock.o \
 	sb_sfs_ops.o
 
+#KBUILD_CFLAGS += -DUSE_SFS_DIO
+#KBUILD_CFLAGS += -DFTFS_CIRCLE
+#KBUILD_CFLAGS += -DFTFS_SMART_PIVOT
 KBUILD_CFLAGS += -DFTFS_PFSPLIT
 KBUILD_CFLAGS += -DFTFS_NO_PRINT
-
-debug: KBUILD_CFLAGS += -DFTFS_DEBUG
-#debug: KBUILD_CFLAGS += -DFTFS_MEM_DEBUG
-#debug: KBUILD_CFLAGS += -DTOKU_DEBUG_PTRS
-#debug: KBUILD_CFLAGS += -DSOUTHBOUND_DEBUG
-#debug: KBUILD_CFLAGS += -DTOKU_MEMLEAK_DETECT
-#debug: KBUILD_CFLAGS += -DFTFS_EMPTY_DIR_VERIFY
-
+#KBUILD_CFLAGS += -DFTFS_DEBUG
+#KBUILD_CFLAGS += -DFTFS_MEM_DEBUG
+#KBUILD_CFLAGS += -DTOKU_MEMLEAK_DETECT
+#KBUILD_CFLAGS += -DTOKU_DEBUG_PTRS
+#KBUILD_CFLAGS += -DSOUTHBOUND_DEBUG
+KBUILD_CFLAGS += -DRMDIR_RANGE_DELETE
 #include $(PWD)/.turnoff-opts.mkinclude
 
 LIBSRC-OBJS = \
@@ -154,13 +152,7 @@ liblocktree/wfg.cc.o
 all: libftindex.o
 	make -C $(MOD_KERN_SOURCE) M=$(PWD) modules
 
-bench: libftindex.o
-	make -C $(MOD_KERN_SOURCE) M=$(PWD) modules
-
-debug: libftindex.o
-	make -C $(MOD_KERN_SOURCE) M=$(PWD) modules
-
-libftindex.o: $(LIBPORTABILITY-OBJS) $(LIBFT-OBJS) $(LIBUTIL-OBJS) $(LIBLOCKTREE-OBJS) $(LIBSRC-OBJS)
+libftindex.o: $(LIBPORTABILITY-OBJS) $(LIBFT-OBJS) $(LIBUTIL-OBJS) $(LIBLOCKTREE-OBJS) $(LIBSRC-OBJS) 
 	ld -r $^ -o $@
 
 libsrc/%.o: ../build/src/libtokufractaltree_static.a
@@ -177,6 +169,5 @@ libportability/%.o: ../build/portability/libtokuportability_static_conv.a
 
 liblocktree/%.o: ../build/locktree/liblocktree_static.a
 	(cd liblocktree; ar x ../$< $*.o)
-
 clean:
 	make -C /lib/modules/$(KDIR)/build M=$(PWD) clean

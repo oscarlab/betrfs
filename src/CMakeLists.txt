@@ -37,7 +37,7 @@ endif (NOT BUILD_FOR_LINUX_KERNEL_MODULE)
 add_library(tokudb_static_conv STATIC ${tokudb_srcs})
 add_dependencies(tokudb_static_conv install_tdb_h generate_log_code)
 set_target_properties(tokudb_static_conv PROPERTIES POSITION_INDEPENDENT_CODE $(STATIC_PIC))
-set(tokudb_source_libs tokudb_static_conv locktree_static ft_static util_static lzma)
+set(tokudb_source_libs tokudb_static_conv locktree_static ft_static util_static)
 toku_merge_static_libs(${LIBTOKUDB}_static ${LIBTOKUDB}_static "${tokudb_source_libs}")
 
 ## add gcov and define _GNU_SOURCE

@@ -98,7 +98,6 @@ out:
 	return ret;
 }
 
-
 ssize_t sb_sfs_dio_read_write(int fd, uint8_t *raw_block,
 			      int64_t size, int64_t offset, int rw,
 			      void (*free_cb) (void*))

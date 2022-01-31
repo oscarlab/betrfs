@@ -746,11 +746,10 @@ liblocktree/test/lock_request_wait_time_callback.cc.o \
 liblocktree/test/manager_status.cc.o \
 liblocktree/test/manager_locktree_map.cc.o
 
-
 all: libftindex.o
 	make -C  /lib/modules/$(KDIR)/build M=$(PWD) modules
 
-libftindex.o: $(LIBPORTABILITY-OBJS) $(LIBFT-OBJS) $(LIBUTIL-OBJS) $(LIBLOCKTREE-OBJS) $(LIBSRC-OBJS)
+libftindex.o: $(LIBPORTABILITY-OBJS) $(LIBFT-OBJS) $(LIBUTIL-OBJS) $(LIBLOCKTREE-OBJS) $(LIBSRC-OBJS) 
 	ld -r $^ -o $@
 
 
