@@ -157,7 +157,7 @@ int test_test_stress7(void) {
     args.num_seconds = 1000;
     args.join_timeout = 600;
     stress_test_main(&args);
-    stress_test_main(&args);
+    //stress_test_main(&args);
     post_teardown();
     return 0;
 }

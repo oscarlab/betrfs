@@ -115,7 +115,7 @@ static void create_non_empty(int n, const char *dirname) {
     DB *db = null_db;
     r = db_create(&db, env, 0); assert(r == 0); assert(db != NULL);
 
-    r = db->open(db, txn, "test.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); 
+    r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); 
     assert(r == 0);
 
     int i;
@@ -171,11 +171,11 @@ static void root_fifo_41(int n, int ntxn, bool do_populate) {
     if (verbose) printf("%s:%d %d\n", __FUNCTION__, __LINE__, n);
     int r;
 
-    const char *dirname = TOKU_TEST_FILENAME;
+    const char *dirname = TOKU_TEST_ENV_DIR_NAME;
 
     // create the env
-    toku_os_recursive_delete(dirname);
-    toku_os_mkdir(dirname, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(dirname, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
 
     // populate
     if (do_populate)
@@ -198,7 +198,7 @@ static void root_fifo_41(int n, int ntxn, bool do_populate) {
         CKERR(r);
         r = db_create(&db, env, 0);
         CKERR(r);
-        r = db->open(db, txn, "test.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); 
+        r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); 
         CKERR(r);
         r = txn->commit(txn, 0); CKERR(r);
         r = db->close(db, 0); CKERR(r);
@@ -217,7 +217,7 @@ static void root_fifo_41(int n, int ntxn, bool do_populate) {
         r = db_create(&db, env, 0); assert(r == 0);
         assert(db != NULL);
 
-        r = db->open(db, txn[i % ntxn], "test.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); 
+        r = db->open(db, txn[i % ntxn], TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); 
         printf("\n func:%s, line:%d, r = %d, i= %d, n=%d, ntxn=%d\n", __func__, __LINE__, r, i, n, ntxn);
         assert(r == 0);
 

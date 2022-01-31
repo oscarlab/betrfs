@@ -98,6 +98,7 @@ PATENT RIGHTS GRANT:
 
 #include "toku_assert.h"
 extern "C" int pthread_create_debug(pthread_t *thread, const pthread_attr_t *attr,void *(*start_routine) (void *), void *arg, const char * debug_str);
+extern "C" int pthread_rwlock_set_mutex(pthread_rwlock_t *, pthread_mutex_t *);
 extern "C" int pthread_rwlock_try_wrlock(pthread_rwlock_t *);
 extern "C" int pthread_rwlock_try_rdlock(pthread_rwlock_t *);
 extern "C" int pthread_rwlock_wrunlock(pthread_rwlock_t *);
@@ -364,6 +365,11 @@ toku_pthread_self(void) {
     return pthread_self();
 }
 
+static inline void
+toku_pthread_rwlock_set_mutex(toku_pthread_rwlock_t *__restrict rw_lock, toku_mutex_t * mutex){
+    int r = pthread_rwlock_set_mutex(&rw_lock->prwlock, &mutex->pmutex.pmutex);
+    assert_zero(r);
+}
 static inline void
 toku_pthread_rwlock_init(toku_pthread_rwlock_t *__restrict rwlock, const toku_pthread_rwlockattr_t *__restrict attr) {
     int r = pthread_rwlock_init(&rwlock->prwlock, attr);

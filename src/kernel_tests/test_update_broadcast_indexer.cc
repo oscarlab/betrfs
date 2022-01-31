@@ -148,14 +148,13 @@ static int generate_row_for_put(
 }
 
 static void setup (void) {
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    { int chk_r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
+    { int chk_r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
     { int chk_r = db_env_create(&env, 0); CKERR(chk_r); }
     env->set_errfile(env, stderr);
     { int chk_r = env->set_generate_row_callback_for_put(env,generate_row_for_put); CKERR(chk_r); }
     { int chk_r = env->set_generate_row_callback_for_del(env,generate_row_for_del); CKERR(chk_r); }
     env->set_update(env, update_fun);
-    { int chk_r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
+    { int chk_r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
 }
 
 static void cleanup (void) {
@@ -177,7 +176,7 @@ static void run_test(void) {
 
     IN_TXN_COMMIT(env, NULL, txn_create, 0, {
             { int chk_r = db_create(&db, env, 0); CKERR(chk_r); }
-            { int chk_r = db->open(db, txn_create, "foo.db", NULL, DB_BTREE, DB_CREATE, 0666); CKERR(chk_r); }
+            { int chk_r = db->open(db, txn_create, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_CREATE, 0666); CKERR(chk_r); }
         });
 
 
@@ -221,7 +220,7 @@ static void run_test(void) {
     IN_TXN_COMMIT(env, NULL, txn_indexer, 0, {
         // create DB
             { int chk_r = db_create(&hot_index_db, env, 0); CKERR(chk_r); }
-            { int chk_r = hot_index_db->open(hot_index_db, txn_indexer, "bar.db", NULL, DB_BTREE, DB_CREATE|DB_IS_HOT_INDEX, 0666); CKERR(chk_r); }
+            { int chk_r = hot_index_db->open(hot_index_db, txn_indexer, TOKU_TEST_META_DB_NAME, NULL, DB_BTREE, DB_CREATE|DB_IS_HOT_INDEX, 0666); CKERR(chk_r); }
             { int chk_r = env->create_indexer(
             env,
             txn_indexer,
@@ -248,7 +247,7 @@ static void run_test(void) {
       });    
     { int chk_r = db->close(db, 0); CKERR(chk_r); }
     { int chk_r = db_create(&db, env, 0); CKERR(chk_r); }
-    { int chk_r = db->open(db, NULL, "foo.db", NULL, DB_BTREE, 0, 0666); CKERR(chk_r); }
+    { int chk_r = db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, 0, 0666); CKERR(chk_r); }
     { int chk_r = db->cursor(db, txn_read1, &cursor, 0); CKERR2(chk_r, TOKUDB_MVCC_DICTIONARY_TOO_NEW); }
     { int chk_r = db->cursor(db, txn_read2, &cursor, 0); CKERR2(chk_r, TOKUDB_MVCC_DICTIONARY_TOO_NEW); }
     { int chk_r = db->cursor(db, txn_read3, &cursor, 0); CKERR2(chk_r, TOKUDB_MVCC_DICTIONARY_TOO_NEW); }

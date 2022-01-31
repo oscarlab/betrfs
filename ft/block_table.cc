@@ -185,11 +185,19 @@ ft_set_dirty(FT ft, bool for_checkpoint){
     }
 }
 
+static void update_safe_file_size(int fd, BLOCK_TABLE bt) {
+    int64_t file_size;
+    int r = toku_os_get_file_size(fd, &file_size);
+    lazy_assert_zero(r);
+    bt->safe_file_size = file_size;
+}
+
 static void
 maybe_truncate_file(BLOCK_TABLE bt, int fd, uint64_t size_needed_before) {
     toku_mutex_assert_locked(&bt->mutex);
     uint64_t new_size_needed = block_allocator_allocated_limit(bt->block_allocator);
     //Save a call to toku_os_get_file_size (kernel call) if unlikely to be useful.
+    update_safe_file_size(fd, bt);
     if (new_size_needed < size_needed_before && new_size_needed < bt->safe_file_size) {
         nb_mutex_lock(&bt->safe_file_size_lock, &bt->mutex);
 
@@ -262,6 +270,29 @@ toku_block_get_blocks_in_use_unlocked(BLOCK_TABLE bt) {
         }
     }
     return num_blocks;
+}
+
+int64_t toku_get_largest_used_size(BLOCK_TABLE bt) {
+    struct translation *t = &bt->checkpointed;
+    BLOCKNUM b;
+    int64_t largest = 0;
+    int64_t offset = 0;
+    int64_t size = 0;
+
+    for (b.b = RESERVED_BLOCKNUMS; b.b < t->smallest_never_used_blocknum.b; b.b++) {
+        offset = t->block_translation[b.b].u.diskoff;
+        size = t->block_translation[b.b].size;
+        if (offset + size > largest) {
+            largest = offset + size;
+        }
+    }
+    b = make_blocknum(RESERVED_BLOCKNUM_TRANSLATION);
+    offset = t->block_translation[b.b].u.diskoff;
+    size = t->block_translation[b.b].size;
+    if (offset + size > largest) {
+       largest = offset + size;
+    }
+    return largest;
 }
 
 static void
@@ -383,10 +414,9 @@ static void dealias_log_block_log(LBL * thaw, LBL * frozen) {
 // move inprogress to checkpoint (resetting type)
 // inprogress = NULL
 void
-toku_block_translation_note_end_checkpoint (BLOCK_TABLE bt, int fd) {
+toku_block_translation_note_end_checkpoint (BLOCK_TABLE bt, int UU(fd)) {
     // Free unused blocks
     lock_for_blocktable(bt);
-    uint64_t allocated_limit_at_start = block_allocator_allocated_limit(bt->block_allocator);
     paranoid_invariant_notnull(bt->inprogress.block_translation);
     if (bt->checkpoint_skipped) {
         toku_free(bt->inprogress.block_translation);
@@ -416,18 +446,13 @@ toku_block_translation_note_end_checkpoint (BLOCK_TABLE bt, int fd) {
         bt->checkpointed = bt->inprogress;
         bt->checkpointed.type = TRANSLATION_CHECKPOINTED;
         memset(&bt->inprogress, 0, sizeof(bt->inprogress));
-        maybe_truncate_file(bt, fd, allocated_limit_at_start);
-    
-    //be noted the bt->checkpointed.log_block_log is the old inprogress lbl, aka, the frozen blb.
-    //
+        //be noted the bt->checkpointed.log_block_log is the old inprogress lbl, aka, the frozen blb.
         block_table_log_block_log_put_blocks(bt->block_allocator, bt->checkpointed.log_block_log);
         //dealias the current lbl
     
         dealias_log_block_log(&bt->current.log_block_log, &bt->checkpointed.log_block_log);
 
         bt->checkpointed.log_block_log.deinit();
-        
-
     }
 end:
     unlock_for_blocktable(bt);
@@ -565,18 +590,14 @@ ensure_safe_write_unlocked(BLOCK_TABLE bt, int fd, DISKOFF block_size, DISKOFF b
     // Requires: holding bt->mutex
     uint64_t size_needed = block_size + block_offset;
     if (size_needed > bt->safe_file_size) {
-        // Must hold safe_file_size_lock to change safe_file_size.
-        nb_mutex_lock(&bt->safe_file_size_lock, &bt->mutex);
-        if (size_needed > bt->safe_file_size) {
-            unlock_for_blocktable(bt);
-
-            int64_t size_after;
-            toku_maybe_preallocate_in_file(fd, size_needed, bt->safe_file_size, &size_after);
-
-            lock_for_blocktable(bt);
-            bt->safe_file_size = size_after;
+        update_safe_file_size(fd, bt);
+        if (block_size == 0) {
+            assert(block_offset == diskoff_unused);
+        } else if (block_size != 0 && bt->safe_file_size < size_needed) {
+            printf("%s:safe_file_size=%lu, size_needed=%lu\n", __func__, bt->safe_file_size, size_needed);
+            // YZJ: consider return ENOSPC in the future
+            assert(false);
         }
-        nb_mutex_unlock(&bt->safe_file_size_lock);
     }
 }
 

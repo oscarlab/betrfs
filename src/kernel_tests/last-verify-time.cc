@@ -99,7 +99,7 @@ test_verify_time_after_create(DB_ENV *env) {
     DB *db = NULL;
     r = db_create(&db, env, 0); assert_zero(r);
 
-    r = db->open(db, NULL, "test.tdb", NULL, DB_BTREE, DB_AUTO_COMMIT+DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
+    r = db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_AUTO_COMMIT+DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
 
     DB_BTREE_STAT64 stats;
     r = db->stat64(db, NULL, &stats); assert_zero(r);
@@ -115,7 +115,7 @@ test_verify_time_after_open(DB_ENV *env) {
     DB *db = NULL;
     r = db_create(&db, env, 0); assert_zero(r);
 
-    r = db->open(db, NULL, "test.tdb", NULL, DB_BTREE, DB_AUTO_COMMIT+DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
+    r = db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_AUTO_COMMIT+DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
 
     DB_BTREE_STAT64 stats;
     r = db->stat64(db, NULL, &stats); assert_zero(r);
@@ -131,7 +131,7 @@ test_verify_time_after_check(DB_ENV *env) {
     DB *db = NULL;
     r = db_create(&db, env, 0); assert_zero(r);
 
-    r = db->open(db, NULL, "test.tdb", NULL, DB_BTREE, DB_AUTO_COMMIT+DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
+    r = db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_AUTO_COMMIT+DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
 
     DB_BTREE_STAT64 stats;
     r = db->stat64(db, NULL, &stats); assert_zero(r);
@@ -152,7 +152,7 @@ test_verify_time_after_reopen(DB_ENV *env) {
     DB *db = NULL;
     r = db_create(&db, env, 0); assert_zero(r);
 
-    r = db->open(db, NULL, "test.tdb", NULL, DB_BTREE, DB_AUTO_COMMIT+DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
+    r = db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_AUTO_COMMIT+DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
 
     DB_BTREE_STAT64 stats;
     r = db->stat64(db, NULL, &stats); assert_zero(r);
@@ -167,13 +167,13 @@ int test_last_verify_time(void) {
 
     verbose = 1;
     pre_setup();
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
+    assert(r==0);
 
     DB_ENV *env = NULL;
     r = db_env_create(&env, 0); assert_zero(r);
 
-    r = env->open(env, TOKU_TEST_FILENAME, DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_TXN|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_TXN|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); assert_zero(r);
 
     test_verify_time_after_create(env);
 

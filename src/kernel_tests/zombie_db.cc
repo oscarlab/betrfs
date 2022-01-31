@@ -136,12 +136,11 @@ static DB * db;
 static void
 setup (void) {
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r=toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);       CKERR(r);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);       CKERR(r);
 
     r=db_env_create(&env, 0); CKERR(r);
     env->set_errfile(env, stderr);
-    r=env->open(env, TOKU_TEST_FILENAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r=env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
 }
 
 
@@ -167,7 +166,7 @@ test_zombie_db_work(void) {
 
 	r=env->txn_begin(env, 0, &txn_a, 0); CKERR(r);
 	r=db_create(&db, env, 0); CKERR(r);
-	r=db->open(db, txn_a, "foo.db", 0, DB_BTREE, DB_CREATE, S_IRWXU|S_IRWXG|S_IRWXO); CKERR(r);
+	r=db->open(db, txn_a, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU|S_IRWXG|S_IRWXO); CKERR(r);
 	r=db->put(db, txn_a, &key, &val, 0); CKERR(r);
 	r=txn_a->commit(txn_a, 0); CKERR(r);
     }
@@ -189,9 +188,9 @@ test_zombie_db_work(void) {
 	DB_TXN * txn_c;
 
 	r=env->txn_begin(env, 0, &txn_c, 0); CKERR(r);
-	r = env->dbremove(env, txn_c, "foo.db", NULL, 0);  
+	r = env->dbremove(env, txn_c, TOKU_TEST_DATA_DB_NAME, NULL, 0);  
 	CKERR2(r, DB_LOCK_NOTGRANTED);
-	r = env->dbrename(env, txn_c, "foo.db", NULL, "bar.db", 0); 
+	r = env->dbrename(env, txn_c, TOKU_TEST_DATA_DB_NAME, NULL, "bar.db", 0); 
 	CKERR2(r, DB_LOCK_NOTGRANTED);
 	r=txn_c->commit(txn_c, 0); CKERR(r);
     }

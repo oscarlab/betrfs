@@ -163,16 +163,13 @@ check_results_nested(DB ** dbs, const uint num_rows) {
         dbt_init(&val, &v, sizeof(unsigned int));
         int r;
 
-	DBG;
         DB_TXN *txn;
         r = env->txn_begin(env, NULL, &txn, 0);
         CKERR(r);
-	DBG;
 
         DBC *cursor;
         r = dbs[j]->cursor(dbs[j], txn, &cursor, 0);
         CKERR(r);
-	DBG;
         for(uint i=0;i<num_rows;i++) {
             if (i % MAXDEPTH) {
 		r = cursor->c_get(cursor, &key, &val, DB_NEXT);    
@@ -193,7 +190,6 @@ check_results_nested(DB ** dbs, const uint num_rows) {
             dbt_init(&val, NULL, sizeof(unsigned int));
 	    if ( verbose && (i%10000 == 0)) {printf("."); fflush(stdout);}
         }
-	DBG;
         r = cursor->c_close(cursor);
         CKERR(r);
         r = txn->commit(txn, DB_TXN_NOSYNC);
@@ -216,13 +212,10 @@ static void preload_dbs(DB **dbs)
 
     if ( verbose ) { printf("loading");fflush(stdout); }
 
-	DBG;
     for(row = 0; row <= NUM_ROWS; row++) {
 	uint generated_value = generate_val(row, 0);
-	DBG;
 	my_nested_insert(dbs, 0, NULL, row, generated_value);
 	//nested_insert(dbs, 0, NULL, row, generated_value);
-	DBG;
     }
 
     if (optimize) {
@@ -296,8 +289,6 @@ void my_nested_insert(DB ** dbs, uint depth,  DB_TXN *parent_txn,
 
     txn[depth] = parent_txn;
 
-    DBG;
-
     for (int d = depth; d < MAXDEPTH; d++) {
 
 	dbt_init_realloc(&key[d]);
@@ -313,8 +304,6 @@ void my_nested_insert(DB ** dbs, uint depth,  DB_TXN *parent_txn,
 
 	if (key[d].flags == 0) { dbt_init_realloc(&key[d]); }
 	if (val[d].flags == 0) { dbt_init_realloc(&val[d]); }
-
-        DBG;
     }
 
     for (int d = MAXDEPTH-1; d >= (int) depth; d--) {
@@ -336,8 +325,6 @@ void my_nested_insert(DB ** dbs, uint depth,  DB_TXN *parent_txn,
 
 	if ( key[d].flags ) { toku_free(key[d].data); key[d].data = NULL; }
 	if ( val[d].flags ) { toku_free(val[d].data); key[d].data = NULL; }
-
-        DBG;
     }
 
     if (v) 
@@ -352,17 +339,24 @@ void my_nested_insert(DB ** dbs, uint depth,  DB_TXN *parent_txn,
 
 static char *free_me = NULL;
 
+static const char *dbname[5] = {
+    TOKU_TEST_DATA_DB_NAME,
+    TOKU_TEST_META_DB_NAME,
+    TOKU_TEST_ONE_DB_NAME,
+    TOKU_TEST_TWO_DB_NAME,
+    TOKU_TEST_THREE_DB_NAME
+};
+
 static void run_test(void) 
 {
     int r;
-    const char *env_dir = TOKU_TEST_FILENAME; // the default env_dir.
+    const char *env_dir = TOKU_TEST_ENV_DIR_NAME; // the default env_dir.
     struct toku_db_key_operations key_ops;
     memset(&key_ops, 0, sizeof(key_ops));
     key_ops.keycmp = uint_dbt_cmp;
     pre_setup();
-    toku_os_recursive_delete(env_dir);    
 
-    r = toku_os_mkdir(env_dir, S_IRWXU+S_IRWXG+S_IRWXO);                                                      CKERR(r);
+    r = toku_fs_reset(env_dir, S_IRWXU+S_IRWXG+S_IRWXO);                                                      CKERR(r);
 
     r = db_env_create(&env, 0);                                                                               CKERR(r);
     r = env->set_key_ops(env, &key_ops); CKERR(r);
@@ -382,8 +376,6 @@ static void run_test(void)
     DB **dbs = (DB**)toku_malloc(sizeof(DB*) * NUM_DBS);
     assert(dbs != NULL);
     int *idx = (int *)toku_xmalloc(MAX_DBS * sizeof *idx);
-    DBG;	
-	
 
     for(uint i=0;i<NUM_DBS;i++) {
         idx[i] = i;
@@ -393,25 +385,18 @@ static void run_test(void)
 	    CKERR(0);	    
 	}
         dbs[i]->app_private = &idx[i];
-        snprintf(name, MAX_NAME * 2 * sizeof(*name), "db_%04x", i);
-        r = dbs[i]->open(dbs[i], NULL, name, NULL, DB_BTREE, DB_CREATE, 0666);                                CKERR(r);
+        assert(i < 5);
+        r = dbs[i]->open(dbs[i], NULL, dbname[i], NULL, DB_BTREE, DB_CREATE, 0666);                                CKERR(r);
         IN_TXN_COMMIT(env, NULL, txn_desc, 0, {
                 { int chk_r = dbs[i]->change_descriptor(dbs[i], txn_desc, &desc, 0); CKERR(chk_r); }
         });
-
-        DBG;	
-
     }
 
-    DBG;	
     generate_permute_tables();
-    DBG;	
 
     // -------------------------- //
     preload_dbs(dbs);
     // -------------------------- //
- 
-    DBG;	
     if(r)   {  printf("Error:%d\n", r); return; }
 
     for(uint i=0;i<NUM_DBS;i++) {
@@ -429,11 +414,10 @@ static void run_test(void)
     toku_free(idx);
     toku_free(name);
 
-    toku_os_recursive_delete(env_dir);    
+    r = toku_fs_reset(env_dir, S_IRWXU+S_IRWXG+S_IRWXO);
+    CKERR(r);
 
-    DBG;	
     post_teardown();
-
 }
 
 // ------------ infrastructure ----------

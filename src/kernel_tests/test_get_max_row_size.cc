@@ -96,14 +96,13 @@ int test_test_get_max_row_size(void) {
     DB_ENV * db_env;
 
     pre_setup();
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, 0755); { int chk_r = r; CKERR(chk_r); }
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0755); { int chk_r = r; CKERR(chk_r); }
 
     // set things up
     r = db_env_create(&db_env, 0); { int chk_r = r; CKERR(chk_r); }
-    r = db_env->open(db_env, TOKU_TEST_FILENAME, DB_CREATE|DB_INIT_MPOOL|DB_PRIVATE, 0755); { int chk_r = r; CKERR(chk_r); }
+    r = db_env->open(db_env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE|DB_INIT_MPOOL|DB_PRIVATE|DB_INIT_LOG|DB_INIT_TXN, 0755); { int chk_r = r; CKERR(chk_r); }
     r = db_create(&db, db_env, 0); { int chk_r = r; CKERR(chk_r); }
-    r = db->open(db, NULL, "db", NULL, DB_BTREE, DB_CREATE, 0644); { int chk_r = r; CKERR(chk_r); }
+    r = db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_CREATE, 0644); { int chk_r = r; CKERR(chk_r); }
 
     // - does not test low bounds, so a 0 byte key is "okay"
     // - assuming 32k keys and 32mb values are the max

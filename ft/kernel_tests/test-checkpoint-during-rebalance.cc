@@ -97,7 +97,6 @@ PATENT RIGHTS GRANT:
 #include "ft-flusher.h"
 #include "ft-flusher-internal.h"
 #include "checkpoint.h"
-extern "C" int fcopy(const char *, const char *);
 static TOKUTXN const null_txn = 0;
 static DB * const null_db = 0;
 
@@ -176,12 +175,13 @@ doit (int state) {
     toku_flusher_thread_set_callback(flusher_callback, &state);
 
     toku_cachetable_create(&ct, 500*1024*1024, ZERO_LSN, NULL_LOGGER);
-    unlink("foo3.ft_handle");
-    unlink("bar3.ft_handle");
+
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r == 0);
+
     // note the basement node size is 5 times the node size
     // this is done to avoid rebalancing when writing a leaf
     // node to disk
-    r = toku_open_ft_handle("foo3.ft_handle", 1, &t, NODESIZE, 5*NODESIZE, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
+    r = toku_open_ft_handle(TOKU_TEST_FILENAME_META, 1, &t, NODESIZE, 5*NODESIZE, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
     assert(r==0);
 
     toku_testsetup_initialize();  // must precede any other toku_testsetup calls
@@ -314,15 +314,20 @@ doit (int state) {
     // open it, and verify that the state of what is
     // checkpointed is what we expect
     //
-
-    r = fcopy("foo3.ft_handle","bar3.ft_handle");
+    int64_t bt_size = toku_get_largest_used_size(t->ft->blocktable);
+    int64_t aligned_size = roundup_to_multiple(BLOCK_ALIGNMENT, bt_size);
+    if (ftfs_is_hdd()) {
+        r = fcopy(TOKU_TEST_FILENAME_META, TOKU_TEST_FILENAME_DATA, aligned_size);
+    } else {
+        r = fcopy_dio(TOKU_TEST_FILENAME_META, TOKU_TEST_FILENAME_DATA, aligned_size);
+    }
     assert_zero(r);
 
     FT_HANDLE c_ft;
     // note the basement node size is 5 times the node size
     // this is done to avoid rebalancing when writing a leaf
     // node to disk
-    r = toku_open_ft_handle("bar3.ft_handle", 0, &c_ft, NODESIZE, 5*NODESIZE, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
+    r = toku_open_ft_handle(TOKU_TEST_FILENAME_DATA, 0, &c_ft, NODESIZE, 5*NODESIZE, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
     assert(r==0);
 
     //

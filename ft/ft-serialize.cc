@@ -138,7 +138,7 @@ toku_serialize_descriptor_contents_to_fd(int fd, const DESCRIPTOR desc, DISKOFF 
     lazy_assert(w.ndone==w.size);
     {
         //Actual Write translation table
-        toku_os_full_pwrite(fd, w.buf, size_aligned, offset);
+        toku_os_full_pwrite(fd, w.buf, size_aligned, offset, true);
 	toku_ft_status_update_io_reason(FT_DISK_IO_DESCRIPTOR,size_aligned);
     }
     toku_free(w.buf);
@@ -842,7 +842,7 @@ void toku_serialize_ft_to (int fd, FT_HEADER h, BLOCK_TABLE blocktable, CACHEFIL
     // Actually write translation table
     // This write is guaranteed to read good data at the end of the buffer, since the
     // w_translation.buf is padded with zeros to a 4096-byte boundary.
-    toku_os_full_pwrite(fd, w_translation.buf, roundup_to_multiple(BLOCK_ALIGNMENT, size_translation), address_translation);
+    toku_os_full_pwrite(fd, w_translation.buf, roundup_to_multiple(BLOCK_ALIGNMENT, size_translation), address_translation, true);
     toku_ft_status_update_io_reason(FT_DISK_IO_TT,roundup_to_multiple(BLOCK_ALIGNMENT, size_translation));
     //Everything but the header MUST be on disk before header starts.
     //Otherwise we will think the header is good and some blocks might not
@@ -854,14 +854,18 @@ void toku_serialize_ft_to (int fd, FT_HEADER h, BLOCK_TABLE blocktable, CACHEFIL
         toku_cachefile_fsync(cf);
     }
     else {
-        toku_file_fsync(fd);
+        if (ftfs_is_hdd()) {
+            toku_file_fsync(fd);
+        } else {
+            sb_sfs_dio_fsync(fd);
+        }
     }
 
     //Alternate writing header to two locations:
     //   Beginning (0) or BLOCK_ALLOCATOR_HEADER_RESERVE
     toku_off_t main_offset;
     main_offset = (h->checkpoint_count & 0x1) ? 0 : BLOCK_ALLOCATOR_HEADER_RESERVE;
-    toku_os_full_pwrite(fd, w_main.buf, size_main_aligned, main_offset);
+    toku_os_full_pwrite(fd, w_main.buf, size_main_aligned, main_offset, true);
     toku_ft_status_update_io_reason(FT_DISK_IO_HEADER, size_main_aligned);
     toku_free(w_main.buf);
     toku_free(w_translation.buf);

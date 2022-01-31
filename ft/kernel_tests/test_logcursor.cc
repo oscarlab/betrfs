@@ -101,7 +101,7 @@ PATENT RIGHTS GRANT:
 # include <sys/syslimits.h>
 #endif
 
-const char LOGDIR[100] = "./dir.test_logcursor";
+const char LOGDIR[100] = TOKU_TEST_ENV_DIR_NAME;
 const int FSYNC = 1;
 const int NO_FSYNC = 0;
 
@@ -129,8 +129,8 @@ int test_logcursor(void) {
     int r = 0;
     // start from a clean directory
     
-    toku_os_recursive_delete(LOGDIR);
-    toku_os_mkdir(LOGDIR, S_IRWXU+S_IRWXG+S_IRWXO);
+    toku_fs_reset(LOGDIR, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
 
     if ( (r=create_logfiles()) !=0 ) return r;
 

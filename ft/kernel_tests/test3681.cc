@@ -108,9 +108,11 @@ volatile bool done1 = false;
 
 static void setup (void) {
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
-    const char *fname = TOKU_TEST_FILENAME;
-    unlink(fname);
-    { int r = toku_open_ft_handle(fname, 1, &t, 1024, 256, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);         assert(r==0); }
+    const char *fname = TOKU_TEST_FILENAME_DATA;
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);
+    assert(r==0);
+
+    { r = toku_open_ft_handle(fname, 1, &t, 1024, 256, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);         assert(r==0); }
 }
 
 

@@ -107,12 +107,14 @@ extern "C" int test_test_db_current_clobbers_db(void);
 int test_test_db_current_clobbers_db(void) {
     int r;
     pre_setup();
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r=toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);    CKERR(r);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
     r=db_env_create(&env, 0); CKERR(r);
-    r=env->open(env, TOKU_TEST_FILENAME, DB_PRIVATE|DB_INIT_MPOOL|DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r=env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_PRIVATE|DB_INIT_MPOOL|DB_CREATE|DB_INIT_LOG|DB_INIT_TXN, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+
+    r = env->txn_begin(env, NULL, &null_txn, 0); assert_zero(r);
     r=db_create(&db, env, 0); CKERR(r);
-    r = db->open(db, null_txn, "foo.db", "main", DB_BTREE, DB_CREATE, 0666); CKERR(r);
+    r = db->open(db, null_txn, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_CREATE, 0666); CKERR(r);
     DBC *cursor;
     r = db->cursor(db, null_txn, &cursor, 0); CKERR(r);
     DBT key, val;
@@ -155,6 +157,8 @@ int test_test_db_current_clobbers_db(void) {
     r = cursor->c_close(cursor);
         CKERR(r);
     r=db->close(db, 0);       CKERR(r);
+
+    r = null_txn->commit(null_txn, 0); assert_zero(r);
     r=env->close(env, 0);     CKERR(r);
     post_teardown();
     return 0;

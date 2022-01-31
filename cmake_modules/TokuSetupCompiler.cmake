@@ -120,8 +120,8 @@ set_ldflags_if_supported(
   )
 
 ## set extra debugging flags and preprocessor definitions
-set(CMAKE_C_FLAGS_DEBUG "-g3 -O0 ${CMAKE_C_FLAGS_DEBUG}")
-set(CMAKE_CXX_FLAGS_DEBUG "-g3 -O0 ${CMAKE_CXX_FLAGS_DEBUG}")
+set(CMAKE_C_FLAGS_DEBUG "-g3 -O0 -DFT_DEBUGGING ${CMAKE_C_FLAGS_DEBUG}")
+set(CMAKE_CXX_FLAGS_DEBUG "-g3 -O0 -DFT_DEBUGGING ${CMAKE_CXX_FLAGS_DEBUG}")
 
 ## flags to use when we want to run DRD on the resulting binaries
 ## DRD needs debugging symbols.
@@ -252,16 +252,16 @@ if (BUILD_FOR_LINUX_KERNEL_MODULE)
     -Wundef
     -Wstrict-prototypes
     -Wno-trigraphs
-    #-Werror-implicit-function-declaration
     -Wno-format-security
     -Wframe-larger-than=1100 ## hack wkj 11/1/15
     -Wno-unused-but-set-variable
     -Wdeclaration-after-statement
     -Wno-pointer-sign
-    -Wno-format-truncation
     -Wno-sign-compare
+    -Wno-format-truncation
     -Wno-implicit-fallthrough
     -Wno-misleading-indentation
+
     -fno-strict-aliasing
     -fno-common
     -fno-delete-null-pointer-checks

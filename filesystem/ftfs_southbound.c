@@ -1,18 +1,29 @@
 /* -*- mode: C++; c-basic-offset: 8; indent-tabs-mode: t -*- */
 // vim: set tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab:
 
+/* This file is part of the southbound.
+ *
+ * It largely implements "glue" code for mounting the
+ * southbound file system and doing directory operations
+ * on the southbound.
+ *
+ * Some of this, if not all, can probably be removed once we
+ * get rid of other copied kernel code that can be eliminated
+ * via SFS.
+ */
+
 #include <linux/kallsyms.h>
 #include <linux/slab.h>
 #include <asm/page_types.h>
 #include <linux/fs_struct.h>
 #include <linux/mount.h>
-#include <linux/sched/task.h>
 
-#include "ftfs_southbound.h"
 #include "ftfs.h"
-#include "ftfs_pthread.h"
-#include "ftfs_stat.h"
-#include "ftfs_fs.h"
+#include "ftfs_southbound.h"
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,19,99)
+#include <linux/sched/task.h>
+#endif
 
 static DEFINE_MUTEX(ftfs_southbound_lock);
 
@@ -68,10 +79,14 @@ static struct files_struct ftfs_files_init = {
 		.fd             = &ftfs_files_init.fd_array[0],
 		.close_on_exec  = ftfs_files_init.close_on_exec_init,
 		.open_fds       = ftfs_files_init.open_fds_init,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,19,99)
 		.full_fds_bits	= ftfs_files_init.full_fds_bits_init,
+#endif
 	},
 	.file_lock      = __SPIN_LOCK_UNLOCKED(ftfs_files_init.file_lock),
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,19,99)
 	.resize_wait	= __WAIT_QUEUE_HEAD_INITIALIZER(ftfs_files_init.resize_wait),
+#endif
 };
 /* to get struct mount *: return container_of(mnt, struct mount, mnt); */
 
@@ -289,7 +304,7 @@ void save_task_southbound(struct task_struct *tsk,
 	task_unlock(tsk);
 }
 
-void ftfs_override_creds(const struct cred **saved)
+void sb_override_creds(const struct cred **saved)
 {
 	*saved = override_creds(ftfs_cred);
 }
@@ -323,7 +338,7 @@ static inline struct mount *real_mount(struct vfsmount *mnt)
 }
 
 /* mount our hidden southbound filesystem */
-int ftfs_private_mount(const char *dev_name, const char *fs_type, void *data)
+int sb_private_mount(const char *dev_name, const char *fs_type, void *data)
 {
 	int err;
 	struct vfsmount *vfs_mount;
@@ -342,6 +357,11 @@ int ftfs_private_mount(const char *dev_name, const char *fs_type, void *data)
 	}
 
 	type = get_fs_type(fs_type);
+	// We didn't find the type we wanted
+	if (!type) {
+		printk(KERN_ERR "Invalid file system type [%s]\n", fs_type);
+		return -EINVAL;
+	}
 	vfs_mount = vfs_kern_mount(type, FTFS_MS_FLAGS, dev_name, data);
 	if (!IS_ERR(vfs_mount) && (type->fs_flags & FS_HAS_SUBTYPE) &&
             !vfs_mount->mnt_sb->s_subtype)
@@ -373,18 +393,32 @@ err_out:
 	return err;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
+int __list_open_southbound_files(struct super_block *sb);
+#endif
+
 /* must hold ftfs_southbound lock */
 int __ftfs_private_umount(void)
 {
 	if (may_umount_tree(ftfs_vfs)) {
 		kern_unmount(ftfs_vfs);
+		ftfs_vfs = NULL;
 		return 0;
+	} else {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
+		int cnt;
+		BUG_ON(!ftfs_vfs);
+		cnt = __list_open_southbound_files(ftfs_vfs->mnt_sb);
+		ftfs_error(__func__, "%d files are open\n", cnt);
+#else
+		ftfs_error(__func__, "There may be still opened files\n");
+#endif
+		return -EBUSY;
 	}
-	return -EBUSY;
 }
 
 /* takes and releases ftfs_southbound lock */
-int ftfs_private_umount(void)
+int sb_private_umount(void)
 {
 	int err;
 
@@ -420,26 +454,77 @@ void put_ftfs_southbound(void)
 	mutex_unlock(&ftfs_southbound_lock);
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
+/* FROM fs/file_table.c.
+ *
+ * These will not be safe, but they are really just for debugging
+ */
+/*
+ *
+ * These macros iterate all files on all CPUs for a given superblock.
+ * files_lglock must be held globally.
+ */
+#ifdef CONFIG_SMP
+
+/*
+ * These macros iterate all files on all CPUs for a given superblock.
+ * files_lglock must be held globally.
+ */
+#define do_file_list_for_each_entry(__sb, __file)		\
+{								\
+	int i;							\
+	for_each_possible_cpu(i) {				\
+		struct list_head *list;				\
+		list = per_cpu_ptr((__sb)->s_files, i);		\
+		list_for_each_entry((__file), list, f_u.fu_list)
+
+#define while_file_list_for_each_entry				\
+	}							\
+}
+
+#else
+
+#define do_file_list_for_each_entry(__sb, __file)		\
+{								\
+	struct list_head *list;					\
+	list = &(sb)->s_files;					\
+	list_for_each_entry((__file), list, f_u.fu_list)
+
+#define while_file_list_for_each_entry				\
+}
+#endif // CONFIG_SMP
+
+int __list_open_southbound_files(struct super_block *sb)
+{
+	int count = 0;
+	struct file *f;
+
+	do_file_list_for_each_entry(sb, f) {
+		count++;
+		ftfs_error(__func__, "%s is still open",
+			 f->f_path.dentry->d_name.name);
+	} while_file_list_for_each_entry;
+
+	return count;
+}
+
+int list_open_southbound_files(void)
+{
+	int err;
+
+	BUG_ON(!ftfs_vfs);
+
+	mutex_lock(&ftfs_southbound_lock);
+	err = __list_open_southbound_files(ftfs_vfs->mnt_sb);
+	mutex_unlock(&ftfs_southbound_lock);
+
+	return err;
+}
+#else
 int list_open_southbound_files(void) {return 0;}
+#endif
+
 unsigned int southbound_mnt_count(void)
 {
 	return ftfs_mnt_get_count(real_mount(ftfs_vfs));
-}
-
-int ftfs_super_statfs(struct dentry * d, struct kstatfs * buf) {
-    struct statfs stat;
-    int r = statvfs64("/", &stat);
-    BUG_ON(r !=0 );
-    buf->f_type = FTFS_SUPER_MAGIC; /* fudge this to NB fs value */
-    buf->f_bsize = stat.f_bsize;
-    buf->f_blocks = stat.f_blocks; /* use SB or NB? */
-    buf->f_bfree = stat.f_bfree;
-    buf->f_bavail = stat.f_bavail;
-    buf->f_files = stat.f_files; /* use SB or NB? */
-    buf->f_ffree = stat.f_ffree;
-    buf->f_fsid = stat.f_fsid;
-    buf->f_namelen = stat.f_namelen;
-    buf->f_frsize = stat.f_frsize;
-    buf->f_flags = stat.f_flags;
-    return 0;
 }

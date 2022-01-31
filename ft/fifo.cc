@@ -172,12 +172,6 @@ size_t toku_ft_msg_memsize_in_fifo(FT_MSG msg) {
 	if(FT_DELETE_MULTICAST == (enum ft_msg_type)(unsigned char)ft_msg_get_type(msg)) { 
 		ret+=sizeof(bool)+sizeof(enum pacman_status);
     	}
-    } else if(FT_KUPSERT_BROADCAST_ALL == (enum ft_msg_type) (unsigned char)
-                  ft_msg_get_type(msg)){
-        uint32_t old_prefix_len = ft_msg_get_kupsert_old_prefix_len(msg);
-        uint32_t new_prefix_len = ft_msg_get_kupsert_new_prefix_len(msg);
-        ret += sizeof(old_prefix_len) + old_prefix_len+
-                sizeof(new_prefix_len) + new_prefix_len;
     }
     return ret;
 }
@@ -222,7 +216,7 @@ int toku_fifo_enq(FIFO fifo, FT_MSG msg, bool is_fresh, int32_t *dest) {
             pos += sizeof(max_keylen);
             memcpy(pos, ft_msg_get_max_key(msg), max_keylen);
             pos += max_keylen;
-        
+
 	    if(FT_DELETE_MULTICAST == (enum ft_msg_type) entry->type) {
 	    	bool is_right_excl = ft_msg_is_multicast_rightexcl(msg);
             	memcpy(pos, &is_right_excl, sizeof(is_right_excl));
@@ -232,26 +226,8 @@ int toku_fifo_enq(FIFO fifo, FT_MSG msg, bool is_fresh, int32_t *dest) {
 		memcpy(pos, &pm_status, sizeof(pm_status));
 		pos += sizeof(pm_status);
 		}
-	
-    } else if(FT_KUPSERT_BROADCAST_ALL == (enum ft_msg_type)(char) entry->type) {
-        assert(entry->keylen == 0);
-        assert(entry->vallen == 0);
-        uint32_t old_prefix_len = ft_msg_get_kupsert_old_prefix_len(msg);
-        memcpy(pos, &old_prefix_len, sizeof(old_prefix_len));
-        pos += sizeof(old_prefix_len);
-        void * old_prefix = ft_msg_get_kupsert_old_prefix(msg);
-        memcpy(pos, old_prefix, old_prefix_len);
-        pos += old_prefix_len;
-        
-        uint32_t new_prefix_len = ft_msg_get_kupsert_new_prefix_len(msg);
-        memcpy(pos, &new_prefix_len, sizeof(new_prefix_len));
-        pos += sizeof(new_prefix_len);
-        void * new_prefix = ft_msg_get_kupsert_new_prefix(msg);
-        memcpy(pos, new_prefix, new_prefix_len);
-        pos += new_prefix_len;
-        
     }
-   
+
     if (dest) {
         *dest = fifo->memory_used;
     }
@@ -311,22 +287,6 @@ void fifo_entry_get_msg(FT_MSG ft_msg, struct fifo_entry * entry, DBT *k, DBT* v
             is_right_excl,
 	    pm_status
             );
-        return;
-    }  else if(type == FT_KUPSERT_BROADCAST_ALL) {
-        char * pos = (char *) val + vallen;
-        uint32_t old_prefix_len = * (uint32_t *) pos;
-        pos += sizeof(old_prefix_len);
-        void * old_prefix = pos;
-        pos = (char *) old_prefix + old_prefix_len;
-
-        uint32_t new_prefix_len = * (uint32_t *) pos;
-        pos += sizeof(new_prefix_len);
-        void * new_prefix = pos;
-        pos = (char *) new_prefix + new_prefix_len;
-        BYTESTRING old_prefix_str = {.len=old_prefix_len, .data=(char *)old_prefix};
-        BYTESTRING new_prefix_str = {.len=new_prefix_len, .data=(char *)new_prefix};
-        ft_msg_kupsert_init(ft_msg, type, msn, xids, old_prefix_str,
-                            new_prefix_str);  
         return;
     }
 

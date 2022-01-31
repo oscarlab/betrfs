@@ -113,21 +113,20 @@ static void
 run_test (void) {
     int r;
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);       CKERR(r);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);       CKERR(r);
 
     DB_ENV *env = NULL;
     r = db_env_create(&env, 0); CKERR(r);
     env->set_errfile(env, stderr);
     r = env->set_redzone(env, 0); CKERR(r);
     env->set_update(env, my_update_callback);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
 
     DB *db = NULL;
     r = db_create(&db, env, 0); CKERR(r);
     DB_TXN *txn = NULL;
     r = env->txn_begin(env, 0, &txn, 0); CKERR(r);
-    r = db->open(db, txn, "foo.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r = txn->commit(txn, 0);    CKERR(r);
 
     // verify that stats include a new row inserted into the root
@@ -146,7 +145,7 @@ run_test (void) {
 
         r = db_create(&db, env, 0); CKERR(r);
         r = env->txn_begin(env, 0, &txn, 0); CKERR(r);
-        r = db->open(db, txn, "foo.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+        r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
         r = txn->commit(txn, 0);    CKERR(r);
 
         r = db->stat64(db, NULL, &s); CKERR(r);
@@ -169,7 +168,7 @@ run_test (void) {
 
         r = db_create(&db, env, 0); CKERR(r);
         r = env->txn_begin(env, 0, &txn, 0); CKERR(r);
-        r = db->open(db, txn, "foo.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+        r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
         r = txn->commit(txn, 0);    CKERR(r);
 
         r = db->stat64(db, NULL, &s); CKERR(r);
@@ -192,7 +191,7 @@ run_test (void) {
 
         r = db_create(&db, env, 0); CKERR(r);
         r = env->txn_begin(env, 0, &txn, 0); CKERR(r);
-        r = db->open(db, txn, "foo.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+        r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
         r = txn->commit(txn, 0);    CKERR(r);
 
         r = db->stat64(db, NULL, &s); CKERR(r);
@@ -223,7 +222,7 @@ run_test (void) {
 
         r = db_create(&db, env, 0); CKERR(r);
         r = env->txn_begin(env, 0, &txn, 0); CKERR(r);
-        r = db->open(db, txn, "foo.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+        r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
         r = txn->commit(txn, 0);    CKERR(r);
 
         r = db->stat64(db, NULL, &s); CKERR(r);
@@ -247,7 +246,7 @@ run_test (void) {
 
         r = db_create(&db, env, 0); CKERR(r);
         r = env->txn_begin(env, 0, &txn, 0); CKERR(r);
-        r = db->open(db, txn, "foo.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+        r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
         r = txn->commit(txn, 0);    CKERR(r);
 
         r = db->stat64(db, NULL, &s); CKERR(r);
@@ -280,7 +279,7 @@ run_test (void) {
 
         r = db_create(&db, env, 0); CKERR(r);
         r = env->txn_begin(env, 0, &txn, 0); CKERR(r);
-        r = db->open(db, txn, "foo.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+        r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
         r = txn->commit(txn, 0);    CKERR(r);
 
         r = db->stat64(db, NULL, &s); CKERR(r);

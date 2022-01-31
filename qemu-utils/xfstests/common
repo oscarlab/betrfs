@@ -1,0 +1,12 @@
+#!/bin/bash
+
+function clone_xfstests {
+    if [ ! -d $FSTESTS_DIR ]; then
+	git clone git://git.kernel.org/pub/scm/fs/ext2/xfstests-bld.git $FSTESTS_DIR;
+    fi
+    # Check out the expected version
+    cd $FSTESTS_DIR
+    git checkout ${XFSTESTS_BLD_COMMIT}
+    cd -
+}
+

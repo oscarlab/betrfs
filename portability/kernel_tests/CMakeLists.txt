@@ -12,7 +12,7 @@ test-fair-rwlock
 #test-flock
 test-hugepage
 test-toku-malloc
-#test-snprintf
+test-snprintf
 test-memory-status
 test-fsync-directory
 test-fsync

@@ -114,6 +114,13 @@ enum { old_default_cachesize=1024 }; // MB
 int CACHESIZE=old_default_cachesize;
 int ALLOW_DUPS=0;
 
+static const char* dbname[5] = {
+    TOKU_TEST_DATA_DB_NAME,
+    TOKU_TEST_META_DB_NAME,
+    TOKU_TEST_ONE_DB_NAME,
+    TOKU_TEST_TWO_DB_NAME,
+    TOKU_TEST_THREE_DB_NAME
+};
 static struct timeval starttime;
 
 static void preload_dbs(DB **dbs)
@@ -173,28 +180,11 @@ char *free_me = NULL;
 static void run_test(void) 
 {
     int r;
-    const char *env_dir = TOKU_TEST_FILENAME; // the default env_dir.
+    const char *env_dir = TOKU_TEST_ENV_DIR_NAME; // the default env_dir.
 
     pre_setup();
-    toku_os_recursive_delete(env_dir);
-//  r = toku_os_mkdir(env_dir, S_IRWXU | S_IRWXG | S_IRWXO);   
-//  DBG;
-//  INT(r);
-    r = toku_os_mkdir(env_dir, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH); 
-    if(r) return; 
-	
+    r = toku_fs_reset(env_dir, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH); 
     assert(r == 0);
-
-
-
-
-
-
-    if (r)
-	return;	
-
-        CKERR(r);
-	DBG;
 
     r = db_env_create(&env, 0);                                                                               CKERR(r);
 //    r = env->set_default_bt_compare(env, uint_dbt_cmp);                                                       CKERR(r);
@@ -222,8 +212,7 @@ static void run_test(void)
 	    CKERR(0);	    
 	}
         dbs[i]->app_private = &idx[i];
-        snprintf(name, MAX_NAME * 2 * sizeof(*name), "db_%04x", i);
-        r = dbs[i]->open(dbs[i], NULL, name, NULL, DB_BTREE, DB_CREATE, 0666);                                CKERR(r);
+        r = dbs[i]->open(dbs[i], NULL, dbname[i], NULL, DB_BTREE, DB_CREATE, 0666);                                CKERR(r);
         IN_TXN_COMMIT(env, NULL, txn_desc, 0, {
                 { int chk_r = dbs[i]->change_descriptor(dbs[i], txn_desc, &desc, 0); CKERR(chk_r); }
         });

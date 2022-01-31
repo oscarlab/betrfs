@@ -103,18 +103,18 @@ int64_key_cmp (DB *db UU(), const DBT *a, const DBT *b) {
 static void
 test_prefetch_read(int fd, FT_HANDLE UU(brt), FT brt_h) {
     int r;
-    brt_h->key_ops.keycmp = int64_key_cmp;    
+    brt_h->key_ops.keycmp = int64_key_cmp;
     FT_CURSOR XMALLOC(cursor);
     FTNODE dn = NULL;
     PAIR_ATTR attr;
-    
+
     // first test that prefetching everything should work
     memset(&cursor->range_lock_left_key, 0 , sizeof(DBT));
     memset(&cursor->range_lock_right_key, 0 , sizeof(DBT));
     cursor->left_is_neg_infty = true;
     cursor->right_is_pos_infty = true;
     cursor->disable_prefetching = false;
-    
+
     struct ftnode_fetch_extra bfe;
 
     // quick test to see that we have the right behavior when we set
@@ -138,7 +138,7 @@ test_prefetch_read(int fd, FT_HANDLE UU(brt), FT brt_h) {
 
     // now enable prefetching again
     cursor->disable_prefetching = false;
-    
+
     fill_bfe_for_prefetch(&bfe, brt_h, cursor);
     r = toku_deserialize_ftnode_from(fd, make_blocknum(20), 0/*pass zero for hash*/, &dn, &ndd, &bfe);
     assert(r==0);
@@ -250,18 +250,18 @@ test_prefetch_read(int fd, FT_HANDLE UU(brt), FT brt_h) {
 static void
 test_subset_read(int fd, FT_HANDLE UU(brt), FT brt_h) {
     int r;
-    brt_h->key_ops.keycmp = int64_key_cmp;    
+    brt_h->key_ops.keycmp = int64_key_cmp;
     FT_CURSOR XMALLOC(cursor);
     FTNODE dn = NULL;
     FTNODE_DISK_DATA ndd = NULL;
     PAIR_ATTR attr;
-    
+
     // first test that prefetching everything should work
     memset(&cursor->range_lock_left_key, 0 , sizeof(DBT));
     memset(&cursor->range_lock_right_key, 0 , sizeof(DBT));
     cursor->left_is_neg_infty = true;
     cursor->right_is_pos_infty = true;
-    
+
     struct ftnode_fetch_extra bfe;
 
     uint64_t left_key = 150;
@@ -272,7 +272,7 @@ test_subset_read(int fd, FT_HANDLE UU(brt), FT brt_h) {
     fill_bfe_for_subset_read(
         &bfe,
         brt_h,
-        NULL, 
+        NULL,
         &left,
         &right,
         false,
@@ -280,7 +280,7 @@ test_subset_read(int fd, FT_HANDLE UU(brt), FT brt_h) {
         false,
         false
         );
-    
+
     // fake the childnum to read
     // set disable_prefetching ON
     bfe.child_to_read = 2;
@@ -365,12 +365,14 @@ test_prefetching(void) {
     //    struct ft_handle source_ft;
     struct ftnode sn;
 
-    int fd = open(TOKU_TEST_FILENAME, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
-    int r;
+    int fd = open(TOKU_TEST_FILENAME_DATA, O_RDWR|O_CREAT|O_BINARY, S_IRWXU|S_IRWXG|S_IRWXO); assert(fd >= 0);
 
     //    source_ft.fd=fd;
     sn.max_msn_applied_to_node_on_disk.msn = 0;
+    toku_init_dbt(&sn.bound_l);
+    toku_init_dbt(&sn.bound_r);
     sn.flags = 0x11223344;
     sn.thisnodename.b = 20;
     sn.layout_version = FT_LAYOUT_VERSION;
@@ -382,7 +384,7 @@ test_prefetching(void) {
 
     uint64_t key1 = 100;
     uint64_t key2 = 200;
-    
+
     MALLOC_N(sn.n_children, sn.bp);
     MALLOC_N(sn.n_children-1, sn.childkeys);
     toku_memdup_dbt(&sn.childkeys[0], &key1, sizeof(key1));
@@ -394,9 +396,12 @@ test_prefetching(void) {
     BP_STATE(&sn,0) = PT_AVAIL;
     BP_STATE(&sn,1) = PT_AVAIL;
     BP_STATE(&sn,2) = PT_AVAIL;
-    set_BNC(&sn, 0, toku_create_empty_nl(nullptr));
-    set_BNC(&sn, 1, toku_create_empty_nl(nullptr));
-    set_BNC(&sn, 2, toku_create_empty_nl(nullptr));
+    set_BNC(&sn, 0, toku_create_empty_nl());
+    set_BNC(&sn, 1, toku_create_empty_nl());
+    set_BNC(&sn, 2, toku_create_empty_nl());
+    toku_init_dbt(&BP_LIFT(&sn, 0));
+    toku_init_dbt(&BP_LIFT(&sn, 1));
+    toku_init_dbt(&BP_LIFT(&sn, 2));
     //Create XIDS
     XIDS xids_0 = xids_get_root_xids();
     XIDS xids_123;
@@ -423,7 +428,10 @@ test_prefetching(void) {
                  TOKU_DEFAULT_COMPRESSION_METHOD);
     brt->ft = brt_h;
     toku_blocktable_create_new(&brt_h->blocktable);
-    { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
+
+    // YZJ: we are confident that the blocktable has nothing allocated
+    // because the file is just created
+
     //Want to use block #20
     BLOCKNUM b = make_blocknum(0);
     while (b.b < 20) {
@@ -442,10 +450,10 @@ test_prefetching(void) {
         assert(size   == 100);
     }
     FTNODE_DISK_DATA ndd = NULL;
-    r = toku_serialize_ftnode_to(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false, &offset, &size);
+    r = toku_serialize_ftnode_to(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false, &offset, &size, true);
     assert(r==0);
 
-    test_prefetch_read(fd, brt, brt_h);    
+    test_prefetch_read(fd, brt, brt_h);
     test_subset_read(fd, brt, brt_h);
 
     toku_free(sn.childkeys[0].data);
@@ -472,7 +480,7 @@ test_ft_bfe_query(void) {
     initialize_dummymsn();
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
- 
+
     test_prefetching();
     toku_ft_layer_destroy();
     return 0;

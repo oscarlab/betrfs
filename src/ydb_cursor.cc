@@ -808,7 +808,7 @@ toku_db_cursor_internal(DB * db, DB_TXN * txn, DBC ** c, uint32_t flags, int is_
     HANDLE_DB_ILLEGAL_WORKING_PARENT_TXN(db, txn);
     DB_ENV* env = db->dbenv;
 
-    if (flags & ~(DB_SERIALIZABLE | DB_INHERIT_ISOLATION | DB_RMW | DBC_DISABLE_PREFETCHING)) {
+    if (flags & ~(DB_SERIALIZABLE | DB_INHERIT_ISOLATION | DB_RMW | DBC_DISABLE_PREFETCHING | DB_SEQ_READ)) {
         return toku_ydb_do_error(
             env, 
             EINVAL, 
@@ -875,6 +875,9 @@ toku_db_cursor_internal(DB * db, DB_TXN * txn, DBC ** c, uint32_t flags, int is_
         // unecessary malloc calls.
         if (is_temporary_cursor) {
             toku_ft_cursor_set_temporary(dbc_struct_i(result)->c);
+        }
+        if ((flags & DB_SEQ_READ) != 0) {
+            toku_ft_cursor_set_seqread(dbc_struct_i(result)->c);
         }
 
         *c = result;

@@ -7,8 +7,7 @@ source ../../fs-info.sh
 
 workloads=(
 	oltp
-	# fileserver does not work on BetrFS v0.4
-	# fileserver
+	fileserver
 	webproxy
 	webserver
 )

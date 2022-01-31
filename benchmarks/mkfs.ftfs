@@ -3,14 +3,13 @@
 DIR="${BASH_SOURCE%/*}"
 if [[ ! -d "$DIR" ]]; then DIR="$PWD"; fi
 
+. "$DIR/fs-info.sh"
 . "$DIR/.hostcheck"
 . "$DIR/.rootcheck"
+. "$DIR/.ismounted"
 
-#mkfs.ext4 $1
-#mkfs -t ext4 -F -E lazy_itable_init=0,lazy_journal_init=0 $1
-
-mke2fs -t ext4 -E discard -F $1
-mount $1 /mnt
+mkfs -t ext4 -F -E lazy_itable_init=0,lazy_journal_init=0 $sb_dev
+mount $sb_dev /mnt
 cd /mnt; mkdir db; mkdir dev; touch dev/null; mkdir tmp; chmod 1777 tmp; cd -;
 
 sleep 1

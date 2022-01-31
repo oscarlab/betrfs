@@ -9,33 +9,35 @@ ccflags-y += -fno-builtin
 
 ftfs-objs := \
 	ftfs_module.o \
-	toku_linkage.o \
-	ftfs_partitioned_counter.o \
-	ftfs_malloc.o \
-	ftfs_random.o \
-	ftfs_error.o \
-	ftfs_rwsem.o \
-	ftfs_frwlock.o \
-	ftfs_pthread.o \
-	ftfs_files.o \
+	sb_linkage.o \
+	sb_partitioned_counter.o \
+	sb_malloc.o \
+	sb_random.o \
+	sb_error.o \
+	sb_rwsem.o \
+	sb_pthread.o \
+	sb_files.o \
 	ftfs_southbound.o \
-	ftfs_dir.o \
-	ftfs_stat.o \
-	ftfs_assert.o \
-	toku_memory.o \
-	ftfs_stdio.o \
+	sb_dir.o \
+	sb_stat.o \
+	sb_assert.o \
+	sb_stdio.o \
 	toku_run_test.o \
 	toku_test_mempool.o \
 	toku_test_southbound.o \
-	toku_misc.o \
-	strerror.o \
-	toku_zlib.o \
+	toku_test_southbound.o \
+	nb_proc_toku_memleak_detect.o \
+	sb_misc.o \
+	sb_strerror.o \
+	sb_zlib.o \
 	libftindex.o \
-	ftfs_toku_lock.o
-
+	sb_flock.o \
+	sb_sfs_ops.o
 
 KBUILD_CFLAGS += -DSOUTHBOUND_TESTING
 #KBUILD_CFLAGS += -DFTFS_DEBUG
+#KBUILD_CFLAGS += -DFTFS_MEM_DEBUG
+#KBUILD_CFLAGS += -DTOKU_MEMLEAK_DETECT
 
 # CFLAGS_REMOVE_ftfs_module.o = -O2
 # CFLAGS_ftfs_module.o = -g -O0
@@ -49,8 +51,8 @@ KBUILD_CFLAGS += -DSOUTHBOUND_TESTING
 # CFLAGS_ftfs_error.o = -g -O0
 # CFLAGS_REMOVE_ftfs_pthread.o = -O2
 # CFLAGS_ftfs_pthread.o = -g -O0
- CFLAGS_REMOVE_ftfs_files.o = -O2
- CFLAGS_ftfs_files.o = -g -O0
+ CFLAGS_REMOVE_sb_files.o = -O2
+ CFLAGS_sb_files.o = -g -O0
 # CFLAGS_REMOVE_ftfs_southbound.o = -O2
 # CFLAGS_ftfs_southbound.o = -g -O0
 # CFLAGS_REMOVE_ftfs_dir.o = -O2
@@ -85,7 +87,6 @@ libsrc/ydb_write.cc.o \
 libsrc/errors.cc.o \
 libsrc/indexer.cc.o \
 libsrc/indexer-undo-do.cc.o \
-libsrc/test/seq-io.cc.o \
 libsrc/test/get_key_after_bytes_unit.cc.o \
 libsrc/test/test_db_dbt_mem_behavior.cc.o \
 libsrc/test/test_update_broadcast_stress.cc.o \
@@ -218,7 +219,6 @@ libsrc/test/stat64.cc.o \
 libsrc/test/stat64-create-modify-times.cc.o \
 libsrc/test/stat64-null-txn.cc.o \
 libsrc/test/stat64-root-changes.cc.o \
-libsrc/test/create-datadir.cc.o \
 libsrc/test/redirect.cc.o \
 libsrc/test/del-multiple.cc.o \
 libsrc/test/del-multiple-huge-primary-row.cc.o \
@@ -258,9 +258,6 @@ libsrc/test/test_txn_nested_abort.cc.o \
 libsrc/test/preload-db.cc.o \
 libsrc/test/simple.cc.o \
 libsrc/test/multiprocess.cc.o \
-libsrc/test/test_archive0.cc.o \
-libsrc/test/test_archive1.cc.o \
-libsrc/test/test_archive2.cc.o \
 libsrc/test/preload-db-nested.cc.o\
 libsrc/test/test_txn_nested_abort.cc.o\
 libsrc/test/test_txn_nested_abort2.cc.o\
@@ -284,7 +281,6 @@ libsrc/test/prelock-read-write.cc.o \
 libsrc/test/prelock-write-write.cc.o \
 libsrc/test/prelock-write-read.cc.o \
 libsrc/test/insert-dup-prelock.cc.o \
-libsrc/test/env_startup.cc.o \
 libsrc/test/openlimit17.cc.o \
 libsrc/test/openlimit17-metafiles.cc.o \
 libsrc/test/openlimit17-locktree.cc.o \
@@ -372,7 +368,6 @@ libsrc/test/test_compression_methods.cc.o \
 libsrc/test/test_cursor_3.cc.o \
 libsrc/test/test_log1_abort.cc.o \
 libsrc/test/test_logflush.cc.o \
-libsrc/test/test_logmax.cc.o \
 libsrc/test/test_cursor_stickyness.cc.o \
 libsrc/test/test_cursor_delete2.cc.o \
 libsrc/test/replace-into-write-lock.cc.o \
@@ -405,8 +400,10 @@ libsrc/test/test_db_env_strdup_null.cc.o \
 libsrc/test/seqwrites-no-txn.cc.o \
 libsrc/test/rename-simple.cc.o \
 libsrc/test/bench.cc.o \
+libsrc/test/circle-log-overflow.cc.o \
 #libsrc/indexer-undo-do.cc.o \
 #libsrc/toku_patent.cc.o \
+#libsrc/test/create-datadir.cc.o \
 
 LIBFT-OBJS = \
 libft/background_job_manager.cc.o \
@@ -648,24 +645,12 @@ libft/test/cachetable-clone-partial-fetch-pinned-node.cc.o \
 libft/test/quicklz-test.cc.o \
 libft/test/test-pick-child-to-flush.cc.o \
 libft/test/test-ft-overflow.cc.o \
-libft/test/test-range-del.cc.o \
-libft/test/test-range-del2.cc.o \
-libft/test/recovery-range-delete.cc.o \
-libft/test/test-ubi-root-chkpt.cc.o
+libft/test/test-ubi-root-chkpt.cc.o \
+libft/test/recovery-range-delete.cc.o
 
-#libft/test/test-slice-subtree-1.cc.o \
-libft/test/test-slice-subtree-2.cc.o \
-libft/test/test-slice-subtree-3.cc.o \
-libft/test/test-slice-subtree-4.cc.o \
-libft/test/test-relocate-subtree-1.cc.o \
-libft/test/test-relocate-subtree-2.cc.o \
-libft/test/test-relocate-subtree-3.cc.o \
-libft/test/test-relocate-subtree-4.cc.o \
-libft/test/test-relocate-subtree-5.cc.o \
-libft/test/test-relocate-subtree-6.cc.o \
-libft/test/test-relocate-subtree-7.cc.o \
 #libft/test/test_unbound_insert_lists.cc.o
-
+#libft/test/test-range-del.cc.o \
+#libft/test/test-range-del2.cc.o \
 #libft/compress.cc.o \
 # Not needed in kernel, according to Leif
 #libft/ftloader.cc.o \
@@ -723,7 +708,6 @@ libportability/test/test-memory-status.cc.o \
 libportability/test/test-pwrite4g.cc.o
 #libportability/memory.cc.o \
 #libportability/toku_crash.cc.o \
-# libportability/toku_assert.cc.o
 # Thread-local storage
 #libportability/toku_fair_rwlock.cc.o
 
@@ -761,6 +745,7 @@ liblocktree/test/locktree_infinity.cc.o \
 liblocktree/test/lock_request_wait_time_callback.cc.o \
 liblocktree/test/manager_status.cc.o \
 liblocktree/test/manager_locktree_map.cc.o
+
 
 all: libftindex.o
 	make -C  /lib/modules/$(KDIR)/build M=$(PWD) modules

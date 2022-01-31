@@ -160,7 +160,6 @@ toku_commit_fdelete (FILENUM    filenum,
     // since this txn has exclusive access to dictionary (by the
     // directory row lock for its dname) and we would not get this
     // far if there were other live handles.
-    toku_cachefile_unlink_on_close(cf);
 done:
     return r;
 }
@@ -465,9 +464,9 @@ static void ft_slice_and_swing(
     BYTESTRING newmaxkeybs,
     BYTESTRING oldprefixbs,
     BYTESTRING newprefixbs,
-    uint64_t msn,
-    XIDS xids,
-    TXNID oldest_referenced_xid
+    uint64_t UU(msn),
+    XIDS UU(xids),
+    TXNID UU(oldest_referenced_xid)
 #if HIDE_LATENCY
     , BACKGROUND_JOB_MANAGER rr_bjm
 #endif
@@ -505,34 +504,9 @@ static void ft_slice_and_swing(
                                      );
     ft_slice_destroy(&src_slice);
     ft_slice_destroy(&dst_slice);
-    if (ft->key_ops.keylift == NULL) {
-        FT_MSG_S src_msg, dst_msg;
-        ft_msg_kupsert_init(&src_msg, FT_KUPSERT_BROADCAST_ALL, {msn}, xids,
-#if HIDE_LATENCY
-                            newprefix_copy, oldprefix_copy
-#else
-                            newprefixbs, oldprefixbs
-#endif
-                            );
-        ft_msg_kupsert_init(&dst_msg, FT_KUPSERT_BROADCAST_ALL, {msn}, xids,
-#if HIDE_LATENCY
-                            oldprefix_copy, newprefix_copy
-#else
-                            oldprefixbs, newprefixbs
-#endif
-                            );
-        toku_ft_relocate_finish(ft, src_above_LCA, dst_above_LCA,
-                                src_childnum, dst_childnum, &src_msg, &dst_msg,
-                                oldest_referenced_xid, ret ? true : false);
-#if HIDE_LATENCY
-        toku_free(oldprefix_copy.data);
-        toku_free(newprefix_copy.data);
-#endif
-    } else {
-        toku_ft_relocate_finish(ft, src_above_LCA, dst_above_LCA,
-                                src_childnum, dst_childnum, NULL, NULL,
-                                oldest_referenced_xid, ret ? true : false);
-    }
+    toku_ft_relocate_finish(ft, src_above_LCA, dst_above_LCA,
+                            src_childnum, dst_childnum,
+                            ret ? true : false);
 
 #if HIDE_LATENCY
     toku_destroy_dbt(&minkey);
@@ -642,6 +616,36 @@ toku_rollback_cmdrename(FILENUM UU(filenum),
                         uint64_t UU(msn),
                         TOKUTXN UU(txn),
                         LSN UU(oplsn))
+{
+    return 0;
+}
+
+int
+toku_commit_cmdclone(FILENUM UU(filenum),
+                     BYTESTRING UU(minkeybs),
+                     BYTESTRING UU(maxkeybs),
+                     BYTESTRING UU(newminkeybs),
+                     BYTESTRING UU(newmaxkeybs),
+                     BYTESTRING UU(oldprefixbs),
+                     BYTESTRING UU(newprefixbs),
+                     TOKUTXN UU(txn),
+                     LSN UU(oplsn))
+{
+    // OSDI 18 TODO: probably initiate slicing here
+    assert(false);
+    return 0;
+}
+
+int
+toku_rollback_cmdclone(FILENUM UU(filenum),
+                       BYTESTRING UU(minkeybs),
+                       BYTESTRING UU(maxkeybs),
+                       BYTESTRING UU(newminkeybs),
+                       BYTESTRING UU(newmaxkeybs),
+                       BYTESTRING UU(oldprefixbs),
+                       BYTESTRING UU(newprefixbs),
+                       TOKUTXN UU(txn),
+                       LSN UU(oplsn))
 {
     return 0;
 }
@@ -803,7 +807,9 @@ toku_rollback_load (FILENUM    UU(old_filenum),
         // It's possible the new iname was never created, so just try to 
         // unlink it if it's there and ignore the error if it's not.
         char *fname_in_cwd = toku_cachetable_get_fname_in_cwd(ct, fname_in_env);
-        r = unlink(fname_in_cwd);
+        // YZJ: Should not happend
+        assert(false);
+
 #ifdef TOKU_LINUX_MODULE
         assert(r == 0 || get_error_errno(r) == ENOENT);
 #else

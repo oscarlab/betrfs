@@ -1,0 +1,4 @@
+SIZE=small
+export MKFS_OPTIONS=""
+export EXT_MOUNT_OPTIONS="data=journal"
+TESTNAME="Ext4 4k block w/data=journal"

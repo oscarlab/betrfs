@@ -96,7 +96,7 @@ PATENT RIGHTS GRANT:
 #include "helper.h"
 
 
-#define FILENAME "test0.ft"
+#define FILENAME TOKU_TEST_FILENAME_DATA
 
 /* YZJ */
 static  int verbose = 1;
@@ -107,26 +107,20 @@ static  int verbose = 1;
 static void test_it (int N) {
     FT_HANDLE brt;
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU);                                                                    CKERR(r);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                                                                    CKERR(r);
 
     TOKULOGGER logger;
     r = toku_logger_create(&logger);                                                                        CKERR(r);
-    r = toku_logger_open(TOKU_TEST_FILENAME, logger);                                                                  CKERR(r);
+    r = toku_logger_open(TOKU_TEST_ENV_DIR_NAME, logger);                                                                  CKERR(r);
 
 
     CACHETABLE ct;
     toku_cachetable_create(&ct, 0, ZERO_LSN, logger);
-    toku_cachetable_set_env_dir(ct, TOKU_TEST_FILENAME);
+    toku_cachetable_set_env_dir(ct, TOKU_TEST_ENV_DIR_NAME);
 
     toku_logger_set_cachetable(logger, ct);
 
     r = toku_logger_open_rollback(logger, ct, true);
-/* YZJ */
-    DBG;       
-    INT(r);    
-/* 03/21/2014 */
-
     CKERR(r);
 
     TOKUTXN txn;

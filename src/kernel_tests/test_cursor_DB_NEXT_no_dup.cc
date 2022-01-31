@@ -107,13 +107,13 @@ static DB_TXN* null_txn = NULL;
 
 static void setup_env(void) {
     assert(!env && !db && !cursor);
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
     r = db_env_create(&env, 0);
         CKERR(r);
     assert(env);
     env->set_errfile(env, stderr);
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE|DB_INIT_MPOOL|DB_THREAD|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE|DB_INIT_MPOOL|DB_THREAD|DB_PRIVATE|DB_INIT_LOG|DB_INIT_TXN, S_IRWXU+S_IRWXG+S_IRWXO);
         CKERR(r);
     assert(env);
 }
@@ -131,7 +131,7 @@ static void setup_db(void) {
         CKERR(r);
     assert(db);
     db->set_errfile(db, stderr);
-    r = db->open(db, null_txn, "foo.db", "main", DB_BTREE, DB_CREATE, 0666);
+    r = db->open(db, null_txn, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_CREATE, 0666);
         CKERR(r);
     assert(db);
 }
@@ -143,9 +143,9 @@ static void close_db(void) {
     db = NULL;
 }
 
-static void setup_cursor(void) {
+static void setup_cursor(DB_TXN *txn) {
     assert(env && db && !cursor);
-    r = db->cursor(db, NULL, &cursor, 0);
+    r = db->cursor(db, txn, &cursor, 0);
         CKERR(r);
     assert(cursor);
 }
@@ -187,7 +187,15 @@ static void c_get(uint32_t flag, char key_expect, char data_expect) {
 static void test_skip_key(uint32_t flag, bool is_next) {
     setup_env();
     setup_db();
-    setup_cursor();
+
+    // YZJ: SFS requires DB_INIT_LOG and DB_INIT_TXN.
+    // With two flags, cursor has to be used with transaction.
+    // Check autotxn_db_cursor() in ydb_cursor.cc 
+		// SCB: Tests now run with DB_INIT_LOG and DB_INIT_TXN
+		// regardless of the backend.
+    DB_TXN *txn = NULL;
+    r = env->txn_begin(env, NULL, &txn, 0); assert_zero(r);
+    setup_cursor(txn);
 
     /* ********************************************************************** */
 
@@ -203,6 +211,7 @@ static void test_skip_key(uint32_t flag, bool is_next) {
 
     /* ********************************************************************** */
     close_cursor();
+    r = txn->commit(txn, 0); assert_zero(r);
     close_db();
     close_env();
 }

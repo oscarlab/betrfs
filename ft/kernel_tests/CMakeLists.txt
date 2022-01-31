@@ -13,7 +13,7 @@ cachetable-cleaner-checkpoint2
 cachetable-checkpoint-prefetched-nodes
 cachetable-checkpoint-pinned-nodes
 cachetable-pin-nonblocking-checkpoint-clean
-#orthopush-flush
+orthopush-flush
 recovery-cbegin
 recovery-no-log
 recovery-no-datadir
@@ -36,7 +36,7 @@ verify-misrouted-msgs
 shortcut
 keyrange
 keytest
-#pqueue-test
+pqueue-test
 comparator-test
 recovery-datadir-is-file
 test-txn-child-manager

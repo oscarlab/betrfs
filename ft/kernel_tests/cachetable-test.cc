@@ -182,10 +182,11 @@ static void test_nested_pin (void)
     int i0, i1;
     int r;
     void *vv,*vv2;
-    const char *fname = TOKU_TEST_FILENAME;
+    const char *fname = TOKU_TEST_FILENAME_DATA;
     if (VERBOSE) printf("creating cachetable\n");
     toku_cachetable_create(&t, 1, ZERO_LSN, NULL_LOGGER);
-    toku_os_recursive_delete(fname);
+    r =toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
     r = toku_cachetable_openf(&f, t, fname, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO);
     assert(r==0);
     expect_f = f;
@@ -263,29 +264,19 @@ static void test_multi_filehandles (void)
     CACHEFILE f1,f2,f3;
     int r;
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = 1;
-    if(r == ENOTDIR) 
-	unlink(TOKU_TEST_FILENAME);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
 
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU);
-    if(r != 0) return;
+    const char *fname1 = TOKU_TEST_FILENAME_DATA;
+    const char *fname3 = TOKU_TEST_FILENAME_ONE;
 
-    char *fname1 = (char *)toku_xmalloc(TOKU_PATH_MAX);
-    char *fname2 = (char *)toku_xmalloc(TOKU_PATH_MAX);
-    char *fname3 = (char *)toku_xmalloc(TOKU_PATH_MAX);
-
-    toku_path_join(fname1, 2, TOKU_TEST_FILENAME, "test1_ct.dat");
-    toku_path_join(fname2, 2, TOKU_TEST_FILENAME, "test2_ct.dat");
-    toku_path_join(fname3, 2, TOKU_TEST_FILENAME, "test3_ct.dat");
     void *v;
-    unlink(fname1);
-    unlink(fname2);
 
     toku_cachetable_create(&t, 4, ZERO_LSN, NULL_LOGGER);
     r = toku_cachetable_openf(&f1, t, fname1, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO);   assert(r==0);
-    r = link(fname1, fname2);                                     assert(r==0);
-    r = toku_cachetable_openf(&f2, t, fname2, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO);   assert(r==0);
+
+    // YZJ: we open fname1 again instead of using link() to create a new name in file system
+    r = toku_cachetable_openf(&f2, t, fname1, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO);   assert(r==0);
     r = toku_cachetable_openf(&f3, t, fname3, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO);   assert(r==0);
 
     assert(f1==f2);
@@ -313,11 +304,8 @@ static void test_multi_filehandles (void)
 
     toku_cachetable_close(&t);
 
-    toku_free(fname1);
-    toku_free(fname2);
-    toku_free(fname3);
-/* YZJ: delete it anyway */
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
 }
 
 #endif
@@ -362,8 +350,10 @@ static void test_dirty(void)
 
     toku_cachetable_create(&t, 4, ZERO_LSN, NULL_LOGGER);
 
-    const char *fname = TOKU_TEST_FILENAME;
-    toku_os_recursive_delete(fname);
+    const char *fname = TOKU_TEST_FILENAME_DATA;
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r == 0);
+ 
     r = toku_cachetable_openf(&f, t, fname, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO);
     assert(r == 0);
 
@@ -493,8 +483,10 @@ static void test_size_resize(void)
 
     toku_cachetable_create(&t, n*size, ZERO_LSN, NULL_LOGGER);
 
-    const char *fname = TOKU_TEST_FILENAME;
-    unlink(fname);
+    const char *fname = TOKU_TEST_FILENAME_DATA;
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r == 0);
+   
     r = toku_cachetable_openf(&f, t, fname, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO);
     assert(r == 0);
 

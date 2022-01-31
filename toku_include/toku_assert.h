@@ -114,12 +114,12 @@ static inline int get_error_errno(int rv);
 /* Looks like the maybe errno is for testing.  Make a racy, static one for now*/
 //static int bogus_errno = 0;
 
-extern "C" int ftfs_get_errno(void);
-extern "C" void ftfs_set_errno(int);
+extern "C" int sb_get_errno(void);
+extern "C" void sb_set_errno(int);
 extern "C" int __trace_printk(unsigned long ip, const char *fmt, ...);
 
 #define TOKU_TRACE_PRINTK 0
-#if TOKU_TRACE_PRINTK 
+#if TOKU_TRACE_PRINTK
 #define toku_trace_printk(fmt, ...)                          \
 do {                                                    \
                  __trace_printk(0, fmt, ##__VA_ARGS__);    \
@@ -141,14 +141,14 @@ get_maybe_error_errno(int r)
 set_errno(int new_errno)
 {
  //   bogus_errno = new_errno;
-    ftfs_set_errno(new_errno);
+    sb_set_errno(new_errno);
 }
 
 #endif
 
 void toku_assert_init(void) __attribute__((constructor));
 
-void toku_assert_set_fpointers(int (*toku_maybe_get_engine_status_text_pointer)(char*, int), 
+void sb_assert_set_fpointers(int (*toku_maybe_get_engine_status_text_pointer)(char*, int),
 			       void (*toku_maybe_set_env_panic_pointer)(int, const char*),
                                uint64_t num_rows);
 
@@ -156,10 +156,10 @@ void toku_do_assert(int /*expr*/,const char* /*expr_as_string*/,const char * /*f
 
 
 extern "C"  {
-    void toku_do_assert_fail(const char* /*expr_as_string*/,const char * /*fun*/,const char* /*file*/,int/*line*/, int/*errno*/) __attribute__((__visibility__("default"))) __attribute__((__noreturn__));
-    void toku_do_assert_zero_fail(uintptr_t/*expr*/, const char* /*expr_as_string*/,const char * /*fun*/,const char* /*file*/,int/*line*/, int/*errno*/) __attribute__((__visibility__("default"))) __attribute__((__noreturn__));
+    void sb_do_assert_fail(const char* /*expr_as_string*/,const char * /*fun*/,const char* /*file*/,int/*line*/, int/*errno*/) __attribute__((__visibility__("default"))) __attribute__((__noreturn__));
+    void sb_do_assert_zero_fail(uintptr_t/*expr*/, const char* /*expr_as_string*/,const char * /*fun*/,const char* /*file*/,int/*line*/, int/*errno*/) __attribute__((__visibility__("default"))) __attribute__((__noreturn__));
 }
-void toku_do_assert_expected_fail(uintptr_t/*expr*/, uintptr_t /*expected*/, const char* /*expr_as_string*/,const char * /*fun*/,const char* /*file*/,int/*line*/, int/*errno*/) __attribute__((__visibility__("default"))) __attribute__((__noreturn__));
+void sb_do_assert_expected_fail(uintptr_t/*expr*/, uintptr_t /*expected*/, const char* /*expr_as_string*/,const char * /*fun*/,const char* /*file*/,int/*line*/, int/*errno*/) __attribute__((__visibility__("default"))) __attribute__((__noreturn__));
 
 // Define GCOV if you want to get test-coverage information that ignores the assert statements.
 // #define GCOV
@@ -171,15 +171,15 @@ extern void (*do_assert_hook)(void); // Set this to a function you want called a
 #define assert_zero(expr) toku_do_assert((expr) == 0, #expr, __FUNCTION__, __FILE__, __LINE__, get_maybe_error_errno())
 #define assert_equals(expr, expected) toku_do_assert((expr) == (expected), (expected), #expr, __FUNCTION__, __FILE__, __LINE__, get_maybe_error_errno())
 #elif defined (TOKU_LINUX_MODULE)
-#define assert(expr)      ((expr)      ? (void)0 : toku_do_assert_fail(#expr, __FUNCTION__, __FILE__, __LINE__, 0))
-#define assert_zero(expr) ((expr) == 0 ? (void)0 : toku_do_assert_zero_fail((uintptr_t)(expr), #expr, __FUNCTION__, __FILE__, __LINE__, 0))
-#define assert_equals(expr, expected) ((expr) == (expected) ? (void)0 : toku_do_assert_expected_fail((uintptr_t)(expr), (uintptr_t)(expected), #expr, __FUNCTION__, __FILE__, __LINE__, 0))
-#define assert_null(expr) ((expr) == nullptr ? (void)0 : toku_do_assert_zero_fail((uintptr_t)(expr), #expr, __FUNCTION__, __FILE__, __LINE__, 0))
+#define assert(expr)      ((expr)      ? (void)0 : sb_do_assert_fail(#expr, __FUNCTION__, __FILE__, __LINE__, 0))
+#define assert_zero(expr) ((expr) == 0 ? (void)0 : sb_do_assert_zero_fail((uintptr_t)(expr), #expr, __FUNCTION__, __FILE__, __LINE__, 0))
+#define assert_equals(expr, expected) ((expr) == (expected) ? (void)0 : sb_do_assert_expected_fail((uintptr_t)(expr), (uintptr_t)(expected), #expr, __FUNCTION__, __FILE__, __LINE__, 0))
+#define assert_null(expr) ((expr) == nullptr ? (void)0 : sb_do_assert_zero_fail((uintptr_t)(expr), #expr, __FUNCTION__, __FILE__, __LINE__, 0))
 #else
-#define assert(expr)      ((expr)      ? (void)0 : toku_do_assert_fail(#expr, __FUNCTION__, __FILE__, __LINE__, get_maybe_error_errno()))
-#define assert_zero(expr) ((expr) == 0 ? (void)0 : toku_do_assert_zero_fail((uintptr_t)(expr), #expr, __FUNCTION__, __FILE__, __LINE__, get_maybe_error_errno()))
-#define assert_equals(expr, expected) ((expr) == (expected) ? (void)0 : toku_do_assert_expected_fail((uintptr_t)(expr), (uintptr_t)(expected), #expr, __FUNCTION__, __FILE__, __LINE__, get_maybe_error_errno()))
-#define assert_null(expr) ((expr) == nullptr ? (void)0 : toku_do_assert_zero_fail((uintptr_t)(expr), #expr, __FUNCTION__, __FILE__, __LINE__, get_maybe_error_errno()))
+#define assert(expr)      ((expr)      ? (void)0 : sb_do_assert_fail(#expr, __FUNCTION__, __FILE__, __LINE__, get_maybe_error_errno()))
+#define assert_zero(expr) ((expr) == 0 ? (void)0 : sb_do_assert_zero_fail((uintptr_t)(expr), #expr, __FUNCTION__, __FILE__, __LINE__, get_maybe_error_errno()))
+#define assert_equals(expr, expected) ((expr) == (expected) ? (void)0 : sb_do_assert_expected_fail((uintptr_t)(expr), (uintptr_t)(expected), #expr, __FUNCTION__, __FILE__, __LINE__, get_maybe_error_errno()))
+#define assert_null(expr) ((expr) == nullptr ? (void)0 : sb_do_assert_zero_fail((uintptr_t)(expr), #expr, __FUNCTION__, __FILE__, __LINE__, get_maybe_error_errno()))
 #endif
 
 #ifdef GCOV
@@ -190,9 +190,9 @@ extern void (*do_assert_hook)(void); // Set this to a function you want called a
 #define WHEN_NOT_GCOV(x) x
 #endif
 
-#define lazy_assert(a)          assert(a)      // indicates code is incomplete 
-#define lazy_assert_zero(a)     assert_zero(a) // indicates code is incomplete 
-#define lazy_assert_equals(a, b)     assert_equals(a, b) // indicates code is incomplete 
+#define lazy_assert(a)          assert(a)      // indicates code is incomplete
+#define lazy_assert_zero(a)     assert_zero(a) // indicates code is incomplete
+#define lazy_assert_equals(a, b)     assert_equals(a, b) // indicates code is incomplete
 #define invariant(a)            assert(a)      // indicates a code invariant that must be true
 #define invariant_null(a)       assert_null(a) // indicates a code invariant that must be true
 #define invariant_notnull(a)    assert(a)      // indicates a code invariant that must be true
@@ -205,7 +205,7 @@ extern void (*do_assert_hook)(void); // Set this to a function you want called a
 #if TOKU_DEBUG_PARANOID
 #define paranoid_invariant(a) assert(a)
 #define paranoid_invariant_null(a) assert_null(a)
-#define paranoid_invariant_notnull(a) assert(a!=nullptr)
+#define paranoid_invariant_notnull(a) assert((a!=nullptr))
 #define paranoid_invariant_zero(a) assert_zero(a)
 #else // !TOKU_DEBUG_PARANOID
 #define paranoid_invariant(a) ((void) 0)

@@ -33,6 +33,11 @@ then
     umount $mntpnt
     rmmod $module
     losetup -d $dummy_dev
+    ## YZJ: Just to make sure everything can be cleared up in SFS
+    if [[ $use_sfs == "true" ]]
+    then
+        rmmod simplefs
+    fi
     exit 0
 elif [[ $fstype == "zfs" ]]
 then

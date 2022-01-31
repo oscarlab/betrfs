@@ -103,10 +103,10 @@ int test_test_db_change_xxx(void) {
     DB_ENV *env;
     DB *db;
     pre_setup();
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r=toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);       assert(r==0);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
     r=db_env_create(&env, 0); assert(r==0);
-    r=env->open(env, TOKU_TEST_FILENAME, DB_PRIVATE|DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
+    r=env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_PRIVATE|DB_CREATE|DB_INIT_LOG|DB_INIT_TXN, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
 
     uint32_t ret_val = 0;
     r = db_create(&db, env, 0);
@@ -137,8 +137,8 @@ int test_test_db_change_xxx(void) {
     assert(ret_method == TOKU_ZLIB_METHOD);
 
     // now do the open
-    const char * const fname = "test.change_xxx";
-    r = db->open(db, NULL, fname, "main", DB_BTREE, DB_CREATE, 0666);
+    const char * const fname = TOKU_TEST_DATA_DB_NAME;
+    r = db->open(db, NULL, fname, NULL, DB_BTREE, DB_CREATE, 0666);
     CKERR(r);
     
     r = db->get_pagesize(db, &ret_val);
@@ -181,7 +181,7 @@ int test_test_db_change_xxx(void) {
     
     r = db_create(&db, env, 0);
     CKERR(r);
-    r = db->open(db, NULL, fname, "main", DB_BTREE, DB_AUTO_COMMIT, 0666);
+    r = db->open(db, NULL, fname, NULL, DB_BTREE, DB_AUTO_COMMIT, 0666);
     CKERR(r);
 
     r = db->get_pagesize(db, &ret_val);

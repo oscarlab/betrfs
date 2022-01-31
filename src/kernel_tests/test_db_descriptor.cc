@@ -99,7 +99,7 @@ PATENT RIGHTS GRANT:
 #include "test.h"
 
 // TOKU_TEST_FILENAME is defined in the Makefile
-#define FNAME       "foo.tokudb"
+static const char * FNAME = NULL;
 static const char *name = NULL;
 
 #define NUM         3
@@ -245,8 +245,8 @@ setup_data(void) {
     memset(&key_ops, 0, sizeof(key_ops));
     key_ops.keycmp = verify_int_cmp;
     r = env->set_key_ops(env, &key_ops); CKERR(r);
-    const int envflags = DB_CREATE|DB_INIT_MPOOL|DB_INIT_TXN|DB_INIT_LOCK |DB_THREAD |DB_PRIVATE;
-    r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);        CKERR(r);
+    const int envflags = DB_CREATE|DB_INIT_MPOOL|DB_INIT_LOG|DB_INIT_TXN|DB_INIT_LOCK |DB_THREAD |DB_PRIVATE;
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);        CKERR(r);
     int i;
     for (i=0; i < NUM; i++) {
         length[i] = i * MAX_LENGTH / (NUM-1);
@@ -304,8 +304,8 @@ test_insert (int n, int which) {
 static void
 runtest(void) {
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r=toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
     setup_data();
     permute_order();
 
@@ -348,7 +348,6 @@ runtest(void) {
         close_db(0);
     }
     delete_db();
-
     //Upgrade descriptors along the way. With two handles
     open_db(-1, 1);
     for (i=0; i < NUM; i++) {
@@ -366,7 +365,6 @@ runtest(void) {
         close_db(1);
     }
     delete_db();
-    
     env->close(env, 0);
 }
 
@@ -377,10 +375,10 @@ int test_test_db_descriptor(void) {
     pre_setup();
     for (abort_type = 0; abort_type < 3; abort_type++) {
         for (get_table_lock = 0; get_table_lock < 2; get_table_lock++) {
-            name = NULL;
+            FNAME = TOKU_TEST_DATA_DB_NAME;
             runtest();
 
-            name = "bar";
+            FNAME = TOKU_TEST_META_DB_NAME;
             runtest();
             
         }

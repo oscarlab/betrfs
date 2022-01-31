@@ -125,7 +125,7 @@ void db_env_set_func_pwrite (ssize_t (*pwrite_function)(int, const void *, size_
     toku_set_func_pwrite(pwrite_function);
 }
 
-void db_env_set_func_full_pwrite (ssize_t (*pwrite_function)(int, const void *, size_t, toku_off_t)) {
+void db_env_set_func_full_pwrite (ssize_t (*pwrite_function)(int, const void *, size_t, toku_off_t, bool)) {
     toku_set_func_full_pwrite(pwrite_function);
 }
 

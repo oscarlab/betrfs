@@ -242,7 +242,7 @@ static inline int
 dbt_realloc(DBT *dbt) {
     void *new_data = toku_realloc(dbt->data, dbt->ulen);
     int r;
-    if (new_data == NULL) {
+    if (new_data == NULL && dbt->ulen != 0) {
         r = ENOMEM;
     } else {
         dbt->data = new_data;

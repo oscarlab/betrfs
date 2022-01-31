@@ -123,19 +123,21 @@ int test_test_db_env_open_nocreate(void) {
 	if (do_private==1) continue; // See #530.  BDB 4.6.21 segfaults if DB_PRIVATE is passed when no environment previously exists.
 #endif
 	int private_flags = do_private ? (DB_CREATE|DB_PRIVATE) : 0;
-	
-	toku_os_recursive_delete(TOKU_TEST_FILENAME);
+	r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+	assert(r==0);
 	r = db_env_create(&dbenv, 0);
 	CKERR(r);
-	r = dbenv->open(dbenv, TOKU_TEST_FILENAME, private_flags|DB_INIT_MPOOL, 0);
+        // YZJ: TOKU_TEST_FILENAME does not exist in TOKU_TEST_ENV_DIR_NAME
+        // env->open returns ENOENT as before.
+	r = dbenv->open(dbenv, TOKU_TEST_FILENAME, private_flags|DB_INIT_MPOOL|DB_INIT_LOG|DB_INIT_TXN, 0);
 	assert(r==ENOENT);
 	dbenv->close(dbenv,0); // free memory
 	
-	toku_os_recursive_delete(TOKU_TEST_FILENAME);
-	toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+	r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+        assert(r==0);
 	r = db_env_create(&dbenv, 0);
 	CKERR(r);
-	r = dbenv->open(dbenv, TOKU_TEST_FILENAME, private_flags|DB_INIT_MPOOL, 0);
+	r = dbenv->open(dbenv, TOKU_TEST_ENV_DIR_NAME, private_flags|DB_INIT_MPOOL|DB_INIT_LOG|DB_INIT_TXN, 0);
 #ifdef USE_TDB
 	// TokuDB has no trouble opening an environment if the directory exists.
 	CKERR(r);
@@ -150,11 +152,11 @@ int test_test_db_env_open_nocreate(void) {
 #ifndef USE_TDB
     // Now make sure that if we have a non-private DB that we can tell if it opened or not.
     DB *db;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r == 0);
     r = db_env_create(&dbenv, 0);
     CKERR(r);
-    r = dbenv->open(dbenv, TOKU_TEST_FILENAME, DB_CREATE|DB_INIT_MPOOL, 0);
+    r = dbenv->open(dbenv, TOKU_TEST_ENV_DIR_NAME, DB_CREATE|DB_INIT_MPOOL|DB_INIT_LOG|DB_INIT_TXN, 0);
     CKERR(r);
     r=db_create(&db, dbenv, 0);
     CKERR(r);
@@ -162,7 +164,7 @@ int test_test_db_env_open_nocreate(void) {
     dbenv->close(dbenv,0); // free memory
     r = db_env_create(&dbenv, 0);
     CKERR(r);
-    r = dbenv->open(dbenv, TOKU_TEST_FILENAME, DB_INIT_MPOOL, 0);
+    r = dbenv->open(dbenv, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL|DB_INIT_LOG|DB_INIT_TXN, 0);
     CKERR(r);
     dbenv->close(dbenv,0); // free memory
 #endif

@@ -104,7 +104,7 @@ static DB_TXN *txn = NULL;
 static DB *db = NULL;
 static uint32_t db_page_size = 4096;
 static uint32_t db_basement_size = 4096;
-static const char *envdir = TOKU_TEST_FILENAME;
+static const char *envdir = TOKU_TEST_ENV_DIR_NAME;
 static uint64_t nrows = 30000;
 static bool get_all = true;
 static bool use_loader = false;
@@ -170,7 +170,7 @@ run_test(void) {
     r = db->set_pagesize(db, db_page_size); CKERR(r);
     r = db->set_readpagesize(db, db_basement_size); CKERR(r);
     r = env->txn_begin(env, 0, &txn, 0); CKERR(r);
-    r = db->open(db, txn, "foo.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
+    r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r = txn->commit(txn, 0);    CKERR(r);
 
     uint64_t *XMALLOC_N(nrows, keys);
@@ -343,8 +343,7 @@ int test_keyrange(void) {
     //get_all = 0;//atoi(argv[++i]) != 0;
     //get_all = 1; random_keys = 1;
 
-    toku_os_recursive_delete(envdir);
-    int r = toku_os_mkdir(envdir, S_IRWXU+S_IRWXG+S_IRWXO);       CKERR(r);
+    int r = toku_fs_reset(envdir, S_IRWXU+S_IRWXG+S_IRWXO);       CKERR(r);
 
     run_test();
 

@@ -60,7 +60,7 @@ for x in ${!alltest[*]}; do
 done
 
 for x in ${!alltest[*]}; do
-	workloads=(oltp webproxy webserver)
+	workloads=(oltp fileserver webproxy webserver)
 	for workload in "${workloads[@]}"; do
 		TEST=${alltest[${x}]}
 		grep 'IO Summary' results/${TEST}-${workload}-*.csv | awk '{print $6}' | ministat -n | tail -n 1 | sed 's/x/'${TEST}.${workload}-ops'/g'

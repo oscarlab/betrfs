@@ -132,10 +132,8 @@ static int iter_fn(FT_MSG msg, bool UU(is_fresh), void *args) {
     buildkey(*p_i);
     buildval(*p_i);
 
-    if(type != FT_KUPSERT_BROADCAST_ALL) {
-    	assert((int) keylen == *p_thekeylen); assert(memcmp(key, *p_thekey, keylen) == 0);
-    	assert((int) vallen == *p_thevallen); assert(memcmp(val, *p_theval, vallen) == 0);
-	}
+	assert((int) keylen == *p_thekeylen); assert(memcmp(key, *p_thekey, keylen) == 0);
+	assert((int) vallen == *p_thevallen); assert(memcmp(val, *p_theval, vallen) == 0);
     assert(cast_to_msg_type(*p_i) == type);
     assert((TXNID)*p_i==xids_get_innermost_xid(xids));
     *p_i = *p_i+1;
@@ -204,12 +202,6 @@ test_fifo_enq (int n) {
         enum ft_msg_type type = cast_to_msg_type(i);
         FT_MSG_S msg;
 
-        if(type == FT_KUPSERT_BROADCAST_ALL) {
-            ft_msg_kupsert_init(&msg, type, msn, xids,
-                                {.len=0, .data=(char *)""},
-                                {.len=0, .data=(char *)""});
-        } else {
-        
         	DBT kdbt, vdbt, mdbt;
         	toku_fill_dbt(&kdbt,thekey,thekeylen);
         	toku_fill_dbt(&mdbt,maxkey,maxkeylen);
@@ -218,7 +210,6 @@ test_fifo_enq (int n) {
             		ft_msg_multicast_init(&msg, type, msn, xids, &kdbt, &mdbt, &vdbt, true, PM_UNCOMMITTED);
         	else
             		ft_msg_init(&msg, type, msn, xids, &kdbt, &vdbt);
-	}
         r = toku_fifo_enq(f, &msg, true, NULL); assert(r == 0);
        xids_destroy(&xids);
     }

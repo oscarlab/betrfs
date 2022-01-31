@@ -288,8 +288,7 @@ static void
 init_logdir(const char *logdir) {
     int error;
 
-    toku_os_recursive_delete(logdir);
-    error = toku_os_mkdir(logdir, 0777);
+    error = toku_fs_reset(logdir, 0777);
     assert(error == 0);
 }
 extern "C" int test_le_cursor_provdel(void);
@@ -300,19 +299,15 @@ test_le_cursor_provdel() {
 
     int init = toku_ft_layer_init();
     assert(init == 0);
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    int r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU);
-    assert_zero(r);
 
-    char logdir[TOKU_PATH_MAX+1];
-    toku_path_join(logdir, 2, TOKU_TEST_FILENAME, "logdir");
+    const char* logdir = TOKU_TEST_ENV_DIR_NAME;
     init_logdir(logdir);
     //int error = chdir(logdir);
     //assert(error == 0);
 
     const int n = 10;
-    create_populate_tree(logdir, "ftfile", n);
-    test_provdel(logdir, "ftfile", n);
+    create_populate_tree(logdir, TOKU_TEST_FILENAME_DATA, n);
+    test_provdel(logdir, TOKU_TEST_FILENAME_DATA, n);
 
     toku_ft_layer_destroy();
     return 0;

@@ -34,16 +34,17 @@ cd micro/tokubench
 ./collect-all-fs.sh
 cd -
 
-#### applications ###
-# IMAP benchmark is finicky. Test manually.
-# cd macro/mailserver/imap-test/
-# ./collect-all-fs.sh
-# cd -
+# application benchmarks are not run on individual FestiFS optimizations
+exit 0
 
-# git benchmark is finicky. Test manually.
-# cd application/git
-# ./collect-all-fs.sh
-# cd -
+#### applications ###
+cd macro/mailserver/imap-test/
+./collect-all-fs.sh
+cd -
+
+cd application/git
+./collect-all-fs.sh
+cd -
 
 cd application/rsync
 ./collect-all-fs.sh
@@ -54,7 +55,6 @@ cd application/tar
 cd -
 
 ### filebench ###
-# filebench is finicky. Test manually.
-# cd macro/filebench
-# ./collect-all-fs.sh
-# cd -
+cd macro/filebench
+./collect-all-fs.sh
+cd -

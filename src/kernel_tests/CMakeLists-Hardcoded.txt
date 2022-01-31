@@ -43,7 +43,6 @@ diskfull
 dump-env
 env_loader_memory
 env-put-multiple
-env_startup
 filesize
 get_key_after_bytes_unit
 #helgrind1 (not going to helgrind in kernel...)
@@ -259,9 +258,6 @@ test_abort3
 test_abort4
 test_abort5
 test_abort_delete_first
-test_archive0
-test_archive1
-test_archive2
 test_blobs_leaf_split
 test_bulk_fetch
 test_cachesize

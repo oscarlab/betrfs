@@ -12,20 +12,26 @@
 #include <linux/proc_fs.h>
 #include <linux/fs.h>
 #include <linux/fs_struct.h>
-#include <linux/uaccess.h>
 #include <linux/kallsyms.h>
 #include <linux/dcache.h>
+
 #include "ftfs_southbound.h"
-#include "toku_misc.h"
-#include "ftfs_malloc.h"
-#include "ftfs_files.h"
-#include "ftfs_dir.h"
-#include "ftfs_error.h"
+#include "sb_misc.h"
+#include "sb_malloc.h"
+#include "sb_files.h"
 #include "ftfs.h"
+#include "ftfs_unit_test.h"
+#include "nb_proc_toku_memleak_detect.h"
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
+#include <asm/uaccess.h>
+#else
+#include <linux/uaccess.h>
+#endif
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Stony Brook University");
-MODULE_DESCRIPTION("Fractal Tree File System");
+MODULE_AUTHOR("BetrFS.org");
+MODULE_DESCRIPTION("B^e-tree file system");
 
 static char *sb_dev = NULL;
 module_param(sb_dev, charp, 0);
@@ -34,6 +40,10 @@ MODULE_PARM_DESC(sb_dev, "the southbound file system's block device");
 static char *sb_fstype = NULL;
 module_param(sb_fstype, charp, 0);
 MODULE_PARM_DESC(sb_fstype, "the southbound file system type (ex: ext4)");
+
+bool sb_is_rotational = 0;
+module_param(sb_is_rotational, bool, 0);
+MODULE_PARM_DESC(sb_is_rotational, "the southbound device type is hdd or not (ex: 0 or 1 )");
 
 /* Do not remove --This filename is not the testname passed to toku_run_test,
  * it is a test file name used by one of portability tests which used
@@ -48,6 +58,11 @@ MODULE_PARM_DESC(toku_ncpus, "Limit on the number of CPUs used by the FT code");
 
 static struct proc_dir_entry *toku_proc_entry;
 static int last_result;
+
+bool ftfs_is_hdd(void)
+{
+	return sb_is_rotational;
+}
 
 void ftfs_error (const char * function, const char * fmt, ...)
 {
@@ -129,9 +144,12 @@ ssize_t toku_write_proc(struct file *file, const char __user *buffer,
 	buf[count] = '\0';
 
 	//last_result = run_test(buf);
-	thread_run_test(buf);
+	ret = thread_run_test(buf);
 
 	kfree(buf);
+
+	// If the test failed, return an error code
+	if (ret < 0) return ret;
 
 	return count;
 }
@@ -156,6 +174,7 @@ static int toku_test_init(void)
 	}
 
 	ftfs_log(__func__, "toku procfs entry created");
+	TOKU_MEMLEAK_INIT;
 
 	return 0;
 }
@@ -168,23 +187,24 @@ static void toku_test_exit(void)
 {
 	remove_proc_entry(TOKU_PROC_NAME, NULL);
 	ftfs_log(__func__, "toku procfs entry removed");
+	TOKU_MEMLEAK_EXIT;
 }
 
 static void __exit ftfs_module_exit(void)
 {
 	put_ftfs_southbound();
 
-	if (ftfs_private_umount())
+	if (sb_private_umount())
 		ftfs_error(__func__, "unable to umount ftfs southbound");
-	destroy_ftfs_vmalloc_cache();
+	destroy_sb_vmalloc_cache();
 	toku_test_exit();
 }
 
 static int resolve_ftfs_symbols(void)
 {
 	if (resolve_ftfs_southbound_symbols() ||
-	    resolve_ftfs_files_symbols() ||
-	    resolve_ftfs_malloc_symbols() ||
+	    resolve_sb_files_symbols() ||
+	    resolve_sb_malloc_symbols() ||
 	    resolve_toku_misc_symbols()) {
 		return -EINVAL;
 	}
@@ -221,8 +241,7 @@ static int __init ftfs_module_init(void)
 	 * we pin a global struct vfsmount that we use for all path
 	 * resolution.
 	 */
-
-	ret = ftfs_private_mount(sb_dev, sb_fstype, data);
+	ret = sb_private_mount(sb_dev, sb_fstype, data);
 	if (ret) {
 		ftfs_error(__func__, "can't mount southbound");
 		return ret;
@@ -236,14 +255,13 @@ static int __init ftfs_module_init(void)
 	 * force all fractal tree worker threads to "see" our file
 	 * system as if they were running in user space.
 	 */
-
 	ret = init_ftfs_southbound();
 	if (ret) {
 		ftfs_error(__func__, "can't init southbound_fs");
 		return ret;
 	}
 
-	ret = init_ftfs_vmalloc_cache();
+	ret = init_sb_vmalloc_cache();
 	if (ret) {
 		ftfs_error(__func__, "can't init vmalloc caches");
 		return ret;

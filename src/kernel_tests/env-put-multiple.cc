@@ -95,12 +95,26 @@ PATENT RIGHTS GRANT:
 #include "test.h"
 
 static const int envflags = DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_TXN|DB_PRIVATE;
-
-enum {MAX_DBS = 64, MAX_KEY = 8, MAX_VAL = 8};
+enum {MAX_DBS = 5, MAX_KEY = 8, MAX_VAL = 8};
 static DB *dbs_multiple[MAX_DBS];
 static DB *dbs_single[MAX_DBS];
-static char names_single[MAX_DBS][sizeof("dbs_0xFFF")];
-static char names_multiple[MAX_DBS][sizeof("dbm_0xFFF")];
+
+static const char* names_single[MAX_DBS] = {
+   TOKU_TEST_DATA_DB_NAME,
+   TOKU_TEST_META_DB_NAME,
+   TOKU_TEST_ONE_DB_NAME,
+   TOKU_TEST_TWO_DB_NAME,
+   TOKU_TEST_THREE_DB_NAME
+};
+
+static const char* names_multiple[MAX_DBS] = {
+   TOKU_TEST_DATA_DB_NAME,
+   TOKU_TEST_META_DB_NAME,
+   TOKU_TEST_ONE_DB_NAME,
+   TOKU_TEST_TWO_DB_NAME,
+   TOKU_TEST_THREE_DB_NAME
+};
+
 static uint32_t num_dbs;
 static uint32_t flags[MAX_DBS];
 static uint32_t ids[MAX_DBS];
@@ -144,14 +158,13 @@ static void run_test (void) {
     if (verbose)
         printf("env-put-multiple num_dbs[%u]\n", num_dbs);
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
 
     DB_ENV *env;
     r = db_env_create(&env, 0);                                                         CKERR(r);
     r = env->set_generate_row_callback_for_put(env, put_multiple_generate);
     CKERR(r);
-    r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                      CKERR(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                      CKERR(r);
 
     uint32_t which;
     {
@@ -359,8 +372,6 @@ int test_env_put_multiple(void) {
     pre_setup();
     uint32_t which;
     for (which = 0; which < MAX_DBS; which++) {
-        sprintf(names_multiple[which], "dbm_0x%02X", which);
-        sprintf(names_single[which], "dbs_0x%02X", which);
         dbt_init(&dest_keys[which], NULL, 0);
         dbt_init(&dest_vals[which], NULL, 0);
     }
@@ -370,6 +381,8 @@ int test_env_put_multiple(void) {
     for (num_dbs = 4; num_dbs <= MAX_DBS; num_dbs *= 2) {
         run_test();
     }
+    num_dbs = 5;
+    run_test();
     post_teardown();
     return 0;
 }

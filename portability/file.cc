@@ -105,9 +105,9 @@ PATENT RIGHTS GRANT:
 
 static int toku_assert_on_write_enospc = 0;
 static const int toku_write_enospc_sleep = 1;
-static time_t   toku_write_enospc_last_time;        // timestamp of most recent ENOSPC
 static uint32_t toku_write_enospc_current;          // number of threads currently blocked on ENOSPC
 static uint64_t toku_write_enospc_total;            // total number of times ENOSPC was returned from an attempt to write
+static time_t   toku_write_enospc_last_time;        // timestamp of most recent ENOSPC
 
 void toku_set_assert_on_write_enospc(int do_assert) {
     toku_assert_on_write_enospc = do_assert;
@@ -122,7 +122,7 @@ void toku_fs_get_write_info(time_t *enospc_last_time, uint64_t *enospc_current, 
 static ssize_t (*t_write)(int, const void *, size_t);
 static ssize_t (*t_full_write)(int, const void *, size_t);
 static ssize_t (*t_pwrite)(int, const void *, size_t, off_t);
-static ssize_t (*t_full_pwrite)(int, const void *, size_t, off_t);
+static ssize_t (*t_full_pwrite)(int, const void *, size_t, off_t, bool);
 #ifndef TOKU_LINUX_MODULE
 static FILE *  (*t_fdopen)(int, const char *);
 #endif
@@ -144,7 +144,7 @@ void toku_set_func_pwrite (ssize_t (*pwrite_fun)(int, const void *, size_t, off_
     t_pwrite = pwrite_fun;
 }
 
-void toku_set_func_full_pwrite (ssize_t (*pwrite_fun)(int, const void *, size_t, off_t)) {
+void toku_set_func_full_pwrite (ssize_t (*pwrite_fun)(int, const void *, size_t, off_t, bool)) {
     t_full_pwrite = pwrite_fun;
 }
 
@@ -222,28 +222,36 @@ toku_os_write (int fd, const void *buf, size_t len) {
 }
 
 void
-toku_os_full_pwrite (int fd, const void *buf, size_t len, toku_off_t off) {
+toku_os_full_pwrite (int fd, const void *buf, size_t len, toku_off_t off, bool is_blocking) {
     assert(0==((long long)buf)%512);
     assert((len%512 == 0) && (off%512)==0); // to make pwrite work.
-    const char *bp = (const char *) buf;
-    while (len > 0) {
-        ssize_t r;
-        if (t_full_pwrite) {
-            r = t_full_pwrite(fd, bp, len, off);
-        } else {
-            r = pwrite(fd, bp, len, off);
+    ssize_t r;
+
+    if (ftfs_is_hdd()) {
+        const char *bp = (const char *) buf;
+        assert(is_blocking == true);
+        while (len > 0) {
+            if (t_full_pwrite) {
+                r = t_full_pwrite(fd, bp, len, off, is_blocking);
+            } else {
+                r = pwrite(fd, bp, len, off);
+            }
+            if (r > 0) {
+                len           -= r;
+                bp            += r;
+                off           += r;
+            }
+            else {
+                printf("%s: r=%ld\n", __func__, r);
+                assert(false);
+            }
         }
-        if (r > 0) {
-            len           -= r;
-            bp            += r;
-            off           += r;
-        }
-        else {
-            printf("%s: r=%ld\n", __func__, r);
-            assert(false);
-        }
+        assert(len == 0);
+    } else {
+        void (* free_cb)(void *) = (is_blocking) ? nullptr : toku_free;
+        r = sb_sfs_dio_write(fd, buf, len, off, free_cb);
+        assert(r == len);
     }
-    assert(len == 0);
 }
 
 ssize_t
@@ -392,29 +400,19 @@ toku_os_pread (int fd, void *buf, size_t count, off_t offset) {
     assert(0==count%512);
     assert(0==offset%512);
     ssize_t r;
-    if (t_pread) {
-	r = t_pread(fd, buf, count, offset);
+    if (ftfs_is_hdd()) {
+        if (t_pread) {
+	    r = t_pread(fd, buf, count, offset);
+        } else {
+	    r = pread(fd, buf, count, offset);
+        }
     } else {
-	r = pread(fd, buf, count, offset);
+        r = sb_sfs_dio_read(fd, buf, count, offset, nullptr);
+        assert(r == count);
     }
     return r;
 }
 
-extern "C" int recursive_delete(const char *);
-void toku_os_recursive_delete(const char *path) {
-#ifdef TOKU_LINUX_MODULE
-    int r = recursive_delete(path);
-    if(r!=0) printf("\nrecursive deletion failed\n");
-    //assert_zero(r);
-#else
-    /* DP: Just malloc for now.  We almost certainly won't use this in the kernel */
-    char * buf = (char *) malloc(TOKU_PATH_MAX + sizeof("rm -rf "));
-    snprintf(buf, sizeof(buf), "rm -rf %s", path);
-    int r = system(buf);
-    assert_zero(r);
-    free(buf);
-#endif
-}
 // fsync logic:
 
 // t_fsync exists for testing purposes only
@@ -425,7 +423,6 @@ static uint64_t toku_long_fsync_threshold = 1000000;
 static uint64_t toku_long_fsync_count;
 static uint64_t toku_long_fsync_time;
 static uint64_t toku_long_fsync_eintr_count;
-static int toku_fsync_debug = 0;
 
 void toku_set_func_fsync(int (*fsync_function)(int)) {
     t_fsync = fsync_function;
@@ -454,26 +451,6 @@ void toku_logger_maybe_sync_internal_no_flags_no_callbacks (int fd) {
         toku_sync_fetch_and_add(&toku_long_fsync_count, 1);
         toku_sync_fetch_and_add(&toku_long_fsync_time, duration);
         toku_sync_fetch_and_add(&toku_long_fsync_eintr_count, eintr_count);
-
-        if (toku_fsync_debug) {
-            const int tstr_length = 26;
-            char tstr[tstr_length];
-            time_t t = time(0);
-#if __linux__ || defined(TOKU_LINUX_MODULE)
-            char fdname[256];
-            snprintf(fdname, sizeof fdname, "/proc/%d/fd/%d", getpid(), fd);
-            char lname[256];
-            ssize_t s = readlink(fdname, lname, sizeof lname);
-            if (0 < s && s < (ssize_t) sizeof lname)
-                lname[s] = 0;
-            fprintf(stderr, "%.24s toku_file_fsync %s fd=%d %s duration=%" PRIu64 " usec eintr=%" PRIu64 "\n", 
-                    ctime_r(&t, tstr), __FUNCTION__, fd, s > 0 ? lname : "?", duration, eintr_count);
-#else
-            fprintf(stderr, "%.24s toku_file_fsync  %s fd=%d duration=%" PRIu64 " usec eintr=%" PRIu64 "\n", 
-                    ctime_r(&t, tstr), __FUNCTION__, fd, duration, eintr_count);
-#endif
-            fflush(stderr);
-        }
     }
 }
 
@@ -504,26 +481,6 @@ static void file_fsync_internal (int fd) {
         toku_sync_fetch_and_add(&toku_long_fsync_count, 1);
         toku_sync_fetch_and_add(&toku_long_fsync_time, duration);
         toku_sync_fetch_and_add(&toku_long_fsync_eintr_count, eintr_count);
-
-        if (toku_fsync_debug) {
-            const int tstr_length = 26;
-            char tstr[tstr_length];
-            time_t t = time(0);
-#if __linux__ || defined(TOKU_LINUX_MODULE)
-            char fdname[256];
-            snprintf(fdname, sizeof fdname, "/proc/%d/fd/%d", getpid(), fd);
-            char lname[256];
-            ssize_t s = readlink(fdname, lname, sizeof lname);
-            if (0 < s && s < (ssize_t) sizeof lname)
-                lname[s] = 0;
-            fprintf(stderr, "%.24s toku_file_fsync %s fd=%d %s duration=%" PRIu64 " usec eintr=%" PRIu64 "\n", 
-                    ctime_r(&t, tstr), __FUNCTION__, fd, s > 0 ? lname : "?", duration, eintr_count);
-#else
-            fprintf(stderr, "%.24s toku_file_fsync  %s fd=%d duration=%" PRIu64 " usec eintr=%" PRIu64 "\n", 
-                    ctime_r(&t, tstr), __FUNCTION__, fd, duration, eintr_count);
-#endif
-            fflush(stderr);
-        }
     }
 }
 
@@ -607,6 +564,3 @@ int toku_fsync_directory(const char *fname) {
     return result;
 }
 
-int toku_fallocate(int fd, off_t offset, off_t len) {
-	return fallocate(fd, 0, offset, len);
-}

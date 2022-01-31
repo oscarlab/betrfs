@@ -106,8 +106,8 @@ int test_test_db_env_set_tmp_dir(void) {
     int r;
 
     pre_setup();
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);    
 
     r = db_env_create(&dbenv, 0);
     assert(r == 0);
@@ -118,7 +118,7 @@ int test_test_db_env_set_tmp_dir(void) {
     r = dbenv->set_tmp_dir(dbenv, ".");
     assert(r == 0);
     
-    r = dbenv->open(dbenv, TOKU_TEST_FILENAME, DB_CREATE|DB_PRIVATE|DB_INIT_MPOOL, 0);
+    r = dbenv->open(dbenv, TOKU_TEST_ENV_DIR_NAME, DB_CREATE|DB_PRIVATE|DB_INIT_MPOOL|DB_INIT_LOG|DB_INIT_TXN, 0);
     CKERR(r);
 
 #ifdef USE_TDB

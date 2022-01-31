@@ -92,7 +92,6 @@ PATENT RIGHTS GRANT:
 
 static const int envflags = DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE|DB_RECOVER;
 
-static const int my_lg_max  = 100;
 extern "C" int test_test4573_logtrim(void);
 static void * child_func(void * arg) {
     int r;
@@ -100,13 +99,12 @@ static void * child_func(void * arg) {
     DB_ENV *env;
     if(arg) return (void*) -1;
     r = db_env_create(&env, 0);                                                         CKERR(r);
-    r = env->set_lg_max(env, my_lg_max);                                                CKERR(r);
-    r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                      CKERR(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                      CKERR(r);
     DB_TXN *txn;
     r = env->txn_begin(env, NULL, &txn, 0);                                             CKERR(r);
     DB *db;
     r = db_create(&db, env, 0);                                                         CKERR(r);
-    r = db->open(db, txn, "test.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO);  CKERR(r);
+    r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO);  CKERR(r);
     r = txn->commit(txn, 0);                                                            CKERR(r);
 
     r = env->txn_begin(env, NULL, &txn, 0);                                             CKERR(r);
@@ -140,8 +138,7 @@ int test_test4573_logtrim(void) {
     pthread_t child;
     void * status;
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);                                 CKERR(r);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);                                 CKERR(r);
 
     const int N = 5;
 
@@ -154,12 +151,12 @@ int test_test4573_logtrim(void) {
     // Now run recovery to see what happens.
     DB_ENV *env;
     r = db_env_create(&env, 0);                                                         CKERR(r);
-    r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                      CKERR(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                      CKERR(r);
     DB_TXN *txn;
     r = env->txn_begin(env, NULL, &txn, 0);                                             CKERR(r);
     DB *db;
     r = db_create(&db, env, 0);                                                         CKERR(r);
-    r = db->open(db, txn, "test.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO);  CKERR(r);
+    r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO);  CKERR(r);
     for (int i=0; i<N; i++) {
 	DBT k;
 	DBT v;

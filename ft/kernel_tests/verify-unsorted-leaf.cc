@@ -137,8 +137,9 @@ test_dup_in_leaf(int do_verify) {
     int r;
 
     // cleanup
-    const char *fname = TOKU_TEST_FILENAME;
-    r = unlink(fname);
+    const char *fname = TOKU_TEST_FILENAME_DATA;
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
+    assert(r==0);
 
     // create a cachetable
     CACHETABLE ct = NULL;

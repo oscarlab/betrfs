@@ -105,7 +105,7 @@ PATENT RIGHTS GRANT:
 static const int envflags = DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_TXN|DB_PRIVATE;
 
 #define ROWSIZE 100
-static const char dbname[] = "data.db";
+static const char dbname[] = TOKU_TEST_DATA_DB_NAME;
 static unsigned long long n_rows;
 
 static DB_ENV *env = NULL;
@@ -120,15 +120,14 @@ static DB *db;
 
 static void create_db (uint64_t N) {
     n_rows = N;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    { int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0); }
     { int r = db_env_create(&env, 0);                                          CKERR(r); }
     env->set_errfile(env, stderr);
 #ifdef TOKUDB
     env->set_redzone(env, 0);
 #endif
     { int r = env->set_cachesize(env, 0, 400*4096, 1);                        CKERR(r); }
-    { int r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);       CKERR(r); }
+    { int r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);       CKERR(r); }
     DB_TXN *txn;
     { int r = env->txn_begin(env, NULL, &txn, 0);                              CKERR(r); }
     { int r = db_create(&db, env, 0);                                          CKERR(r); }

@@ -146,16 +146,15 @@ int test_test_lock_timeout_callback(void) {
     const int env_flags = DB_INIT_MPOOL | DB_CREATE | DB_THREAD |
         DB_INIT_LOCK | DB_INIT_LOG | DB_INIT_TXN | DB_PRIVATE;
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r = toku_os_mkdir(TOKU_TEST_FILENAME, 0755); CKERR(r);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0755); CKERR(r);
 
     r = db_env_create(&env, 0); CKERR(r);
-    r = env->open(env, TOKU_TEST_FILENAME, env_flags, 0755); CKERR(r);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, env_flags, 0755); CKERR(r);
     r = env->set_lock_timeout(env, 1000, nullptr);
     r = env->set_lock_timeout_callback(env, lock_not_granted);
 
     r = db_create(&db, env, 0); CKERR(r);
-    r = db->open(db, NULL, "test", NULL, DB_BTREE, DB_CREATE, 0777); CKERR(r);
+    r = db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_CREATE, 0777); CKERR(r);
 
     r = env->txn_begin(env, NULL, &txn1, DB_SERIALIZABLE); CKERR(r);
     r = env->txn_begin(env, NULL, &txn2, DB_SERIALIZABLE); CKERR(r);

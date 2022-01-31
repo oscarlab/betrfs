@@ -202,7 +202,6 @@ extern CACHEFILE f1;
 
 static void *move_numbers(void *arg) {
     while (run_test1) {
-	printf("move_number is working\n");
         int rand_key1 = 0;
         int rand_key2 = 0;
         int less;
@@ -318,7 +317,6 @@ static void *move_numbers(void *arg) {
 
 static void *read_random_numbers(void *arg) {
     while(run_test1) {
-	printf("the reader is working\n");
         int rand_key1 = random() % NUM_ELEMENTS;
         void* v1;
         long s1;
@@ -351,7 +349,6 @@ static void *checkpoints(void *arg) {
     // first verify that checkpointed_data is correct;
     //printf("%s:%d\n",__func__,__LINE__);
     while(run_test1) {
-        printf("checkpoints is working \n");
         int64_t sum = 0;
         for (int i = 0; i < NUM_ELEMENTS; i++) {
             sum += checkpointed_data[i];
@@ -424,8 +421,9 @@ cachetable_test (void) {
     int r;
     
     toku_cachetable_create(&ct, test_limit, ZERO_LSN, NULL_LOGGER);
-    const char *fname1 = TOKU_TEST_FILENAME;
-    unlink(fname1);
+    const char *fname1 = TOKU_TEST_FILENAME_DATA;
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
+
     r = toku_cachetable_openf(&f1, ct, fname1, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO); assert(r == 0);
 
     toku_cachefile_set_userdata(

@@ -97,27 +97,10 @@ PATENT RIGHTS GRANT:
 TOKULOGGER logger[NUM_LOGGERS];
 
 static void setup_logger(int which) {
-    char logname[10];
-    snprintf(logname, sizeof(logname), "log%d", which);
-    char dnamewhich[TOKU_PATH_MAX+1];
     int r;
-    toku_path_join(dnamewhich, 2, TOKU_TEST_FILENAME, logname);
-    r = toku_os_mkdir(dnamewhich, S_IRWXU);
- 
-   if (r!=0) {
-        int er = 1;
-        printf("file %s error (%d) %s\n", dnamewhich, er, strerror(er));
-        assert(r==0);
-    }
     r = toku_logger_create(&logger[which]);
     assert(r == 0);
-    r = toku_logger_set_lg_max(logger[which], LSIZE);
-    {
-	uint32_t n;
-	r = toku_logger_get_lg_max(logger[which], &n);
-	assert(n==LSIZE);
-    }
-    r = toku_logger_open(dnamewhich, logger[which]);
+    r = toku_logger_open(TOKU_TEST_ENV_DIR_NAME, logger[which]);
     assert(r == 0);
 }
 
@@ -157,14 +140,16 @@ int test_log7(void) {
     int loop;
     const int numloops = 100;
     for (loop = 0; loop < numloops; loop++) {
-        toku_os_recursive_delete(TOKU_TEST_FILENAME);
-        int r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU);
+        int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);
         assert_zero(r);
         for (i = 0; i < NUM_LOGGERS; i++) setup_logger(i);
         for (i = 0; i < NUM_LOGGERS; i++) play_with_logger(i);
         for (i = 0; i < NUM_LOGGERS; i++) tear_down_logger(i);
     }
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
+
+
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);
+    assert(r==0);
 
     return 0;
 }

@@ -104,12 +104,12 @@ test_autotxn (uint32_t env_flags, uint32_t db_flags) {
     DB_ENV *env;
     DB *db;
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
     r = db_env_create (&env, 0);           CKERR(r);
     env->set_errfile(env, stderr);
     r = env->set_flags(env, env_flags, 1); CKERR(r);
-    r = env->open(env, TOKU_TEST_FILENAME, 
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, 
                   DB_CREATE | DB_PRIVATE | DB_INIT_MPOOL | 
                   DB_INIT_LOG | DB_INIT_TXN | DB_INIT_LOCK, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r = db_create(&db, env, 0);
@@ -119,7 +119,7 @@ test_autotxn (uint32_t env_flags, uint32_t db_flags) {
 	if (env_flags==0 && db_flags==0) {
 	    r = env->txn_begin(env, 0, &x, 0); CKERR(r);
 	}
-	r = db->open(db, x, "numbers.db", 0, DB_BTREE, DB_CREATE | db_flags, 0);
+	r = db->open(db, x, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE | db_flags, 0);
 	if (env_flags==0 && db_flags==0) {
 	    r = x->commit(x, 0); CKERR(r);
 	}

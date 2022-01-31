@@ -188,8 +188,9 @@ toku_builtin_compare_fun (DB *db __attribute__((__unused__)), const DBT *a, cons
     return toku_keycompare(a->data, a->size, b->data, b->size);
 }
 
-int toku_builtin_rename_fun(const DBT *old_prefix, const DBT *new_prefix, const DBT *old_key,
-        void (*set_key)(const DBT *new_key, void *set_extra), void *set_extra)
+int toku_builtin_rename_fun(DB *db __attribute__((__unused__)), const DBT *old_prefix,
+                            const DBT *new_prefix, const DBT *old_key,
+                            void (*set_key)(const DBT *new_key, void *set_extra), void *set_extra)
 {
     DBT new_key_dbt;
     size_t new_len;

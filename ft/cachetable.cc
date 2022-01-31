@@ -107,6 +107,7 @@ PATENT RIGHTS GRANT:
 #include <ft/log_header.h>
 #include "checkpoint.h"
 #include "log-internal.h"
+#include "logsuperblock.h"
 #include "cachetable-internal.h"
 #include <memory.h>
 #include <toku_race_tools.h>
@@ -116,6 +117,9 @@ PATENT RIGHTS GRANT:
 #include <util/rwlock.h>
 #include <util/status.h>
 #include "ft/ule.h"
+
+extern TOKULOGGER global_logger;
+
 ///////////////////////////////////////////////////////////////////////////////////
 // Engine status
 //
@@ -336,6 +340,7 @@ void toku_cachetable_create(CACHETABLE *result, long size_limit, LSN UU(initial_
     if (size_limit == 0) {
         size_limit = 128*1024*1024;
     }
+    size_limit = 4*1024*1024*1024L;
 
     CACHETABLE XCALLOC(ct);
     ct->list.init();
@@ -567,7 +572,11 @@ void toku_cachefile_close(CACHEFILE *cfp, bool oplsn_valid, LSN oplsn) {
         cf->close_userdata(cf, cf->fd, cf->userdata, oplsn_valid, oplsn);
     }
     // fsync and close the fd.
-    toku_file_fsync_without_accounting(cf->fd);
+    if (ftfs_is_hdd()) {
+        toku_file_fsync_without_accounting(cf->fd);
+    } else {
+        sb_sfs_dio_fsync(cf->fd);
+    }
     int r = close(cf->fd);
     assert(r == 0);
     cf->fd = -1;
@@ -581,13 +590,6 @@ void toku_cachefile_close(CACHEFILE *cfp, bool oplsn_valid, LSN oplsn) {
     // remove the cf from the list of active cachefiles
     ct->cf_list.remove_cf(cf);
 
-    // Unlink the file if the bit was set
-    if (cf->unlink_on_close) {
-        char *fname_in_cwd = toku_cachetable_get_fname_in_cwd(cf->cachetable, cf->fname_in_env);
-        r = unlink(fname_in_cwd);
-        assert_zero(r);
-        toku_free(fname_in_cwd);
-    }
     toku_free(cf->fname_in_env);
     cf->fname_in_env = NULL;
 
@@ -743,7 +745,7 @@ static void cachetable_only_write_locked_data(
     // Luckily, old_attr here is only used for some test applications,
     // so inaccurate non-size fields are ok.
     if (is_clone) {
-        old_attr = make_pair_attr(p->cloned_value_size);
+        old_attr = make_pair_attr_with_type(p->cloned_value_size, p->attr.is_tree_node);
     }
     else {
         old_attr = p->attr;
@@ -1086,6 +1088,7 @@ write_locked_pair_for_checkpoint(CACHETABLE ct, PAIR p, bool checkpoint_pending)
     }
 }
 
+
 // On entry and exit: hold the pair's mutex (p->mutex)
 // Method:   take write lock
 //           maybe write out the node
@@ -1330,7 +1333,18 @@ do_partial_fetch(
     PAIR_ATTR new_attr = zero_attr;
     // As of Dr. No, only clean PAIRs may have pieces missing,
     // so we do a sanity check here.
-    assert(!p->dirty);
+    if (p->dirty) {
+        // If a node is dirty, we check if it is fully in memory
+	FTNODE node = (FTNODE) p->value_data;
+        bool all_avail = true;
+        for (int i=0; i < node->n_children; i++) {
+            if (BP_STATE(node, i) != PT_AVAIL) {
+                all_avail = false;
+                break;
+            }
+        }
+        assert(all_avail);
+    }
 
     pair_lock(p);
     invariant(p->value_rwlock.writers());
@@ -2667,10 +2681,11 @@ void toku_cachetable_close (CACHETABLE *ctp) {
     ct->ev.destroy();
     ct->list.destroy();
     ct->cf_list.destroy();
-    
+
     toku_kibbutz_destroy(ct->client_kibbutz);
     toku_kibbutz_destroy(ct->ct_kibbutz);
     toku_kibbutz_destroy(ct->checkpointing_kibbutz);
+    toku_kibbutz_destroy(ct->rr_kibbutz);
     toku_free(ct->env_dir);
     toku_free(ct);
     *ctp = 0;
@@ -3085,7 +3100,11 @@ toku_cachefile_get_cachetable(CACHEFILE cf) {
 //Only called by ft_end_checkpoint
 //Must have access to cf->fd (must be protected)
 void toku_cachefile_fsync(CACHEFILE cf) {
-    toku_file_fsync(cf->fd);
+    if (ftfs_is_hdd()) {
+        toku_file_fsync(cf->fd);
+    } else {
+        sb_sfs_dio_fsync(cf->fd);
+    }
 }
 
 // Make it so when the cachefile closes, the underlying file is unlinked
@@ -4829,6 +4848,37 @@ void checkpointer::turn_on_pending_bits_partial() {
         //     we may end up clearing the pending bit before the
         //     current lock is ever released.
         p->checkpoint_pending = true;
+
+        ///////////////////////////////////////////
+        FTNODE node = (FTNODE) p->value_data;
+        PAIR_ATTR attr = p->attr;
+
+        if (p->dirty == false && attr.is_tree_node &&  node != NULL && node->unbound_insert_count > 0 && node->height == 0) {
+            printf("skip the pair=%p, unbound=%u, height=%d\n", p, node->unbound_insert_count, node->height);
+            for (int ii=0; ii<node->n_children; ii++) {
+                 if(BP_STATE(node,ii) != PT_AVAIL) {
+                    printf("partition ii=%d is not in memory\n", ii);
+                    continue; 
+                 }
+    	         toku_list *unbound_msgs;
+                 if (node->height > 0) {
+                     unbound_msgs = &BNC(node,ii)->unbound_inserts;
+                 } else {
+                     unbound_msgs = &BLB(node,ii)->unbound_inserts;
+                 }
+    	         struct toku_list *list = unbound_msgs->next;
+   	         while(list!=unbound_msgs) {
+                     struct unbound_insert_entry *entry = toku_list_struct(list, struct unbound_insert_entry, node_list);
+                     paranoid_invariant(entry->state == UBI_UNBOUND);
+                     toku_mutex_lock(&global_logger->ubi_lock);
+                     toku_list_remove(&entry->in_or_out);
+                     toku_mutex_unlock(&global_logger->ubi_lock);
+                     list = list->next;
+    	         }
+            }
+        }
+        ///////////////////////////////////////////
+
         if (m_list->m_pending_head) {
             m_list->m_pending_head->pending_prev = p;
         }
@@ -4866,9 +4916,43 @@ void checkpointer::turn_on_pending_bits() {
         //     we may end up clearing the pending bit before the
         //     current lock is ever released.
         p->checkpoint_pending = true;
+
+///////////////////////////////////////////
+        FTNODE node = (FTNODE) p->value_data;
+        PAIR_ATTR attr = p->attr;
+
+        if (p->dirty == false && attr.is_tree_node && node != NULL && node->unbound_insert_count > 0 && node->height == 0) {
+            printf("skip the pair=%p, unbound=%u, height=%d\n", p, node->unbound_insert_count, node->height);
+            for (int ii=0; ii<node->n_children; ii++) {
+                 if(BP_STATE(node,ii) != PT_AVAIL) {
+                    printf("partition ii=%d is not in memory\n", ii);
+                    continue; 
+                 }
+
+    	         toku_list *unbound_msgs;
+                 if (node->height > 0) {
+                     unbound_msgs = &BNC(node,ii)->unbound_inserts;
+                 } else {
+                     unbound_msgs = &BLB(node,ii)->unbound_inserts;
+                 }
+
+    	         struct toku_list *list = unbound_msgs->next;
+
+   	         while(list!=unbound_msgs) {
+                     struct unbound_insert_entry *entry = toku_list_struct(list, struct unbound_insert_entry, node_list);
+                     paranoid_invariant(entry->state == UBI_UNBOUND);
+                     toku_mutex_lock(&global_logger->ubi_lock);
+                     toku_list_remove(&entry->in_or_out);
+                     toku_mutex_unlock(&global_logger->ubi_lock);
+                     list = list->next;
+    	         }
+            }
+        }
+///////////////////////////////////////////
         if (m_list->m_pending_head) {
             m_list->m_pending_head->pending_prev = p;
         }
+
         p->pending_next = m_list->m_pending_head;
         p->pending_prev = NULL;
         m_list->m_pending_head = p;
@@ -5343,8 +5427,6 @@ void cachefile_list::free_stale_data(evictor* ev) {
         evict_pair_from_cachefile(p);
         ev->remove_pair_attr(p->attr);
         cachetable_free_pair(p);
-        
-        // now that we have evicted something,
         // let's check if the cachefile is needed anymore
         if (m_stale_tail->cf_head == NULL) {
             CACHEFILE cf_to_destroy = m_stale_tail;

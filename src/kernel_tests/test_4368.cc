@@ -108,12 +108,12 @@ int test_test_4368(void) {
 
     pre_setup();
 
-  toku_os_recursive_delete(TOKU_TEST_FILENAME);
-  r=toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);       assert(r==0);
+  r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); 
+  assert(r==0);
   r=db_env_create(&env, 0); assert(r==0);
-  r=env->open(env, TOKU_TEST_FILENAME, DB_PRIVATE|DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
+  r=env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_PRIVATE|DB_CREATE|DB_INIT_LOG|DB_INIT_TXN, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);
   r=db_create(&db, env, 0); assert(r==0);
-  r = db->open(db, NULL, "test.db", 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert(r == 0);
+  r = db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert(r == 0);
 
   // call hot_optimize on an empty db. The empty db should have only a root node, which should invoke the bug
   uint64_t loops_run;

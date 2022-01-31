@@ -351,13 +351,13 @@ toku_db_open(DB * db, DB_TXN * txn, const char *fname, const char *dbname, DBTYP
         // create iname and make entry in directory
         uint64_t id1 = 0;
         uint64_t id2 = 0;
-
         if (txn) {
-            id1 = toku_txn_get_txnid(db_txn_struct_i(txn)->tokutxn).parent_id64;
-            id2 = toku_txn_get_txnid(db_txn_struct_i(txn)->tokutxn).child_id64;
+            id1 = 2;
+            id2 = 1;
         } else {
             id1 = toku_sync_fetch_and_add(&nontransactional_open_id, 1);
         }
+	printf("id1=%ld, id2=%ld\n", id1, id2);	
         create_iname_hint(dname, hint);
         iname = create_iname(db->dbenv, id1, id2, hint, NULL, -1);  // allocated memory for iname
         toku_fill_dbt(&iname_dbt, iname, strlen(iname) + 1);
@@ -369,7 +369,7 @@ toku_db_open(DB * db, DB_TXN * txn, const char *fname, const char *dbname, DBTYP
         uint32_t put_flags = 0 | ((is_db_hot_index) ? DB_PRELOCKED_WRITE : 0); 
         r = toku_db_put(db->dbenv->i->directory, txn, &dname_dbt, &iname_dbt, put_flags, true);  
     }
-
+    printf("iname=%s\n", iname);
     // we now have an iname
     if (r == 0) {
         r = toku_db_open_iname(db, txn, iname, flags, mode);
@@ -586,7 +586,13 @@ toku_db_change_descriptor(DB *db, DB_TXN* txn, const DBT* descriptor, uint32_t f
 
     // TODO: use toku_clone_dbt(&old-descriptor, db->descriptor);
     old_descriptor.size = db->descriptor->dbt.size;
-    old_descriptor.data = toku_memdup(db->descriptor->dbt.data, db->descriptor->dbt.size);
+    if (db->descriptor->dbt.size > 0) {
+        old_descriptor.data = toku_memdup(db->descriptor->dbt.data,
+                                          db->descriptor->dbt.size
+                                          );
+    } else {
+        old_descriptor.data = NULL; 
+    }
 
     toku_ft_change_descriptor(
         db->i->ft_handle, 
@@ -1071,6 +1077,7 @@ toku_db_create(DB ** db, DB_ENV * env, uint32_t flags) {
     result->del = autotxn_db_del;
     result->del_multi = autotxn_db_del_multi;
     result->rename = autotxn_db_rename;
+    result->clone = autotxn_db_clone;
     result->put = autotxn_db_put;
     result->seq_put = autotxn_db_seq_put;
     result->update = autotxn_db_update;

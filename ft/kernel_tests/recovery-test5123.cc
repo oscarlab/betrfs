@@ -99,9 +99,10 @@ PATENT RIGHTS GRANT:
 static void test_5123(void) {
     TOKULOGGER logger;
     CACHETABLE ct;
-    test_setup(TOKU_TEST_FILENAME, &logger, &ct);
-
     int r;
+    r=test_setup(TOKU_TEST_ENV_DIR_NAME, &logger, &ct);
+    assert(r==0);
+
     TXNID_PAIR one = {.parent_id64 = (TXNID)1, TXNID_NONE};
     TXNID_PAIR two = {.parent_id64 = (TXNID)2, TXNID_NONE};
     TXNID_PAIR three = {.parent_id64 = (TXNID)3, TXNID_NONE};
@@ -122,8 +123,8 @@ static void test_5123(void) {
     logger = NULL;
 
     // "Recover"
-    test_setup_and_recover(TOKU_TEST_FILENAME, &logger, &ct);
-
+    r=test_setup_and_recover(TOKU_TEST_ENV_DIR_NAME, &logger, &ct);
+    assert(r==0);
     shutdown_after_recovery(&logger, &ct);
 }
 

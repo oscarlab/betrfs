@@ -163,6 +163,7 @@ typedef struct pair_attr_s {
     long rollback_size; // size of PAIR is a rollback node, 0 otherwise, used only for engine status
     long cache_pressure_size; // amount PAIR contributes to cache pressure, is sum of buffer sizes and workdone counts
     bool is_valid;
+    bool is_tree_node; // This pair is for tree
 } PAIR_ATTR;
 
 static inline PAIR_ATTR make_pair_attr(long size) { 
@@ -172,10 +173,27 @@ static inline PAIR_ATTR make_pair_attr(long size) {
         .leaf_size = 0, 
         .rollback_size = 0, 
         .cache_pressure_size = 0,
-        .is_valid = true
+        .is_valid = true,
+        .is_tree_node = false
     }; 
     return result; 
 }
+
+static inline PAIR_ATTR make_pair_attr_with_type(long size, bool type) { 
+    PAIR_ATTR result={
+        .size = size, 
+        .nonleaf_size = 0, 
+        .leaf_size = 0, 
+        .rollback_size = 0, 
+        .cache_pressure_size = 0,
+        .is_valid = true,
+        .is_tree_node = type
+    }; 
+    return result; 
+}
+
+
+
 
 typedef struct {
     uint32_t len;
@@ -259,8 +277,6 @@ enum ft_msg_type {
     FT_COMMIT_MULTICAST_ALL = 18, // multicast that commits all leafentries (like FT_COMMIT_BROADCAST_ALL)
     FT_ABORT_MULTICAST_TXN = 19, // multicast that aborts
     FT_UNBOUND_INSERT = 20, //large sequentail IO (part of a stream of consecutive keys)
-// kupsert msg
-    FT_KUPSERT_BROADCAST_ALL = 21 //Kuprsert to all leafentries.
 };
 
 static inline ft_msg_type
@@ -353,7 +369,6 @@ ft_msg_type_applies_once(enum ft_msg_type type)
     case FT_COMMIT_MULTICAST_ALL:
     case FT_ABORT_MULTICAST_TXN:
     case FT_NONE:
-    case FT_KUPSERT_BROADCAST_ALL:
         ret_val = false;
         break;
     default:
@@ -386,7 +401,6 @@ ft_msg_type_applies_multiple(enum ft_msg_type type)
     case FT_DELETE_MULTICAST:
     case FT_COMMIT_MULTICAST_TXN:
     case FT_COMMIT_MULTICAST_ALL:
-    case FT_KUPSERT_BROADCAST_ALL:
     case FT_ABORT_MULTICAST_TXN:
         ret_val = true;
         break;
@@ -415,7 +429,6 @@ ft_msg_type_is_multicast(enum ft_msg_type type)
     case FT_OPTIMIZE:
     case FT_OPTIMIZE_FOR_UPGRADE:
     case FT_UPDATE_BROADCAST_ALL:
-    case FT_KUPSERT_BROADCAST_ALL:
         ret_val = false;
         break;
     case FT_DELETE_MULTICAST:
@@ -452,12 +465,6 @@ struct range_delete_extra {
 	enum  pacman_status pm_status;
 };
 
-struct kupsert_extra {
-	BYTESTRING old_prefix;
-	BYTESTRING new_prefix;
-//	DBT * forward(char * old_prefix, char * new_prefix, DBT * old_key);
-//	DBT * backward(char * old_prefix, char * new_prefix DBT * new_key);
-};
 /* tree commands */
 struct ft_msg {
     enum ft_msg_type type;
@@ -467,9 +474,8 @@ struct ft_msg {
     const DBT *        max_key;
     const DBT *        val;
     union {
-          struct kupsert_extra k_extra;
           struct range_delete_extra rd_extra; //for now just extra for range delete.
-    } u;   
+    } u;
 #if 0
       union {
         /* insert or delete */
@@ -500,8 +506,6 @@ static inline void ft_print_key(struct toku_db_key_operations *key_ops, const DB
 {
     key_ops->keyprint(key, true);
 }
-
-int ft_msg_kupsert_forward_transform(struct toku_db_key_operations *key_ops, FT_MSG k_msg, DBT *old_key, DBT *new_key);
 
 typedef int (*ft_compare_func)(DB *, const DBT *, const DBT *);
 typedef void (*setval_func)(const DBT *, void *);

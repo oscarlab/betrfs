@@ -106,13 +106,12 @@ extern "C" int test_test_db_open_notexist_reopen(void);
 int test_test_db_open_notexist_reopen(void) {
     pre_setup();
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    r=toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);                                                           assert(r==0);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);                                                           assert(r==0);
     r=db_env_create(&env, 0);                                                     CKERR(r);
-    r=env->open(env, TOKU_TEST_FILENAME, DB_PRIVATE|DB_INIT_MPOOL|DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO);                         CKERR(r);
+    r=env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_PRIVATE|DB_INIT_MPOOL|DB_CREATE|DB_INIT_LOG|DB_INIT_TXN, S_IRWXU+S_IRWXG+S_IRWXO);                         CKERR(r);
     r=db_create(&db, env, 0);                                                     CKERR(r);
-    r=db->open(db, NULL, "doesnotexist.db", "testdb", DB_BTREE, 0, 0666);         assert(r==ENOENT);
-    r=db->open(db, NULL, "doesnotexist.db", "testdb", DB_BTREE, DB_CREATE, 0666); CKERR(r);
+    r=db->open(db, NULL, "doesnotexist.db", NULL, DB_BTREE, 0, 0666);         assert(r==ENOENT);
+    r=db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_CREATE, 0666); CKERR(r);
     r=db->close(db, 0);                                                           CKERR(r);
     r=env->close(env, 0);                                                         CKERR(r);
     post_teardown();

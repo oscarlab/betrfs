@@ -138,7 +138,8 @@ doit (int ksize __attribute__((__unused__))) {
     int r;
     
     toku_cachetable_create(&ct, 16*1024, ZERO_LSN, NULL_LOGGER);
-    unlink(fname);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
+
     r = toku_open_ft_handle(fname, 1, &t, NODESIZE, NODESIZE, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
     assert(r==0);
 
@@ -226,7 +227,7 @@ test_inc_split (void) {
     initialize_dummymsn();
     int rinit = toku_ft_layer_init();
     CKERR(rinit); 
-    fname = TOKU_TEST_FILENAME;
+    fname = TOKU_TEST_FILENAME_DATA;
     doit(53);
 #if 0
     //Skip remaining tests. 

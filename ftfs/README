@@ -1,0 +1,5 @@
+This directory builds a stripped-down version of BetrFS
+that only exports the key-value API (no VFS layer).
+
+This version of the code is symlinked to the main file system,
+and intended only for unit testing the key-value store.

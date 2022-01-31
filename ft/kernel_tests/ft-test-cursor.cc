@@ -170,7 +170,7 @@ static void test_ft_cursor_first(int n) {
 
     if (verbose) printf("test_ft_cursor_first:%d\n", n);
 
-    unlink(fname);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
 
@@ -208,7 +208,7 @@ static void test_ft_cursor_last(int n) {
 
     if (verbose) printf("test_ft_cursor_last:%d\n", n);
 
-    unlink(fname);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
 
@@ -247,7 +247,7 @@ static void test_ft_cursor_first_last(int n) {
 
     if (verbose) printf("test_ft_cursor_first_last:%d\n", n);
 
-    unlink(fname);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
 
@@ -289,7 +289,7 @@ static void test_ft_cursor_rfirst(int n) {
 
     if (verbose) printf("test_ft_cursor_rfirst:%d\n", n);
 
-    unlink(fname);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
 
@@ -353,7 +353,7 @@ static void test_ft_cursor_walk(int n) {
 
     if (verbose) printf("test_ft_cursor_walk:%d\n", n);
 
-    unlink(fname);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
 
@@ -415,7 +415,7 @@ static void test_ft_cursor_rwalk(int n) {
 
     if (verbose) printf("test_ft_cursor_rwalk:%d\n", n);
 
-    unlink(fname);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
 
@@ -496,7 +496,7 @@ static void test_ft_cursor_rand(int n) {
 
     if (verbose) printf("test_ft_cursor_rand:%d\n", n);
 
-    unlink(fname);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
 
@@ -546,7 +546,7 @@ static void test_ft_cursor_split(int n) {
 
     if (verbose) printf("test_ft_cursor_split:%d\n", n);
 
-    unlink(fname);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
 
@@ -617,7 +617,7 @@ static void test_multiple_ft_cursors(int n) {
     FT_HANDLE brt;
     FT_CURSOR cursors[n];
 
-    unlink(fname);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
 
@@ -660,7 +660,7 @@ static void test_multiple_ft_cursor_walk(int n) {
     const int ncursors = n/cursor_gap;
     FT_CURSOR * cursors = (FT_CURSOR *) toku_xmalloc(sizeof(FT_CURSOR)*ncursors);
 
-    unlink(fname);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
     int nodesize = 1<<12;
     int h = log16(n);
@@ -736,7 +736,7 @@ static void test_ft_cursor_set(int n, int cursor_op) {
     FT_HANDLE brt;
     FT_CURSOR cursor=0;
 
-    unlink(fname);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
 
@@ -804,7 +804,7 @@ static void test_ft_cursor_set_range(int n) {
     FT_HANDLE brt;
     FT_CURSOR cursor=0;
 
-    unlink(fname);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
 
@@ -864,7 +864,7 @@ static void test_ft_cursor_delete(int n) {
     FT_HANDLE brt;
     FT_CURSOR cursor=0;
 
-    unlink(fname);
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
 
@@ -968,7 +968,7 @@ test_ft_test_cursor (void) {
     initialize_dummymsn();
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
-    fname = TOKU_TEST_FILENAME;
+    fname = TOKU_TEST_FILENAME_DATA;
     test_ft_cursor();
     toku_ft_layer_destroy();
     if (verbose) printf("test ok\n");

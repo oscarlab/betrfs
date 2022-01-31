@@ -794,7 +794,6 @@ msg_modify_ule(ULE ule, FT_MSG msg) {
         ule_do_implicit_promotions(ule, xids);
     }
     switch (type) {
-    case FT_KUPSERT_BROADCAST_ALL: break;
     case FT_NONE: break;
     case FT_INSERT_NO_OVERWRITE: {
         UXR old_innermost_uxr = ule_get_innermost_uxr(ule);

@@ -94,15 +94,14 @@ PATENT RIGHTS GRANT:
 
 #include "helper.h"
 
-static inline void
+static inline int
 test_setup(const char *envdir, TOKULOGGER *loggerp, CACHETABLE *ctp) {
     *loggerp = NULL;
     *ctp = NULL;
     int r;
     STR(envdir);
     //DBG;
-    toku_os_recursive_delete(envdir);
-    r = toku_os_mkdir(envdir, S_IRWXU);
+    r = toku_fs_reset(envdir, S_IRWXU);
     CKERR(r);
 
     r = toku_logger_create(loggerp);
@@ -129,6 +128,7 @@ test_setup(const char *envdir, TOKULOGGER *loggerp, CACHETABLE *ctp) {
     CHECKPOINTER cp = toku_cachetable_get_checkpointer(*ctp);
     r = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, STARTUP_CHECKPOINT, false);
     CKERR(r);
+    return 0;
 }
 
 static inline void
@@ -137,7 +137,7 @@ xid_lsn_keep_cachetable_callback (DB_ENV *env, CACHETABLE cachetable) {
     *ctp = cachetable;
 }
 
-static inline void test_setup_and_recover(const char *envdir, TOKULOGGER *loggerp, CACHETABLE *ctp) {
+static inline int test_setup_and_recover(const char *envdir, TOKULOGGER *loggerp, CACHETABLE *ctp) {
     int r;
     TOKULOGGER logger = NULL;
     CACHETABLE ct = NULL;
@@ -145,11 +145,14 @@ static inline void test_setup_and_recover(const char *envdir, TOKULOGGER *logger
     CKERR(r);
 
     DB_ENV *CAST_FROM_VOIDP(ctv, (void *) &ct);  // Use intermediate to avoid compiler warning.
+
+    struct toku_db_key_operations dummy_ftfs_key_ops;
+    memset(&dummy_ftfs_key_ops, 0, sizeof(dummy_ftfs_key_ops));
     r = tokudb_recover(ctv,
                        NULL_prepared_txn_callback,
                        xid_lsn_keep_cachetable_callback,
                        logger,
-                       envdir, envdir, 0, 0, 0, NULL, 0);
+                       envdir, envdir, &dummy_ftfs_key_ops, 0, 0, NULL, 0);
     CKERR(r);
     if (!toku_logger_is_open(logger)) {
         //Did not need recovery.
@@ -161,6 +164,7 @@ static inline void test_setup_and_recover(const char *envdir, TOKULOGGER *logger
     }
     *ctp = ct;
     *loggerp = logger;
+    return 0;
 }
 
 static inline void clean_shutdown(TOKULOGGER *loggerp, CACHETABLE *ctp) {

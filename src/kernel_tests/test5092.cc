@@ -97,9 +97,7 @@ static void clean_env (const char *envdir) {
 
     snprintf(cmd, len, "rm -rf %s", envdir);
 
-    toku_os_recursive_delete(envdir);    
-
-    CKERR(toku_os_mkdir(envdir, S_IRWXU+S_IRWXG+S_IRWXO));
+    CKERR(toku_fs_reset(envdir, S_IRWXU+S_IRWXG+S_IRWXO));
 }
 
 static void setup_env (DB_ENV **envp, const char *envdir) {
@@ -117,7 +115,7 @@ static void setup_env_and_prepare (DB_ENV **envp, const char *envdir, bool commi
     clean_env(envdir);
     setup_env(envp, envdir);
     CKERR(db_create(&db, *envp, 0));
-    CKERR(db->open(db, NULL, "foo.db", 0, DB_BTREE, DB_CREATE | DB_AUTO_COMMIT, S_IRWXU+S_IRWXG+S_IRWXO));
+    CKERR(db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE | DB_AUTO_COMMIT, S_IRWXU+S_IRWXG+S_IRWXO));
     CKERR((*envp)->txn_begin(*envp, 0, &txn, 0));
     uint8_t gid[DB_GID_SIZE];
     memset(gid, 0, DB_GID_SIZE);
@@ -132,7 +130,7 @@ int test_test5092(void) {
 
     pre_setup();
     DB_ENV *env;
-    setup_env_and_prepare(&env, TOKU_TEST_FILENAME, true);
+    setup_env_and_prepare(&env, TOKU_TEST_ENV_DIR_NAME, true);
     { int chk_r = env ->close(env,  0); CKERR(chk_r); }
 
 

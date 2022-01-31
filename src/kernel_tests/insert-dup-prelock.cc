@@ -198,7 +198,7 @@ int test_insert_dup_prelock(void) {
         return usage(argv[0]);
     }*/
 
-    const char *envdir = TOKU_TEST_FILENAME;
+    const char *envdir = TOKU_TEST_ENV_DIR_NAME;
     //char cmd[TOKU_PATH_MAX+sizeof("rm -rf ")];
     //snprintf(cmd, sizeof(cmd), "rm -rf %s", TOKU_TEST_FILENAME);
     //r = system(cmd);
@@ -207,8 +207,7 @@ int test_insert_dup_prelock(void) {
     //assert(r == 0);
 
 
-    toku_os_recursive_delete(envdir); 
-    r = toku_os_mkdir(envdir, 0777);
+    r = toku_fs_reset(envdir, 0777);
     CKERR(r);
 
 
@@ -217,7 +216,7 @@ int test_insert_dup_prelock(void) {
     assert(r == 0);
 
     DB *db;
-    r = db_init(env, "db0", &db);
+    r = db_init(env, TOKU_TEST_DATA_DB_NAME, &db);
     assert(r == 0);
 
     r = inserter(env, db, maxk, 0, 0);

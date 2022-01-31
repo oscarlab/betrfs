@@ -104,12 +104,16 @@ void frwlock::init(toku_mutex_t *const mutex) {
     m_current_writer_expensive = false;
     m_read_wait_expensive = false;
     fair_lock_init();
+    fair_lock_set_mutex(mutex);
 }
 
 void frwlock::deinit(void) {
     fair_lock_deinit();
 }
 
+void frwlock::fair_lock_set_mutex(toku_mutex_t* const mutex) {
+    toku_pthread_rwlock_set_mutex(&m_fair_lock, mutex);
+}
 void frwlock::fair_lock_init(void) {
 
     pthread_rwlockattr_t attr;
@@ -138,9 +142,7 @@ void frwlock::write_lock(bool expensive) {
     if(expensive) {
 	++m_num_expensive_want_write;
     }
-   toku_mutex_unlock(m_mutex);
     toku_pthread_rwlock_wrlock(&m_fair_lock);
-    toku_mutex_lock(m_mutex);
     // Now it's our turn.
     paranoid_invariant(m_num_want_write > 0);
     paranoid_invariant_zero(m_num_readers);
@@ -179,9 +181,7 @@ void frwlock::read_lock(void) {
 
         // Wait for our turn.
         ++m_num_want_read;
-	toku_mutex_unlock(m_mutex);
 	toku_pthread_rwlock_rdlock(&m_fair_lock);
-	toku_mutex_lock(m_mutex);
         paranoid_invariant(m_num_want_read > 0);
         paranoid_invariant_zero(m_num_writers);
 

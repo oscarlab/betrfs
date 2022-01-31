@@ -110,9 +110,8 @@ doit (void) {
     int r;
 
     //toku_cachetable_create(&ct, 16*1024, ZERO_LSN, nullptr);
-    //unlink(fname);
-    test_setup(TOKU_TEST_FILENAME, &logger, &ct);
-
+    r=test_setup(TOKU_TEST_ENV_DIR_NAME, &logger, &ct);
+    assert(r==0);
     r = toku_open_ft_handle(fname, 1, &t, NODESIZE, NODESIZE, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
     assert(r==0);
 
@@ -181,7 +180,7 @@ test_ubi_root_chkpt (void) {
     initialize_dummymsn();
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
-    fname = TOKU_TEST_FILENAME;
+    fname = TOKU_TEST_FILENAME_DATA;
     doit();
     toku_ft_layer_destroy();
     return 0;

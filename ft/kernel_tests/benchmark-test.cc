@@ -93,7 +93,7 @@ PATENT RIGHTS GRANT:
 /* Insert a bunch of stuff */
 #include <toku_time.h>
 static int verbose = 1;
-static const char *fname ="sinsert.ft";
+static const char *fname = NULL;
 
 enum { SERIAL_SPACING = 1<<6 };
 int64_t ITEMS_TO_INSERT_PER_ITERATION = 1<<20;
@@ -118,7 +118,7 @@ static FT_HANDLE t;
 
 static void setup (void) {
     int r;
-    unlink(fname);
+    r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
     r = toku_open_ft_handle(fname, 1, &t, nodesize, basementnodesize, compression_method, ct, NULL_TXN, toku_builtin_compare_fun); assert(r==0);
 }
@@ -214,7 +214,7 @@ test_benchmark_test (void) {
 
     verbose=1; //Default
     /* parse parameters */
-    fname = TOKU_TEST_FILENAME;
+    fname = TOKU_TEST_FILENAME_DATA;
 
     struct timeval t1,t2,t3;
     long long total_n_items = 1LL<<6; // 1LL<<16
@@ -242,7 +242,7 @@ test_benchmark_test (void) {
 	printf("Total time %" PRIu64 "s for %lld insertions = %lld/s\n", toku_tdiff(&t3, &t1), f*total_n_items, f*total_n_items/toku_tdiff(&t3, &t1));
         fflush(stdout);
     }
-    unlink(fname);
+    int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
 #ifdef __SUPPORT_DIRECT_IO
     printf("\n INFO: direct io is turned on \n");

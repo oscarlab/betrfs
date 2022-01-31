@@ -93,6 +93,8 @@ PATENT RIGHTS GRANT:
 
 // This must be first to make the 64-bit file mode work right in Linux
 #include "fttypes.h"
+#include "toku_assert.h"
+#include "ft-internal.h"
 
 typedef enum {
     FT_FLUSHER_CLEANER_TOTAL_NODES = 0,     // total number of nodes whose buffers are potentially flushed by cleaner thread
@@ -253,4 +255,59 @@ void toku_ft_flush_this_child(
     FTNODE node,
     FTNODE childnode,
     int childnum) ;
+
+// This next chunk is basically an elaborate assert, only for debugging
+static inline void printf_slice_key(DBT * UU(key), FT UU(ft)) {
+	bool is_meta = false;
+	char *path;
+        uint64_t blocknum;
+
+	if(!key || key->data == nullptr) {
+		toku_trace_printk(" null \n");
+		return;
+	}
+
+        if (ft->cf)
+            is_meta = sb_sfs_is_meta_db(toku_cachefile_get_fd(ft->cf));
+        path = (char *)key->data;
+        blocknum = *(uint64_t *)(path + key->size - sizeof(uint64_t));
+
+	if (is_meta)
+		toku_trace_printk(" meta key: [%s]\n", path);
+        else
+		toku_trace_printk(" data key: [%s:%lu]\n", path, blocknum);
+}
+
+#define VERIFY_ASSERTION(predicate, i, string) ({                                                                              \
+    if(!(predicate)) {                                                                                                         \
+        toku_trace_printk("%s:%d: Looking at child %d out of %d children of block %" PRId64 ": %s two keys:\n", __FILE__, __LINE__, i, node->n_children, node->thisnodename.b, string); \
+	printf_slice_key(&node->childkeys[i], ft);\
+	printf_slice_key(&node->childkeys[i+1], ft);\
+        assert(predicate);                    \
+    }})
+
+static inline int
+compare_pairs (FT ft, const DBT *a, const DBT *b) {
+    FAKE_DB(db, &ft->cmp_descriptor);
+    int cmp = ft->key_ops.keycmp(&db, a, b);
+    return cmp;
+}
+
+static inline void ft_verify_pivots(FTNODE UU(node), FT UU(ft)) {
+#ifdef FT_DEBUGGING
+    for (int i = 0; i < node->n_children-2; i++) {
+        int compare = compare_pairs(ft, &node->childkeys[i], &node->childkeys[i+1]);
+        if (node->height == 0) {
+            // DEP 9/16/20: It appears the ft code allows a leaf to have a repeated key
+            //              for basement nodes, indicating that a basement node is
+            //              empty.  See ft-serialize-test.cc:test_serialize_leaf_with_multiple_empty_basement_nodes()
+            //              for an example of this.  We may want to disallow this in the
+            //              future.
+            VERIFY_ASSERTION(compare <= 0, i, "Leaf node: Value is > the next value");
+        } else {
+            VERIFY_ASSERTION(compare < 0, i, "Interior node: value is >= the next value");
+        }
+    }
+#endif //FT_DEBUGGING
+}
 #endif // End of header guardian.

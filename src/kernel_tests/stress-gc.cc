@@ -104,13 +104,14 @@ int test_stress_gc(void) {
     }
     
     int r;
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
+
     DB_ENV *env;
     r = db_env_create(&env, 0);
     CKERR(r);
     env->set_errfile(env, stderr);
-    r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
     db_env_set_mvcc_garbage_collection_verification(1);
     int max_txns = 400;

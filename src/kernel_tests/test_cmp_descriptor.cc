@@ -172,12 +172,11 @@ static void open_env(void) {
     int r = env->set_key_ops(env, &key_ops); CKERR(r);
     //r = env->set_cachesize(env, 0, 500000, 1); CKERR(r);
     r = env->set_generate_row_callback_for_put(env, generate_row_for_put); CKERR(r);
-    { int chk_r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
+    { int chk_r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
 }
 
 static void setup (void) {
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    { int chk_r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
+    { int chk_r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
     open_env();
 }
 
@@ -259,7 +258,7 @@ static void run_test(void) {
             CKERR(r);
             r = db->set_readpagesize(db, 1024);
             CKERR(r);
-            { int chk_r = db->open(db, txn_create, "foo.db", NULL, DB_BTREE, DB_CREATE, 0666); CKERR(chk_r); }
+            { int chk_r = db->open(db, txn_create, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_CREATE, 0666); CKERR(chk_r); }
             assert(db->descriptor->dbt.size == 0);
             assert(db->cmp_descriptor->dbt.size == 0);
             { int chk_r = db->change_descriptor(db, txn_create, &orig_desc, DB_UPDATE_CMP_DESCRIPTOR); CKERR(chk_r); }
@@ -307,7 +306,7 @@ static void run_test(void) {
     // latest descriptor
     cmp_desc_is_four = false;
     { int chk_r = db_create(&db, env, 0); CKERR(chk_r); }
-    { int chk_r = db->open(db, NULL, "foo.db", NULL, DB_BTREE, DB_AUTO_COMMIT, 0666); CKERR(chk_r); }
+    { int chk_r = db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_AUTO_COMMIT, 0666); CKERR(chk_r); }
     assert_desc_eight(db);
     assert_cmp_desc_valid(db);
     do_inserts_and_queries(db);
@@ -315,7 +314,7 @@ static void run_test(void) {
 
     cmp_desc_is_four = true;
     { int chk_r = db_create(&db, env, 0); CKERR(chk_r); }
-    { int chk_r = db->open(db, NULL, "foo.db", NULL, DB_BTREE, DB_AUTO_COMMIT, 0666); CKERR(chk_r); }
+    { int chk_r = db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_AUTO_COMMIT, 0666); CKERR(chk_r); }
     IN_TXN_COMMIT(env, NULL, txn_1, 0, {
             { int chk_r = db->change_descriptor(db, txn_1, &orig_desc, DB_UPDATE_CMP_DESCRIPTOR); CKERR(chk_r); }
         assert_desc_four(db);

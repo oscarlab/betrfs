@@ -1705,6 +1705,8 @@ struct __db {
 	int  (*remove) __P((DB *, const char *, const char *, uint32_t));
 	int  (*rename) __P((DB *,
 		const char *, const char *, const char *, uint32_t));
+	int  (*clone) __P((DB *,
+		const char *, const char *, const char *, uint32_t));
 	int  (*set_alloc) __P((DB *, void *(*)(size_t),
 		void *(*)(void *, size_t), void (*)(void *)));
 	int  (*set_append_recno) __P((DB *, int (*)(DB *, DBT *, db_recno_t)));
@@ -2332,7 +2334,6 @@ struct __db_env {
 	int  (*lock_stat_print) __P((DB_ENV *, uint32_t));
 	int  (*lock_vec) __P((DB_ENV *,
 		uint32_t, uint32_t, DB_LOCKREQ *, int, DB_LOCKREQ **));
-	int  (*log_archive) __P((DB_ENV *, char **[], uint32_t));
 	int  (*log_cursor) __P((DB_ENV *, DB_LOGC **, uint32_t));
 	int  (*log_file) __P((DB_ENV *, const DB_LSN *, char *, size_t));
 	int  (*log_flush) __P((DB_ENV *, const DB_LSN *));

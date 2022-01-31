@@ -13,13 +13,6 @@
 
 #define FTFS_MS_FLAGS (MS_KERNMOUNT) //| MS_PRIVATE
 
-#define SB_CHECK_CONTEXT						\
-	if (!in_southbound_context(current)) {				\
-		ftfs_debug_break();					\
-		ftfs_error(__func__, "called from non-southbound context!"); \
-		BUG();							\
-	}
-
 #define SOUTHBOUND_VARS				\
 	struct ftfs_southbound southbound;	\
 	struct task_struct *sb_tsk;		\
@@ -29,7 +22,7 @@
 	sb_tsk = current;				\
 	save_task_southbound(sb_tsk, &southbound);	\
 	attach_ftfs_southbound(sb_tsk);			\
-	ftfs_override_creds(&curr_cred);
+	sb_override_creds(&curr_cred);
 
 #define SOUTHBOUND_RESTORE				\
 	detach_ftfs_southbound(sb_tsk);			\
@@ -86,14 +79,14 @@ struct mount {
 
 int resolve_ftfs_southbound_symbols(void);
 
-void ftfs_override_creds(const struct cred **saved);
+void sb_override_creds(const struct cred **saved);
 int attach_ftfs_southbound(struct task_struct *tsk);
 void detach_ftfs_southbound(struct task_struct *tsk);
 int init_ftfs_southbound(void);
 void put_ftfs_southbound(void);
 
-int ftfs_private_mount(const char *dev_name, const char *fstype, void *data);
-int ftfs_private_umount(void);
+int sb_private_mount(const char *dev_name, const char *fstype, void *data);
+int sb_private_umount(void);
 
 int in_southbound_context(struct task_struct *tsk);
 
@@ -101,5 +94,4 @@ void save_task_southbound(struct task_struct *tsk,
 			struct ftfs_southbound *save);
 void restore_task_southbound(struct task_struct *tsk,
 			struct ftfs_southbound *saved);
-int ftfs_super_statfs(struct dentry *, struct kstatfs *);
 #endif /* _FTFS_SOUTHBOUND_H */

@@ -144,13 +144,13 @@ test_reverse_compare (int n) {
     if (verbose) printf("test_reverse_compare:%d\n", n);
 
     DB_TXN * const null_txn = 0;
-    const char * const fname = "reverse.compare.db";
+    const char * const fname = TOKU_TEST_DATA_DB_NAME;
 
     int r;
     int i;
 
-    toku_os_recursive_delete(TOKU_TEST_FILENAME);
-    toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
+    assert(r==0);
 
     /* create the dup database file */
     DB_ENV *env;
@@ -162,7 +162,7 @@ test_reverse_compare (int n) {
     r = env->set_key_ops(env, &key_ops);
     CKERR(r);
 #endif
-    r = env->open(env, TOKU_TEST_FILENAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL, 0); assert(r == 0);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL+DB_INIT_LOG+DB_INIT_TXN, 0); assert(r == 0);
 
     DB *db;
     r = db_create(&db, env, 0);
@@ -173,7 +173,7 @@ test_reverse_compare (int n) {
     r = db->set_bt_compare(db, reverse_compare);
     CKERR(r);
 #endif
-    r = db->open(db, null_txn, fname, "main", DB_BTREE, DB_CREATE, 0666);
+    r = db->open(db, null_txn, fname, NULL, DB_BTREE, DB_CREATE, 0666);
     CKERR(r);
 
     /* insert n unique keys {0, 1,  n-1} */
@@ -199,7 +199,7 @@ test_reverse_compare (int n) {
     r = db->set_bt_compare(db, reverse_compare);
     CKERR(r);
 #endif
-    r = db->open(db, null_txn, fname, "main", DB_BTREE, 0, 0666);
+    r = db->open(db, null_txn, fname, NULL, DB_BTREE, 0, 0666);
     CKERR(r);
 
     /* insert n unique keys {n, n+1,  2*n-1} */
@@ -214,9 +214,12 @@ test_reverse_compare (int n) {
         CKERR(r);
     }
 
+    DB_TXN *txn = NULL;
+    r = env->txn_begin(env, NULL, &txn, 0); assert_zero(r);
+
     /* verify the sort order with a cursor */
     DBC *cursor;
-    r = db->cursor(db, null_txn, &cursor, 0);
+    r = db->cursor(db, txn, &cursor, 0);
     CKERR(r);
 
     //for (i=0; i<2*n; i++) 
@@ -226,6 +229,7 @@ test_reverse_compare (int n) {
     r = cursor->c_close(cursor);
     CKERR(r);
 
+    r = txn->commit(txn, 0); assert_zero(r);
     r = db->close(db, 0); CKERR(r);
     r = env->close(env, 0); CKERR(r);
 }

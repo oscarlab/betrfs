@@ -103,7 +103,7 @@ test_logcursor_bw (void) {
 
     // verify the log backwards
     TOKULOGCURSOR lc = NULL;
-    r = toku_logcursor_create(&lc, ".");
+    r = toku_logcursor_create(&lc, TOKU_TEST_ENV_DIR_NAME);
     assert(r == 0 && lc != NULL);
 
     int n = 0;

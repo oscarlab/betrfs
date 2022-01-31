@@ -48,3 +48,5 @@ cscope.*
 
 #log files
 *.log
+*.csv
+*.cmd

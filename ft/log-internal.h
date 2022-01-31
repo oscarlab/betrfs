@@ -115,7 +115,8 @@ using namespace toku;
 // Locking for the logger
 //  For most purposes we use the big ydb lock.
 // To log: grab the buf lock
-//  If the buf would overflow, then grab the file lock, swap file&buf, release buf lock, write the file, write the entry, release the file lock
+//  If the buf would overflow, then grab the file lock, swap file&buf,
+//  release buf lock, write the file, write the entry, release the file lock
 //  else append to buf & release lock
 #define LOGGER_MIN_BUF_SIZE (1<<26)
 struct mylock {
@@ -143,7 +144,7 @@ struct logbuf {
 };
 
 struct unbound_insert_entry {
-    DBT * key; 
+    DBT * key;
     struct toku_list in_or_out; // either logger->ubi_in or logger->ubi_out
     struct toku_list node_list; // this is actually in the
                                 // ftnode_nonleaf_childinfo or
@@ -202,7 +203,7 @@ int unbound_entry_is_bound(struct unbound_insert_entry *entry) {
 }
 
 
-// 16MB log buffers, so how many hash entries for unbound inserts?  
+// 16MB log buffers, so how many hash entries for unbound inserts?
 #define UNBOUND_HASH_BUCKETS (2<<12)
 #define UBI_WHICH_BUCKET(actual_msn) ((actual_msn) % (UNBOUND_HASH_BUCKETS))
 
@@ -210,30 +211,39 @@ struct tokulogger {
     struct mylock  input_lock;
 
     toku_cond_t input_swapped;
-    toku_mutex_t output_condition_lock; // if you need both this lock and input_lock, acquire the output_lock first, then input_lock. More typical is to get the output_is_available condition to be false, and then acquire the input_lock.
+    toku_mutex_t output_condition_lock; // if you need both this lock and input_lock,
+                                        // acquire the output_lock first, then input_lock.
+                                        // More typical is to get the output_is_available condition to be false,
+                                        // and then acquire the input_lock.
     toku_cond_t  output_condition;      //
-    bool output_is_available;           // this is part of the predicate for the output condition.  It's true if no thread is modifying the output (either doing an fsync or otherwise fiddling with the output).
+    bool output_is_available;           // this is part of the predicate for the output condition.
+                                        // It's true if no thread is modifying the output (either doing an
+                                        // fsync or otherwise fiddling with the output).
 
     bool is_open;
+    bool new_env; // YZJ: Detect whether the log file is empty or not.
+                  // If it is empty, we create new environment in env->open().
     bool write_log_files;
     bool trim_log_files; // for test purposes
     char *directory;  // file system directory
     DIR *dir; // descriptor for directory
     int fd;
     CACHETABLE ct;
-    int lg_max; // The size of the single file in the log.  Default is 100MB in TokuDB
+    uint64_t lg_max; // The size of the single file in the log.  Default is 100MB in TokuDB
 
     // To access these, you must have the input lock
     LSN lsn; // the next available lsn
     struct logbuf inbuf; // data being accumulated for the write
-    
+
     // To access these, you must have the output condition lock.
     LSN written_lsn; // the last lsn written
-    LSN fsynced_lsn; // What is the LSN of the highest fsynced log entry  (accessed only while holding the output lock, and updated only when the output lock and output permission are held)
+    LSN fsynced_lsn; // What is the LSN of the highest fsynced log entry
+                     // accessed only while holding the output lock,
+                     // and updated only when the output lock and output permission are held)
     LSN last_completed_checkpoint_lsn;     // What is the LSN of the most recent completed checkpoint.
     long long next_log_file_number;
     struct logbuf outbuf; // data being written to the file
-    int  n_in_file; // The amount of data in the current file
+    uint32_t  n_in_file; // The amount of data in the current file
     toku_mutex_t ubi_lock;
     uint64_t n_unbound_inserts;
     LSN unbound_insert_lsn; // when we append sync_unbound_insert
@@ -257,13 +267,13 @@ struct tokulogger {
     tokutime_t time_spent_writing_to_disk; // how much tokutime did we spend writing to disk?
 
     void (*remove_finalize_callback) (DICTIONARY_ID, void*);  // ydb-level callback to be called when a transaction that ...
-    void * remove_finalize_callback_extra;                    // ... deletes a file is committed or when one that creates a file is aborted.
+    void * remove_finalize_callback_extra;                    // ... deletes a file is committed or
+                                                              // when one that creates a file is aborted.
     CACHEFILE rollback_cachefile;
     rollback_log_node_cache rollback_cache;
     TXN_MANAGER txn_manager;
 };
 
-int toku_logger_find_next_unused_log_file(const char *directory, long long *result);
 int toku_logger_find_logfiles (const char *directory, char ***resultp, int *n_logfiles);
 
 struct txn_roll_info {
@@ -288,11 +298,11 @@ struct txn_roll_info {
     // that makes up the rollback log chain
     BLOCKNUM spilled_rollback_head;
     // the spilled rollback is the block number of the last rollback node that
-    // makes up the rollback log chain. 
+    // makes up the rollback log chain.
     BLOCKNUM spilled_rollback_tail;
     // the current rollback node block number we may use. if this is ROLLBACK_NONE,
     // then we need to create one and set it here before using it.
-    BLOCKNUM current_rollback; 
+    BLOCKNUM current_rollback;
 };
 
 struct tokutxn {
@@ -312,8 +322,8 @@ struct tokutxn {
     // other threads from trying to read this value while another
     // thread commits/aborts the child
     TOKUTXN child;
-    // statically allocated child manager, if this 
-    // txn is a root txn, this manager will be used and set to 
+    // statically allocated child manager, if this
+    // txn is a root txn, this manager will be used and set to
     // child_manager for this transaction and all of its children
     txn_child_manager child_manager_s;
     // child manager for this transaction, all of its children,
@@ -348,8 +358,8 @@ struct tokutxn {
     struct txn_roll_info roll_info; // Info used to manage rollback entries
 
     // mutex that protects the transition of the state variable
-    // the rest of the variables are used by the txn code and 
-    // hot indexing to ensure that when hot indexing is processing a 
+    // the rest of the variables are used by the txn code and
+    // hot indexing to ensure that when hot indexing is processing a
     // leafentry, a TOKUTXN cannot dissappear or change state out from
     // underneath it
     toku_mutex_t state_lock;

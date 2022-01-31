@@ -4,19 +4,17 @@
 #ifndef _FTFS_H
 #define _FTFS_H
 
+/* This file defines several internal functions and parameters
+ * for the module, including kernel linking, hooks for initializing
+ * the kv store, and internal resource management.
+ */
 
 #include <linux/sched.h>
 #include <linux/nsproxy.h>
 #include <linux/mount.h>
 #include <linux/mnt_namespace.h>
 #include <linux/mm.h>
-
-#define TOKU_PROC_NAME "toku_test"
-#define TOKU_MEMLEAK_PROC_NAME "toku_memleak"
-
-extern int run_test(char *);
-extern int thread_run_test(char *);
-extern char *test_filename;
+#include <linux/version.h>
 
 extern size_t db_cachesize;
 //#define FTFS_SCALE_CACHE(totalram_pages) (totalram_pages / 8) //1/4
@@ -72,10 +70,12 @@ static inline int init_ft_index(void)
 
 extern void toku_ydb_destroy(void);
 static inline void destroy_ft_index(void)
-{ 
+{
     toku_ydb_destroy();
 }
 
 void init_mem_trace(void);
+
+#define FTFS_SUPER_MAGIC 0XF7F5
 
 #endif /* _FTFS_H */

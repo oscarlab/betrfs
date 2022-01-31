@@ -1,4 +1,0 @@
-MOUNTPOINT=mnt
-USER=bill
-REPO=home/$USER/ft-index/
-VIRTUALDISK=linuxdisk.raw
