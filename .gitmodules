@@ -1,3 +1,0 @@
-[submodule "third_party/xz-4.999.9beta"]
-	path = third_party/xz-4.999.9beta
-	url = https://git.tukaani.org/xz.git

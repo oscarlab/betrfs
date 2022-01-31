@@ -17,7 +17,7 @@ The BetrFS prototype (*) fits into the Linux storage stack as follows:
     |______________|
     ________________
     |              |
-    |     ext4     |
+    |   simplefs   |
     |______________|
 
 
@@ -25,12 +25,11 @@ Like any other file system, BetrFS is registered with the VFS as a
 file system during module load. But BetrFS has a stacked file system
 design. When you mount BetrFS, it loads a B^e-tree index from a
 separate kernel file system (the "southbound" file system, here
-ext4). For this reason, you must specify (at BetrFS mount time) the
+simplefs). For this reason, you must specify (at BetrFS mount time) the
 device and file system type where the B^e-tree index image
-resides. This will be explained in detail in the 'Mounting BetrFS'
-section below.
+resides. This will be explained in detail in the
+[Mounting BetrFS](#Mounting-BetrFS) section below.
 
-NOTE: The BetrFS prototype currently only works on the 3.11.10 kernel.
 
 Repository layout
 -----------------
@@ -39,45 +38,20 @@ BetrFS code is contained in the filesystem/ directory. Its primarily
 role is to implement the BetrFS schema and convert VFS operations into
 B^e-tree operations. The BetrFS kernel module code can be found in
 filesystem/ftfs_module.c, and the primary files that deal with the
-VFS->B^e-tree mapping are filesystem/ftfs_super.c and
-filesystem/ftfs_bstore.c
+VFS->B^e-tree mapping are filesystem/nb_super.c and
+filesystem/nb_bstore.c
 
 The B^e-tree implementation in BetrFS is from the open-source fractal
 tree index provided by TokuTek (TokuDB). There have been slight
 modifications to TokuDB in order for the kernel port to be successful,
 but the TokuDB code has remained largely unchanged. The ft/, src/,
-portability/, util(s)/, include/, locktree/, and cmake_modules/
+portability/, util/, include/, locktree/, and cmake_modules/
 directories contain most of the TokuDB code and configuration files.
 
 To port the B^e-tree to the kernel, we reimplemented the userspace
 libraries used by TokuDB that were not compatible with the
-kernel. These can be found in the filesystem/ directory
-```
-  ftfs_pthreads.*
-  ftfs_files.*
-  ftfs_stat.*
-  ftfs_stdio.*
-  ftfs_error.*
-  ftfs_assert.*
-  ftfs_compress.*
-  ftfs_random.*
-  toku_linkage.c
-  ...
-```
-We import TokuDB as a binary blob, and overwrite TokuDB symbols using
-symbols from these files.
-
-The linux-3.11.10 directory contains the kernel required to run
-BetrFS. A modified kernel is required for a few reasons:
-  1. At the time of writing BetrFS, the kernel did not support direct
-  IO from non-userspace buffers.
-  2. TokuDB relies on errno for error handling. Instead of modifying
-  all of the TokuDB code to explicitly pass error numbers, we
-  augmented the Linux 'struct task_struct' with an error number
-  field. This field is unused by code outside of BetrFS.
-  3. To interface with ext4, we maintain a private file table and file
-  system namespace for TokuDB files. We had to export a few functions
-  that were already in the kernel, but unavailable for our uses.
+kernel. Refer to the [README in filesystem/](./filesystem) for more
+information.
 
 The ftfs/ directory contains a simple module that can be used to run
 all of the TokuDB regression tests within the kernel. It is not
@@ -88,112 +62,45 @@ the data structures.
 Compiling the code
 ------------------
 
-Apply the provided patch (linux-3.11.10.diff) to the 3.11.10 Linux kernel
-available from https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.11.10.tar.bz2. Please remember to turn off Transparent Huge Pages when configuring the kernel (disable option CONFIG_TRANSPARENT_HUGEPAGE_ALWAYS). You may set it to madvise or never. The MongoDB project has a <a href="https://docs.mongodb.org/manual/tutorial/transparent-huge-pages/">good guide </a>on doing this with an init script if you don't want to mess with your kernel config.
+We recommend using Ubuntu 18.04 (bionic), as this is the distribution on
+which BetrFS is currently tested and developed.
 
-There are many guides on how to do this, so please read one if you have
-never compiled your own kernel. The build scripts assume you will download 
-and build the kernel in the top directory of the betrfs repository.
-An abbreviated version:
-
-	cd betrfs
-	wget https://www.kernel.org/pub/linux/kernel/v3.x/linux-3.11.10.tar.gz
-	tar -xvf linux-3.11.10.tar.gz
-	cd linux-3.11.10
-	cp ../pthread_union_check.py ./
-	patch -p1 < ../linux-3.11.10.diff
-	make oldconfig
-	(double check that CONFIG_TRANSPARENT_HUGEPAGE_ALWAYS is not set in .config)
-	./pthread_union_check.py
-	make
-	make modules
-	make modules_install
-	make install
-
+First you must install a 4.19.99 Linux kernel. A stock kernel is fine,
+and other versions may work, but they are not tested.
 
 The next step is to build TokuDB. TokuDB uses cmake, and it is very finicky.
-You must have the right versions of gcc, and g++: gcc-4.7, g++-4.7.
-You must also have valgrind and zlib.
-(To build TokuDB on ubuntu 13.10 server, we found that we needed the
-following packages: zlib1g-dev, build-essential, gcc-4.7, g++-4.7,
-cmake, valgrind, cscope. Some of these requirements may be relaxed by
-changing settings in the cmake_modules/ directory, but we will not
-explore this in depth.)
+You must have the right versions of gcc, and g++: gcc-7, g++-7.
 
-For those unfamiliar with cmake, I would suggest an out-of-source
-build. The following commands should work:
+In addition, you must install valgrind and zlib. On our system,
 
-    mkdir build  # in the top-level directory of the betrfs repository
-    cd build
-    CC=gcc-4.7 CXX=g++-4.7 cmake \
-      -D CMAKE_BUILD_TYPE=$TYPE \
-      -D USE_BDB=OFF \
-      -D USE_TDB=ON \
-      -D BUILD_TESTING=OFF \
-      -D CMAKE_INSTALL_PREFIX=../ft-install/ \
-      -D BUILD_FOR_LINUX_KERNEL_MODULE=ON \
-      ..
+    apt-get install gcc-7 g++-7 valgrind zlib1g-dev
 
-    cmake --build . --target install
+To build, simply run the build.sh script:
 
-After building TokuDB, you can finally build the actual BetrFS code.
+    ./build.sh
 
-      cd filesystem/
-      make
+This builds for production/benchmarking by default.  To compile
+in additional debugging tools and assertions, which may cause
+the code to run slower, you may pass in the `-d` argument:
 
-Mounting the file system
+    ./build.sh -d
+
+
+Mounting BetrFS
 ------------------------
 You need a couple of things:
 
   1. A device formatted with an existing file system to use as your
-  "southbound" file system (we have been using ext4, but there is no
+  "southbound" file system (we have been using simplefs, but there is no
   reason it can't be a different file system).
 
-  2. The southbound file system must also be set up with some files
-  and directories that TokuDB expects at certain places, including:
-  ```
-    db/
-    /dev/null
-    /tmp
-  ```
-
-  3. The compiled module from the filesystem/ folder
+  2. The compiled modules from the simplefs/ and filesystem/ directories.
 
   4. A "dummy" device to pass to the mount command (can be an empty
   file set up as a loop device). This is neither read from or written
   to; it is there solely to pass to the mount command.
 
-  5. zlib (on our system, apt-get install zlib1g-dev)
-
-This example code was used to set up the file system on a setup where
-we had a second disk with a partition for our "southbound" file system
-at /dev/sdb1. Change the parameters to fit your needs.
-```
-  USER=betrfs
-  REPO=/home/$USER/ft-index
-  MODDIR=filesystem
-  MODULE=ftfs.ko
-  MOUNTPOINT=mnt
-  SBDISK=/dev/sdb1
-
-  sudo mkfs.ext4 $SBDISK
-  mkdir -p $MOUNTPOINT
-  mount -t ext4 $SBDISK $MOUNTPOINT
-  cd $MOUNTPOINT;
-  rm -rf *;
-  mkdir db;
-  mkdir dev;
-  touch dev/null;
-  mkdir tmp;
-  chmod 1777 tmp;
-  cd -;
-  umount $MOUNTPOINT
-
-  cd $REPO/$MODDIR; make; cd -;
-  sudo modprobe zlib
-  sudo insmod $REPO/$MODDIR/$MODULE sb_dev=$SBDISK sb_fstype=ext4
-
-  touch dummy.dev
-  sudo losetup /dev/loop0 dummy.dev
-  sudo mount -t ftfs /dev/loop0 $MOUNTPOINT
-```
+Refer to [qemu-utils/mount-betrfs.sh](qemu-utils/mount-betrfs.sh) for the most
+up-to-date commands of how to mount BetrFS. In that example, BetrFS is mounted
+on `/dev/hdb`. Don't forget to change the parameters at the beginning of the script
+to fit your system.

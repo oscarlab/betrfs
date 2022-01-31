@@ -38,8 +38,6 @@ third_party/jemalloc
 
 # build dir
 build
-ft-install
-linux-3.11.10
 
 #cscope
 cscope.*
@@ -47,7 +45,6 @@ cscope.*
 # backups
 *~
 *.swp
-*#*
 
 #log files
 *.log

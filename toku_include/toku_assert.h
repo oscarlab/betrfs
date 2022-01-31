@@ -205,7 +205,7 @@ extern void (*do_assert_hook)(void); // Set this to a function you want called a
 #if TOKU_DEBUG_PARANOID
 #define paranoid_invariant(a) assert(a)
 #define paranoid_invariant_null(a) assert_null(a)
-#define paranoid_invariant_notnull(a) assert(a)
+#define paranoid_invariant_notnull(a) assert(a!=nullptr)
 #define paranoid_invariant_zero(a) assert_zero(a)
 #else // !TOKU_DEBUG_PARANOID
 #define paranoid_invariant(a) ((void) 0)

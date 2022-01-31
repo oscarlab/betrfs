@@ -136,8 +136,6 @@ test_serialize_leaf(int valsize, int nelts, double entropy) {
     XCALLOC(sn);
 
     sn->max_msn_applied_to_node_on_disk.msn = 0;
-    toku_init_dbt(&sn->bound_l);
-    toku_init_dbt(&sn->bound_r);
     sn->flags = 0x11223344;
     sn->thisnodename.b = 20;
     sn->layout_version = FT_LAYOUT_VERSION;
@@ -152,7 +150,6 @@ test_serialize_leaf(int valsize, int nelts, double entropy) {
     for (int i = 0; i < sn->n_children; ++i) {
         BP_STATE(sn,i) = PT_AVAIL;
         set_BLB(sn, i, toku_create_empty_bn());
-        toku_init_dbt(&BP_LIFT(sn, i));
     }
     int nperbn = nelts / sn->n_children;
     for (int ck = 0; ck < sn->n_children; ++ck) {
@@ -192,7 +189,7 @@ test_serialize_leaf(int valsize, int nelts, double entropy) {
                  128*1024,
                  TOKU_DEFAULT_COMPRESSION_METHOD);
     brt->ft = brt_h;
-
+    
     brt_h->key_ops.keycmp = long_key_cmp;
     toku_blocktable_create_new(&brt_h->blocktable);
     { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
@@ -264,8 +261,6 @@ test_serialize_nonleaf(int valsize, int nelts, double entropy) {
 
     //    source_ft.fd=fd;
     sn.max_msn_applied_to_node_on_disk.msn = 0;
-    toku_init_dbt(&sn.bound_l);
-    toku_init_dbt(&sn.bound_r);
     sn.flags = 0x11223344;
     sn.thisnodename.b = 20;
     sn.layout_version = FT_LAYOUT_VERSION;
@@ -280,8 +275,7 @@ test_serialize_nonleaf(int valsize, int nelts, double entropy) {
     for (int i = 0; i < sn.n_children; ++i) {
         BP_BLOCKNUM(&sn, i).b = 30 + (i*5);
         BP_STATE(&sn,i) = PT_AVAIL;
-        set_BNC(&sn, i, toku_create_empty_nl());
-        toku_init_dbt(&BP_LIFT(&sn, i));
+        set_BNC(&sn, i, toku_create_empty_nl(nullptr));
     }
     //Create XIDS
     XIDS xids_0 = xids_get_root_xids();
@@ -330,7 +324,7 @@ test_serialize_nonleaf(int valsize, int nelts, double entropy) {
                  128*1024,
                  TOKU_DEFAULT_COMPRESSION_METHOD);
     brt->ft = brt_h;
-
+    
     brt_h->key_ops.keycmp = long_key_cmp;
     toku_blocktable_create_new(&brt_h->blocktable);
     { int r_truncate = ftruncate(fd, 0); CKERR(r_truncate); }
@@ -408,7 +402,8 @@ test_ft_serialize_benchmark (void) {
     initialize_dummymsn();
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
-
+ 
+   
     initialize_dummymsn();
     valsize = 100;
     nelts = 10000;

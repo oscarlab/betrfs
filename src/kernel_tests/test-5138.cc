@@ -115,7 +115,7 @@ int test_test_5138(void) {
     CKERR(r);
     r = db_create(&db, env, 0);
     CKERR(r);
-    r = db->set_compression_method(db, TOKU_LZMA_METHOD);
+    r = db->set_compression_method(db, TOKU_QUICKLZ_METHOD);
     CKERR(r);
     r = db->open(db, txn, "foo.db", NULL, DB_BTREE, DB_CREATE, 0666);
     CKERR(r);

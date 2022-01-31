@@ -2,7 +2,6 @@
 set -x
 
 . ../../fs-info.sh
-. ../../.ismounted
 
 support=${FT_HOMEDIR}/benchmarks/support-files
 
@@ -19,8 +18,9 @@ if [ -e $mntpnt/$clone_repo ]; then
     exit 17
 fi
 
-sudo -E ../../clear-fs-caches.sh
+sudo ../../clear-fs-caches.sh
 
 cd $mntpnt;
 /usr/bin/time -p git clone $support/$clone_repo
 cd -
+

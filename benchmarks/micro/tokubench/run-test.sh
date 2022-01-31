@@ -1,4 +1,4 @@
-cd ~/ft-index/benchmarks/
+cd ../../../benchmarks/
 sudo ./cleanup-fs.sh
 sudo ./setup-ftfs.sh
 cd -

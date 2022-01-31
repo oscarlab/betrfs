@@ -109,7 +109,7 @@ PATENT RIGHTS GRANT:
 #include "test.h"
 
 #include <stdio.h>
-#include <math.h>
+//#include <math.h>
 #include <locale.h>
 
 #include <db.h>
@@ -2369,7 +2369,7 @@ DEFINE_NUMERIC_HELP(int32, PRId32, i32, INT32_MIN, INT32_MAX)
 DEFINE_NUMERIC_HELP(int64, PRId64, i64, INT64_MIN, INT64_MAX)
 DEFINE_NUMERIC_HELP(uint32, PRIu32, u32, 0, UINT32_MAX)
 DEFINE_NUMERIC_HELP(uint64, PRIu64, u64, 0, UINT64_MAX)
-DEFINE_NUMERIC_HELP(double, ".2lf",  d, -HUGE_VAL, HUGE_VAL)
+//DEFINE_NUMERIC_HELP(double, ".2lf",  d, -HUGE_VAL, HUGE_VAL)
 static inline void
 help_bool(struct arg_type *type, int width_name, int width_type) {
     invariant(strncmp("--", type->name, strlen("--")));
@@ -2432,7 +2432,7 @@ parse_string(struct arg_type *type, int *extra_args_consumed, int argc, char *co
     *extra_args_consumed = 1;
     return 0;
 }
-
+#if 0
 static inline int
 parse_uint64(struct arg_type *type, int *extra_args_consumed, int argc, char *const argv[]) {
     // Already verified name.
@@ -2529,7 +2529,6 @@ parse_int32(struct arg_type *type, int *extra_args_consumed, int argc, char *con
     return 0;
 }
 
-#if 0
 static inline int
 parse_double(struct arg_type *type, int *extra_args_consumed, int argc, char *const argv[]) {
     // Already verified name.
@@ -2741,12 +2740,10 @@ static inline void parse_stress_test_args (struct cli_args *args) {
             args->compression_method = TOKU_QUICKLZ_METHOD;
         } else if (strcmp(compression_method_s, "zlib") == 0) {
             args->compression_method = TOKU_ZLIB_WITHOUT_CHECKSUM_METHOD;
-        } else if (strcmp(compression_method_s, "lzma") == 0) {
-            args->compression_method = TOKU_LZMA_METHOD;
         } else if (strcmp(compression_method_s, "none") == 0) {
             args->compression_method = TOKU_NO_COMPRESSION;
         } else {
-            fprintf(stderr, "valid values for --compression_method are \"quicklz\", \"zlib\", \"lzma\" and \"none\"\n");
+            fprintf(stderr, "valid values for --compression_method are \"quicklz\", \"zlib\", and \"none\"\n");
             do_usage(argv0, num_arg_types, arg_types);
             exit(EINVAL);
         }

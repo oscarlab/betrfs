@@ -39,9 +39,9 @@ int main(int argc, char* argv[]) {
 			" fname: %s and fsize: %lld\n", fname, fsize);
 		return -1;
 	}
-	printf("file_size:   %lld\n", fsize);
-	printf("block_size:  %d\n", block_size);
-	printf("rand_blocks: %d\n", rand_blocks);
+	printf("\n\n\nfile_size:   %lld,\n", fsize);
+	printf("block_size:  %d,\n", block_size);
+	printf("rand_blocks: %d,\nWRITE SEQ,\n", rand_blocks);
 
 	if (fsize <= 4) {
 		fprintf(stderr, "fsize too small\n");
@@ -50,7 +50,7 @@ int main(int argc, char* argv[]) {
 
 	srand(seed);
 
-	array = malloc(RAND_BLOCKS * sizeof(*array));
+	array = malloc(rand_blocks * sizeof(*array));
 	if (!array)
 		return -ENOMEM;
 
@@ -90,8 +90,8 @@ int main(int argc, char* argv[]) {
 				clock_gettime(CLOCK_MONOTONIC, &gb_end);
 				elapsed = (gb_end.tv_sec - gb_start.tv_sec) +
 					(gb_end.tv_nsec - gb_start.tv_nsec) / 1000000000.0;
-				printf("%lu GB\n", nr_gb);
-				printf("write, seq, %lf, %lf, %lf\n", 1024.0, elapsed, 1024.0 / elapsed);
+				printf("%lu, ", nr_gb);
+				printf("%lf, %lf, %lf,\n", 1024.0, elapsed, 1024.0 / elapsed);
 				gb_start = gb_end;
 				nr_gb++;
 			}
@@ -103,7 +103,7 @@ int main(int argc, char* argv[]) {
 		clock_gettime(CLOCK_MONOTONIC, &end);
 		elapsed = (end.tv_sec - start.tv_sec) +
 			(end.tv_nsec - start.tv_nsec) / 1000000000.0;
-		printf("before fsync: write, seq, %lf, %lf, %lf\n", fsize/1.0E6, elapsed, (fsize/1.0E6) / elapsed);
+		printf("\n\nbefore fsync: write, seq, %lf, %lf, %lf, \n", fsize/1.0E6, elapsed, (fsize/1.0E6) / elapsed);
 	}
 
 	fsync(fd);
@@ -113,8 +113,8 @@ int main(int argc, char* argv[]) {
 	elapsed = (end.tv_sec - start.tv_sec) +
 		(end.tv_nsec - start.tv_nsec) / 1000000000.0;
 	mb = fsize/1.0E6;
-	printf("op, seq.or.rand, size.MB, time.s, throughput.MBps\n");
-	printf("write, seq, %lf, %lf, %lf\n", mb, elapsed, mb / elapsed);
+	printf("op, seq.or.rand, size.MB, time.s, throughput.MBps, \n");
+	printf("write.seq, %lf, %lf, %lf\n", mb, elapsed, mb / elapsed);
 	return 0;
 }
 

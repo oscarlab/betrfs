@@ -29,20 +29,19 @@ if __name__ == "__main__":
     if test != "" :
         print "\npost-test {0}.".format(test)
 
+    command = "cat /proc/meminfo"
+    ret = subprocess.call(command, shell=True)
+    if ret != 0 :
+        print "ERROR!"
+        print "cat /proc/meminfo returning: {0}. exiting...".format(ret)
+        exit(ret)
+
     command = "rmmod ftfs.ko"
     ret = subprocess.call(command, shell=True)
     if ret != 0 :
         print "ERROR!"
         print "command \"{0}\" returning: {1}. exiting...".format(command, ret)
         exit(ret)
-
-    # Check for umount errors from ftfs
-    command = "dmesg | grep \"ftfs_private_umount ret: -\""
-    ret = subprocess.call(command, shell=True)
-    if ret != 1 :
-        print "ERROR!"
-        print "command \"{0}\" returning: {1}. exiting...".format(command, ret)
-        exit(-1)
 
     print "removed module, printing /proc/meminfo"
     command = "cat /proc/meminfo"
@@ -53,3 +52,4 @@ if __name__ == "__main__":
         exit(ret)
 
     exit(ret)
+

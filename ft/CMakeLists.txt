@@ -33,14 +33,14 @@ set(FT_SOURCES
   cachetable
   checkpoint
   compress
-  dbufio
+  #dbufio
   fifo
   ft
   ft-cachetable-wrappers
   ft-flusher
   ft-hot-flusher
-  ftloader
-  ftloader-callback
+  #ftloader
+  #ftloader-callback
   ft_msg
   ft_node-serialize
   ft-node-deserialize
@@ -58,7 +58,7 @@ set(FT_SOURCES
   memarena
   minicron
   omt
-  pqueue
+  #pqueue
   queue
   quicklz
   recover
@@ -83,8 +83,8 @@ set(FT_SOURCES
 if (NOT BUILD_FOR_LINUX_KERNEL_MODULE)
   add_library(ft SHARED ${FT_SOURCES})
   maybe_add_gcov_to_libraries(ft ft_static)
-  add_dependencies(ft install_tdb_h generate_log_code build_lzma)
-  target_link_libraries(ft LINK_PRIVATE util_static lzma ${LIBTOKUPORTABILITY})
+  add_dependencies(ft install_tdb_h generate_log_code)
+  target_link_libraries(ft LINK_PRIVATE util_static ${LIBTOKUPORTABILITY})
   target_link_libraries(ft LINK_PUBLIC z)
 endif (NOT BUILD_FOR_LINUX_KERNEL_MODULE)
 
@@ -94,17 +94,17 @@ set_target_properties(ft_static PROPERTIES POSITION_INDEPENDENT_CODE ${STATIC_PI
 maybe_add_gcov_to_libraries(ft ft_static)
 
 ## depend on other generated targets
-add_dependencies(ft_static install_tdb_h generate_log_code build_lzma)
+add_dependencies(ft_static install_tdb_h generate_log_code)
 
-## link with lzma (which should be static) and link dependers with zlib
-target_link_libraries(ft_static LINK_PRIVATE lzma)
+## link dependers with zlib
+target_link_libraries(ft_static LINK_PRIVATE)
 
 if (NOT BUILD_FOR_LINUX_KERNEL_MODULE)
   ## build the bins in this directory
   foreach(tool tokuftdump tdb_logprint tdb-recover ftverify)
     add_executable(${tool} ${tool})
     add_dependencies(${tool} install_tdb_h)
-    target_link_libraries(${tool} ft_static util_static z lzma ${LIBTOKUPORTABILITY}_static ${CMAKE_THREAD_LIBS_INIT} ${EXTRA_SYSTEM_LIBS})
+    target_link_libraries(${tool} ft_static util_static z ${LIBTOKUPORTABILITY}_static ${CMAKE_THREAD_LIBS_INIT} ${EXTRA_SYSTEM_LIBS})
     add_space_separated_property(TARGET ${tool} COMPILE_FLAGS -fvisibility=hidden)
   endforeach(tool)
 

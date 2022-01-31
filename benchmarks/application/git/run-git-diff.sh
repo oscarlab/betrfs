@@ -1,7 +1,6 @@
 #!/bin/bash
 
 . ../../fs-info.sh
-. ../../.ismounted
 
 support=${FT_HOMEDIR}/benchmarks/support-files
 
@@ -12,7 +11,7 @@ if [ ! -e $mntpnt/$clone_repo ]; then
     cd $mntpnt; git clone $support/$clone_repo; cd -
 fi
 
-sudo -E ../../clear-fs-caches.sh
+sudo ../../clear-fs-caches.sh
 
 cd $mntpnt/$clone_repo
 /usr/bin/time -p git diff --patch v4.7 v4.14 > patch

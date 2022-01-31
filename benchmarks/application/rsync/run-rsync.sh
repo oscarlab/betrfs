@@ -1,7 +1,6 @@
 #!/bin/bash
 
 . ../../fs-info.sh
-. ../../.ismounted
 
 support=$FT_HOMEDIR/benchmarks/support-files
 src=linux-3.11.10
@@ -13,14 +12,17 @@ if [ ! -e $support/$src ]; then
     cd $support; tar -xf $src.tar.xz; cd -
 fi
 
-sudo -E ../../clear-fs-caches.sh
+cp -r $support/$src $mntpnt/
+sudo -E ../../clear-fs-caches.sh $1
+
 #echo 'Copy from home to benchmark partition'
 #sudo perf record -g -- rsync --stats -r -t -S -h $support/$src $mntpnt/$dst
 #strace -c -T rsync --stats -r -t -S -h $support/$src $mntpnt/$dst 2&> strace.txt
-rsync --stats -r -t -S  $support/$src $mntpnt/$dst
+echo "-------------------------------------------------------------------"
+rsync --stats -r -t -S  $mntpnt/$src $mntpnt/$dst
 #rsync --stats -r -t -W -h --inplace $support/$src $mntpnt/$dst
 
-sudo -E ../../clear-fs-caches.sh
+sudo -E ../../clear-fs-caches.sh $1
 
 if [ -e $mntpnt/$dst2 ]; then
     cd $mntpnt; rm -r $dst2; cd -

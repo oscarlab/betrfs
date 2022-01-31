@@ -21,15 +21,18 @@ if [ "$#" -ne 1 ] && [ "$#" -ne 2 ] ; then
 	exit 1
 fi
 
+if [ "$#" -eq 2 ] ; then
+    if [ "$2" != "--force-hdd" ] && [ "$2" != "--force-ssd" ]; then
+        echo "Invalid argument!"
+        exit 1
+    fi
+fi
+
 TIME=`date +"%d-%m-%Y-%H-%M-%S"`
 FILE=$1-rand-write-4-${TIME}
 FS=$1
 
-if [ "$#" -eq 2 ] ; then
-	FILE=$2
-fi
-
-sudo -E ../../clear-fs-caches.sh
+sudo -E ../../clear-fs-caches.sh $2
 
 echo "beginning random write test..."
 TIME=`date +"%d-%m-%Y-%H-%M-%S"`

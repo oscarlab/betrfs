@@ -163,7 +163,7 @@ int test_test_db_change_xxx(void) {
     CKERR(r);
     r = db->change_readpagesize(db, 10000);
     CKERR(r);
-    r = db->change_compression_method(db, TOKU_LZMA_METHOD);
+    r = db->change_compression_method(db, TOKU_QUICKLZ_METHOD);
     CKERR(r);
     
     r = db->get_pagesize(db, &ret_val);
@@ -175,7 +175,7 @@ int test_test_db_change_xxx(void) {
     ret_method = TOKU_NO_COMPRESSION;
     r = db->get_compression_method(db, &ret_method);
     CKERR(r);
-    assert(ret_method == TOKU_LZMA_METHOD);
+    assert(ret_method == TOKU_QUICKLZ_METHOD);
 
     r = db->close(db, 0);
     
@@ -193,7 +193,7 @@ int test_test_db_change_xxx(void) {
     ret_method = TOKU_NO_COMPRESSION;
     r = db->get_compression_method(db, &ret_method);
     CKERR(r);
-    assert(ret_method == TOKU_LZMA_METHOD);
+    assert(ret_method == TOKU_QUICKLZ_METHOD);
 
     r = db->close(db, 0);
 

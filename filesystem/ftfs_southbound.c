@@ -6,10 +6,13 @@
 #include <asm/page_types.h>
 #include <linux/fs_struct.h>
 #include <linux/mount.h>
+#include <linux/sched/task.h>
+
 #include "ftfs_southbound.h"
 #include "ftfs.h"
-#include "sb_pthread.h"
-#include "sb_stat.h"
+#include "ftfs_pthread.h"
+#include "ftfs_stat.h"
+#include "ftfs_fs.h"
 
 static DEFINE_MUTEX(ftfs_southbound_lock);
 
@@ -65,8 +68,10 @@ static struct files_struct ftfs_files_init = {
 		.fd             = &ftfs_files_init.fd_array[0],
 		.close_on_exec  = ftfs_files_init.close_on_exec_init,
 		.open_fds       = ftfs_files_init.open_fds_init,
+		.full_fds_bits	= ftfs_files_init.full_fds_bits_init,
 	},
 	.file_lock      = __SPIN_LOCK_UNLOCKED(ftfs_files_init.file_lock),
+	.resize_wait	= __WAIT_QUEUE_HEAD_INITIALIZER(ftfs_files_init.resize_wait),
 };
 /* to get struct mount *: return container_of(mnt, struct mount, mnt); */
 
@@ -337,11 +342,6 @@ int ftfs_private_mount(const char *dev_name, const char *fs_type, void *data)
 	}
 
 	type = get_fs_type(fs_type);
-	// We didn't find the type we wanted
-	if (!type) {
-		printk(KERN_ERR "Invalid file system type [%s]\n", fs_type);
-		return -EINVAL;
-	}
 	vfs_mount = vfs_kern_mount(type, FTFS_MS_FLAGS, dev_name, data);
 	if (!IS_ERR(vfs_mount) && (type->fs_flags & FS_HAS_SUBTYPE) &&
             !vfs_mount->mnt_sb->s_subtype)
@@ -373,22 +373,14 @@ err_out:
 	return err;
 }
 
-int __list_open_southbound_files(struct super_block *sb);
-
 /* must hold ftfs_southbound lock */
 int __ftfs_private_umount(void)
 {
 	if (may_umount_tree(ftfs_vfs)) {
 		kern_unmount(ftfs_vfs);
-		ftfs_vfs = NULL;
 		return 0;
-	} else {
-		int cnt;
-		BUG_ON(!ftfs_vfs);
-		cnt = __list_open_southbound_files(ftfs_vfs->mnt_sb);
-		ftfs_error(__func__, "%d files are open\n", cnt);
-		return -EBUSY;
 	}
+	return -EBUSY;
 }
 
 /* takes and releases ftfs_southbound lock */
@@ -428,72 +420,7 @@ void put_ftfs_southbound(void)
 	mutex_unlock(&ftfs_southbound_lock);
 }
 
-/* FROM fs/file_table.c.
- *
- * These will not be safe, but they are really just for debugging
- */
-/*
- *
- * These macros iterate all files on all CPUs for a given superblock.
- * files_lglock must be held globally.
- */
-#ifdef CONFIG_SMP
-
-/*
- * These macros iterate all files on all CPUs for a given superblock.
- * files_lglock must be held globally.
- */
-#define do_file_list_for_each_entry(__sb, __file)		\
-{								\
-	int i;							\
-	for_each_possible_cpu(i) {				\
-		struct list_head *list;				\
-		list = per_cpu_ptr((__sb)->s_files, i);		\
-		list_for_each_entry((__file), list, f_u.fu_list)
-
-#define while_file_list_for_each_entry				\
-	}							\
-}
-
-#else
-
-#define do_file_list_for_each_entry(__sb, __file)		\
-{								\
-	struct list_head *list;					\
-	list = &(sb)->s_files;					\
-	list_for_each_entry((__file), list, f_u.fu_list)
-
-#define while_file_list_for_each_entry				\
-}
-#endif // CONFIG_SMP
-
-int __list_open_southbound_files(struct super_block *sb)
-{
-	int count = 0;
-	struct file *f;
-
-	do_file_list_for_each_entry(sb, f) {
-		count++;
-		ftfs_error(__func__, "%s is still open",
-			 f->f_path.dentry->d_name.name);
-	} while_file_list_for_each_entry;
-
-	return count;
-}
-
-int list_open_southbound_files(void)
-{
-	int err;
-
-	BUG_ON(!ftfs_vfs);
-
-	mutex_lock(&ftfs_southbound_lock);
-	err = __list_open_southbound_files(ftfs_vfs->mnt_sb);
-	mutex_unlock(&ftfs_southbound_lock);
-
-	return err;
-}
-
+int list_open_southbound_files(void) {return 0;}
 unsigned int southbound_mnt_count(void)
 {
 	return ftfs_mnt_get_count(real_mount(ftfs_vfs));

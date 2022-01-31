@@ -17,7 +17,7 @@ add_c_defines(
 if (NOT CMAKE_SYSTEM_NAME STREQUAL FreeBSD)
   ## on FreeBSD these types of macros actually remove functionality
   add_c_defines(
-    _SVID_SOURCE
+    _DEFAULT_SOURCE
     _XOPEN_SOURCE=600
     )
 endif ()
@@ -230,7 +230,7 @@ function(maybe_add_gcov_to_libraries)
   endif (USE_GCOV)
 endfunction(maybe_add_gcov_to_libraries)
 
-set(STATIC_PIC ON)
+set(STATIC_PIC OFF)
 
 if (BUILD_FOR_LINUX_KERNEL_MODULE)
 
@@ -246,21 +246,22 @@ if (BUILD_FOR_LINUX_KERNEL_MODULE)
       )
   endif(DEBUG_CHECKPOINTER)
 
-  set(STATIC_PIC OFF)
   set_cflags_if_supported(
     # Hard-copied from a kernel module build
     #-Wall
     -Wundef
     -Wstrict-prototypes
     -Wno-trigraphs
-    -Werror-implicit-function-declaration
+    #-Werror-implicit-function-declaration
     -Wno-format-security
     -Wframe-larger-than=1100 ## hack wkj 11/1/15
     -Wno-unused-but-set-variable
     -Wdeclaration-after-statement
     -Wno-pointer-sign
+    -Wno-format-truncation
     -Wno-sign-compare
-
+    -Wno-implicit-fallthrough
+    -Wno-misleading-indentation
     -fno-strict-aliasing
     -fno-common
     -fno-delete-null-pointer-checks
@@ -272,6 +273,7 @@ if (BUILD_FOR_LINUX_KERNEL_MODULE)
     -fno-optimize-sibling-calls
     -fno-strict-overflow
     -fconserve-stack
+    -fno-pie
 
     -m64
     -mno-sse

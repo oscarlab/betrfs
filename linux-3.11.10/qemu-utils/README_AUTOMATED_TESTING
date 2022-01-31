@@ -1,0 +1,45 @@
+## generate the virtual disks
+# this creates a virtual disk, formats it as ext4, and puts a debian wheezy system on it
+# then it creates a virtual disk for your southbound and formats it as ext4
+
+./genVirtDisk.sh
+
+## build the kernel
+cp linux-3.11.10/qemu-utils/kvm-net-config .config
+make
+make modules
+sudo make modules_install
+
+
+## run kvm to set up the ftfs environment
+./control-vm start-vm
+./control-vm ssh
+
+## (within kvm)
+# checkout the code from camilla
+scp (host)/(repository)/linux-3.11.10/qemu_utils/buildbot_rsa* ~/.ssh/.
+git clone ssh://git@camilla.oscar.cs.stonybrook.edu/ft-index
+
+# compile the kernel and modules (so you can build against the kernel source, you need to do make modules_install)
+cd ft-index/linux-3.11.10/
+cp qemu-utils/kvm-net-config .config
+make -j4
+make modules
+make modules_install
+
+# setup the tokudb build process
+cd ft-index/
+mkdir build
+cp linux-3.11.10/qemu-utils/cmake-ft.sh build/.
+cd build
+./cmake-ft.sh
+--- wait a while ---
+
+# make the kernel module
+cd ft-index/ftfs
+make
+
+# setup the automated testing scripts
+cp ft-index/linux-3.11.10/qemu-utils/guest-files/run-unit-tests.sh ~/.
+cp ft-index/linux-3.11.10/qemu-utils/guest-files/<test-list> ~/todays-tests
+

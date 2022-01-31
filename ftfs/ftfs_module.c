@@ -12,15 +12,15 @@
 #include <linux/proc_fs.h>
 #include <linux/fs.h>
 #include <linux/fs_struct.h>
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 #include <linux/kallsyms.h>
 #include <linux/dcache.h>
 #include "ftfs_southbound.h"
-#include "sb_misc.h"
-#include "sb_malloc.h"
-#include "sb_files.h"
-#include "sb_dir.h"
-#include "sb_error.h"
+#include "toku_misc.h"
+#include "ftfs_malloc.h"
+#include "ftfs_files.h"
+#include "ftfs_dir.h"
+#include "ftfs_error.h"
 #include "ftfs.h"
 
 MODULE_LICENSE("GPL");
@@ -129,12 +129,9 @@ ssize_t toku_write_proc(struct file *file, const char __user *buffer,
 	buf[count] = '\0';
 
 	//last_result = run_test(buf);
-	ret = thread_run_test(buf);
+	thread_run_test(buf);
 
 	kfree(buf);
-
-	// If the test failed, return an error code
-	if (ret < 0) return ret;
 
 	return count;
 }
@@ -187,7 +184,6 @@ static int resolve_ftfs_symbols(void)
 {
 	if (resolve_ftfs_southbound_symbols() ||
 	    resolve_ftfs_files_symbols() ||
-	    resolve_ftfs_dir_symbols() ||
 	    resolve_ftfs_malloc_symbols() ||
 	    resolve_toku_misc_symbols()) {
 		return -EINVAL;

@@ -1,2 +1,4 @@
+random_read
 random_write
+random_write_4k
 sequential_write

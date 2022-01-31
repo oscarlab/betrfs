@@ -1,6 +1,11 @@
-# This file lists a set of tests to run.  Each test needs two lines:
-# First, a line that indicates the subdirectory where the test script is
-# Second, a line that indicates the script to run
+macro/filebench
+./run-test.sh fileserver ftfs
+macro/filebench
+./run-test.sh oltp ftfs
+macro/filebench
+./run-test.sh webserver ftfs
+macro/filebench
+./run-test.sh webproxy ftfs
 application/git
 ./run-all.sh
 application/tar

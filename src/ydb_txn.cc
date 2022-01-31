@@ -323,7 +323,7 @@ public:
     }
 
     void push(stack_elem elem) {
-        assert(index < size);
+        assert(index < STACK_SIZE);
         ((stack_elem *)head)[index] = elem;
         index += 1;
     }

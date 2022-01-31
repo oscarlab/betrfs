@@ -78,6 +78,4 @@ static inline void destroy_ft_index(void)
 
 void init_mem_trace(void);
 
-#define FTFS_SUPER_MAGIC 0XF7F5
-
 #endif /* _FTFS_H */

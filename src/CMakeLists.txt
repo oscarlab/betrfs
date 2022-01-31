@@ -19,7 +19,7 @@ set(tokudb_srcs
 if (NOT BUILD_FOR_LINUX_KERNEL_MODULE)
   add_library(${LIBTOKUDB} SHARED ${tokudb_srcs})
   add_dependencies(${LIBTOKUDB} install_tdb_h generate_log_code)
-  target_link_libraries(${LIBTOKUDB} LINK_PRIVATE locktree_static ft_static util_static lzma ${LIBTOKUPORTABILITY})
+  target_link_libraries(${LIBTOKUDB} LINK_PRIVATE locktree_static ft_static util_static ${LIBTOKUPORTABILITY})
   target_link_libraries(${LIBTOKUDB} LINK_PUBLIC z)
   maybe_add_gcov_to_libraries(${LIBTOKUDB})
   set_property(TARGET ${LIBTOKUDB} APPEND PROPERTY COMPILE_DEFINITIONS _GNU_SOURCE)

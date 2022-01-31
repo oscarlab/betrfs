@@ -163,13 +163,16 @@ check_results_nested(DB ** dbs, const uint num_rows) {
         dbt_init(&val, &v, sizeof(unsigned int));
         int r;
 
+	DBG;
         DB_TXN *txn;
         r = env->txn_begin(env, NULL, &txn, 0);
         CKERR(r);
+	DBG;
 
         DBC *cursor;
         r = dbs[j]->cursor(dbs[j], txn, &cursor, 0);
         CKERR(r);
+	DBG;
         for(uint i=0;i<num_rows;i++) {
             if (i % MAXDEPTH) {
 		r = cursor->c_get(cursor, &key, &val, DB_NEXT);    
@@ -190,6 +193,7 @@ check_results_nested(DB ** dbs, const uint num_rows) {
             dbt_init(&val, NULL, sizeof(unsigned int));
 	    if ( verbose && (i%10000 == 0)) {printf("."); fflush(stdout);}
         }
+	DBG;
         r = cursor->c_close(cursor);
         CKERR(r);
         r = txn->commit(txn, DB_TXN_NOSYNC);
@@ -212,10 +216,13 @@ static void preload_dbs(DB **dbs)
 
     if ( verbose ) { printf("loading");fflush(stdout); }
 
+	DBG;
     for(row = 0; row <= NUM_ROWS; row++) {
 	uint generated_value = generate_val(row, 0);
+	DBG;
 	my_nested_insert(dbs, 0, NULL, row, generated_value);
 	//nested_insert(dbs, 0, NULL, row, generated_value);
+	DBG;
     }
 
     if (optimize) {
@@ -289,6 +296,8 @@ void my_nested_insert(DB ** dbs, uint depth,  DB_TXN *parent_txn,
 
     txn[depth] = parent_txn;
 
+    DBG;
+
     for (int d = depth; d < MAXDEPTH; d++) {
 
 	dbt_init_realloc(&key[d]);
@@ -304,6 +313,8 @@ void my_nested_insert(DB ** dbs, uint depth,  DB_TXN *parent_txn,
 
 	if (key[d].flags == 0) { dbt_init_realloc(&key[d]); }
 	if (val[d].flags == 0) { dbt_init_realloc(&val[d]); }
+
+        DBG;
     }
 
     for (int d = MAXDEPTH-1; d >= (int) depth; d--) {
@@ -325,6 +336,8 @@ void my_nested_insert(DB ** dbs, uint depth,  DB_TXN *parent_txn,
 
 	if ( key[d].flags ) { toku_free(key[d].data); key[d].data = NULL; }
 	if ( val[d].flags ) { toku_free(val[d].data); key[d].data = NULL; }
+
+        DBG;
     }
 
     if (v) 
@@ -369,6 +382,8 @@ static void run_test(void)
     DB **dbs = (DB**)toku_malloc(sizeof(DB*) * NUM_DBS);
     assert(dbs != NULL);
     int *idx = (int *)toku_xmalloc(MAX_DBS * sizeof *idx);
+    DBG;	
+	
 
     for(uint i=0;i<NUM_DBS;i++) {
         idx[i] = i;
@@ -383,13 +398,20 @@ static void run_test(void)
         IN_TXN_COMMIT(env, NULL, txn_desc, 0, {
                 { int chk_r = dbs[i]->change_descriptor(dbs[i], txn_desc, &desc, 0); CKERR(chk_r); }
         });
+
+        DBG;	
+
     }
 
+    DBG;	
     generate_permute_tables();
+    DBG;	
 
     // -------------------------- //
     preload_dbs(dbs);
     // -------------------------- //
+ 
+    DBG;	
     if(r)   {  printf("Error:%d\n", r); return; }
 
     for(uint i=0;i<NUM_DBS;i++) {
@@ -409,7 +431,9 @@ static void run_test(void)
 
     toku_os_recursive_delete(env_dir);    
 
+    DBG;	
     post_teardown();
+
 }
 
 // ------------ infrastructure ----------

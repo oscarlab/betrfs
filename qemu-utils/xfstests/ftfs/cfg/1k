@@ -1,4 +1,0 @@
-SIZE=small
-export MKFS_OPTIONS="-q -b 1024"
-export EXT_MOUNT_OPTIONS=""
-TESTNAME="Ext4 1k block"

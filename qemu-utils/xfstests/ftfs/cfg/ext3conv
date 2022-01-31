@@ -1,4 +1,0 @@
-SIZE=small
-export MKFS_OPTIONS="-O ^flex_bg"
-export EXT_MOUNT_OPTIONS="nodelalloc"
-TESTNAME="Ext4 4k block w/nodelalloc and no flex_bg"

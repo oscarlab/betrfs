@@ -156,8 +156,6 @@ setup_ftnode_header(struct ftnode *node)
     node->dirty = 1;
     node->totalchildkeylens = 0;
     node->oldest_referenced_xid_known = TXNID_NONE;
-    toku_init_dbt(&node->bound_l);
-    toku_init_dbt(&node->bound_r);
 }
 
 static void
@@ -171,7 +169,6 @@ setup_ftnode_partitions(struct ftnode *node, int n_children, const MSN msn, size
         BP_STATE(node, bn) = PT_AVAIL;
         set_BLB(node, bn, toku_create_empty_bn());
         BLB_MAX_MSN_APPLIED(node, bn) = msn;
-        toku_init_dbt(&BP_LIFT(node, bn));
     }
 }
 
@@ -213,7 +210,6 @@ test_split_on_boundary(void)
         }
     }
 
-    close(fd);
     unlink(fname);
     CACHETABLE ct;
     FT_HANDLE brt;
@@ -283,7 +279,7 @@ test_split_with_everything_on_the_left(void)
             toku_free(big_val);
         }
     }
-    close(fd);
+
     unlink(fname);
     CACHETABLE ct;
     FT_HANDLE brt;
@@ -305,6 +301,7 @@ test_split_with_everything_on_the_left(void)
 
     toku_destroy_ftnode_internals(&sn);
 }
+
 
 //
 // Maximum node size according to the BRT: 1024 (expected node size after split)
@@ -354,7 +351,7 @@ test_split_on_boundary_of_last_node(void)
             toku_free(big_val);
         }
     }
-    close(fd);
+
     unlink(fname);
     CACHETABLE ct;
     FT_HANDLE brt;
@@ -419,7 +416,6 @@ test_split_at_begin(void)
         totalbytes += LE_CLEAN_MEMSIZE(totalbytes + 3) + keylen + sizeof(uint32_t);
     }
 
-    close(fd);
     unlink(fname);
     CACHETABLE ct;
     FT_HANDLE brt;
@@ -480,7 +476,6 @@ test_split_at_end(void)
         }
     }
 
-    close(fd);
     unlink(fname);
     CACHETABLE ct;
     FT_HANDLE brt;
@@ -535,7 +530,6 @@ test_split_odd_nodes(void)
         }
     }
 
-    close(fd);
     unlink(fname);
     CACHETABLE ct;
     FT_HANDLE brt;

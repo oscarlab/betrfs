@@ -115,7 +115,7 @@ static int compare_fields (const void *av, const void *bv) {
     if (a->offset< b->offset) return -1;
     if (a->offset==b->offset) return  0;
     return +1;
-}
+}				      
 
 #define STRUCT_SETUP(typ, fname, fstring) ({            \
     assert(field_counter<FIELD_LIMIT);                  \
@@ -339,7 +339,7 @@ static void print_defines (void) {
         dodefine_from_track(txn_flags, DB_SERIALIZABLE);
         dodefine_from_track(txn_flags, DB_TXN_READ_ONLY);
     }
-
+    
     /* TOKUDB specific error codes*/
     printf("/* TOKUDB specific error codes */\n");
     dodefine(TOKUDB_OUT_OF_LOCKS);
@@ -513,7 +513,7 @@ static void print_db_struct (void) {
     STRUCT_SETUP(DB, dbenv,          "DB_ENV *%s");
     STRUCT_SETUP(DB, del,            "int (*%s) (DB *, DB_TXN *, DBT *, uint32_t)");
     STRUCT_SETUP(DB, del_multi,            "int (*%s) (DB *, DB_TXN *, DBT *, DBT *, bool, uint32_t)");
-    STRUCT_SETUP(DB, rename,         "int (*%s) (DB *, DB_TXN *, DBT *, DBT *, DBT *, DBT *, uint32_t)");
+    STRUCT_SETUP(DB, rename,         "int (*%s) (DB *, DB_TXN *, DBT *, DBT *, DBT *, DBT *, uint32_t)"); 
     STRUCT_SETUP(DB, fd,             "int (*%s) (DB *, int *)");
     STRUCT_SETUP(DB, get,            "int (*%s) (DB *, DB_TXN *, DBT *, DBT *, uint32_t)");
 #if DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 3
@@ -587,7 +587,7 @@ static void print_db_txn_struct (void) {
     STRUCT_SETUP(DB_TXN, mgrp,        "DB_ENV *%s /*In TokuDB, mgrp is a DB_ENV not a DB_TXNMGR*/");
     STRUCT_SETUP(DB_TXN, parent,      "DB_TXN *%s");
     const char *extra[] = {
-	"int (*txn_stat)(DB_TXN *, struct txn_stat **)",
+	"int (*txn_stat)(DB_TXN *, struct txn_stat **)", 
 	"struct toku_list open_txns",
 	"int (*commit_with_progress)(DB_TXN*, uint32_t, TXN_PROGRESS_POLL_FUNCTION, void*)",
 	"int (*abort_with_progress)(DB_TXN*, TXN_PROGRESS_POLL_FUNCTION, void*)",
@@ -644,7 +644,8 @@ int main (int argc, char *const argv[] __attribute__((__unused__))) {
     printf("#include <stdbool.h>\n");
     printf("#include <stdint.h>\n");
     printf("#else\n");
-    printf("#include \"sb_files.h\"\n");
+    printf("#include \"faked_std.h\"\n");
+    printf("#include \"ftfs_files.h\"\n");
     printf("#endif //__KERNEL__\n");
     //printf("#include <inttypes.h>\n");
     printf("#if defined(__cplusplus) || defined(__cilkplusplus)\nextern \"C\" {\n#endif\n");
@@ -688,7 +689,7 @@ int main (int argc, char *const argv[] __attribute__((__unused__))) {
     printf("typedef int(*YDB_CALLBACK_FUNCTION)(DBT const*, DBT const*, void*);\n");
 
     printf("#include \"tdb-internal.h\"\n");
-
+    
     //stat64
     printf("typedef struct __toku_db_btree_stat64 {\n");
     printf("  uint64_t bt_nkeys; /* how many unique keys (guaranteed only to be an estimate, even when flattened)          */\n");
@@ -706,11 +707,9 @@ int main (int argc, char *const argv[] __attribute__((__unused__))) {
     printf("    TOKU_NO_COMPRESSION = 0,\n");  // "identity" compression
     printf("    TOKU_ZLIB_METHOD    = 8,\n");  // RFC 1950 says use 8 for zlib.  It reserves 15 to allow more bytes.
     printf("    TOKU_QUICKLZ_METHOD = 9,\n");  // We use 9 for QUICKLZ (the QLZ compression level is stored int he high-order nibble).  I couldn't find any standard for any other numbers, so I just use 9. -Bradley
-    printf("    TOKU_LZMA_METHOD    = 10,\n");  // We use 10 for LZMA.  (Note the compression level is stored in the high-order nibble).
-    printf("    TOKU_ZLIB_WITHOUT_CHECKSUM_METHOD = 11,\n"); // We wrap a zlib without checksumming compression technique in our own checksummed metadata.
+    printf("    TOKU_ZLIB_WITHOUT_CHECKSUM_METHOD = 10,\n"); // We wrap a zlib without checksumming compression technique in our own checksummed metadata.
     printf("    TOKU_DEFAULT_COMPRESSION_METHOD = 1,\n");  // default is actually quicklz
     printf("    TOKU_FAST_COMPRESSION_METHOD = 2,\n");  // friendlier names
-    printf("    TOKU_SMALL_COMPRESSION_METHOD = 3,\n");
     printf("} TOKU_COMPRESSION_METHOD;\n");
 
     //bulk loader

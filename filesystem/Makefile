@@ -4,49 +4,41 @@ obj-m += ftfs.o
 
 ftfs-objs := \
 	ftfs_module.o \
-	sb_linkage.o \
-	sb_partitioned_counter.o \
-	sb_malloc.o \
-	sb_random.o \
-	sb_error.o \
-	sb_rwsem.o \
+	toku_linkage.o \
+	ftfs_partitioned_counter.o \
+	ftfs_malloc.o \
+	ftfs_random.o \
+	ftfs_error.o \
+	ftfs_rwsem.o \
 	ftfs_frwlock.o \
-	sb_pthread.o \
-	sb_files.o \
+	ftfs_pthread.o \
+	ftfs_files.o \
 	ftfs_southbound.o \
-	sb_dir.o \
-	sb_stat.o \
-	sb_assert.o \
+	ftfs_dir.o \
+	ftfs_stat.o \
+	ftfs_assert.o \
 	toku_memory.o \
-	sb_stdio.o \
-	sb_misc.o \
-	sb_strerror.o \
-	nb_super.o \
-	nb_bstore.o \
-	nb_proc_toku_engine_status.o \
-	nb_proc_toku_checkpoint.o \
-	nb_proc_toku_flusher.o \
-	nb_proc_toku_dump_node.o \
-	nb_proc_toku_memleak_detect.o \
-	sb_zlib.o \
+	ftfs_stdio.o \
+	toku_misc.o \
+	strerror.o \
+	ftfs_super.o \
+	ftfs_bstore.o \
+	toku_engine_status.o \
+	toku_checkpoint.o \
+	toku_flusher.o \
+	toku_dump_node.o \
+	toku_memleak_detect.o \
+	toku_zlib.o \
 	libftindex.o \
-	sb_flock.o
+	ftfs_toku_lock.o
 
 #KBUILD_CFLAGS += -DFTFS_CIRCLE
 KBUILD_CFLAGS += -DFTFS_RANGE_RENAME
 KBUILD_CFLAGS += -DFTFS_LIFTING
-KBUILD_CFLAGS += -DFTFS_PFSPLIT
+#KBUILD_CFLAGS += -DFTFS_PFSPLIT
 KBUILD_CFLAGS += -DFTFS_NO_PRINT
 #KBUILD_CFLAGS += -DFTFS_DEBUG #-DSOUTHBOUND_DEBUG #-DFTFS_MEM_DEBUG # -DFTFS_DEBUG_PTRS
 #include $(PWD)/.turnoff-opts.mkinclude
-
-debug: KBUILD_CFLAGS += -DFTFS_DEBUG
-#debug: KBUILD_CFLAGS += -DFTFS_MEM_DEBUG
-#debug: KBUILD_CFLAGS += -DTOKU_DEBUG_PTRS
-#debug: KBUILD_CFLAGS += -DSOUTHBOUND_DEBUG
-#debug: KBUILD_CFLAGS += -DTOKU_MEMLEAK_DETECT
-#debug: KBUILD_CFLAGS += -DFTFS_EMPTY_DIR_VERIFY
-#debug: KBUILD_CFLAGS += -DFT_INDIRECT_DEBUG
 
 LIBSRC-OBJS = \
 libsrc/ydb.cc.o \
@@ -101,10 +93,8 @@ libft/rollback-apply.cc.o \
 libft/rollback-ct-callbacks.cc.o \
 libft/rollback_log_node_cache.cc.o \
 libft/roll.cc.o \
-libft/ftloader-callback.cc.o \
 libft/sub_block.cc.o \
 libft/txn.cc.o \
-libft/pqueue.cc.o \
 libft/txn_child_manager.cc.o \
 libft/txn_manager.cc.o \
 libft/ule.cc.o \
@@ -122,6 +112,8 @@ libft/log_print.cc.o
 # libft/dbufio.cc.o \
 # libft/pqueue.cc.o \
 # libft/queue.cc.o \
+# libft/ftloader-callback.cc.o \
+
 
 LIBUTIL-OBJS = \
 libutil/frwlock.cc.o \
@@ -134,7 +126,6 @@ libutil/threadpool.cc.o
 LIBPORTABILITY-OBJS = \
 libportability/huge_page_detection.cc.o \
 libportability/file.cc.o \
-libportability/os_malloc.cc.o \
 libportability/portability.cc.o \
 libportability/toku_path.cc.o \
 libportability/toku_pthread.cc.o \
@@ -144,6 +135,7 @@ libportability/toku_time.cc.o
 # libportability/toku_assert.cc.o
 # Thread-local storage
 #libportability/toku_fair_rwlock.cc.o
+#libportability/os_malloc.cc.o \
 
 LIBLOCKTREE-OBJS = \
 liblocktree/locktree.cc.o \
@@ -154,76 +146,10 @@ liblocktree/range_buffer.cc.o \
 liblocktree/keyrange.cc.o \
 liblocktree/wfg.cc.o
 
-LIBLZMA-OBJS = \
-	liblzma/liblzma_la-common.o \
-	liblzma/liblzma_la-easy_buffer_encoder.o \
-	liblzma/liblzma_la-easy_decoder_memusage.o \
-	liblzma/liblzma_la-stream_buffer_encoder.o \
-	liblzma/liblzma_la-stream_buffer_decoder.o \
-	liblzma/liblzma_la-stream_flags_encoder.o \
-	liblzma/liblzma_la-stream_flags_decoder.o \
-	liblzma/liblzma_la-stream_flags_common.o \
-	liblzma/liblzma_la-stream_decoder.o \
-	liblzma/liblzma_la-block_buffer_encoder.o \
-	liblzma/liblzma_la-block_buffer_decoder.o \
-	liblzma/liblzma_la-easy_preset.o \
-	liblzma/liblzma_la-block_header_encoder.o \
-	liblzma/liblzma_la-block_header_decoder.o \
-	liblzma/liblzma_la-block_decoder.o \
-	liblzma/liblzma_la-check.o \
-	liblzma/liblzma_la-index.o \
-	liblzma/liblzma_la-vli_size.o \
-	liblzma/liblzma_la-crc32_fast.o \
-	liblzma/liblzma_la-crc32_table.o \
-	liblzma/liblzma_la-crc64_fast.o \
-	liblzma/liblzma_la-crc64_table.o \
-	liblzma/liblzma_la-filter_flags_encoder.o \
-	liblzma/liblzma_la-filter_flags_decoder.o \
-	liblzma/liblzma_la-filter_encoder.o \
-	liblzma/liblzma_la-filter_decoder.o \
-	liblzma/liblzma_la-arm.o \
-	liblzma/liblzma_la-armthumb.o \
-	liblzma/liblzma_la-lzma_encoder.o \
-	liblzma/liblzma_la-lzma_decoder.o \
-	liblzma/liblzma_la-lzma_encoder_presets.o \
-	liblzma/liblzma_la-lzma2_encoder.o \
-	liblzma/liblzma_la-lzma2_decoder.o \
-	liblzma/liblzma_la-x86.o \
-	liblzma/liblzma_la-filter_common.o \
-	liblzma/liblzma_la-fastpos_table.o \
-	liblzma/liblzma_la-delta_encoder.o \
-	liblzma/liblzma_la-delta_decoder.o \
-	liblzma/liblzma_la-delta_common.o \
-	liblzma/liblzma_la-simple_coder.o \
-	liblzma/liblzma_la-simple_encoder.o \
-	liblzma/liblzma_la-simple_decoder.o \
-	liblzma/liblzma_la-lzma_encoder_optimum_fast.o \
-	liblzma/liblzma_la-lzma_encoder_optimum_normal.o \
-	liblzma/liblzma_la-powerpc.o \
-	liblzma/liblzma_la-price_table.o \
-	liblzma/liblzma_la-sha256.o \
-	liblzma/liblzma_la-sparc.o \
-	liblzma/liblzma_la-vli_encoder.o \
-	liblzma/liblzma_la-vli_decoder.o \
-	liblzma/liblzma_la-index_encoder.o \
-	liblzma/liblzma_la-index_decoder.o \
-	liblzma/liblzma_la-index_hash.o \
-	liblzma/liblzma_la-ia64.o \
-	liblzma/liblzma_la-lz_encoder.o \
-	liblzma/liblzma_la-lz_decoder.o \
-	liblzma/liblzma_la-lz_encoder_mf.o \
-	liblzma/liblzma_la-block_util.o \
-
 all: libftindex.o
-	make -C $(MOD_KERN_SOURCE) M=$(PWD) modules
+	make -C  /lib/modules/$(KDIR)/build M=$(PWD) modules
 
-bench: libftindex.o
-	make -C $(MOD_KERN_SOURCE) M=$(PWD) modules
-
-debug: libftindex.o
-	make -C $(MOD_KERN_SOURCE) M=$(PWD) modules
-
-libftindex.o: $(LIBPORTABILITY-OBJS) $(LIBFT-OBJS) $(LIBUTIL-OBJS) $(LIBLOCKTREE-OBJS) $(LIBSRC-OBJS) $(LIBLZMA-OBJS)
+libftindex.o: $(LIBPORTABILITY-OBJS) $(LIBFT-OBJS) $(LIBUTIL-OBJS) $(LIBLOCKTREE-OBJS) $(LIBSRC-OBJS)
 	ld -r $^ -o $@
 
 libsrc/%.o: ../build/src/libtokufractaltree_static.a
@@ -240,9 +166,5 @@ libportability/%.o: ../build/portability/libtokuportability_static_conv.a
 
 liblocktree/%.o: ../build/locktree/liblocktree_static.a
 	(cd liblocktree; ar x ../$< $*.o)
-
-liblzma/%.o: ../build/xz/lib/liblzma.a
-	(cd liblzma; ar x ../$< $*.o)
-
 clean:
 	make -C /lib/modules/$(KDIR)/build M=$(PWD) clean

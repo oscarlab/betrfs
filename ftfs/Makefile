@@ -9,29 +9,29 @@ ccflags-y += -fno-builtin
 
 ftfs-objs := \
 	ftfs_module.o \
-	sb_linkage.o \
-	sb_partitioned_counter.o \
-	sb_malloc.o \
-	sb_random.o \
-	sb_error.o \
-	sb_rwsem.o \
+	toku_linkage.o \
+	ftfs_partitioned_counter.o \
+	ftfs_malloc.o \
+	ftfs_random.o \
+	ftfs_error.o \
+	ftfs_rwsem.o \
 	ftfs_frwlock.o \
-	sb_pthread.o \
-	sb_files.o \
+	ftfs_pthread.o \
+	ftfs_files.o \
 	ftfs_southbound.o \
-	sb_dir.o \
-	sb_stat.o \
-	sb_assert.o \
+	ftfs_dir.o \
+	ftfs_stat.o \
+	ftfs_assert.o \
 	toku_memory.o \
-	sb_stdio.o \
+	ftfs_stdio.o \
 	toku_run_test.o \
 	toku_test_mempool.o \
 	toku_test_southbound.o \
-	sb_misc.o \
-	sb_strerror.o \
-	sb_zlib.o \
+	toku_misc.o \
+	strerror.o \
+	toku_zlib.o \
 	libftindex.o \
-	sb_flock.o
+	ftfs_toku_lock.o
 
 
 KBUILD_CFLAGS += -DSOUTHBOUND_TESTING
@@ -49,8 +49,8 @@ KBUILD_CFLAGS += -DSOUTHBOUND_TESTING
 # CFLAGS_ftfs_error.o = -g -O0
 # CFLAGS_REMOVE_ftfs_pthread.o = -O2
 # CFLAGS_ftfs_pthread.o = -g -O0
- CFLAGS_REMOVE_sb_files.o = -O2
- CFLAGS_sb_files.o = -g -O0
+ CFLAGS_REMOVE_ftfs_files.o = -O2
+ CFLAGS_ftfs_files.o = -g -O0
 # CFLAGS_REMOVE_ftfs_southbound.o = -O2
 # CFLAGS_ftfs_southbound.o = -g -O0
 # CFLAGS_REMOVE_ftfs_dir.o = -O2
@@ -652,6 +652,18 @@ libft/test/test-range-del.cc.o \
 libft/test/test-range-del2.cc.o \
 libft/test/recovery-range-delete.cc.o \
 libft/test/test-ubi-root-chkpt.cc.o
+
+#libft/test/test-slice-subtree-1.cc.o \
+libft/test/test-slice-subtree-2.cc.o \
+libft/test/test-slice-subtree-3.cc.o \
+libft/test/test-slice-subtree-4.cc.o \
+libft/test/test-relocate-subtree-1.cc.o \
+libft/test/test-relocate-subtree-2.cc.o \
+libft/test/test-relocate-subtree-3.cc.o \
+libft/test/test-relocate-subtree-4.cc.o \
+libft/test/test-relocate-subtree-5.cc.o \
+libft/test/test-relocate-subtree-6.cc.o \
+libft/test/test-relocate-subtree-7.cc.o \
 #libft/test/test_unbound_insert_lists.cc.o
 
 #libft/compress.cc.o \
@@ -750,71 +762,10 @@ liblocktree/test/lock_request_wait_time_callback.cc.o \
 liblocktree/test/manager_status.cc.o \
 liblocktree/test/manager_locktree_map.cc.o
 
-LIBLZMA-OBJS = \
-	liblzma/liblzma_la-common.o \
-	liblzma/liblzma_la-easy_buffer_encoder.o \
-	liblzma/liblzma_la-easy_decoder_memusage.o \
-	liblzma/liblzma_la-stream_buffer_encoder.o \
-	liblzma/liblzma_la-stream_buffer_decoder.o \
-	liblzma/liblzma_la-stream_flags_encoder.o \
-	liblzma/liblzma_la-stream_flags_decoder.o \
-	liblzma/liblzma_la-stream_flags_common.o \
-	liblzma/liblzma_la-stream_decoder.o \
-	liblzma/liblzma_la-block_buffer_encoder.o \
-	liblzma/liblzma_la-block_buffer_decoder.o \
-	liblzma/liblzma_la-easy_preset.o \
-	liblzma/liblzma_la-block_header_encoder.o \
-	liblzma/liblzma_la-block_header_decoder.o \
-	liblzma/liblzma_la-block_decoder.o \
-	liblzma/liblzma_la-check.o \
-	liblzma/liblzma_la-index.o \
-	liblzma/liblzma_la-vli_size.o \
-	liblzma/liblzma_la-crc32_fast.o \
-	liblzma/liblzma_la-crc32_table.o \
-	liblzma/liblzma_la-crc64_fast.o \
-	liblzma/liblzma_la-crc64_table.o \
-	liblzma/liblzma_la-filter_flags_encoder.o \
-	liblzma/liblzma_la-filter_flags_decoder.o \
-	liblzma/liblzma_la-filter_encoder.o \
-	liblzma/liblzma_la-filter_decoder.o \
-	liblzma/liblzma_la-arm.o \
-	liblzma/liblzma_la-armthumb.o \
-	liblzma/liblzma_la-lzma_encoder.o \
-	liblzma/liblzma_la-lzma_decoder.o \
-	liblzma/liblzma_la-lzma_encoder_presets.o \
-	liblzma/liblzma_la-lzma2_encoder.o \
-	liblzma/liblzma_la-lzma2_decoder.o \
-	liblzma/liblzma_la-x86.o \
-	liblzma/liblzma_la-filter_common.o \
-	liblzma/liblzma_la-fastpos_table.o \
-	liblzma/liblzma_la-delta_encoder.o \
-	liblzma/liblzma_la-delta_decoder.o \
-	liblzma/liblzma_la-delta_common.o \
-	liblzma/liblzma_la-simple_coder.o \
-	liblzma/liblzma_la-simple_encoder.o \
-	liblzma/liblzma_la-simple_decoder.o \
-	liblzma/liblzma_la-lzma_encoder_optimum_fast.o \
-	liblzma/liblzma_la-lzma_encoder_optimum_normal.o \
-	liblzma/liblzma_la-powerpc.o \
-	liblzma/liblzma_la-price_table.o \
-	liblzma/liblzma_la-sha256.o \
-	liblzma/liblzma_la-sparc.o \
-	liblzma/liblzma_la-vli_encoder.o \
-	liblzma/liblzma_la-vli_decoder.o \
-	liblzma/liblzma_la-index_encoder.o \
-	liblzma/liblzma_la-index_decoder.o \
-	liblzma/liblzma_la-index_hash.o \
-	liblzma/liblzma_la-ia64.o \
-	liblzma/liblzma_la-lz_encoder.o \
-	liblzma/liblzma_la-lz_decoder.o \
-	liblzma/liblzma_la-lz_encoder_mf.o \
-	liblzma/liblzma_la-block_util.o \
-
-
 all: libftindex.o
 	make -C  /lib/modules/$(KDIR)/build M=$(PWD) modules
 
-libftindex.o: $(LIBPORTABILITY-OBJS) $(LIBFT-OBJS) $(LIBUTIL-OBJS) $(LIBLOCKTREE-OBJS) $(LIBSRC-OBJS) $(LIBLZMA-OBJS)
+libftindex.o: $(LIBPORTABILITY-OBJS) $(LIBFT-OBJS) $(LIBUTIL-OBJS) $(LIBLOCKTREE-OBJS) $(LIBSRC-OBJS)
 	ld -r $^ -o $@
 
 
@@ -858,9 +809,6 @@ rmmod:
 	git diff-index --exit-code --quiet HEAD || git commit -a -m "doing rmmod"
 	git push imola
 	sudo rmmod ftfs
-
-liblzma/%.o: ../build/xz/lib/liblzma.a
-	(cd liblzma; ar x ../$< $*.o)
 
 clean:
 	make -C /lib/modules/$(KDIR)/build M=$(PWD) clean

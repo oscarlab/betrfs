@@ -375,7 +375,7 @@ static void maybe_report_directory_scan_progress(int files_so_far, int * stop)
     if (files_so_far > 0 && files_so_far % check_interval == 0) {
         long now = toku_current_time_usec();
         if (now - last_progress_report > time_interval) {
-            progress_printf("* progress: scanned %d files in %ld usec, %lf files/second\n",
+            progress_printf("* progress: scanned %d files, %ld usec elapsed, (cumulative throughput: %lf files/second)\n",
                     files_so_far, now - start, 
                     files_so_far / ((now - start) / 1000000.0));
             last_progress_report = now;
@@ -484,17 +484,17 @@ static int toku_gettid(void)
 // HACK should be replaced by a struct benchmark_info that
 // is contained in benchmark_thread_info
 static long benchmark_start_time;
-static void maybe_report_file_io_progress(enum thread_operation op, 
-        int operation_num)
+static void maybe_report_file_io_progress(enum thread_operation op,
+					  int operation_num)
 {
     if (should_report_file_io_progress(operation_num)) {
         // adding 1 is a shameless hack to avoid start == now
         long elapsed_time = toku_current_time_usec()+1 - benchmark_start_time;
         size_t num_bytes = operation_num * iosize;
-        progress_printf("* progress: thread [%d] %s %lu bytes so far, %lf\n",
+        progress_printf("* progress: thread [%d] %s %lu bytes, %ld usec elapsed, (cumulative throughput %lf bytes/usec)\n",
 			toku_gettid(),
-			thread_operation_is_writing(op) ? "wrote" : "read", 
-			num_bytes, num_bytes * 1.0f / elapsed_time);
+			thread_operation_is_writing(op) ? "wrote" : "read",
+			num_bytes, elapsed_time, num_bytes*1.0f / elapsed_time);
     }
 }
 
@@ -513,9 +513,9 @@ static void maybe_report_file_create_progress(int i)
     if (i > 0 && i % interval == 0) {
         long elapsed_time = toku_current_time_usec() - start;
         (void) __sync_fetch_and_add(&files_created, interval);
-        progress_printf("* progress: %d files, %lf files/sec\n",
-                files_created, 
-                files_created / (elapsed_time / 1000000.0));
+        progress_printf("* progress: created %d files, %ld usec elapsed, (cumulative throughput %lf files/sec)\n",
+			files_created, elapsed_time,
+			files_created / (elapsed_time / 1000000.0));
     }
 }
 
@@ -766,6 +766,12 @@ static void run_benchmarks(struct benchmark_file_ops * file_ops)
     if (num_operations > 0) {
         long bytes = num_files * num_operations * iosize;
         printf("throughput: %lf MB/sec\n", bytes / (elapsed_time * 1.0));
+    }
+
+    if (num_files > 1 && num_operations > 0) {
+        long bytes = num_files * num_operations * iosize;
+        double seconds = elapsed_time / 1000000.0;
+        printf("tokubench, %d, %lf, %lf\n", num_files, num_files / seconds,  bytes / (elapsed_time * 1.0));
     }
 
     ret = toku_threadpool_destroy(&tp);

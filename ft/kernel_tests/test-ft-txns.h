@@ -145,14 +145,11 @@ static inline void test_setup_and_recover(const char *envdir, TOKULOGGER *logger
     CKERR(r);
 
     DB_ENV *CAST_FROM_VOIDP(ctv, (void *) &ct);  // Use intermediate to avoid compiler warning.
-
-    struct toku_db_key_operations dummy_ftfs_key_ops;
-    memset(&dummy_ftfs_key_ops, 0, sizeof(dummy_ftfs_key_ops));
     r = tokudb_recover(ctv,
                        NULL_prepared_txn_callback,
                        xid_lsn_keep_cachetable_callback,
                        logger,
-                       envdir, envdir, &dummy_ftfs_key_ops, 0, 0, NULL, 0);
+                       envdir, envdir, 0, 0, 0, NULL, 0);
     CKERR(r);
     if (!toku_logger_is_open(logger)) {
         //Did not need recovery.

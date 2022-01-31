@@ -2,6 +2,7 @@
 set -x
 set -e
 
+#FT_HOMEDIR=/home/betrfs/ft-index/
 . $FT_HOMEDIR/benchmarks/fs-info.sh || exit 1
 
 DIR=`pwd`
@@ -9,7 +10,7 @@ DIR=`pwd`
 cd $FT_HOMEDIR/benchmarks/support-files || exit 1
 
 #### Untar the source ####
-if [ -d linux-3.11.10 ]
+if [ -d linux-3.11.10 ] 
 then :
 else
     tar -xf linux-3.11.10.tar.xz || exit 1

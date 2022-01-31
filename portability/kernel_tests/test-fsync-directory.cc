@@ -111,6 +111,7 @@ int test_fsync_directory(void) {
     r = toku_fsync_directory("."); CKERR(r);
     r = toku_fsync_directory(toku_path_join(buf, 3, TOKU_TEST_FILENAME, "test", "a")); CKERR(r);
     r = toku_fsync_directory(toku_path_join(buf, 4, ".", TOKU_TEST_FILENAME, "test", "a")); CKERR(r);
+    r = toku_fsync_directory("/tmp/x"); CKERR(r);
     toku_free(buf);
     return 0;
 }

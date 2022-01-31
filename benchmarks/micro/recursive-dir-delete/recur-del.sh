@@ -8,6 +8,14 @@ set -e
 set -x
 . $FT_HOMEDIR/benchmarks/fs-info.sh
 . $FT_HOMEDIR/benchmarks/micro/prepare-support-file.sh --big
-sudo -E ../../clear-fs-caches.sh
+
+if [ "$#" -eq 1 ] ; then
+    if [ "$1" != "--force-hdd" ] && [ "$1" != "--force-ssd" ]; then
+        echo "Invalid argument!"
+        exit 1
+    fi
+fi
+
+sudo -E ../../clear-fs-caches.sh $1
 
 /usr/bin/time -p rm -fr $mntpnt/big-linux > /dev/null

@@ -22,11 +22,11 @@
 #include <linux/mm_types.h>
 #include <linux/mm.h>
 #include "ftfs.h"
-#include "sb_files.h"
-#include "sb_dir.h"
-#include "sb_stat.h"
-#include "sb_error.h"
-#include "sb_malloc.h"
+#include "ftfs_files.h"
+#include "ftfs_dir.h"
+#include "ftfs_stat.h"
+#include "ftfs_error.h"
+#include "ftfs_malloc.h"
 
 extern int usleep(unsigned long);
 
@@ -696,21 +696,23 @@ int test_mkdir(void)
 	int err;
 	err = mkdir("/test_mkdir/", 0755);
 	if (err)
-		ftfs_error(__func__, "LINE=%d mkdir failed for err: %d", __LINE__, err);
+		ftfs_error(__func__, "mkdir failed for err: %d", err);
 	err = mkdir("/test_mkdir/1", 0755);
 	if (err)
-		ftfs_error(__func__, "LINE=%d mkdir failed for err: %d", __LINE__, err);
+		ftfs_error(__func__, "mkdir failed for err: %d", err);
 	err = mkdir("/test_mkdir/1/2", 0755);
 	if (err)
-		ftfs_error(__func__, "LINE=%d mkdir failed for err: %d", __LINE__, err);
+		ftfs_error(__func__, "mkdir failed for err: %d", err);
 	err = mkdir("/test_mkdir/1/2/3", 0755);
 	if (err)
-		ftfs_error(__func__, "LINE=%d mkdir failed for err: %d", __LINE__, err);
+		ftfs_error(__func__, "mkdir failed for err: %d", err);
 	err = mkdir("/test_mkdir/1/2/3/4", 0755);
 	if (err)
-		ftfs_error(__func__, "LINE=%d mkdir failed for err: %d", __LINE__, err);
+		ftfs_error(__func__, "mkdir failed for err: %d", err);
 
-	printk(KERN_ALERT "mkdir test finished: err=%d\n", err);
+	printk(KERN_ALERT "mkdir test finished\n");
+	set_errno(err);
+	perror("test_mkdir");
 
 	return err;
 }
@@ -720,42 +722,35 @@ int test_rmdir(void)
 	int err;
 	err = rmdir("/test_mkdir/1/2/3/4");
 	if (err)
-		ftfs_error(__func__, "LINE=%d rmdir failed for err: %d", __LINE__, err);
+		ftfs_error(__func__, "rmdir failed for err: %d", err);
 	err = rmdir("/test_mkdir/1/2/3");
 	if (err)
-		ftfs_error(__func__, "LINE=%d rmdir failed for err: %d", __LINE__, err);
+		ftfs_error(__func__, "rmdir failed for err: %d", err);
 	err = rmdir("/test_mkdir/1/2");
 	if (err)
-		ftfs_error(__func__, "LINE=%d rmdir failed for err: %d", __LINE__, err);
+		ftfs_error(__func__, "rmdir failed for err: %d", err);
 	err = rmdir("/test_mkdir/1");
 	if (err)
-		ftfs_error(__func__, "LINE=%d rmdir failed for err: %d", __LINE__, err);
+		ftfs_error(__func__, "rmdir failed for err: %d", err);
 	err = rmdir("/test_mkdir");
 	if (err)
-		ftfs_error(__func__, "LINE=%d rmdir failed for err: %d", __LINE__, err);
+		ftfs_error(__func__, "rmdir failed for err: %d", err);
 
-	printk(KERN_ALERT "rmdir test finished: err=%d\n", err);
+	printk(KERN_ALERT "rmdir test finished\n");
 	return err;
 }
 
 int test_mkrmdir(void)
 {
-	int i=0, err = 0;
-	err = recursive_delete("/test_mkdir");
-	if (err != 0 && err != -ENOENT) {
-		ftfs_error(__func__, "Make sure recursive deletion work: err=%d\n", err);
-		return err;
-	}
-
+	int i=0;
 	for (i=0; i<10; i++) {
-		err = test_mkdir();
-		if (err) break;
+		test_mkdir();
 		usleep(1000);
-		err = test_rmdir();
-		if (err) break;
+		test_rmdir();
  	}
-	printk(KERN_ALERT "mkrmdir test finished: err=%d\n", err);
-	return err;
+
+	printk(KERN_ALERT "mkrmdir test finished\n");
+	return 0;
 }
 
 int test_unlink(void)
@@ -820,19 +815,16 @@ static int create_files(void)
 	ret = open64("/test/1", O_CREAT|O_RDWR, 0755);
 	if (ret < 0)
 		goto err;
-	close(ret);
 
 	num = 2;
 	ret = open64("/test/2", O_CREAT|O_RDWR, 0755);
 	if (ret < 0)
 		goto err;
-	close(ret);
 
 	num = 3;
 	ret = open64("/test/3", O_CREAT|O_RDWR, 0755);
 	if (ret < 0)
 		goto err;
-	close(ret);
 
 	return 0;
 
@@ -1018,7 +1010,7 @@ int test_remove(void)
 		set_errno(ret);
 		perror("test_remove /test/");
 	}
-
+	
 	return ret;
 
 }
@@ -1105,7 +1097,7 @@ int test_slab(void)
 	ftfs_error(__func__, "kmalloc(0): %p\n", p);
 	if (p)
 		kfree(p);
-
+		
 	return 0;
 }
 

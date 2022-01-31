@@ -4,7 +4,6 @@
 set -e
 
 . ../../fs-info.sh
-. ../../.ismounted
 
 support=$FT_HOMEDIR/benchmarks/support-files
 src=linux-3.11.10.tar.xz
@@ -16,16 +15,22 @@ if [ ! -e $mntpnt/$dst ]; then
     cp $support/$src $mntpnt/$dst
 fi
 
-sudo -E ../../clear-fs-caches.sh
+if [ "$#" -eq 1 ] ; then
+    if [ "$1" != "--force-hdd" ] && [ "$1" != "--force-ssd" ]; then
+        echo "Invalid argument!"
+        exit 1
+    fi
+fi
+
+sudo -E ../../clear-fs-caches.sh $1
 
 cd $mntpnt;
 /usr/bin/time -p  tar -xf $dst
 cd -
 
-sudo -E ../../clear-fs-caches.sh
+sudo -E ../../clear-fs-caches.sh $1
 
 cd $mntpnt;
 /usr/bin/time  -p tar -zcvf ./linux.tar.gz ./linux-3.11.10/ > /dev/null
 cd -
-
 

@@ -69,7 +69,7 @@ int main(int argc, char* argv[]) {
     elapsed = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1000000000.0;
     mb = (4*randomwrites)/1.0E6;
     printf("op, seq.or.rand, size.MB, time.s, throughput.MBps\n");
-    printf("write, random, %lf, %lf, %lf\n", mb, elapsed, mb / elapsed);
+    printf("write.random.4B, %lf, %lf, %lf\n", mb, elapsed, mb / elapsed);
     return 0;
 }
 void print_usage (FILE * stream){

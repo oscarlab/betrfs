@@ -238,6 +238,8 @@ struct ftnode_nonleaf_childinfo {
     struct toku_list unbound_inserts;
     uint32_t unbound_insert_count;
 
+    DBT lifted;
+
     FIFO buffer;
     off_omt_t broadcast_list;
     off_omt_t kupsert_list;
@@ -327,12 +329,6 @@ struct ftnode_partition {
     // How many bytes worth of work was performed by messages in each buffer.
     uint64_t     workdone;
 
-    // the prefix lifted (BP_LIFT)
-    // BLBs (leaf partitions) always have empty lift
-    // all messages in the BNC (nonleaf partitions) have been lifted by this lift
-    // all descendents of this partition have been lifted by this lift
-    DBT lift;
-
     //
     // pointer to the partition. Depending on the state, they may be different things
     // if state == PT_INVALID, then the node was just initialized and ptr == NULL
@@ -404,7 +400,6 @@ struct ftnode {
 #define BP_BLOCKNUM(node,i) ((node)->bp[i].blocknum)
 #define BP_STATE(node,i) ((node)->bp[i].state)
 #define BP_WORKDONE(node, i)((node)->bp[i].workdone)
-#define BP_LIFT(node, i) ((node)->bp[i].lift)
 
 //
 // macros for managing a node's clock
@@ -742,7 +737,7 @@ BASEMENTNODE toku_create_empty_bn(void);
 BASEMENTNODE toku_create_empty_bn_no_buffer(void); // create a basement node with a null buffer.
 NONLEAF_CHILDINFO toku_clone_nl(NONLEAF_CHILDINFO orig_childinfo);
 BASEMENTNODE toku_clone_bn(BASEMENTNODE orig_bn);
-NONLEAF_CHILDINFO toku_create_empty_nl(void);
+NONLEAF_CHILDINFO toku_create_empty_nl(NONLEAF_CHILDINFO orig);
 // FIXME needs toku prefix
 void destroy_basement_node (BASEMENTNODE bn);
 // FIXME needs toku prefix

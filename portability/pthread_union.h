@@ -161,11 +161,8 @@ struct rw_semaphore {
 };
 #endif //CONFIG_RWSEM_GENERIC_SPINLOCK
 struct true_pthread_struct;
-// The mux needs to be held until we either have the semaphore, or are in the wait queue, 
-// otherwise there is a risk of non-fifo behavior. See the complementary ftfs_down_read.
 struct kernel_rwlock {
 	struct rw_semaphore lock;
-        struct kernel_pthread_mutex * mutex;
 	int init;
 #ifdef DEBUG_NESTED_SEMAPHORES	
 	struct list_head holders;

@@ -18,10 +18,11 @@ if [ -e $mnt/$input ] ; then
     rm $mnt/$input
 fi
 
-sudo -E ../../clear-fs-caches.sh
+sudo ../../clear-fs-caches.sh
 
 echo "beginning sequential write test..."
 #sudo blktrace -d /dev/sda4 -b 2048 &
 $exe -o$mnt/$input -b$io_size -n$random_buffers -s$f_size
 #sudo pkill -15 blktrace
 echo "done!"
+

@@ -4,7 +4,7 @@
 #include <linux/string.h>
 #include <linux/kernel.h>
 #include <linux/slab.h>
-#include "sb_pthread.h"
+#include "ftfs_pthread.h"
 
 extern int atoi(char *);
 
@@ -615,6 +615,19 @@ extern int test_xid_lsn_independent(void);
 extern int test_verify_misrouted_msgs(void);
 extern int test_test_db_env_strdup_null(void);
 extern int test_seqwrite_no_txn(void);
+#if 0
+extern int test_slice_subtree_1(void);
+extern int test_slice_subtree_2(void);
+extern int test_slice_subtree_3(void);
+extern int test_slice_subtree_4(void);
+extern int test_relocate_subtree_1(void);
+extern int test_relocate_subtree_2(void);
+extern int test_relocate_subtree_3(void);
+extern int test_relocate_subtree_4(void);
+extern int test_relocate_subtree_5(void);
+extern int test_relocate_subtree_6(void);
+extern int test_relocate_subtree_7(void);
+#endif
 extern int test_rename_simple(void);
 /* large IO tests */
 //extern int logger_test_tables(void);
@@ -846,7 +859,7 @@ struct {
 	{ "write", test_write, 5},
 	{ "readlink", test_readlink, 5},
 	{ "f-all", test_f_all, 5},
-	{ "shortcut", test_shortcut, 5},
+	{ "f-all", test_shortcut, 5},
 	{ "bug1381", test_bug1381, 5},
 	{ "cursor-step-over-delete", test_cursor_step_over_delete, 5},
 	{ "x1764-test", test_x1764, 5},
@@ -1135,7 +1148,7 @@ struct {
 	{"test-stress6",test_test_stress6, 45},
 	{"test-stress7",test_test_stress7, 90},
 	{"test-stress-openclose",test_test_stress_openclose, 45},
-	{"test-stress-with-verify",test_test_stress_with_verify, 60},
+	{"test-stress-with-verify",test_test_stress_with_verify, 45},
 	{"perf-child-txn",test_perf_child_txn, 30},
 	{"perf-rangequery", test_perf_rangequery, 30},
 	{"perf-read-txn", test_perf_read_txn, 30},
@@ -1238,6 +1251,19 @@ struct {
 	{"range-del2",test_range_del2, 5},
 	{"range-del2",test_range_del2, 5},
 	{"rename-simple",test_rename_simple, 5},
+#if 0
+	{"slice-subtree-1",test_slice_subtree_1, 5},
+	{"slice-subtree-2",test_slice_subtree_2, 5},
+	{"slice-subtree-3",test_slice_subtree_3, 5},
+	{"slice-subtree-4",test_slice_subtree_4, 5},
+	{"relocate-subtree-1",test_relocate_subtree_1, 5},
+	{"relocate-subtree-2",test_relocate_subtree_2, 5},
+	{"relocate-subtree-3",test_relocate_subtree_3, 5},
+	{"relocate-subtree-4",test_relocate_subtree_4, 5},
+	{"relocate-subtree-5",test_relocate_subtree_5, 5},
+	{"relocate-subtree-6",test_relocate_subtree_6, 5},
+	{"relocate-subtree-7",test_relocate_subtree_7, 5},
+#endif
 	{"recovery-range-delete",test_recovery_range_delete, 5}
 };
 

@@ -1,5 +1,14 @@
-mountpoint -q $mntpnt
-if [ $? -ne 0 ]; then
-   echo "no file system mounted: $?"
-   exit 1
+#!/bin/bash
+
+isDevMounted()
+{
+	findmnt -rn | grep "$1";
+}
+
+if isDevMounted "$sb_dev";
+then
+    echo "Device $sb_dev is mounted!!!!!!"
+    exit 1
+else
+    echo "Device $sb_dev is not mounted~~~~~"
 fi

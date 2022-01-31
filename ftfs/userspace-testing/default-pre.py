@@ -8,43 +8,36 @@ def usage() :
     print "optional args:"
     print "\t--test=<name of test>: specify test name"
     print "\th, --help: show this dialogue"
-    print "\ts, --sfs: use sfs for unit tests"
 
 if __name__ == "__main__":
 
     test = ""
 
     try :
-        opts, args = getopt.getopt(sys.argv[1:], "hs", ["help", "sfs", "test="])
+        opts, args = getopt.getopt(sys.argv[1:], "h", ["help", "test="])
 
     except getopt.GetoptError:
         usage();
         sys.exit(2)
 
-    use_sfs = False
     for opt, arg in opts :
         if opt in ("h", "--help") :
             usage()
         elif opt == "--test" :
             test = arg
-        elif opt in ("s", "--sfs"):
-            use_sfs = True
 
     if test != "" :
         print "\n\npre-test {0}.".format(test)
 
-    print "Check dmesg"
-    command = "tail -n 50 /var/log/syslog"
+    print "printing /proc/meminfo"
+    command = "cat /proc/meminfo"
     ret = subprocess.call(command, shell=True)
     if ret != 0 :
         print "ERROR!"
+        print "cat /proc/meminfo returning: {0}. exiting...".format(ret)
         exit(ret)
 
-    if use_sfs:
-       command = "insmod ftfs.ko sb_dev=/dev/sdb sb_fstype=sfs"
-    else:
-       command = "insmod ftfs.ko sb_dev=/dev/sdb sb_fstype=ext4"
-
+    command = "insmod ftfs.ko sb_dev=/dev/sdb sb_fstype=ext4"
     ret = subprocess.call(command, shell=True)
     if ret != 0 :
         print "ERROR!"
@@ -52,3 +45,4 @@ if __name__ == "__main__":
         exit(ret)
 
     exit(ret)
+    

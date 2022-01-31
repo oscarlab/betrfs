@@ -1,5 +1,5 @@
 set(tokusrc_kernel_srcs
-seq-io
+#seq-io
 bench
 big-nested-abort-abort
 big-nested-abort-commit
@@ -246,10 +246,10 @@ test_3645
 test_3755
 test_4015 #(drd test)
 test_4368
-test4573-logtrim
+#test4573-logtrim
 test_4657
 test_5015
-test5092
+#test5092
 test-5138 #(custom test)
 test_5469
 test_789
@@ -350,11 +350,11 @@ test_logmax #loooong test
 test_mostly_seq
 test_multiple_checkpoints_block_commit
 test_nested
-test-nested-xopen-eclose
+#test-nested-xopen-eclose
 test_nodup_set
-test-prepare2
-test-prepare3
-test-prepare
+#test-prepare2
+#test-prepare3
+#test-prepare
 test_query  #loooong test
 test_rand_insert
 test_read_txn_invalid_ops
@@ -362,7 +362,7 @@ test_redirect_func
 test_restrict
 test_reverse_compare_fun
 test-rollinclude
-test_set_func_malloc
+#test_set_func_malloc
 test_simple_read_txn
 test_stress0 
 # needs to link with lock_tree. (--num_elements 512, --num_seconds 1000 --join_timeout 600 (we weant this test, but we must fix threaded_stress_test_helpers.h first)
@@ -431,8 +431,8 @@ test_update_txn_snapshot_works_concurrently
 test_update_txn_snapshot_works_correctly_with_deletes
 test_update_with_empty_table
 test_weakxaction
-test-xa-prepare
-test-xopen-eclose
+#test-xa-prepare
+#test-xopen-eclose
 test_zero_length_keys
 transactional_fileops
 update

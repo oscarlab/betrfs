@@ -4,10 +4,8 @@ set(tokuportability_srcs
   huge_page_detection
   file
   memory
-  os_malloc
   portability
   toku_assert
-  toku_crash
   toku_path
   toku_pthread
   toku_time

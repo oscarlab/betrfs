@@ -12,14 +12,16 @@ if [ -d $mntpnt/linux-3.11.10 ]; then
 else
 . $FT_HOMEDIR/benchmarks/micro/prepare-support-file.sh
 fi
-sudo -E ../../clear-fs-caches.sh
 
-if [ "$1" = "" ]
-then
-filename='wait.c'
-else
-filename=$1
+if [ "$#" -eq 1 ] ; then
+    if [ "$1" != "--force-hdd" ] && [ "$1" != "--force-ssd" ]; then
+        echo "Invalid argument!"
+        exit 1
+    fi
 fi
 
+sudo -E ../../clear-fs-caches.sh $1
+
+filename='wait.c'
 
 /usr/bin/time -p find $mntpnt/linux-3.11.10 -name $filename>/dev/null

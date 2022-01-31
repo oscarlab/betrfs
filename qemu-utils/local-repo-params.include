@@ -1,5 +1,0 @@
-MOUNTPOINT=mnt
-USER=don
-USERID=1000
-REPO=home/$USER/betrfs-private/
-VIRTUALDISK=linuxdisk.raw

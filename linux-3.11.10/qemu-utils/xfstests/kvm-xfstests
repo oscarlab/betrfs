@@ -1,0 +1,125 @@
+#!/bin/bash
+
+DIR=.
+if test -n "$KVM_XFSTESTS_DIR"
+then
+    DIR="$KVM_XFSTESTS_DIR"
+fi
+
+. "$DIR/util/get-config"
+
+QUIET="quiet loglevel=0"
+
+. $DIR/util/parse_cli
+
+if ! test -f "$KERNEL"; then
+     echo "$KERNEL: kernel not found"
+     exit 1
+fi
+
+if test -z "$DO_NET" ; then
+   echo "Networking disabled."
+   NET="-net none "
+elif test $(whoami) = "root" ; then
+  NET="-net nic,model=virtio -net tap,script=$IFUP,downscript=$IFDOWN "
+else
+  NET="-netdev user,id=mynet0,net=172.20.0.0/24 -device virtio-net,netdev=mynet0 "
+fi
+
+EXTRA_ARG=$(echo "$EXTRA_ARG" | sed -e 's/:/ /')
+
+if test -n "$SKIP_LOG" ; then
+    LOGFILE=/tmp/log.$(date +%Y%m%d%H%M)
+else
+    mkdir -p "$DIR/logs"
+    LOGFILE="$DIR/logs/log.$(date +%Y%m%d%H%M)"
+fi
+
+if test -n "$INITRD" ; then
+    INITRD="--initrd $INITRD"
+fi
+
+if ! test -e $VDB -a -e $VDC -a -e $VDD -a -e $VDE -a -e $VDF -a -e $VDG
+then
+	echo "Test disks don't exist, running setup..."
+	$DIR/setup
+fi
+
+for i in "$VDB" "$VDC" "$VDD" "$VDE" "$VDF" "$VDG"
+do
+    if ! test -e "$i"
+    then
+	echo "Fatal error: disk $i does not exit.  Config error?"
+	exit 1;
+    fi
+done
+
+if ionice -h > /dev/null ; then
+    IONICE="ionice -n 5"
+fi
+
+VDH=$(mktemp /tmp/kvm-upload.XXXXXXXX)
+trap 'rm -f "$VDH"' 0
+tar -c -f "$VDH" -T /dev/null
+
+if test -z "$NO_ACTION" -a "$UPDATE_XFSTESTS" = "yes"
+then
+    tar -r -f $VDH -C "$DIR/.." xfstests.tar.gz
+fi
+
+if test -z "$NO_ACTION" -a "$UPDATE_FILES" = "yes"
+then
+    TDIR=$(mktemp -d /tmp/files.XXXXXXXX)
+    if test -z "$TDIR"; then
+	echo "Couldn't create temp directory"
+	exit 1
+    fi
+    (cd "$DIR/test-appliance"; \
+     tar -X kvm-exclude-files -C files -cf - . | \
+	 gzip -9n > "$TDIR/files.tar.gz")
+    tar -r -f $VDH -C "$TDIR" files.tar.gz
+    rm -rf "$TDIR"
+fi
+
+chmod 400 "$VDH"
+ARG="$ARG test_timeout=$TEST_TIMEOUT"
+$NO_ACTION $IONICE $QEMU -boot order=c $NET \
+	-machine type=pc,accel=kvm:tcg \
+	-drive file=$ROOT_FS,if=virtio$SNAPSHOT \
+	-drive file=$VDB,cache=none,if=virtio,format=raw \
+	-drive file=$VDC,cache=none,if=virtio,format=raw \
+	-drive file=$VDD,cache=none,if=virtio,format=raw \
+	-drive file=$VDE,cache=none,if=virtio,format=raw \
+	-drive file=$VDF,cache=none,if=virtio,format=raw \
+	-drive file=$VDG,cache=none,if=virtio,format=raw \
+	-drive file=$VDH,cache=unsafe,readonly,if=virtio \
+	-vga none -nographic -smp $NR_CPU -m $MEM \
+	$VIRTIO_RNG \
+	$CONSOLE \
+	$MONITOR \
+	$SERIAL \
+	$GDB \
+	$NUMA \
+	--kernel $KERNEL \
+	$INITRD \
+	--append "$QUIET root=$ROOT_DEV console=ttyS0,115200 $ARG $EXTRA_ARG" |\
+tee $LOGFILE
+
+$DIR/get-results $LOGFILE
+
+if test -n "$SKIP_LOG" ; then
+  rm $LOGFILE
+else
+  echo "logfile in $LOGFILE"
+fi
+
+yes | rm summary.log
+echo "xfstests results summary" >> summary.log
+echo "---------------------------------" >> summary.log
+cat $LOGFILE | grep "Failed [0-9]* of [0-9]* tests" >> summary.log
+cat $LOGFILE | grep "Failures: generic*" >> summary.log
+cat $LOGFILE | grep "Passed all [0-9]* tests" >> summary.log
+echo $'\n' >> summary.log
+cat $LOGFILE | grep "Ran: *" >> summary.log
+
+python email-results.py --subject="xfstests results" --addresses=$(cat xfstests_email) --attachments="summary.log,$LOGFILE"

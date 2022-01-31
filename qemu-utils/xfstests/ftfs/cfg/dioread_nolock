@@ -1,4 +1,0 @@
-SIZE=small
-export MKFS_OPTIONS=""
-export EXT_MOUNT_OPTIONS="dioread_nolock"
-TESTNAME="Ext4 4k block w/dioread_nolock"

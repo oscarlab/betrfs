@@ -140,7 +140,6 @@ private:
     void maybe_signal_next_writer(void);
 */
     void fair_lock_init(void);
-    void fair_lock_set_mutex(toku_mutex_t * const);
     void fair_lock_deinit(void);
     toku_mutex_t *m_mutex;
     toku_pthread_rwlock_t m_fair_lock;

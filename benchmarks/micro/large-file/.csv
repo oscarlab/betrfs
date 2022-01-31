@@ -1,0 +1,4 @@
+op, seq.or.rand, size.MB, time.s, throughput.MBps
+write, random, 1.048576, 5.677552, 0.184688
+op, seq.or.rand, size.MB, time.s, throughput.MBps
+write, random, 1.048576, 5.376863, 0.195016

@@ -302,7 +302,6 @@ static int recover_env_init (RECOVER_ENV renv,
     renv->env                      = env;
     renv->prepared_txn_callback    = prepared_txn_callback;
     renv->keep_cachetable_callback = keep_cachetable_callback;
-    assert (key_ops != NULL);
     memcpy(&renv->key_ops, key_ops, sizeof(*key_ops));
     renv->update_function          = update_function;
     renv->generate_row_for_put     = generate_row_for_put;

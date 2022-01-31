@@ -105,7 +105,6 @@ PATENT RIGHTS GRANT:
 
 static int toku_assert_on_write_enospc = 0;
 static const int toku_write_enospc_sleep = 1;
-static uint64_t toku_write_enospc_last_report;      // timestamp of most recent report to error log
 static time_t   toku_write_enospc_last_time;        // timestamp of most recent ENOSPC
 static uint32_t toku_write_enospc_current;          // number of threads currently blocked on ENOSPC
 static uint64_t toku_write_enospc_total;            // total number of times ENOSPC was returned from an attempt to write
@@ -118,81 +117,6 @@ void toku_fs_get_write_info(time_t *enospc_last_time, uint64_t *enospc_current, 
     *enospc_last_time = toku_write_enospc_last_time;
     *enospc_current = toku_write_enospc_current;
     *enospc_total = toku_write_enospc_total;
-}
-
-//Print any necessary errors
-//Return whether we should try the write again.
-static void
-try_again_after_handling_write_error(int fd, size_t len, ssize_t r_write) {
-    int try_again = 0;
-
-    assert(r_write < 0);
-#ifdef TOKU_LINUX_MODULE
-    // unable to fetch errno here
-    int errno_write = EINTR;
-#else
-    int errno_write = get_error_errno();
-#endif
-    switch (errno_write) {
-    case EINTR: { //The call was interrupted by a signal before any data was written; see signal(7).
-	char err_msg[sizeof("Write of [] bytes to fd=[] interrupted.  Retrying.") + 20+10]; //64 bit is 20 chars, 32 bit is 10 chars
-	snprintf(err_msg, sizeof(err_msg), "Write of [%" PRIu64 "] bytes to fd=[%d] interrupted.  Retrying.", (uint64_t)len, fd);
-	perror(err_msg);
-	fflush(stderr);
-	try_again = 1;
-	break;
-    }
-    case ENOSPC: {
-        if (toku_assert_on_write_enospc) {
-            char err_msg[sizeof("Failed write of [] bytes to fd=[].") + 20+10]; //64 bit is 20 chars, 32 bit is 10 chars
-            snprintf(err_msg, sizeof(err_msg), "Failed write of [%" PRIu64 "] bytes to fd=[%d].", (uint64_t)len, fd);
-            perror(err_msg);
-            fflush(stderr);
-            int out_of_disk_space = 1;
-            assert(!out_of_disk_space); //Give an error message that might be useful if this is the only one that survives.
-        } else {
-            toku_sync_fetch_and_add(&toku_write_enospc_total, 1);
-            toku_sync_fetch_and_add(&toku_write_enospc_current, 1);
-
-            time_t tnow = time(0);
-            toku_write_enospc_last_time = tnow;
-            if (toku_write_enospc_last_report == 0 || tnow - toku_write_enospc_last_report >= 60) {
-                toku_write_enospc_last_report = tnow;
-
-                const int tstr_length = 26;
-                char tstr[tstr_length];
-                time_t t = time(0);
-                ctime_r(&t, tstr);
-
-                const int MY_MAX_PATH = 256;
-                /* DEP: malloc to reduce frame size. */
-                char * fname = (char *) malloc(MY_MAX_PATH);
-                char * symname = (char *) malloc(MY_MAX_PATH+1);
-                sprintf(fname, "/proc/%d/fd/%d", getpid(), fd);
-                ssize_t n = readlink(fname, symname, MY_MAX_PATH);
-
-                if ((int)n == -1)
-                    fprintf(stderr, "%.24s Tokudb No space when writing %" PRIu64 " bytes to fd=%d ", tstr, (uint64_t) len, fd);
-                else {
-		    tstr[n] = 0; // readlink doesn't append a NUL to the end of the buffer.
-                    fprintf(stderr, "%.24s Tokudb No space when writing %" PRIu64 " bytes to %*s ", tstr, (uint64_t) len, (int) n, symname);
-		}
-                fprintf(stderr, "retry in %d second%s\n", toku_write_enospc_sleep, toku_write_enospc_sleep > 1 ? "s" : "");
-                fflush(stderr);
-                free(fname);
-                free(symname);
-            }
-            sleep(toku_write_enospc_sleep);
-            try_again = 1;
-            toku_sync_fetch_and_sub(&toku_write_enospc_current, 1);
-            break;
-        }
-    }
-    default:
-	break;
-    }
-    assert(try_again);
-    set_errno(errno_write);
 }
 
 static ssize_t (*t_write)(int, const void *, size_t);
@@ -265,7 +189,8 @@ toku_os_full_write (int fd, const void *buf, size_t len) {
             bp            += r;
         }
         else {
-            try_again_after_handling_write_error(fd, len, r);
+            printf("%s: r=%ld\n", __func__, r);
+            assert(false);
         }
     }
     assert(len == 0);
@@ -314,7 +239,8 @@ toku_os_full_pwrite (int fd, const void *buf, size_t len, toku_off_t off) {
             off           += r;
         }
         else {
-            try_again_after_handling_write_error(fd, len, r);
+            printf("%s: r=%ld\n", __func__, r);
+            assert(false);
         }
     }
     assert(len == 0);

@@ -368,8 +368,8 @@ int test_checkpoint_stress(void) {
     int crash = 0;
     for(iter = 0; iter < 5; iter ++)
         run_test(iter, crash);
-    //crash = 1;
-    //run_test(iter,crash);
+    crash = 1;
+    run_test(iter,crash);
     
     post_teardown();
     return 0;

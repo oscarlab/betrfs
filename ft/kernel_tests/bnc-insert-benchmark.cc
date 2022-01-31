@@ -152,7 +152,7 @@ run_test(unsigned long eltsize, unsigned long nodesize, unsigned long repeat)
     assert_zero(r);  
 
     for (unsigned int j = 0; j < repeat; ++j) {
-        bnc = toku_create_empty_nl();
+        bnc = toku_create_empty_nl(nullptr);
         for (; toku_bnc_nbytesinbuf(bnc) <= nodesize; ++cur) {
             FT_MSG_S msg;
             DBT key, val;
