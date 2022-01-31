@@ -851,7 +851,9 @@ int main (int argc, char *const argv[] __attribute__((__unused__))) {
     printf("void db_env_set_func_fsync (int (*)(int)) %s;\n", VISIBLE);
     printf("void db_env_set_func_free (void (*)(void*)) %s;\n", VISIBLE);
     printf("void db_env_set_func_malloc (void *(*)(size_t)) %s;\n", VISIBLE);
-    printf("void db_env_set_func_realloc (void *(*)(void*, size_t)) %s;\n", VISIBLE);
+    printf("void db_env_set_func_realloc (void *(*)(void*, size_t, size_t)) %s;\n", VISIBLE);
+    printf("void db_env_set_func_free_sized (void (*)(void*, size_t)) %s;\n", VISIBLE);
+    printf("void db_env_set_func_malloc_sized (void *(*)(size_t, bool)) %s;\n", VISIBLE);
     printf("void db_env_set_func_pwrite (ssize_t (*)(int, const void *, size_t, toku_off_t)) %s;\n", VISIBLE);
     printf("void db_env_set_func_full_pwrite (ssize_t (*)(int, const void *, size_t, toku_off_t, bool)) %s;\n", VISIBLE);
     printf("void db_env_set_func_write (ssize_t (*)(int, const void *, size_t)) %s;\n", VISIBLE);

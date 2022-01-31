@@ -1073,10 +1073,10 @@ void toku_ftnode_clone_callback(
         // set header stats, must be done before rebalancing
         ftnode_update_disk_stats(node, ft, for_checkpoint);
         // rebalance the leaf node
-        ft_verify_pivots(node, ft);
+        ft_verify_pivots(node, ft);         /// XXX: Drop?
         rebalance_ftnode_leaf(ft, node, ft->h->basementnodesize);
     //    toku_trace_printk("after rebalancing node [%" PRIu64 "]\n", node->thisnodename.b);
-	ft_verify_pivots(node, ft);
+	ft_verify_pivots(node, ft);         /// XXX: Drop?
     }
 
     //toku_ft_node_unbound_inserts_validation(node);
@@ -1094,8 +1094,9 @@ void toku_ftnode_clone_callback(
     cloned_node->n_children = node->n_children;
     cloned_node->totalchildkeylens = node->totalchildkeylens;
 
-    if (node->n_children>1) {
-        XMALLOC_N(node->n_children-1, cloned_node->childkeys);
+    assert(node->n_children > 0);
+    if (node->n_children > 1) {
+        XMALLOC_N(node->n_children - 1, cloned_node->childkeys);
     } else {
         cloned_node->childkeys = NULL;
     }
@@ -1226,8 +1227,10 @@ void toku_ftnode_flush_callback(
 		//update the logger ubi hashtable with diskoff and size
 		note_diskoff_size_and_bound(ftnode, bound_offset, bound_size);
         	//FIXME remove the unbound msg list from the node??
-		ftnode_remove_unbound_insert_list_and_reset_count(ftnode);
+
+                ftnode_remove_unbound_insert_list_and_reset_count(ftnode);
                 //FIXME Bill, who would free unbound_msg_entry that were just bound from the in/out list in logger? will you do it upon log flush?
+
 		toku_mutex_unlock(&logger->ubi_lock);
 	}
         //debugging code
@@ -1933,10 +1936,12 @@ ft_compare_pivot(DESCRIPTOR desc, ft_compare_func cmp, const DBT *key, const DBT
 // MUST NOT do anything besides free the structures that have been allocated
 void toku_destroy_ftnode_internals(FTNODE node)
 {
-    for (int i=0; i<node->n_children-1; i++) {
-        toku_destroy_dbt(&node->childkeys[i]);
+    if (node->n_children > 0) {
+        for (int i = 0; i < node->n_children - 1; i++) {
+            toku_destroy_dbt(&node->childkeys[i]);
+        }
+        toku_free(node->childkeys);
     }
-    if(node->n_children>1) toku_free(node->childkeys);
     node->childkeys = NULL;
     node->unbound_insert_count = 0;
     for (int i=0; i < node->n_children; i++) {
@@ -1963,7 +1968,7 @@ void toku_destroy_ftnode_internals(FTNODE node)
         set_BNULL(node, i);
         toku_cleanup_dbt(&BP_LIFT(node, i));
     }
-    if(node->n_children>0) toku_free(node->bp);
+    if (node->n_children > 0) toku_free(node->bp);
     node->bp = NULL;
 }
 
@@ -1978,10 +1983,8 @@ void toku_ftnode_free(FTNODE *nodep) {
     toku_destroy_ftnode_internals(node);
     // free here because toku_destroy_ftnode_internals is also called in
     //   rebalance_ftnode_leaf
-    if (node->bound_l.size != 0)
-        toku_destroy_dbt(&node->bound_l);
-    if (node->bound_r.size != 0)
-        toku_destroy_dbt(&node->bound_r);
+    toku_cleanup_dbt(&node->bound_l);
+    toku_cleanup_dbt(&node->bound_r);
     toku_free(node);
     *nodep = nullptr;
 }
@@ -2014,7 +2017,7 @@ toku_initialize_empty_ftnode (FTNODE n, BLOCKNUM nodename, int height, int num_c
     n->unbound_insert_count = 0;
     if (num_children > 0) {
         if (num_children > 1) {
-            XMALLOC_N(num_children-1, n->childkeys);
+            XCALLOC_N(num_children - 1, n->childkeys);
         } else {
             n->childkeys = NULL;
         }
@@ -2299,9 +2302,9 @@ void
 toku_ft_nonleaf_append_child(FTNODE node, FTNODE child, const DBT *pivotkey) {
     int childnum = node->n_children;
     node->n_children++;
-    XREALLOC_N(node->n_children, node->bp);
+    XREALLOC_N(node->n_children-1, node->n_children, node->bp);
     init_childinfo(node, childnum, child);
-    XREALLOC_N(node->n_children-1, node->childkeys);
+    XREALLOC_N(node->n_children-2, node->n_children-1, node->childkeys);
     if (pivotkey) {
         invariant(childnum > 0);
         init_childkey(node, childnum-1, pivotkey);
@@ -5027,8 +5030,11 @@ int toku_ft_lift_key(FT ft, DBT *lifted_key, const DBT *key, const DBT *lifted)
 
 int toku_ft_lift_key_no_alloc(FT ft, DBT *lifted_key, const DBT *key, const DBT *lifted)
 {
-    assert(lifted->data != NULL);
     assert(ft->key_ops.keyliftkey != NULL);
+    if (lifted->size == 0)
+        return 0;
+    
+    assert(lifted->data != NULL);
 
     char *key_buf = (char*)key->data;
     if (key_buf[0] == 'm' && key->size <= lifted->size &&
@@ -6411,16 +6417,14 @@ apply_ancestors_messages_to_bn(
             toku_init_dbt(&tmp);
             int r = toku_ft_unlift_key(t->ft, &tmp, curr_bounds->lower_bound_exclusive, lift);
             assert_zero(r);
-            if (lk.data != NULL)
-                toku_destroy_dbt(&lk);
+            toku_cleanup_dbt(&lk);
             toku_copy_dbt(&lk, tmp);
         }
         if (curr_bounds->upper_bound_inclusive != NULL) {
             toku_init_dbt(&tmp);
             int r = toku_ft_unlift_key(t->ft, &tmp, curr_bounds->upper_bound_inclusive, lift);
             assert_zero(r);
-            if (uk.data != NULL)
-                toku_destroy_dbt(&uk);
+            toku_cleanup_dbt(&uk);
             toku_copy_dbt(&uk, tmp);
         }
         curr_bounds = &unlifted_bounds;
@@ -6569,16 +6573,14 @@ static bool bn_needs_ancestors_messages(
             toku_init_dbt(&tmp);
             int r = toku_ft_unlift_key(ft, &tmp, curr_bounds->lower_bound_exclusive, lift);
             assert_zero(r);
-            if (lk.data != NULL)
-                toku_destroy_dbt(&lk);
+            toku_cleanup_dbt(&lk);
             toku_copy_dbt(&lk, tmp);
         }
         if (curr_bounds->upper_bound_inclusive != NULL) {
             toku_init_dbt(&tmp);
             int r = toku_ft_unlift_key(ft, &tmp, curr_bounds->upper_bound_inclusive, lift);
             assert_zero(r);
-            if (uk.data != NULL)
-                toku_destroy_dbt(&uk);
+            toku_cleanup_dbt(&uk);
             toku_copy_dbt(&uk, tmp);
         }
         curr_bounds = &unlifted_bounds;
@@ -7030,38 +7032,7 @@ ft_search_child(FT_HANDLE brt, FTNODE node, int childnum, ft_search_t *search,
     } else {
         int r;
         r = toku_ft_lift_key_no_alloc(brt->ft, &lifted_k, search->k, lifted);
-	if (r)  {
-	    // if r !=0, there is only one possibility: the lift has failed due
-	    // to mismatched prefix b/w search-> k and lifted. Then the search
-            // ->pivot_bound must have stored the most recently attampted leaf's 
-            // bound, because search always takes a hint from pivot_bound to avoid
-            // retry the failed attampts. Search and see the calls to 
-            // search_which_child_cmp_with_bound how it moves past the failed attempts.  
-	    assert(search->pivot_bound.data);
-            // example: search->key = (/foo/a, max_blk), search->pivot_bound=(/foo/b,0)
-            // after GET_NEXT search failed at the left child because /foo/b is deleted
-            //                                  [/foo/b,0]                                            
-            //                                 |           |
-            //                                 |           | 
-            //                  lifted=/foo/               lifted =/foo/b
-            //                   [mix of /foo/a]          [/foo/b only]                   
-            //                   [and /foo/b   ]
-	    //  The current search memorizes the left child has failed by storing the pivot
-            //  into search->pivot_bound, so the retry will skip the left child. 
-            //  However, the search->k /foo/a does not match with /foo/b, prefix of the right
-            //  chlid.
-            //     
-            //  A better solution than pivot_bound, is to update the search->key as the search
-            //  progresses over the deleted range. For instance, if we are searching the
-            //  the_next_of(key 3), and we found 4 deleted, then we can safely update the query to 
-            //  the_next_of(key 4).  In this example, since the search has failed the left child, 
-            //  the search->key could have been updated to the pivot to the left child and continue, 
-            //  which is, (/foo/b, 0) in the example. Because we know the target is beyond this pivot.
-            r = toku_ft_lift_key_no_alloc(brt->ft, &lifted_k, &search->pivot_bound, lifted);
-            //  Now the search can continue with key being updated to the most recently failed pivot, 
-            //  and it is bound to match the prefix. 
-            assert_zero(r);
-	}
+        assert_zero(r);
         ft_search_init(&next_search, search->compare, search->direction,
                        &lifted_k, search->context);
         if (search->pivot_bound.data) {
@@ -7724,6 +7695,10 @@ ft_cursor_shortcut (
                 vallen,
                 val
                 );
+            // key is from buffer, but unlifted_key could be alloc'ed
+            // from toku_ft_unlift_with_ancestors() before entering this function
+            if (*unlifted_key != *key)
+                toku_free(*unlifted_key);
             *key = foundkey;
             *unlifted_key = foundkey;
             *keylen = foundkeylen;
@@ -7742,8 +7717,6 @@ ft_cursor_shortcut (
                 toku_ft_unlift_with_ancestors(ft, ancestors, unlifted_key, unlifted_keylen);
             r = getf(*unlifted_keylen, *unlifted_key, *vallen, *val, getf_v, false);
             if (r == TOKUDB_CURSOR_CONTINUE) {
-                if (*unlifted_key != *key)
-                    toku_free(*unlifted_key);
                 continue;
             }
             else {

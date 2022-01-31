@@ -801,6 +801,7 @@ void toku_ft_merge_child(
     FTNODE node,
     int childnum
     );
+
 static inline CACHETABLE_WRITE_CALLBACK get_write_callbacks_for_node(FT h) {
     CACHETABLE_WRITE_CALLBACK wc;
     wc.flush_callback = toku_ftnode_flush_callback;
@@ -1034,11 +1035,6 @@ int
 toku_bfe_leftmost_child_wanted(struct ftnode_fetch_extra *bfe, FTNODE node);
 int
 toku_bfe_rightmost_child_wanted(struct ftnode_fetch_extra *bfe, FTNODE node);
-
-// allocate a block number
-// allocate and initialize a ftnode
-// put the ftnode into the cache table
-void toku_create_new_ftnode (FT_HANDLE t, FTNODE *result, int height, int n_children);
 
 // Effect: Fill in N as an empty ftnode.
 void toku_initialize_empty_ftnode (FTNODE n, BLOCKNUM nodename, int height, int num_children,

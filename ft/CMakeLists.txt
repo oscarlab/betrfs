@@ -33,14 +33,13 @@ set(FT_SOURCES
   cachetable
   checkpoint
   compress
-  #dbufio
+  dbufio
   fifo
   ft
   ft-cachetable-wrappers
   ft-flusher
   ft-hot-flusher
-  #ftloader
-  #ftloader-callback
+  ftloader-callback
   ft_msg
   ft_node-serialize
   ft-node-deserialize
@@ -58,7 +57,7 @@ set(FT_SOURCES
   memarena
   minicron
   omt
-  #pqueue
+  pqueue
   queue
   quicklz
   recover
@@ -83,7 +82,6 @@ set(FT_SOURCES
 if (NOT BUILD_FOR_LINUX_KERNEL_MODULE)
   add_library(ft SHARED ${FT_SOURCES})
   maybe_add_gcov_to_libraries(ft ft_static)
-  add_dependencies(ft install_tdb_h generate_log_code)
   target_link_libraries(ft LINK_PRIVATE util_static ${LIBTOKUPORTABILITY})
   target_link_libraries(ft LINK_PUBLIC z)
 endif (NOT BUILD_FOR_LINUX_KERNEL_MODULE)

@@ -563,6 +563,7 @@ int test_ftfs_realloc(void)
 	int x = 128;
 	char tmp[] = "0123456789qwertyui";
 
+	int old_size = x;
 
 	printk(KERN_ALERT "Max: %lu\n", FTFS_KMALLOC_MAX_SIZE);
 	ptr = sb_malloc(x);
@@ -574,7 +575,8 @@ int test_ftfs_realloc(void)
 	memcpy(ptr, tmp, sizeof(tmp));
 
 	for (x = 256; x <= i; x = x + x) {
-		ptr = (char*) sb_realloc(ptr, x);
+		ptr = (char*) sb_realloc(ptr, old_size, x);
+		old_size = x;
 		if (!ptr) {
 			printk(KERN_ALERT " failed size:%d\n", x);
 			return -ENOMEM;

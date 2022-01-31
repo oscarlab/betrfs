@@ -118,15 +118,15 @@ static int iter_fn(FT_MSG msg, bool UU(is_fresh), void *args) {
     if (verbose) printf("checkit %d %d %" PRIu64 "\n", *p_i, type, msn.msn);
     assert(msn.msn == p_startmsn->msn + *p_i);
 #define buildkey(len) { \
-        *p_thekeylen = len+1; \
-        XREALLOC_N(*p_thekeylen, *p_thekey); \
-        memset(*p_thekey, len, *p_thekeylen); \
+        XREALLOC_N(*p_thekeylen, len+1, *p_thekey);     \
+        *p_thekeylen = len+1;                           \
+        memset(*p_thekey, len, *p_thekeylen);           \
     }
 
 #define buildval(len) { \
-        *p_thevallen = len+2; \
-        XREALLOC_N(*p_thevallen, *p_theval); \
-        memset(*p_theval, ~len, *p_thevallen); \
+        XREALLOC_N(*p_thevallen, len+2, *p_theval);     \
+        *p_thevallen = len+2;                           \
+        memset(*p_theval, ~len, *p_thevallen);          \
     }
 
     buildkey(*p_i);
@@ -146,7 +146,7 @@ test_fifo_create (void) {
     FIFO f;
 
     f = 0;
-    r = toku_fifo_create(&f); 
+    r = toku_fifo_create(&f);
     assert(r == 0); assert(f != 0);
 
     toku_fifo_free(&f);
@@ -159,30 +159,33 @@ test_fifo_enq (int n) {
     MSN startmsn = ZERO_MSN;
 
     f = 0;
-    r = toku_fifo_create(&f); 
+    r = toku_fifo_create(&f);
     assert(r == 0); assert(f != 0);
 
     char *thekey = 0; int thekeylen;
     char *maxkey = 0; int maxkeylen;
     char *theval = 0; int thevallen;
 
-    // this was a function but icc cant handle it    
+    // this was a function but icc cant handle it
 #define buildkey2(len) { \
-       thekeylen = len+1; \
-        XREALLOC_N(thekeylen, thekey); \
+        thekeylen = len+1;              \
+        if (thekey) toku_free(thekey);  \
+        XMALLOC_N(thekeylen, thekey);   \
         memset(thekey, len, thekeylen); \
     }
 
-#define buildmaxkey2(len) { \
-       maxkeylen = len+1; \
-        XREALLOC_N(maxkeylen, maxkey); \
-        memset(maxkey, len+1, maxkeylen); \
+#define buildmaxkey2(len) {                     \
+        maxkeylen = len+1;                      \
+        if(maxkey) toku_free(maxkey);           \
+        XMALLOC_N(maxkeylen, maxkey);           \
+        memset(maxkey, len+1, maxkeylen);       \
     }
 
-#define buildval2(len) { \
-       thevallen = len+2; \
-        XREALLOC_N(thevallen, theval); \
-        memset(theval, ~len, thevallen); \
+#define buildval2(len) {                        \
+        thevallen = len+2;                      \
+        if (thevallen) toku_free(theval);    \
+        XMALLOC_N(thevallen, theval);           \
+        memset(theval, ~len, thevallen);        \
     }
 
     for (int i=0; i<n; i++) {
@@ -202,16 +205,16 @@ test_fifo_enq (int n) {
         enum ft_msg_type type = cast_to_msg_type(i);
         FT_MSG_S msg;
 
-        	DBT kdbt, vdbt, mdbt;
-        	toku_fill_dbt(&kdbt,thekey,thekeylen);
-        	toku_fill_dbt(&mdbt,maxkey,maxkeylen);
-        	toku_fill_dbt(&vdbt,theval, thevallen);
-        	if (ft_msg_type_is_multicast(type))
-            		ft_msg_multicast_init(&msg, type, msn, xids, &kdbt, &mdbt, &vdbt, true, PM_UNCOMMITTED);
-        	else
-            		ft_msg_init(&msg, type, msn, xids, &kdbt, &vdbt);
+        DBT kdbt, vdbt, mdbt;
+        toku_fill_dbt(&kdbt,thekey,thekeylen);
+        toku_fill_dbt(&mdbt,maxkey,maxkeylen);
+        toku_fill_dbt(&vdbt,theval, thevallen);
+        if (ft_msg_type_is_multicast(type))
+            ft_msg_multicast_init(&msg, type, msn, xids, &kdbt, &mdbt, &vdbt, true, PM_UNCOMMITTED);
+        else
+            ft_msg_init(&msg, type, msn, xids, &kdbt, &vdbt);
         r = toku_fifo_enq(f, &msg, true, NULL); assert(r == 0);
-       xids_destroy(&xids);
+        xids_destroy(&xids);
     }
 
     int i = 0;

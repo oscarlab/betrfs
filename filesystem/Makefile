@@ -1,7 +1,7 @@
 include $(PWD)/.mkinclude
 
-
 obj-m += ftfs.o
+ccflags-y += -fno-builtin
 
 ftfs-objs := \
 	ftfs_module.o \
@@ -43,6 +43,7 @@ KBUILD_CFLAGS += -DFTFS_NO_PRINT
 #KBUILD_CFLAGS += -DTOKU_DEBUG_PTRS
 #KBUILD_CFLAGS += -DSOUTHBOUND_DEBUG
 KBUILD_CFLAGS += -DRMDIR_RANGE_DELETE
+#KBUILD_CFLAGS += -DFTFS_EMPTY_DIR_VERIFY
 #include $(PWD)/.turnoff-opts.mkinclude
 
 LIBSRC-OBJS = \
@@ -98,8 +99,10 @@ libft/rollback-apply.cc.o \
 libft/rollback-ct-callbacks.cc.o \
 libft/rollback_log_node_cache.cc.o \
 libft/roll.cc.o \
+libft/ftloader-callback.cc.o \
 libft/sub_block.cc.o \
 libft/txn.cc.o \
+libft/pqueue.cc.o \
 libft/txn_child_manager.cc.o \
 libft/txn_manager.cc.o \
 libft/ule.cc.o \
@@ -152,7 +155,7 @@ liblocktree/wfg.cc.o
 all: libftindex.o
 	make -C $(MOD_KERN_SOURCE) M=$(PWD) modules
 
-libftindex.o: $(LIBPORTABILITY-OBJS) $(LIBFT-OBJS) $(LIBUTIL-OBJS) $(LIBLOCKTREE-OBJS) $(LIBSRC-OBJS) 
+libftindex.o: $(LIBPORTABILITY-OBJS) $(LIBFT-OBJS) $(LIBUTIL-OBJS) $(LIBLOCKTREE-OBJS) $(LIBSRC-OBJS)
 	ld -r $^ -o $@
 
 libsrc/%.o: ../build/src/libtokufractaltree_static.a
@@ -169,5 +172,6 @@ libportability/%.o: ../build/portability/libtokuportability_static_conv.a
 
 liblocktree/%.o: ../build/locktree/liblocktree_static.a
 	(cd liblocktree; ar x ../$< $*.o)
+
 clean:
 	make -C /lib/modules/$(KDIR)/build M=$(PWD) clean

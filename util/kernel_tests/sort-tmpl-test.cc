@@ -159,8 +159,10 @@ already_sorted_test(int nelts)
 static void
 random_array_test(int nelts)
 {
-    int *XMALLOC_N(nelts, a);
-    int *XMALLOC_N(nelts, b);
+    int *a, *b;
+    size_t bytes = nelts * sizeof (int);
+    a = (int *)sb_malloc_sized(bytes, true);
+    b = (int *)sb_malloc_sized(bytes, true);
     for (int i = 0; i < nelts; ++i) {
         a[i] = rand() % MAX_NUM;
         b[i] = a[i];
@@ -171,8 +173,8 @@ random_array_test(int nelts)
     for (int i = 0; i < nelts; ++i) {
         assert(a[i] == b[i]);
     }
-    toku_free(a);
-    toku_free(b);
+    sb_free_sized(a, bytes);
+    sb_free_sized(b, bytes);
 }
 #endif
 
@@ -195,8 +197,11 @@ uint64_cmp(const int &e, const uint64_t &a, const uint64_t &b)
 static void
 random_array_test_64(int nelts)
 {
-    uint64_t *XMALLOC_N(nelts, a);
-    uint64_t *XMALLOC_N(nelts, b);
+    uint64_t *a, *b;
+    size_t bytes = nelts * sizeof (uint64_t);
+    a = (uint64_t *)sb_malloc_sized(bytes, true);
+    b = (uint64_t *)sb_malloc_sized(bytes, true);
+
     for (int i = 0; i < nelts; ++i) {
         a[i] = ((uint64_t)rand() << 32ULL) | rand();
         b[i] = a[i];
@@ -206,8 +211,8 @@ random_array_test_64(int nelts)
     for (int i = 0; i < nelts; ++i) {
         assert(a[i] == b[i]);
     }
-    toku_free(a);
-    toku_free(b);
+    sb_free_sized(a, bytes);
+    sb_free_sized(b, bytes);
 }
 #endif
 
@@ -228,7 +233,7 @@ test_sort_tmpl(void)
     #endif
     #else
     printf("random tests are skipped for now, please revisit once random() and srandom() are ready");
-    #endif 
+    #endif
     dup_array_test(10);
     dup_array_test(1000);
     dup_array_test(10001);
@@ -238,7 +243,7 @@ test_sort_tmpl(void)
     already_sorted_test(10);
     already_sorted_test(1000);
     already_sorted_test(10001);
-    #ifdef _LARGE_MEM 
+    #ifdef _LARGE_MEM
     already_sorted_test(10000000);
     #endif
     #ifndef _LARGE_MEM
@@ -246,4 +251,3 @@ test_sort_tmpl(void)
     #endif
     return 0;
 }
-

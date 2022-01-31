@@ -201,12 +201,14 @@ template<typename omtdata_t, typename omtdataout_t, bool supports_marks>
 void omt<omtdata_t, omtdataout_t, supports_marks>::clone(const omt &src) {
     barf_if_marked(*this);
     this->create_internal(src.size());
-    if (src.is_array) {
-        memcpy(&this->d.a.values[0], &src.d.a.values[src.d.a.start_idx], src.d.a.num_values * (sizeof this->d.a.values[0]));
-    } else {
-        src.fill_array_with_subtree_values(&this->d.a.values[0], src.d.t.root);
+    if (src.size()) {
+        if (src.is_array) {
+            memcpy(&this->d.a.values[0], &src.d.a.values[src.d.a.start_idx], src.d.a.num_values * (sizeof this->d.a.values[0]));
+        } else {
+            src.fill_array_with_subtree_values(&this->d.a.values[0], src.d.t.root);
+        }
+        this->d.a.num_values = src.size();
     }
-    this->d.a.num_values = src.size();
 }
 
 template<typename omtdata_t, typename omtdataout_t, bool supports_marks>
@@ -223,18 +225,20 @@ void omt<omtdata_t, omtdataout_t, supports_marks>::clear(void) {
 template<typename omtdata_t, typename omtdataout_t, bool supports_marks>
 void omt<omtdata_t, omtdataout_t, supports_marks>::destroy(void) {
     this->clear();
-    this->capacity = 0;
     if (this->is_array) {
         if (this->d.a.values != nullptr) {
-            toku_free(this->d.a.values);
+            size_t values_size = this->capacity * sizeof(omtdata_t);
+            sb_free_sized(this->d.a.values, values_size);
         }
         this->d.a.values = nullptr;
     } else {
         if (this->d.t.nodes != nullptr) {
-            toku_free(this->d.t.nodes);
+            size_t nodes_size = this->capacity * sizeof(omt_node);
+            sb_free_sized(this->d.t.nodes, nodes_size);
         }
         this->d.t.nodes = nullptr;
     }
+    this->capacity = 0;
 }
 
 template<typename omtdata_t, typename omtdataout_t, bool supports_marks>
@@ -547,7 +551,10 @@ void omt<omtdata_t, omtdataout_t, supports_marks>::create_internal_no_array(cons
 template<typename omtdata_t, typename omtdataout_t, bool supports_marks>
 void omt<omtdata_t, omtdataout_t, supports_marks>::create_internal(const uint32_t new_capacity) {
     this->create_internal_no_array(new_capacity);
-    XMALLOC_N(this->capacity, this->d.a.values);
+    size_t new_size_bytes = this->capacity * sizeof(omtdata_t);
+    if (new_size_bytes) {
+        this->d.a.values = (omtdata_t *)sb_malloc_sized(new_size_bytes, true);
+    }
 }
 
 template<typename omtdata_t, typename omtdataout_t, bool supports_marks>
@@ -578,12 +585,17 @@ void omt<omtdata_t, omtdataout_t, supports_marks>::maybe_resize_array(const uint
     const uint32_t room = this->capacity - this->d.a.start_idx;
 
     if (room < n || this->capacity / 2 >= new_size) {
-        omtdata_t *XMALLOC_N(new_size, tmp_values);
+        size_t new_size_bytes = new_size * sizeof(omtdata_t);
+        omtdata_t *tmp_values;
+        // XXX: We could exploit the knowledge that this always rounds up to LARGE bytes
+        // to further reduce allocation costs, or restore realloc once we better optimize that
+        tmp_values = (omtdata_t *)sb_malloc_sized(new_size_bytes, true);
         memcpy(tmp_values, &this->d.a.values[this->d.a.start_idx],
                this->d.a.num_values * (sizeof tmp_values[0]));
         this->d.a.start_idx = 0;
+        size_t old_size_bytes = this->capacity * sizeof(omtdata_t);
+        sb_free_sized(this->d.a.values, old_size_bytes);
         this->capacity = new_size;
-        toku_free(this->d.a.values);
         this->d.a.values = tmp_values;
     }
 }
@@ -603,10 +615,12 @@ void omt<omtdata_t, omtdataout_t, supports_marks>::convert_to_array(void) {
         const uint32_t num_values = this->size();
         uint32_t new_size = 2*num_values;
         new_size = new_size < 4 ? 4 : new_size;
-
-        omtdata_t *XMALLOC_N(new_size, tmp_values);
+        size_t new_size_bytes = new_size * sizeof(omtdata_t);
+        omtdata_t *tmp_values;
+        tmp_values = (omtdata_t *)sb_malloc_sized(new_size_bytes, true);
         this->fill_array_with_subtree_values(tmp_values, this->d.t.root);
-        toku_free(this->d.t.nodes);
+        size_t nodes_size = this->capacity * sizeof(omt_node);
+        sb_free_sized(this->d.t.nodes, nodes_size);
         this->is_array       = true;
         this->capacity       = new_size;
         this->d.a.num_values = num_values;
@@ -638,8 +652,10 @@ void omt<omtdata_t, omtdataout_t, supports_marks>::convert_to_tree(void) {
         const uint32_t num_nodes = this->size();
         uint32_t new_size  = num_nodes*2;
         new_size = new_size < 4 ? 4 : new_size;
-
-        omt_node *XMALLOC_N(new_size, new_nodes);
+        size_t old_size_bytes = this->capacity * sizeof(omtdata_t);
+        size_t new_size_bytes = new_size * sizeof(omt_node);
+        omt_node *new_nodes;
+        new_nodes = (omt_node *)sb_malloc_sized(new_size_bytes, true);
         omtdata_t *const values = this->d.a.values;
         omtdata_t *const tmp_values = &values[this->d.a.start_idx];
         this->is_array = false;
@@ -648,7 +664,7 @@ void omt<omtdata_t, omtdataout_t, supports_marks>::convert_to_tree(void) {
         this->d.t.free_idx = 0;
         this->d.t.root.set_to_null();
         this->rebuild_from_sorted_array(&this->d.t.root, tmp_values, num_nodes);
-        toku_free(values);
+        sb_free_sized(values, old_size_bytes);
     }
 }
 
@@ -802,7 +818,7 @@ template<typename iterate_extra_t,
 void omt<omtdata_t, omtdataout_t, supports_marks>::iterate_ptr_internal(const uint32_t left, const uint32_t right,
                                                         const subtree &subtree, const uint32_t idx,
                                                         iterate_extra_t *const iterate_extra) {
-    if (!subtree.is_null()) { 
+    if (!subtree.is_null()) {
         omt_node &n = this->d.t.nodes[subtree.get_index()];
         const uint32_t idx_root = idx + this->nweight(n.left);
         if (left < idx_root) {
@@ -970,6 +986,7 @@ void omt<omtdata_t, omtdataout_t, supports_marks>::rebalance(subtree *const subt
         size_t mem_needed = n.weight * (sizeof tmp_array[0]);
         size_t mem_free = (this->capacity - this->d.t.free_idx) * (sizeof this->d.t.nodes[0]);
         bool malloced;
+        size_t bytes = n.weight * sizeof(node_idx);
         if (mem_needed<=mem_free) {
             //There is sufficient free space at the end of the nodes array
             //to hold enough node indexes to rebalance.
@@ -978,11 +995,13 @@ void omt<omtdata_t, omtdataout_t, supports_marks>::rebalance(subtree *const subt
         }
         else {
             malloced = true;
-            XMALLOC_N(n.weight, tmp_array);
+            tmp_array = (node_idx *)sb_malloc_sized(bytes, true);
         }
         this->fill_array_with_subtree_idxs(tmp_array, *subtree);
         this->rebuild_subtree_from_idxs(subtree, tmp_array, n.weight);
-        if (malloced) toku_free(tmp_array);
+        if (malloced) {
+            sb_free_sized(tmp_array, bytes);
+        }
     }
 }
 

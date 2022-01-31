@@ -8,9 +8,6 @@
 
 extern int atoi(char *);
 
-/* performance tests */
-extern int bench_insert(void);
-
 /* unbound_insert tests */
 extern int test_ubi_root_chkpt(void);
 
@@ -298,7 +295,7 @@ extern int test_le_cursor_right(void);
 extern int test_cachetable_clone_partial_fetch_pinned_node(void);
 extern int test_quicklz(void);
 extern int test_pick_child_to_flush(void);
-extern int test_ft_overflow(void);
+//extern int test_ft_overflow(void);
 extern int test_cachetable_simple_unpin_remove_checkpoint(void);
 extern int test_ft_serialize(void);
 extern int test_orthopush_flush(void);
@@ -601,7 +598,6 @@ extern int test_root_fifo_31(void);
 extern int test_root_fifo_32(void);
 extern int test_root_fifo_41(void);
 extern int test_test_multiple_checkpoints_block_commit(void);
-extern int test_test_set_func_malloc(void);
 extern int test_test_nested_xopen_eclose(void);
 extern int test_print_engine_status(void);
 extern int test_queries_with_deletes(void);
@@ -1036,7 +1032,7 @@ struct {
 	{"le-cursor-right", test_le_cursor_right, 5},
 	{"cachetable-clone-partial-fetch-pinned-node", test_cachetable_clone_partial_fetch_pinned_node, 5},
 	{"test-quicklz", test_quicklz, 5},
-	{"ft-overflow",test_ft_overflow, 5},
+	//{"ft-overflow",test_ft_overflow, 5},
 	{"big-nested-aa",test_big_nested_abort_abort, 5},
 	{"big-nested-ac",test_big_nested_abort_commit, 5},
 	{"big-nested-cc",test_big_nested_commit_commit, 5},
@@ -1125,7 +1121,6 @@ struct {
 	{"perf-checkpoint-var", test_perf_checkpoint_var, 30},
 	{"perf-malloc-free", test_perf_malloc_free, 30},
 	{"perf-cursor-nop", test_perf_cursor_nop, 30},
-	{"bench-insert", bench_insert, 15},
 	{"perf-insert", test_perf_insert, 30},
 	{"perf-iibench", test_perf_iibench, 60},
 	{"perf-ptquery", test_perf_ptquery, 30},
@@ -1206,7 +1201,6 @@ struct {
 	{"root-fifo-2", test_root_fifo_2, 5},
 	{"test-multiple-checkpoints-block-commit", test_test_multiple_checkpoints_block_commit, 5},
 	{"test-rand-insert",test_test_rand_insert, 5},
-	{"test-set-func-malloc",test_test_set_func_malloc, 5},
 	{"test-nested-xopen-eclose",test_test_nested_xopen_eclose, 5},
 	{"print_engine_status", test_print_engine_status, 5},
 	{"xid-lsn-independent", test_xid_lsn_independent, 5},

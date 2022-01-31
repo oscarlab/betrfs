@@ -195,15 +195,6 @@ void os_free(void* p) {
     malloc_unlock();
 }
 
-size_t os_malloc_usable_size(const void *p) {
-    malloc_lock();
-    struct malloc_pair *mp = find_malloced_pair(p);
-    assert(mp);
-    size_t size = mp->requested_size;
-    malloc_unlock();
-    return size;
-}
-
 #else
 
 void *
@@ -222,33 +213,5 @@ void
 os_free(void* p)
 {
     free(p);
-}
-
-#ifndef TOKU_LINUX_MODULE
-typedef size_t (*malloc_usable_size_fun_t)(const void *);
-static malloc_usable_size_fun_t malloc_usable_size_f = NULL;
-#else
-/* DP 2/7/14 - Since we are just using kmalloc everywhere, we can
- * assume ksize will always work for usable_size
- */
-extern "C" { size_t sb_allocsize(const void *objp); }
-#endif
-
-size_t os_malloc_usable_size(const void *p) {
-#ifndef TOKU_LINUX_MODULE
-    if (p==NULL) return 0;
-    if (!malloc_usable_size_f) {
-        malloc_usable_size_f = (malloc_usable_size_fun_t) dlsym(RTLD_DEFAULT, "malloc_usable_size");
-        if (!malloc_usable_size_f) {
-            malloc_usable_size_f = (malloc_usable_size_fun_t) dlsym(RTLD_DEFAULT, "malloc_size"); // darwin
-            if (!malloc_usable_size_f) {
-                abort(); // couldn't find a malloc size function
-            }
-        }
-    }
-    return malloc_usable_size_f(p);
-#else
-    return sb_allocsize(p);
-#endif
 }
 #endif

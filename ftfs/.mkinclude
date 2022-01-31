@@ -1,2 +1,3 @@
+#KDIR=4.19.99
 KDIR=$(shell uname -r)
 MOD_KERN_SOURCE=/lib/modules/$(KDIR)/build

@@ -273,7 +273,7 @@ if (BUILD_FOR_LINUX_KERNEL_MODULE)
     -fno-optimize-sibling-calls
     -fno-strict-overflow
     -fconserve-stack
-    -fno-pic
+    -fno-pie
 
     -m64
     -mno-sse

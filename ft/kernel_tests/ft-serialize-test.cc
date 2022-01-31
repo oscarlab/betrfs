@@ -438,6 +438,8 @@ test_serialize_leaf_with_large_pivots(enum ftnode_verify_type bft, bool do_clone
     snp->unbound_insert_count = 0;
     MALLOC_N(snp->n_children, snp->bp);
     MALLOC_N(snp->n_children-1, snp->childkeys);
+    assert(snp->bp);
+    assert(snp->childkeys);
     snp->totalchildkeylens = (snp->n_children-1)*sizeof(int);
     for (int i = 0; i < snp->n_children; ++i) {
         BP_STATE(snp,i) = PT_AVAIL;
@@ -535,11 +537,16 @@ test_serialize_leaf_with_large_pivots(enum ftnode_verify_type bft, bool do_clone
             assert(BLB_DATA(dn, bn)->omt_size() > 0);
             for (uint32_t i = 0; i < BLB_DATA(dn, bn)->omt_size(); i++) {
                 LEAFENTRY curr_le;
-                uint32_t curr_keylen;
+                uint32_t curr_keylen, other_len, curr_le_size;
                 void* curr_key;
+                LEAFENTRY other_le;
                 BLB_DATA(dn, bn)->fetch_klpair(i, &curr_le, &curr_keylen, &curr_key);
+                other_le = get_le_from_klpair(les[last_i]);
+                other_len = leafentry_memsize(other_le);
+                curr_le_size = leafentry_memsize(curr_le);
                 assert(leafentry_memsize(curr_le) == leafentry_memsize(get_le_from_klpair(les[last_i])));
-                assert(memcmp(curr_le, get_le_from_klpair(les[last_i]), leafentry_memsize(curr_le)) == 0);
+                assert(memcmp(curr_le, other_le, other_len) == 0);
+                //assert(memcmp(curr_le, get_le_from_klpair(les[last_i]), leafentry_memsize(curr_le)) == 0);
                 if (bn < npartitions-1) {
                     assert(strcmp((char*)dn->childkeys[bn].data, (char*)(les[last_i]->key_le)) <= 0);
                 }
@@ -845,9 +852,15 @@ test_serialize_leaf_with_large_rows(enum ftnode_verify_type bft, bool do_clone) 
                 LEAFENTRY curr_le;
                 uint32_t curr_keylen;
                 void* curr_key;
+                LEAFENTRY other_le;
+                uint32_t other_len, curr_le_size;
                 BLB_DATA(dn, bn)->fetch_klpair(i, &curr_le, &curr_keylen, &curr_key);
                 assert(leafentry_memsize(curr_le) == leafentry_memsize(get_le_from_klpair(les[last_i])));
-                assert(memcmp(curr_le, get_le_from_klpair(les[last_i]), leafentry_memsize(curr_le)) == 0);
+                other_le = get_le_from_klpair(les[last_i]);
+                other_len = leafentry_memsize(other_le);
+                curr_le_size = leafentry_memsize(curr_le);
+                assert(memcmp(curr_le, other_le, other_len) == 0);
+                //assert(memcmp(curr_le, get_le_from_klpair(les[last_i]), leafentry_memsize(curr_le)) == 0);
                 if (bn < npartitions-1) {
                     assert(strcmp((char*)dn->childkeys[bn].data, (char*)(les[last_i]->key_le)) <= 0);
                 }

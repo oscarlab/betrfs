@@ -100,16 +100,16 @@ PATENT RIGHTS GRANT:
 // A LE_CURSOR is good for scanning a FT from beginning to end. Useful for hot indexing.
 
 struct le_cursor {
-    // TODO: remove DBs from the ft layer comparison function 
+    // TODO: remove DBs from the ft layer comparison function
     // so this is never necessary
-    // use a fake db for comparisons. 
+    // use a fake db for comparisons.
     struct __toku_db fake_db;
     FT_CURSOR ft_cursor;
     bool neg_infinity; // true when the le cursor is positioned at -infinity (initial setting)
     bool pos_infinity; // true when the le cursor is positioned at +infinity (when _next returns DB_NOTFOUND)
 };
 
-int 
+int
 toku_le_cursor_create(LE_CURSOR *le_cursor_result, FT_HANDLE ft_handle, TOKUTXN txn) {
     int result = 0;
     LE_CURSOR MALLOC(le_cursor);
@@ -145,7 +145,7 @@ void toku_le_cursor_close(LE_CURSOR le_cursor) {
 // Move to the next leaf entry under the LE_CURSOR
 // Success: returns zero, calls the getf callback with the getf_v parameter
 // Failure: returns a non-zero error number
-int 
+int
 toku_le_cursor_next(LE_CURSOR le_cursor, FT_GET_CALLBACK_FUNCTION getf, void *getf_v) {
     int result;
     if (le_cursor->neg_infinity) {
@@ -193,7 +193,10 @@ toku_le_cursor_update_estimate(LE_CURSOR le_cursor, DBT* estimate) {
         return;
     }
     DBT *cursor_key = &le_cursor->ft_cursor->key;
-    estimate->data = toku_xrealloc(estimate->data, cursor_key->size);
+    // No good reason we can't use malloc vs realloc
+    if (estimate->data)
+        toku_free(estimate->data);
+    estimate->data = toku_malloc(cursor_key->size);
     memcpy(estimate->data, cursor_key->data, cursor_key->size);
     estimate->size = cursor_key->size;
     estimate->flags = DB_DBT_REALLOC;

@@ -1,6 +1,5 @@
 set(tokusrc_kernel_srcs
 #seq-io
-bench
 big-nested-abort-abort
 big-nested-abort-commit
 big-nested-commit-abort
@@ -359,7 +358,6 @@ test_redirect_func
 test_restrict
 test_reverse_compare_fun
 test-rollinclude
-#test_set_func_malloc
 test_simple_read_txn
 test_stress0
 # needs to link with lock_tree. (--num_elements 512, --num_seconds 1000 --join_timeout 600 (we weant this test, but we must fix threaded_stress_test_helpers.h first)

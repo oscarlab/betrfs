@@ -18,7 +18,10 @@ int init_sb_vmalloc_cache(void);
 int destroy_sb_vmalloc_cache(void);
 int resolve_sb_malloc_symbols(void);
 void *sb_malloc(size_t size);
+void *sb_malloc_sized(size_t size, bool abort_on_fail);
 void sb_free(void* ptr);
-void *sb_realloc(void *ptr, size_t size);
+void sb_free_sized(void* ptr, size_t size);
+void *sb_realloc(void *ptr, size_t old_size, size_t new_size);
+ 
 
 #endif /* SB_MALLOC_H */

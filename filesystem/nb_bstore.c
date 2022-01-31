@@ -1242,6 +1242,7 @@ static int nb_die_cb(DBT const *key, DBT const *val, void *extra)
 	return 0;
 }
 
+#ifdef FTFS_EMPTY_DIR_VERIFY
 int nb_dir_is_empty(DB *meta_db, DBT *meta_dbt, DB_TXN *txn, int *is_empty)
 {
 	int ret, r;
@@ -1271,6 +1272,7 @@ out:
 	dbt_destroy(&start_meta_dbt);
 	return ret;
 }
+#endif
 
 static int
 nb_bstore_move_copy(DB *meta_db, DB *data_db, DBT *old_meta_dbt,

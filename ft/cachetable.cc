@@ -340,7 +340,6 @@ void toku_cachetable_create(CACHETABLE *result, long size_limit, LSN UU(initial_
     if (size_limit == 0) {
         size_limit = 128*1024*1024;
     }
-
     size_limit = 4*1024*1024*1024L;
 
     CACHETABLE XCALLOC(ct);
@@ -1346,6 +1345,7 @@ do_partial_fetch(
         }
         assert(all_avail);
     }
+
 
     pair_lock(p);
     invariant(p->value_rwlock.writers());
@@ -4850,7 +4850,7 @@ void checkpointer::turn_on_pending_bits_partial() {
         //     current lock is ever released.
         p->checkpoint_pending = true;
 
-	///////////////////////////////////////////
+///////////////////////////////////////////
         FTNODE node = (FTNODE) p->value_data;
         PAIR_ATTR attr = p->attr;
 
@@ -4878,7 +4878,7 @@ void checkpointer::turn_on_pending_bits_partial() {
     	         }
             }
         }
-	///////////////////////////////////////////
+///////////////////////////////////////////
 
         if (m_list->m_pending_head) {
             m_list->m_pending_head->pending_prev = p;

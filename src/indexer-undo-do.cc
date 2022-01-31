@@ -135,7 +135,7 @@ static void
 indexer_commit_keys_add(struct indexer_commit_keys *keys, size_t length, void *ptr) {
     if (keys->current_keys >= keys->max_keys) {
         int new_max_keys = keys->max_keys == 0 ? 256 : keys->max_keys * 2;
-        keys->keys = (DBT *) toku_xrealloc(keys->keys, new_max_keys * sizeof (DBT));
+        keys->keys = (DBT *) toku_xrealloc(keys->keys, keys->max_keys * sizeof(DBT), new_max_keys * sizeof (DBT));
         for (int i = keys->current_keys; i < new_max_keys; i++)
             toku_init_dbt_flags(&keys->keys[i], DB_DBT_REALLOC);
         keys->max_keys = new_max_keys;
@@ -273,7 +273,7 @@ indexer_undo_do_committed(DB_INDEXER *indexer, DB *hotdb, struct ule_prov_info *
             assert(0);
 
         // send commit messages if needed
-        for (int i = 0; result == 0 && i < indexer_commit_keys_valid(&indexer->i->commit_keys); i++) 
+        for (int i = 0; result == 0 && i < indexer_commit_keys_valid(&indexer->i->commit_keys); i++)
             result = indexer_ft_commit(indexer, hotdb, &indexer->i->commit_keys.keys[i], xids);
 
         if (result != 0)
@@ -327,7 +327,7 @@ indexer_undo_do_provisional(DB_INDEXER *indexer, DB *hotdb, struct ule_prov_info
 
     TXNID outermost_xid_state;
     outermost_xid_state = prov_states[0];
-    
+
     // scan the provisional stack from the outermost to the innermost transaction record
     TOKUTXN curr_txn;
     curr_txn = NULL;
@@ -342,7 +342,7 @@ indexer_undo_do_provisional(DB_INDEXER *indexer, DB *hotdb, struct ule_prov_info
         if (this_xid_state == TOKUTXN_ABORTING) {
             break;         // nothing to do once we reach a transaction that is aborting
         }
-        
+
         if (xrindex == num_committed) { // if this is the outermost xr
             result = indexer_set_xid(indexer, this_xid, &xids);    // always add the outermost xid to the XIDS list
             curr_txn = prov_txns[xrindex - num_committed];
@@ -552,7 +552,7 @@ indexer_generate_hot_keys_vals(DB_INDEXER *indexer, DB *hotdb, struct ule_prov_i
 }
 
 // Take a write lock on the given key for the outermost xid in the xids list.
-static void 
+static void
 indexer_lock_key(DB_INDEXER *indexer, DB *hotdb, DBT *key, TXNID outermost_live_xid, TOKUTXN txn) {
     // TEST
     if (indexer->i->test_lock_key) {
@@ -575,7 +575,7 @@ indexer_find_prev_xr(DB_INDEXER *UU(indexer), ULEHANDLE ule, uint64_t xrindex, u
         if (!uxr_is_placeholder(uxr)) {
             *prev_xrindex = xrindex;
             prev_found = true;
-            break; 
+            break;
         }
     }
     return prev_found;
@@ -583,7 +583,7 @@ indexer_find_prev_xr(DB_INDEXER *UU(indexer), ULEHANDLE ule, uint64_t xrindex, u
 
 // inject "delete" message into brt with logging in recovery and rollback logs,
 // and making assocation between txn and brt
-static int 
+static int
 indexer_ft_delete_provisional(DB_INDEXER *indexer, DB *hotdb, DBT *hotkey, XIDS xids, TOKUTXN txn) {
     int result = 0;
     // TEST
@@ -602,11 +602,11 @@ indexer_ft_delete_provisional(DB_INDEXER *indexer, DB *hotdb, DBT *hotkey, XIDS 
             toku_ft_maybe_delete (hotdb->i->ft_handle, hotkey, txn, false, ZERO_LSN, true);
         }
     }
-    return result;	
+    return result;
 }
 
 // send a delete message into the tree without rollback or recovery logging
-static int 
+static int
 indexer_ft_delete_committed(DB_INDEXER *indexer, DB *hotdb, DBT *hotkey, XIDS xids) {
     int result = 0;
     // TEST
@@ -623,7 +623,7 @@ indexer_ft_delete_committed(DB_INDEXER *indexer, DB *hotdb, DBT *hotkey, XIDS xi
 
 // inject "insert" message into brt with logging in recovery and rollback logs,
 // and making assocation between txn and brt
-static int 
+static int
 indexer_ft_insert_provisional(DB_INDEXER *indexer, DB *hotdb, DBT *hotkey, DBT *hotval, XIDS xids, TOKUTXN txn) {
     int result = 0;
     // TEST
@@ -642,7 +642,7 @@ indexer_ft_insert_provisional(DB_INDEXER *indexer, DB *hotdb, DBT *hotkey, DBT *
 
 // send an insert message into the tree without rollback or recovery logging
 // and without associating the txn and the brt
-static int 
+static int
 indexer_ft_insert_committed(DB_INDEXER *indexer, DB *hotdb, DBT *hotkey, DBT *hotval, XIDS xids) {
     int result = 0;
     // TEST
@@ -661,7 +661,7 @@ indexer_ft_insert_committed(DB_INDEXER *indexer, DB *hotdb, DBT *hotkey, DBT *ho
 // Note: If the xid is zero, then the leafentry will already have a committed transaction
 //       record and no commit message is needed.  (A commit message with xid of zero is
 //       illegal anyway.)
-static int 
+static int
 indexer_ft_commit(DB_INDEXER *indexer, DB *hotdb, DBT *hotkey, XIDS xids) {
     int result = 0;
     if (xids_get_num_xids(xids) > 0) {// send commit only when not the root xid

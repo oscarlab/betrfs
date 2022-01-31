@@ -147,17 +147,32 @@ out:
 atomic64_t ftfs_kmalloc_in_use;
 atomic64_t ftfs_vmalloc_in_use;
 
+size_t sb_allocsize(void *p)
+{
+	if (!p)
+		return 0;
+
+	if (is_vmalloc_addr(p)) {
+		FTFS_DEBUG_ON(!is_vmalloc_addr(p));
+		return ftfs_find_vm_area(p)->nr_pages << PAGE_SHIFT;
+	}
+
+	return ksize(p);
+}
+
 void debug_ftfs_alloc(void *p, size_t size)
 {
 #ifdef TOKU_MEMLEAK_DETECT
 	struct obj_trace *data;
 #endif
+#if (defined FTFS_DEBUG_PTRS) || (defined TOKU_MEMLEAK_DETECT)
 	size_t alloc_size = sb_allocsize(p);
+#endif
 
 	if (is_vmalloc_addr(p))
-		atomic64_add(alloc_size, &ftfs_vmalloc_in_use);
+		atomic64_add(size, &ftfs_vmalloc_in_use);
 	else
-		atomic64_add(alloc_size, &ftfs_kmalloc_in_use);
+		atomic64_add(size, &ftfs_kmalloc_in_use);
 
 #ifdef FTFS_DEBUG_PTRS
 	printk(KERN_ALERT "alloc ptr:%p size:%ld\n", p, size);
@@ -224,9 +239,14 @@ void debug_ftfs_free(void *p)
  * A long-term fix would be to change the memory allocation functions
  * in the ft code.
  */
-#define FTFS_VMALLOC_SMALL 98304
-#define FTFS_VMALLOC_LARGE 163840
+#define FTFS_VMALLOC_SMALL 98304UL
+#define FTFS_VMALLOC_LARGE 163840UL
 #define FTFS_VMALLOC_SMALL_COUNT 32
+
+static inline int size_in_vmalloc_cache_range(size_t size) {
+	return (size >= FTFS_VMALLOC_SMALL
+		&& size <= FTFS_VMALLOC_LARGE);
+}
 
 struct list_head __percpu *vcache_percpu_alloc;
 struct list_head __percpu *vcache_percpu_freed;
@@ -304,41 +324,60 @@ int destroy_sb_vmalloc_cache(void) {
 	return 0;
 }
 
-static void *alloc_small(size_t size)
+void sb_memory_debug_break(void) {
+#ifdef FTFS_MEM_DEBUG
+	ftfs_error(__func__, "ftfs_kmalloc_in_use: %ld",
+		   atomic64_read(&ftfs_kmalloc_in_use));
+	ftfs_error(__func__, "ftfs_vmalloc_in_use: %ld",
+		   atomic64_read(&ftfs_vmalloc_in_use));
+#endif
+	ftfs_error(__func__, "debug");
+}
+
+// This is a special interface for common object sizes.  Do not
+// mix and match with malloc.  For performance, we need to statically
+// specify which is which
+void *sb_cache_alloc(size_t size, bool abort_on_fail)
 {
+	void *p;
 	int cpu;
 	struct ftfs_cached_ptr *ptr;
 	struct list_head *alloced;
 	struct list_head *freed;
-	void *p;
 
+	BUG_ON(!size_in_vmalloc_cache_range(size));
+
+	// Disable preemption; return this CPU id
 	cpu = get_cpu();
 	alloced = per_cpu_ptr(vcache_percpu_alloc, cpu);
 	if (list_empty(alloced)) {
 		put_cpu();
-		return vmalloc(size);
+		// XXX: We should probably grow and shrink the caches properly
+		p = vmalloc(FTFS_VMALLOC_LARGE);
+	} else {
+		freed = per_cpu_ptr(vcache_percpu_freed, cpu);
+		ptr = list_first_entry(alloced, struct ftfs_cached_ptr, list);
+		p = ptr->p;
+		BUG_ON(!p);
+		ptr->p = NULL;
+		list_move(&ptr->list, freed);
+		put_cpu();
 	}
-	freed = per_cpu_ptr(vcache_percpu_freed, cpu);
 
-	ptr = list_first_entry(alloced, struct ftfs_cached_ptr, list);
-	p = ptr->p;
-	ptr->p = NULL;
-	list_move(&ptr->list, freed);
-	put_cpu();
+	if (abort_on_fail && !p) {
+		ftfs_error(__func__, "sb_cache_alloc(%ld) returned NULL", size);
+		sb_memory_debug_break();
+		BUG();
+ 	}
+
+#ifdef FTFS_MEM_DEBUG
+	debug_ftfs_alloc(p, size);
+#endif
 	return p;
 }
 
-static void *alloc_large(size_t size)
-{
-	if (size < FTFS_VMALLOC_SMALL) {
-		return vmalloc(size);
-	} else if (size <= FTFS_VMALLOC_LARGE) {
-		return alloc_small(size);
-	}
-	return vmalloc(size);
-}
-
-void *sb_malloc(size_t size)
+static
+void *_sb_malloc(size_t size, bool abort_on_fail)
 {
 	void *p;
 
@@ -356,57 +395,74 @@ void *sb_malloc(size_t size)
 	// certain on this, but the code paths here are used somewhat
 	// infrequently.  It would be a good task for someone to
 	// try just returning NULL as a separate optimization.
-	if (size == 0) size = 1;
+	if (size == 0)
+		size = 1;
 
-	if (size > FTFS_KMALLOC_MAX_SIZE)
-		p = alloc_large(size);
-	else
+	if (size > FTFS_VMALLOC_LARGE) {
+		p = vmalloc(size);
+	} else if (size >= FTFS_VMALLOC_SMALL) {
+		// Objects in this size range should use
+		// the cached alloc/free interface
+		printk(KERN_ALERT "sb_malloc allocation using size appropriate for cache allocator: %lu requested, min is %lu, max is %lu\n",
+		       size, FTFS_VMALLOC_SMALL, FTFS_VMALLOC_LARGE);
+
+		BUG();
+	} else if (size > FTFS_KMALLOC_MAX_SIZE) {
+		p = vmalloc(size);
+	} else {
 		p = kmalloc(size, GFP_KERNEL);
+	}
+
 #ifdef FTFS_MEM_DEBUG
 	debug_ftfs_alloc(p, size);
 #endif
+	if (p == NULL || p == (void *) 0x20)
+		printk(KERN_ERR "An sb_malloc is gonna fail\n");
+
+	if (abort_on_fail && p == NULL) {
+		ftfs_error(__func__, "sb_malloc(%lu) returning NULL", size);
+		sb_memory_debug_break();
+		BUG();
+	}
+
 	return p;
 }
+
+void *sb_malloc(size_t size)
+{
+	return _sb_malloc(size, false);
+}
+
 
 // The ft code uses toku_malloc and malloc
 void *toku_malloc(size_t size) __attribute__((alias ("sb_malloc")));
 void *malloc(size_t size) __attribute__((alias ("sb_malloc")));
 
-static void free_small(void *p)
+void sb_cache_free(void* p)
 {
 	int cpu;
 	struct ftfs_cached_ptr *ptr;
 	struct list_head *alloced;
 	struct list_head *freed;
 
+#ifdef FTFS_MEM_DEBUG
+	debug_ftfs_free(p);
+#endif
+
 	cpu = get_cpu();
 	freed = per_cpu_ptr(vcache_percpu_freed, cpu);
 	if (list_empty(freed)) {
+		// XXX: We could be smarter about resizing the list
 		put_cpu();
 		vfree(p);
 		return;
 	}
 	alloced = per_cpu_ptr(vcache_percpu_alloc, cpu);
 	ptr = list_first_entry(freed, struct ftfs_cached_ptr, list);
+	BUG_ON(ptr->p);
 	ptr->p = p;
 	list_move(&ptr->list, alloced);
 	put_cpu();
-}
-
-static inline size_t vmalloc_allocsize(void *p)
-{
-	FTFS_DEBUG_ON(!is_vmalloc_addr(p));
-	return ftfs_find_vm_area(p)->nr_pages << PAGE_SHIFT;
-}
-
-static void sb_vfree(void *p)
-{
-	size_t size = vmalloc_allocsize(p);
-	if (FTFS_VMALLOC_LARGE == size) {
-		free_small(p);
-	} else {
-		vfree(p);
-	}
 }
 
 void sb_free(void *p)
@@ -416,7 +472,7 @@ void sb_free(void *p)
 		debug_ftfs_free(p);
 #endif
 		if (is_vmalloc_addr(p))
-			sb_vfree(p);
+			vfree(p);
 		else
 			kfree(p);
 	}
@@ -425,53 +481,85 @@ void sb_free(void *p)
 void free(void *p) __attribute__((alias ("sb_free")));
 void toku_free(void *p) __attribute__((alias ("sb_free")));
 
+
+/* The malloc and free "sized" variants are for cases
+ * where the caller is tracking the size of the allocation.
+ * We can then avoid tracking this ourselves, or expensive
+ * queries for the size.
+ *
+ * Using malloc_sized() is a "contract" that the caller will
+ * pass the size to free.
+ *
+ * A significant portion of the toku code does not handle allocation
+ * failures, and instead uses an "xmalloc", which just blows
+ * an assert.  The abort_on_fail arugment keeps this behavior.
+ */
+void *sb_malloc_sized(size_t size, bool abort_on_fail)
+{
+	if (size_in_vmalloc_cache_range(size)) {
+		return sb_cache_alloc(size, abort_on_fail);
+	} else {
+		return _sb_malloc(size, abort_on_fail);
+	}
+}
+
+void sb_free_sized(void* ptr, size_t size)
+{
+	if (size_in_vmalloc_cache_range(size)) {
+		return sb_cache_free(ptr);
+	} else {
+		return sb_free(ptr);
+	}
+}
+
+
 /* dumb copy for now. what this should do is unmap the pages, alloc a
  * few more, and then remap them as in vmap */
-static void *vm_enlarge_remap(void *p, size_t new_size)
+static void *vm_enlarge_remap(void *p, size_t old_size, size_t new_size)
 {
-	size_t sz = vmalloc_allocsize(p);
 	void *n = vmalloc(new_size);
 	if (!n) {
 		ftfs_error(__func__, "vmalloc failed.");
 		return NULL;
 	}
 
-	FTFS_DEBUG_ON(sz > new_size);
+	FTFS_DEBUG_ON(old_size > new_size);
 	FTFS_DEBUG_ON(!is_vmalloc_addr(p));
 
-	memcpy(n, p, sz);
+	memcpy(n, p, old_size);
 #ifdef FTFS_MEM_DEBUG
 	debug_ftfs_alloc(n, new_size);
-	debug_ftfs_free(p);
+	// The free will be recorded in sb_free sized
 #endif
-	sb_vfree(p);
+	BUG_ON(size_in_vmalloc_cache_range(old_size));
+	sb_free_sized(p, old_size);
 	return n;
 }
 
-
-static void *vm_enlarge_in_place(void *p, size_t size)
+static void *vmalloc_realloc(void *p, size_t old_size, size_t new_size)
 {
-	return NULL;
-}
-
-int vmalloc_has_room(void *p, size_t size)
-{
-	/* we will return 0 until enlarge_in_place is finished */
-	return 0;
-}
-
-static void *vmalloc_realloc(void *p, size_t size)
-{
-	if (size <= vmalloc_allocsize(p)) {
-		/* nothing to do here... I am ok with lying */
+	if (new_size <= old_size ||
+	    (size_in_vmalloc_cache_range(old_size)
+	     && size_in_vmalloc_cache_range(new_size))
+	    ) {
+		/* nothing to do here... I am ok with ignoring
+		 * wasted space.  We can also increase sizes
+		 * within the vmalloc cache for "free".
+		 * XXX: Should probably push this information up
+		 *      one level and just use the full buffer.
+		 */
 		return p;
+	} else if ((size_in_vmalloc_cache_range(new_size) && !size_in_vmalloc_cache_range(old_size))
+		   || (!size_in_vmalloc_cache_range(new_size) && size_in_vmalloc_cache_range(old_size))) {
+
+		// We need to move to/from a cache allocation, rather than remapping the vamlloc region
+		void * new_pointer = sb_malloc_sized(new_size, false);
+		memcpy(new_pointer, p, old_size);
+		sb_free_sized(p, old_size);
+		return new_pointer;
 	}
 
-	/* check if we can just add pages */
-	if (vmalloc_has_room(p, size))
-		return vm_enlarge_in_place(p, size);
-
-	return vm_enlarge_remap(p, size);
+	return vm_enlarge_remap(p, old_size, new_size);
 }
 
 static void *kmalloc_to_vmalloc(void *old_p, size_t new_size)
@@ -498,49 +586,40 @@ static void *kmalloc_to_vmalloc(void *old_p, size_t new_size)
 	return new_p;
 }
 
-void *sb_realloc(void *ptr, size_t size)
+void *sb_realloc(void *ptr, size_t old_size, size_t new_size)
 {
 	void *p;
 	// If size is zero, we should just return NULL and free
 	// ptr, similar to libc's realloc.
-	if (size == 0) {
+	if (new_size == 0) {
 		sb_free(ptr);
 		p = NULL;
 		goto done;
 	}
 	if (ptr == NULL) {
-		p = sb_malloc(size);
+		p = sb_malloc(new_size);
 		goto done;
 	}
 	if (is_vmalloc_addr(ptr)) {
-		return vmalloc_realloc(ptr, size);
-	} else if (size > FTFS_KMALLOC_MAX_SIZE) {
-		return kmalloc_to_vmalloc(ptr, size);
+		return vmalloc_realloc(ptr, old_size, new_size);
+	} else if (new_size > FTFS_KMALLOC_MAX_SIZE) {
+		return kmalloc_to_vmalloc(ptr, new_size);
 	} else {
 #ifdef FTFS_MEM_DEBUG
 		debug_ftfs_free(ptr);
 #endif
-		p = krealloc(ptr, size, GFP_KERNEL);
+		// XXX: 2x check that krealloc is smart about same power of 2
+		p = krealloc(ptr, new_size, GFP_KERNEL);
 #ifdef FTFS_MEM_DEBUG
-		debug_ftfs_alloc(p, size);
+		debug_ftfs_alloc(p, new_size);
 #endif
 	}
 done:
 	return p;
 }
-void *realloc(void *ptr, size_t size) __attribute__((alias ("sb_realloc")));
-void *toku_realloc(void *ptr, size_t size) __attribute__((alias ("sb_realloc")));
 
-size_t sb_allocsize(void *p)
-{
-	if (!p)
-		return 0;
-
-	if (is_vmalloc_addr(p))
-		return vmalloc_allocsize(p);
-
-	return ksize(p);
-}
+void *realloc(void *ptr, size_t old_size, size_t new_size) __attribute__((alias ("sb_realloc")));
+void *toku_realloc(void *ptr, size_t old_size, size_t new_size) __attribute__((alias ("sb_realloc")));
 
 void *toku_memdup(const void *v, size_t _len) {
 	int len = _len;
@@ -560,6 +639,7 @@ void *toku_memdup(const void *v, size_t _len) {
 	// certain on this, but the code paths here are used somewhat
 	// infrequently.  It would be a good task for someone to
 	// try just returning NULL as a separate optimization.
+
 	if(_len == 0)
 		len = 1;
 
@@ -568,7 +648,6 @@ void *toku_memdup(const void *v, size_t _len) {
 		p = sb_malloc(len);
 		if (p)
 			memcpy(p, v, _len);
-		return p;
 	} else {
 		p = kmemdup(v, len, GFP_KERNEL);
 	}
@@ -576,6 +655,11 @@ void *toku_memdup(const void *v, size_t _len) {
 #ifdef FTFS_MEM_DEBUG
 	debug_ftfs_alloc(p, len);
 #endif
+
+	if (IS_ERR(p)) {
+		p = NULL;
+	}
+
 	return p;
 }
 
@@ -618,25 +702,16 @@ void * toku_malloc_aligned(size_t alignment, size_t size) {
 	/* wkj: 2/2/15 regardless of the issue with direct I/O, kmalloc will
 	 *  not return an aligned pointer... reverting to vmalloc */
 	p = vmalloc(size);
-#ifdef FTFS_MEM_DEBUG
-	debug_ftfs_alloc(p, size);
-#endif
 	if(IS_ERR(p)) {
 		sb_set_errno(PTR_ERR(p));
 		p = NULL;
 		//note: errno is not needed to set in errno.
+#ifdef FTFS_MEM_DEBUG
+	} else {
+		debug_ftfs_alloc(p, size);
+#endif
 	}
 	return p;
-}
-
-void sb_memory_debug_break(void) {
-#ifdef FTFS_MEM_DEBUG
-	ftfs_error(__func__, "ftfs_kmalloc_in_use: %ld",
-		   atomic64_read(&ftfs_kmalloc_in_use));
-	ftfs_error(__func__, "ftfs_vmalloc_in_use: %ld",
-		   atomic64_read(&ftfs_vmalloc_in_use));
-#endif
-	ftfs_error(__func__, "debug");
 }
 
 void toku_memory_get_status(LOCAL_MEMORY_STATUS s) {
@@ -734,13 +809,7 @@ void *toku_xcalloc(size_t nmemb, size_t size) {
 }
 
 void *toku_xmalloc(size_t size) {
-	void *p = sb_malloc(size);
-	if (p == NULL) {
-		ftfs_error(__func__, "sb_malloc(%ld) returned NULL", size);
-		sb_memory_debug_break();
-		BUG();
-	}
-	return p;
+	return _sb_malloc(size, true);
 }
 
 void *toku_xmalloc_aligned(size_t alignment, size_t size) {
@@ -753,16 +822,17 @@ void *toku_xmalloc_aligned(size_t alignment, size_t size) {
 	return p;
 }
 
-void *toku_xrealloc(void *old, size_t size) {
-	void *p = toku_realloc(old, size);
+void *toku_xrealloc(void *old, size_t old_size, size_t new_size) {
+	void *p = toku_realloc(old, old_size, new_size);
+
 	// The toku_x* functions cannot fail.  As in, rather than
 	// write error handlers on out-of-memory conditions, the code
 	// assumes things will blow up if the function fails.
 	// However, NULL is a valid return value for a zero size (re)alloc.
 	// So let's try to return NULL here and see what happens.
-	if (p == NULL && size != 0) {
+	if (p == NULL && new_size != 0) {
 		ftfs_error(__func__, "toku_xrealloc(%p, %d) returned NULL",
-			   old, size);
+			   old, new_size);
 		sb_memory_debug_break();
 		BUG();
 	}
@@ -792,12 +862,6 @@ char *toku_xstrdup (const char *s) {
 		BUG();
 	}
 	return t;
-}
-
-size_t toku_memory_footprint(void * p, size_t touched) {
-	if (p)
-		return sb_allocsize(p);
-	return 0;
 }
 
 /* set these to bug until we understand our memory leak */

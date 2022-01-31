@@ -837,18 +837,20 @@ toku_logger_assert_space_in_outbuf(TOKULOGGER logger, unsigned int buflen, unsig
 	#endif
  //       assert(0);
 
+	logger->outbuf.buf = (char *)toku_xrealloc(logger->outbuf.buf, logger->outbuf.buf_size,
+                                                   logger->outbuf.n_in_buf+buflen*n);
  	logger->outbuf.buf_size = logger->outbuf.n_in_buf + buflen*n;
-	logger->outbuf.buf = (char *)toku_xrealloc(logger->outbuf.buf, logger->outbuf.n_in_buf+buflen*n);
     }
 }
 
 static void
 toku_logger_restore_outbuf_size(TOKULOGGER logger, unsigned int old_buf_size) {
 	if(logger->outbuf.buf_size > old_buf_size) {
-		logger->outbuf.buf_size = old_buf_size;
-		logger->outbuf.buf = (char*) toku_xrealloc(logger->outbuf.buf, old_buf_size);
+            logger->outbuf.buf = (char*) toku_xrealloc(logger->outbuf.buf, logger->outbuf.buf_size,
+                                                       old_buf_size);
+            logger->outbuf.buf_size = old_buf_size;
 	} else if(logger->outbuf.buf_size < old_buf_size) {
-		assert(0);
+            assert(0);
 	}
 }
 //TODO: this is modified from log_code.cc
@@ -1086,7 +1088,7 @@ if(!logger_unbound_test_callback||!logger_unbound_test_callback(callback_extra))
         assert(n_bytes_needed < (1<<30)); // it seems unlikely to work if a logentry gets that big.
         int new_size = max_int(logger->inbuf.buf_size * 2, n_bytes_needed); // make it at least twice as big, and big enough for n_bytes
         assert(new_size < (1<<30));
-        XREALLOC_N(new_size, logger->inbuf.buf);
+        XREALLOC_N(logger->inbuf.buf_size, new_size, logger->inbuf.buf);
         logger->inbuf.buf_size = new_size;
     }
     release_output(logger, fsynced_lsn);
@@ -1110,7 +1112,7 @@ if(!logger_unbound_test_callback||!logger_unbound_test_callback(callback_extra))
         assert(n_bytes_needed < (1<<30)); // it seems unlikely to work if a logentry gets that big.
         int new_size = max_int(logger->inbuf.buf_size * 2, n_bytes_needed); // make it at least twice as big, and big enough for n_bytes
         assert(new_size < (1<<30));
-        XREALLOC_N(new_size, logger->inbuf.buf);
+        XREALLOC_N(logger->inbuf.buf_size, new_size, logger->inbuf.buf);
         logger->inbuf.buf_size = new_size;
     }
     release_output(logger, fsynced_lsn);
@@ -1238,8 +1240,8 @@ int toku_logger_find_logfiles (const char *directory, char ***resultp, int *n_lo
     uint32_t version_ignore;
     if ( (is_a_logfile_any_version(f_name, &thisl, &version_ignore)) ) {
         if (n_results+1>=result_limit) {
-           result_limit*=2;
-           XREALLOC_N(result_limit, result);
+            XREALLOC_N(result_limit, result_limit*2, result);
+            result_limit*=2;
         }
         result[n_results++] = fname;
     }

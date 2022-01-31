@@ -381,8 +381,8 @@ ft_slice_update_parent(FT ft,
 
     paranoid_invariant(parent->n_children > 0);
     parent->n_children += 1;
-    XREALLOC_N(parent->n_children, parent->bp);
-    XREALLOC_N(parent->n_children - 1, parent->childkeys);
+    XREALLOC_N(parent->n_children - 1, parent->n_children, parent->bp);
+    XREALLOC_N(parent->n_children - 2, parent->n_children - 1, parent->childkeys);
 
     for (int i = parent->n_children - 1; i > nodenum + 1; i--) {
         parent->bp[i] = parent->bp[i - 1];
@@ -562,14 +562,14 @@ ft_slice_leaf(FT ft, FTNODE parent, FTNODE node, int nodenum,
     }
     if (dst_childnum < sib->n_children)
         BP_STATE(sib, dst_childnum) = PT_AVAIL;
-    node->n_children = n_children_in_node;
-    REALLOC_N(n_children_in_node, node->bp);
+    REALLOC_N(n_children_in_node, node->n_children, node->bp);
     if (n_children_in_node > 1)
-        REALLOC_N(n_children_in_node - 1, node->childkeys);
+        REALLOC_N(n_children_in_node - 1, node->n_children - 1, node->childkeys);
     else {
         toku_free(node->childkeys);
         node->childkeys = NULL;
     }
+    node->n_children = n_children_in_node;
 
     ft_slice_update_bound(node, sib, key);
 
@@ -633,14 +633,15 @@ ft_slice_nonl(FT ft, FTNODE parent, FTNODE node, int nodenum,
     }
     node->totalchildkeylens -= node->childkeys[n_children_in_node - 1].size;
     toku_destroy_dbt(&node->childkeys[n_children_in_node - 1]);
-    node->n_children = n_children_in_node;
-    REALLOC_N(n_children_in_node, node->bp);
+    REALLOC_N(n_children_in_node, node->n_children, node->bp);
     if (n_children_in_node > 1)
-        REALLOC_N(n_children_in_node - 1, node->childkeys);
+        REALLOC_N(n_children_in_node - 1, node->n_children - 1, node->childkeys);
     else {
         toku_free(node->childkeys);
         node->childkeys = NULL;
     }
+
+    node->n_children = n_children_in_node;
 
     ft_slice_update_bound(node, sib, key);
 

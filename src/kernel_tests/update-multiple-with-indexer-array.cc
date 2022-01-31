@@ -228,7 +228,7 @@ put_callback(DB *dest_db, DB *src_db, DBT_ARRAY *dest_key_arrays, DBT_ARRAY *des
 
         assert(dest_key->flags == DB_DBT_REALLOC);
         if (dest_key->ulen < sizeof(int)) {
-            dest_key->data = toku_xrealloc(dest_key->data, sizeof(int));
+            dest_key->data = toku_xrealloc(dest_key->data, dest_key->ulen, sizeof(int));
             dest_key->ulen = sizeof(int);
         }
         dest_key->size = sizeof(int);
@@ -470,8 +470,8 @@ run_test(int ndbs, int nrows) {
     for (int dbnum = 0; dbnum < ndbs; dbnum++)
         r = db[dbnum]->close(db[dbnum], 0); assert_zero(r);
 
-    env->set_generate_row_callback_for_put(env, NULL); 
-    env->set_generate_row_callback_for_del(env, NULL); 
+    env->set_generate_row_callback_for_put(env, NULL);
+    env->set_generate_row_callback_for_del(env, NULL);
 
     r = env->close(env, 0); assert_zero(r);
 }
@@ -498,4 +498,3 @@ test_update_multiple_with_indexer_array(void) {
     post_teardown();
     return 0;
 }
-

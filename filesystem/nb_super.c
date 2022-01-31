@@ -746,7 +746,7 @@ retry:
 	inode = mapping->host;
 	sbi = inode->i_sb->s_fs_info;
 	meta_dbt = nb_get_read_lock(FTFS_I(inode));
-	ret = dbt_alloc(&data_dbt, DATA_KEY_MAX_LEN);
+	ret = dbt_alloc(&data_dbt, meta_dbt->size + DATA_META_KEY_SIZE_DIFF);
 	if (ret) {
 		nb_put_read_lock(FTFS_I(inode));
 		goto out;
@@ -958,7 +958,7 @@ static int nb_rename(struct inode *old_dir, struct dentry *old_dentry,
 		       unsigned int flags)
 #endif
 {
-	int ret, err;
+	int ret, err, r, drop_newdir_count;
 	struct inode *old_inode, *new_inode;
 	struct ftfs_sb_info *sbi = old_dir->i_sb->s_fs_info;
 	DBT *old_meta_dbt, new_meta_dbt, *old_dir_meta_dbt, *new_dir_meta_dbt,
@@ -981,23 +981,36 @@ static int nb_rename(struct inode *old_dir, struct dentry *old_dentry,
 	TXN_GOTO_LABEL(retry);
 	nb_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
 
+	drop_newdir_count=0;
 	if (new_inode) {
 		if (S_ISDIR(old_inode->i_mode)) {
 			if (!S_ISDIR(new_inode->i_mode)) {
 				ret = -ENOTDIR;
 				goto abort;
 			}
-			err = nb_dir_is_empty(sbi->meta_db, new_inode_meta_dbt,
-					      txn, &ret);
+
+			ret = new_inode->i_nlink-2;
+#ifdef FTFS_EMPTY_DIR_VERIFY
+			err =  nb_dir_is_empty(sbi->meta_db, new_inode_meta_dbt, txn, &r);
+
 			if (err) {
 				DBOP_JUMP_ON_CONFLICT(err, retry);
 				ret = err;
 				goto abort;
 			}
-			if (!ret) {
+
+			if (!(ret ==0 && r==1 || ret>0 && r==0)) { //r is: dir is isempty?
+				//dir inode has invalid count
+				BUG();
+			}
+#endif
+			
+			if (ret) {  //enter if not empty
 				ret = -ENOTEMPTY;
 				goto abort;
 			}
+			
+			drop_newdir_count=1;
 			// there will be a put later, so we don't need to
 			// delete meta here. but if it is a circle root,
 			// we need to perform delete and avoid future update
@@ -1016,6 +1029,8 @@ static int nb_rename(struct inode *old_dir, struct dentry *old_dentry,
 			//   we need to delete here
 			ret = ftfs_nb_do_unlink(new_inode_meta_dbt, txn,
 			                     new_inode, sbi);
+			drop_newdir_count=1;
+
 			if (ret) {
 				DBOP_JUMP_ON_CONFLICT(ret, retry);
 				goto abort;
@@ -1052,8 +1067,19 @@ static int nb_rename(struct inode *old_dir, struct dentry *old_dentry,
 	dbt_copy(&FTFS_I(old_inode)->meta_dbt, &new_meta_dbt);
 
 	unlock_children_after_rename(&locked_children);
+
+	drop_nlink(old_dir);
+	inc_nlink(new_dir);
+
+	if (drop_newdir_count == 1) {
+		drop_nlink(new_dir);
+	}
+
+	mark_inode_dirty(old_dir);
+	mark_inode_dirty(new_dir);
+
 	if (new_inode) {
-		drop_nlink(new_inode);
+		clear_nlink(new_inode);
 		mark_inode_dirty(new_inode);
 		// avoid future updates from write_inode and evict_inode
 		FTFS_I(new_inode)->ftfs_flags |= FTFS_FLAG_DELETED;
@@ -1165,6 +1191,10 @@ err_free_dbt:
 		goto err_free_dbt;
 	}
 
+	if ((mode | S_IFDIR ) == mode) {
+		inc_nlink(inode);
+	}
+
 	TXN_GOTO_LABEL(retry);
 	nb_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_MAY_WRITE);
 	ret = nb_bstore_meta_put(sbi->meta_db, &meta_dbt, txn, &meta);
@@ -1180,7 +1210,10 @@ err_free_dbt:
 	ret = nb_bstore_txn_commit(txn, DB_TXN_NOSYNC);
 	COMMIT_JUMP_ON_CONFLICT(ret, retry);
 
+	inc_nlink(dir);
+	mark_inode_dirty(dir);
 	d_instantiate(dentry, inode);
+	mark_inode_dirty(inode);
 
 out:
 	nb_put_read_lock(FTFS_I(dir));
@@ -1221,13 +1254,17 @@ out:
 
 static int nb_rmdir(struct inode *dir, struct dentry *dentry)
 {
-	int r, r2, ret;
+	int r2;
+	int r, ret, x;	
+	int i_nlink;
+
 	struct inode *inode = dentry->d_inode;
 	struct ftfs_sb_info *sbi = inode->i_sb->s_fs_info;
 	struct ftfs_inode *ftfs_inode = FTFS_I(inode);
-	DBT *meta_dbt;
+	DBT *meta_dbt, *dir_meta_dbt;
 	DB_TXN *txn;
 
+	dir_meta_dbt = nb_get_read_lock(FTFS_I(dir));
 	meta_dbt = nb_get_read_lock(ftfs_inode);
 
 	if (meta_dbt->data == &root_meta_key) {
@@ -1235,6 +1272,7 @@ static int nb_rmdir(struct inode *dir, struct dentry *dentry)
 		goto out;
 	}
 
+#ifdef FTFS_EMPTY_DIR_VERIFY
 	TXN_GOTO_LABEL(retry);
 	nb_bstore_txn_begin(sbi->db_env, NULL, &txn, TXN_READONLY);
 	ret = nb_dir_is_empty(sbi->meta_db, meta_dbt, txn, &r);
@@ -1247,10 +1285,11 @@ static int nb_rmdir(struct inode *dir, struct dentry *dentry)
 	ret = nb_bstore_txn_commit(txn, DB_TXN_NOSYNC);
 	COMMIT_JUMP_ON_CONFLICT(ret, retry);
 
-	if (!r) {
-		ret = -ENOTEMPTY;
-		goto out;
+	ret = inode->i_nlink-2;
+	if (!(ret ==0 && r==1 || ret>0 && r==0)) { //r is: dir is isempty?
+		BUG();
 	}
+#endif
 
 #ifdef RMDIR_RANGE_DELETE
 	// Issue a range delete for pacman
@@ -1261,12 +1300,23 @@ static int nb_rmdir(struct inode *dir, struct dentry *dentry)
 	r2 = ftfs_dir_delete(sbi, meta_dbt);
 	BUG_ON(r2);
 #endif
-	clear_nlink(inode);
-	mark_inode_dirty(inode);
-	ret = 0;
-
+	i_nlink = inode->i_nlink;
+	if (i_nlink != 2) {
+		ret = -ENOTEMPTY;
+	}
+	else {
+		r = inode->i_nlink;
+		x = dir->i_nlink;
+		clear_nlink(inode);
+		ret = dir->i_nlink;
+		drop_nlink(dir);
+		mark_inode_dirty(inode);
+		mark_inode_dirty(dir);
+		ret = 0;
+	}
 out:
 	nb_put_read_lock(ftfs_inode);
+	nb_put_read_lock(FTFS_I(dir));	
 	return ret;
 }
 
@@ -1334,6 +1384,9 @@ abort:
 	ret = nb_bstore_txn_commit(txn, DB_TXN_NOSYNC);
 	COMMIT_JUMP_ON_CONFLICT(ret, retry);
 
+	inc_nlink(dir);
+	mark_inode_dirty(dir);
+
 	d_instantiate(dentry, inode);
 	dbt_destroy(&data_dbt);
 out:
@@ -1379,6 +1432,8 @@ static int nb_link(struct dentry *old_dentry,
 #else
 		inode->i_ctime = current_time(inode);
 #endif
+		inc_nlink(dir);
+		mark_inode_dirty(dir);
 		mark_inode_dirty(inode);
 		ihold(inode);
 		d_instantiate(dentry, inode);
@@ -1423,6 +1478,10 @@ static int nb_unlink(struct inode *dir, struct dentry *dentry)
 		DBOP_JUMP_ON_CONFLICT(ret, retry);
 		nb_bstore_txn_abort(txn);
 	} else {
+		drop_nlink (dir);
+		mark_inode_dirty(dir);
+		if (dir->i_nlink  < 2)
+			printk(KERN_ERR "Warning: nlink < 2 for parent of unlinked file. If parent is root, ignore warning");
 		ret = nb_bstore_txn_commit(txn, DB_TXN_NOSYNC);
 		COMMIT_JUMP_ON_CONFLICT(ret, retry);
 	}
@@ -2390,7 +2449,7 @@ static struct dentry *ftfs_mount(struct file_system_type *fs_type, int flags,
                                  const char *sb_dev, void *data)
 {
 	char *all_opts;
-	const char *dummy;
+	char *dummy;
 	size_t size;
 	struct dentry *ret;
 	int rv;

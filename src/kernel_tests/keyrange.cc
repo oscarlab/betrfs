@@ -110,13 +110,13 @@ static bool get_all = true;
 static bool use_loader = false;
 static bool random_keys = false;
 
-static int 
+static int
 my_compare(DB *this_db UU(), const DBT *a UU(), const DBT *b UU()) {
     assert(a->size == b->size);
     return memcmp(a->data, b->data, a->size);
 }
 
-static int 
+static int
 my_generate_row(DB *dest_db UU(), DB *src_db UU(), DBT_ARRAY *dest_keys UU(), DBT_ARRAY *dest_vals UU(), const DBT *src_key UU(), const DBT *src_val UU()) {
     toku_dbt_array_resize(dest_keys, 1);
     toku_dbt_array_resize(dest_vals, 1);
@@ -124,11 +124,11 @@ my_generate_row(DB *dest_db UU(), DB *src_db UU(), DBT_ARRAY *dest_keys UU(), DB
     DBT *dest_val = &dest_vals->dbts[0];
 
     assert(dest_key->flags == DB_DBT_REALLOC);
-    dest_key->data = toku_realloc(dest_key->data, src_key->size);
+    dest_key->data = toku_realloc(dest_key->data, dest_key->size, src_key->size);
     memcpy(dest_key->data, src_key->data, src_key->size);
     dest_key->size = src_key->size;
     assert(dest_val->flags == DB_DBT_REALLOC);
-    dest_val->data = toku_realloc(dest_val->data, src_val->size);
+    dest_val->data = toku_realloc(dest_val->data, dest_val->size, src_val->size);
     memcpy(dest_val->data, src_val->data, src_val->size);
     dest_val->size = src_val->size;
     return 0;
@@ -139,7 +139,7 @@ swap(uint64_t keys[], uint64_t i, uint64_t j) {
     uint64_t t = keys[i]; keys[i] = keys[j]; keys[j] = t;
 }
 
-static uint64_t 
+static uint64_t
 max64(uint64_t a, uint64_t b) {
     return a < b ? b : a;
 }
@@ -156,7 +156,7 @@ static void open_env(void) {
     r = env->open(env, envdir, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
 }
 
-static void 
+static void
 run_test(void) {
 
     size_t key_size = 9;
@@ -315,11 +315,11 @@ run_test(void) {
     r = txn->commit(txn, 0);    CKERR(r);
     r = db->close(db, 0);     CKERR(r);
     r = env->close(env, 0);   CKERR(r);
-    
+
     toku_free(keys);
 }
 /*
-static int 
+static int
 usage(void) {
     fprintf(stderr, "-v (verbose)\n");
     fprintf(stderr, "-q (quiet)\n");

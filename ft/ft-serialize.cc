@@ -440,6 +440,7 @@ int deserialize_ft_versioned(int fd, struct rbuf *rb, FT *ftp, uint32_t version)
     // copy descriptor to cmp_descriptor for #4541
     ft->cmp_descriptor.dbt.size = ft->descriptor.dbt.size;
     ft->cmp_descriptor.dbt.data = toku_xmemdup(ft->descriptor.dbt.data, ft->descriptor.dbt.size);
+
     // Version 13 descriptors had an extra 4 bytes that we don't read
     // anymore.  Since the header is going to think it's the current
     // version if it gets written out, we need to write the descriptor in
@@ -776,11 +777,11 @@ size_t toku_serialize_ft_size (FT_HEADER h) {
 
 
 void toku_serialize_ft_to_wbuf (
-    struct wbuf *wbuf, 
-    FT_HEADER h, 
-    DISKOFF translation_location_on_disk, 
+    struct wbuf *wbuf,
+    FT_HEADER h,
+    DISKOFF translation_location_on_disk,
     DISKOFF translation_size_on_disk
-    ) 
+    )
 {
     wbuf_literal_bytes(wbuf, "tokudata", 8);
     wbuf_network_int  (wbuf, h->layout_version); //MUST be in network order regardless of disk order

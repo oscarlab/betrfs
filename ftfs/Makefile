@@ -388,7 +388,6 @@ libsrc/test/root_fifo_32.cc.o \
 libsrc/test/root_fifo_41.cc.o \
 libsrc/test/root_fifo_2.cc.o \
 libsrc/test/test_multiple_checkpoints_block_commit.cc.o \
-libsrc/test/test_set_func_malloc.cc.o \
 libsrc/test/test-xopen-eclose.cc.o \
 libsrc/test/test-nested-xopen-eclose.cc.o \
 libsrc/test/test_log7.cc.o \
@@ -399,11 +398,12 @@ libsrc/test/test_update_stress.cc.o \
 libsrc/test/test_db_env_strdup_null.cc.o \
 libsrc/test/seqwrites-no-txn.cc.o \
 libsrc/test/rename-simple.cc.o \
-libsrc/test/bench.cc.o \
-libsrc/test/circle-log-overflow.cc.o \
+libsrc/test/circle-log-overflow.cc.o
+#libsrc/test/bench.cc.o \
 #libsrc/indexer-undo-do.cc.o \
 #libsrc/toku_patent.cc.o \
 #libsrc/test/create-datadir.cc.o \
+#libsrc/test/test_set_func_malloc.cc.o \
 
 LIBFT-OBJS = \
 libft/background_job_manager.cc.o \
@@ -644,7 +644,6 @@ libft/test/le-cursor-right.cc.o \
 libft/test/cachetable-clone-partial-fetch-pinned-node.cc.o \
 libft/test/quicklz-test.cc.o \
 libft/test/test-pick-child-to-flush.cc.o \
-libft/test/test-ft-overflow.cc.o \
 libft/test/test-ubi-root-chkpt.cc.o \
 libft/test/recovery-range-delete.cc.o
 
@@ -658,6 +657,7 @@ libft/test/recovery-range-delete.cc.o
 # libft/dbufio.cc.o \
 # libft/pqueue.cc.o \
 # libft/queue.cc.o \
+# libft/test/test-ft-overflow.cc.o \
 
 LIBUTIL-OBJS = \
 libutil/frwlock.cc.o \
@@ -683,7 +683,6 @@ libutil/test/test_partitioned_counter.cc.o
 LIBPORTABILITY-OBJS = \
 libportability/huge_page_detection.cc.o \
 libportability/file.cc.o \
-libportability/os_malloc.cc.o \
 libportability/portability.cc.o \
 libportability/toku_path.cc.o \
 libportability/toku_pthread.cc.o \
@@ -710,6 +709,7 @@ libportability/test/test-pwrite4g.cc.o
 #libportability/toku_crash.cc.o \
 # Thread-local storage
 #libportability/toku_fair_rwlock.cc.o
+#libportability/os_malloc.cc.o \
 
 LIBLOCKTREE-OBJS = \
 liblocktree/locktree.cc.o \

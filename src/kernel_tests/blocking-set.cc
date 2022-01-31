@@ -88,8 +88,8 @@ PATENT RIGHTS GRANT:
 
 #ident "Copyright (c) 2007-2013 Tokutek Inc.  All rights reserved."
 #ident "The technology is licensed by the Massachusetts Institute of Technology, Rutgers State University of New Jersey, and the Research Foundation of State University of New York at Stony Brook under United States of America Serial No. 11/760379 and to the patents and/or patent applications resulting from it."
-// verify that cursor set operations suspend the conflicting threads when another transaction 
-// owns a lock on the key.  
+// verify that cursor set operations suspend the conflicting threads when another transaction
+// owns a lock on the key.
 
 #include "test.h"
 #include "toku_pthread.h"
@@ -118,7 +118,7 @@ static int blocking_set_callback(DBT const *a UU(), DBT const *b UU(), void *e U
     DBT const *found_val = b;
     DBT *my_val = (DBT *) e;
     assert(my_val->flags == DB_DBT_REALLOC);
-    my_val->data = toku_xrealloc(my_val->data, found_val->size);
+    my_val->data = toku_xrealloc(my_val->data, my_val->size, found_val->size);
     my_val->size = found_val->size;
     memcpy(my_val->data, found_val->data, found_val->size);
     return 0;

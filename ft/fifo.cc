@@ -112,13 +112,13 @@ static void fifo_init(struct fifo *fifo) {
 
 __attribute__((const,nonnull))
 static int fifo_entry_size(struct fifo_entry *entry) {
-   
-        DBT key, val, max_key;    
-        FT_MSG_S msg; 
-        fifo_entry_get_msg(&msg, entry, &key, &val, &max_key); 
+
+        DBT key, val, max_key;
+        FT_MSG_S msg;
+        fifo_entry_get_msg(&msg, entry, &key, &val, &max_key);
         return toku_ft_msg_memsize_in_fifo(&msg);
 }
-/*  
+/*
 __attribute__((const,nonnull))
 size_t toku_ft_msg_memsize_in_fifo(FT_MSG cmd) {
     // This must stay in sync with fifo_entry_size because that's what we
@@ -161,15 +161,15 @@ static int next_power_of_two (int n) {
 __attribute__((const,nonnull))
 size_t toku_ft_msg_memsize_in_fifo(FT_MSG msg) {
     const uint32_t  keylen = ft_msg_get_keylen(msg);
-    const uint32_t  datalen = ft_msg_get_vallen(msg);  
+    const uint32_t  datalen = ft_msg_get_vallen(msg);
     const size_t xidslen = xids_get_size(ft_msg_get_xids(msg));
     size_t ret = sizeof(struct fifo_entry) + keylen + datalen + xidslen - sizeof(XIDS_S);
-    if(ft_msg_type_is_multicast((enum ft_msg_type)(unsigned char)ft_msg_get_type(msg))) 
+    if(ft_msg_type_is_multicast((enum ft_msg_type)(unsigned char)ft_msg_get_type(msg)))
     {
         uint32_t max_keylen = ft_msg_get_max_keylen(msg);
         ret += sizeof(max_keylen) + max_keylen;
-   
-	if(FT_DELETE_MULTICAST == (enum ft_msg_type)(unsigned char)ft_msg_get_type(msg)) { 
+
+	if(FT_DELETE_MULTICAST == (enum ft_msg_type)(unsigned char)ft_msg_get_type(msg)) {
 		ret+=sizeof(bool)+sizeof(enum pacman_status);
     	}
     }
@@ -181,13 +181,13 @@ int toku_fifo_enq(FIFO fifo, FT_MSG msg, bool is_fresh, int32_t *dest) {
     int need_space_total = fifo->memory_used+need_space_here;
     if (fifo->memory == NULL) {
         fifo->memory_size = next_power_of_two(need_space_total);
-        XMALLOC_N(fifo->memory_size, fifo->memory);
+        fifo->memory = (char *) sb_malloc_sized(fifo->memory_size, true);
     }
     if (need_space_total > fifo->memory_size) {
         // Out of memory at the end.
         int next_2 = next_power_of_two(need_space_total);
         // resize the fifo
-        XREALLOC_N(next_2, fifo->memory);
+        XREALLOC_N(fifo->memory_size, next_2, fifo->memory);
         fifo->memory_size = next_2;
     }
     void * key = ft_msg_get_key(msg);
@@ -291,10 +291,10 @@ void fifo_entry_get_msg(FT_MSG ft_msg, struct fifo_entry * entry, DBT *k, DBT* v
     }
 
     memset(m, 0, sizeof(*m));
-    ft_msg_init(ft_msg, type, msn, xids,    
+    ft_msg_init(ft_msg, type, msn, xids,
                 toku_fill_dbt(k, key, keylen),
                 toku_fill_dbt(v, val, vallen)
-               ); 
+               );
 }
 //this iterate exposes the fifo entry to the caller
 int toku_fifo_iterate_pacman(FIFO fifo,
@@ -337,15 +337,15 @@ int toku_fifo_iterate(FIFO fifo,
     return r;
 }
 
-void toku_fifo_iterate_flip_msg_type (FIFO fifo, enum ft_msg_type from_type, enum ft_msg_type to_type) { 
+void toku_fifo_iterate_flip_msg_type (FIFO fifo, enum ft_msg_type from_type, enum ft_msg_type to_type) {
     int fifo_iterate_off;
-    for (fifo_iterate_off = toku_fifo_iterate_internal_start(fifo);                                     
-       toku_fifo_iterate_internal_has_more(fifo, fifo_iterate_off);                                       
-       ) {                      
-        struct fifo_entry *e = toku_fifo_iterate_internal_get_entry(fifo, fifo_iterate_off);                
-        DBT key,  val,  max_key;    
-        FT_MSG_S msg; 
-        fifo_entry_get_msg(&msg, e, &key, &val, &max_key); 
+    for (fifo_iterate_off = toku_fifo_iterate_internal_start(fifo);
+       toku_fifo_iterate_internal_has_more(fifo, fifo_iterate_off);
+       ) {
+        struct fifo_entry *e = toku_fifo_iterate_internal_get_entry(fifo, fifo_iterate_off);
+        DBT key,  val,  max_key;
+        FT_MSG_S msg;
+        fifo_entry_get_msg(&msg, e, &key, &val, &max_key);
 	if(from_type == e->type)
 		e->type = to_type;
         fifo_iterate_off = toku_fifo_iterate_internal_next(&msg, fifo_iterate_off);
@@ -360,8 +360,11 @@ unsigned long toku_fifo_memory_size_in_use(FIFO fifo) {
 }
 
 unsigned long toku_fifo_memory_footprint(FIFO fifo) {
-    size_t size_used = toku_memory_footprint(fifo->memory, fifo->memory_used);
-    long rval = sizeof(*fifo) + size_used; 
+    // DEP 11/12/19: I see no reason to query the kernel for how big the allocation
+    //               is, given that we already memoize it.  And a lot of expensive reasons
+    //               to do the query.  Just return our memoized size.
+    size_t size_used = fifo->memory_size;
+    long rval = sizeof(*fifo) + size_used;
     return rval;
 }
 
@@ -379,10 +382,10 @@ void toku_fifo_clone(FIFO orig_fifo, FIFO* cloned_fifo) {
     new_fifo->n_items_in_fifo = orig_fifo->n_items_in_fifo;
     new_fifo->memory_used = orig_fifo->memory_used;
     new_fifo->memory_size = new_fifo->memory_used;
-    XMALLOC_N(new_fifo->memory_size, new_fifo->memory);
+    new_fifo->memory = (char *) sb_malloc_sized(new_fifo->memory_size, true);
     memcpy(
-        new_fifo->memory, 
-        orig_fifo->memory, 
+        new_fifo->memory,
+        orig_fifo->memory,
         new_fifo->memory_size
         );
     *cloned_fifo = new_fifo;
