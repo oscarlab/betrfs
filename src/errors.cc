@@ -92,7 +92,7 @@ PATENT RIGHTS GRANT:
 /**
   \file errors.c
   \brief Error handling
- 
+
   The error handling routines for ydb
 */
 
@@ -110,36 +110,36 @@ int toku_env_is_panicked(DB_ENV *dbenv /**< The environment to check */) {
 
 /* Prints an error message to a file specified by env (or stderr),
    preceded by the environment's error prefix. */
-static void toku__ydb_error_file(const DB_ENV *env, bool use_stderr, 
+static void toku__ydb_error_file(const DB_ENV *env, bool use_stderr,
                                   char errmsg[]) {
     /* Determine the error file to use */
-    FILE *CAST_FROM_VOIDP(efile, env->i->errfile);
-    if (efile==NULL && env->i->errcall==0 && use_stderr) efile = stderr;
+    int efile = env->i->errfile;
+    int rv = 0;
+    size_t len;
+    if (efile==0 && env->i->errcall==0 && use_stderr) efile = 2;
 
     /* Print out on a file */
     if (efile) {
-        if (env->i->errpfx) 
+        if (env->i->errpfx)
         {
-            #ifndef TOKU_LINUX_MODULE
-            fprintf(efile, "%s: ", env->i->errpfx);
-            #else
-            fwrite(env->i->errpfx, 1, strlen(env->i->errpfx), efile);
-            #endif
+            len = strlen(env->i->errpfx);
+            rv = write(efile, env->i->errpfx, len);
+            assert(rv == (int) len);
+            rv = write(efile, ": ", 2);
+            assert(rv == 2);
         }
-       
-        #ifndef TOKU_LINUX_MODULE
-        fprintf(efile, "%s: ", errmsg);
-        #else
-        fwrite(errmsg, 1, strlen(errmsg), efile);
-        #endif
+
+        len = strlen(errmsg);
+        rv = write(efile, errmsg, len);
+        assert(rv == (int) len);
     }
 }
 
-/**  
+/**
 
-     Prints out environment errors, adjusting to a variety of options 
-     and formats. 
-     The printout format can be controlled to print the following optional 
+     Prints out environment errors, adjusting to a variety of options
+     and formats.
+     The printout format can be controlled to print the following optional
      messages:
      - The environment error message prefix
      - User-supplied prefix obtained by printing ap with the
@@ -150,26 +150,26 @@ static void toku__ydb_error_file(const DB_ENV *env, bool use_stderr,
      Both errcall and errfile can be set.
      The error message is truncated to approximately 4,000 characters.
 
-     \param env   The environment that the error refers to. 
+     \param env   The environment that the error refers to.
      \param error The error code
-     \param include_stderrstring Controls whether the standard db error 
+     \param include_stderrstring Controls whether the standard db error
                   string should be included in the print out
      \param use_stderr_if_nothing_else Toggles the use of stderr.
      \param fmt   Output format for optional prefix arguments (must be NULL
                   if the prefix is empty)
      \param ap    Optional prefix
 */
-void toku_ydb_error_all_cases(const DB_ENV * env, 
-                              int error, 
-                              bool include_stderrstring, 
-                              bool use_stderr_if_nothing_else, 
+void toku_ydb_error_all_cases(const DB_ENV * env,
+                              int error,
+                              bool include_stderrstring,
+                              bool use_stderr_if_nothing_else,
                               const char *fmt, va_list ap) {
     /* Construct the error message */
     char *buf = (char *)toku_xmalloc(4000 * sizeof(*buf));
     int count=0;
     if (fmt) count=vsnprintf(buf, 4000, fmt, ap);
     if (include_stderrstring) {
-        count+=snprintf(&buf[count], 4000-count, ": %s", 
+        count+=snprintf(&buf[count], 4000-count, ": %s",
                         db_strerror(error));
     }
 
@@ -181,7 +181,7 @@ void toku_ydb_error_all_cases(const DB_ENV * env,
     toku_free(buf);
 }
 
-/** Handle all the error cases (but don't do the default thing.) 
+/** Handle all the error cases (but don't do the default thing.)
     \param dbenv  The environment that is subject to errors
     \param error  The error code
     \param fmt    The format string for additional variable arguments to
@@ -194,7 +194,7 @@ int toku_ydb_do_error (const DB_ENV *dbenv, int error, const char *fmt, ...) {
     return error;
 }
 
-/** Handle errors on an environment, 
+/** Handle errors on an environment,
     \param dbenv  The environment that is subject to errors
     \param error  The error code
     \param fmt    The format string for additional variable arguments to

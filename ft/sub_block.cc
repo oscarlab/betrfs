@@ -119,10 +119,15 @@ void sub_block_init(SUB_BLOCK sub_block) {
     sub_block->compressed_size = 0;
 
     sub_block->xsum = 0;
+#ifdef FT_INDIRECT
+    sub_block->ind_data = NULL;
+    sub_block->read_pfns = NULL;
+    sub_block->fd = 0;
+#endif
 }
-    
+
 // get the size of the compression header
-size_t 
+size_t
 sub_block_header_size(int n_sub_blocks) {
     return sizeof (uint32_t) + n_sub_blocks * sizeof (struct stored_sub_block);
 }
@@ -132,8 +137,8 @@ set_compressed_size_bound(struct sub_block *se, enum toku_compression_method met
     se->compressed_size_bound = toku_compress_bound(method, se->uncompressed_size);
 }
 
-// get the sum of the sub block compressed sizes 
-size_t 
+// get the sum of the sub block compressed sizes
+size_t
 get_sum_compressed_size_bound(int n_sub_blocks, struct sub_block sub_block[], enum toku_compression_method method) {
     size_t compressed_size_bound = 0;
     for (int i = 0; i < n_sub_blocks; i++) {
@@ -143,17 +148,17 @@ get_sum_compressed_size_bound(int n_sub_blocks, struct sub_block sub_block[], en
     return compressed_size_bound;
 }
 
-// get the sum of the sub block uncompressed sizes 
-size_t 
+// get the sum of the sub block uncompressed sizes
+size_t
 get_sum_uncompressed_size(int n_sub_blocks, struct sub_block sub_block[]) {
     size_t uncompressed_size = 0;
-    for (int i = 0; i < n_sub_blocks; i++) 
+    for (int i = 0; i < n_sub_blocks; i++)
         uncompressed_size += sub_block[i].uncompressed_size;
     return uncompressed_size;
 }
 
 // round up n
-static inline int 
+static inline int
 alignup32(int a, int b) {
     return ((a+b-1) / b) * b;
 }
@@ -208,7 +213,7 @@ set_all_sub_block_sizes(int total_size, int sub_block_size, int n_sub_blocks, st
         sub_block[i].uncompressed_size = sub_block_size;
         size_left -= sub_block_size;
     }
-    if (i == 0 || size_left > 0) 
+    if (i == 0 || size_left > 0)
         sub_block[i].uncompressed_size = size_left;
 }
 
@@ -292,7 +297,7 @@ compress_all_sub_blocks(int n_sub_blocks, struct sub_block sub_block[], char *un
     // This is a complex way to write a parallel loop.  Cilk would be better.
 
     if (n_sub_blocks == 1) {
-        // single sub-block 
+        // single sub-block
         sub_block[0].uncompressed_ptr = uncompressed_ptr;
         sub_block[0].compressed_ptr = compressed_ptr;
         compress_sub_block(&sub_block[0], method);
@@ -344,14 +349,14 @@ compress_all_sub_blocks(int n_sub_blocks, struct sub_block sub_block[], char *un
 }
 
 // initialize the decompression work
-void 
+void
 decompress_work_init(struct decompress_work *dw,
                      void *compress_ptr, uint32_t compress_size,
                      void *uncompress_ptr, uint32_t uncompress_size,
                      uint32_t xsum) {
-    dw->compress_ptr = compress_ptr; 
+    dw->compress_ptr = compress_ptr;
     dw->compress_size = compress_size;
-    dw->uncompress_ptr = uncompress_ptr; 
+    dw->uncompress_ptr = uncompress_ptr;
     dw->uncompress_size = uncompress_size;
     dw->xsum = xsum;
     dw->error = 0;
@@ -367,7 +372,7 @@ decompress_sub_block(void *compress_ptr, uint32_t compress_size, void *uncompres
     // verify checksum
     uint32_t xsum = x1764_memory(compress_ptr, compress_size);
     if (xsum != expected_xsum) {
-        if (verbose_decompress_sub_block) fprintf(stderr, "%s:%d xsum %u expected %u\n", __FUNCTION__, __LINE__, xsum, expected_xsum);
+        if (verbose_decompress_sub_block) dprintf(STDERR, "%s:%d xsum %u expected %u\n", __FUNCTION__, __LINE__, xsum, expected_xsum);
         result = EINVAL;
     } else {
         // decompress
@@ -420,7 +425,7 @@ decompress_all_sub_blocks(int n_sub_blocks, struct sub_block sub_block[], unsign
             compressed_data += sub_block[i].compressed_size;
         }
         workset_unlock(&ws);
-    
+
         // decompress the sub-blocks
         if (0) printf("%s:%d Cores=%d Blocks=%d T=%d\n", __FUNCTION__, __LINE__, num_cores, n_sub_blocks, T);
         toku_thread_pool_run(pool, 0, &T, decompress_worker, &ws);

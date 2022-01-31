@@ -101,7 +101,7 @@ test_stat64 (unsigned int N) {
 
     int r;
     r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
-    assert(r==0);    
+    assert(r==0);
 
     DB_ENV *env;
     DB *db;
@@ -134,7 +134,6 @@ test_stat64 (unsigned int N) {
     for (i=0; i<N; i++) {
         if (verbose>1 && i % (1<<14) == 0) {
             printf("%s(total=%u) inserted %u so far\n", __FILE__, N, i);
-            fflush(stdout);
         }
 	char hello[30], there[30];
 	snprintf(hello, sizeof(hello), "hello%8d", i);
@@ -164,7 +163,7 @@ test_stat64 (unsigned int N) {
             printf("nkeys=%" PRIu64 "\nndata=%" PRIu64 "\ndsize=%" PRIu64 "\n",
                    s.bt_nkeys, s.bt_ndata, s.bt_dsize);
             printf("fsize=%" PRIu64 "\n", s.bt_fsize);
-            printf("expected dsize=%" PRIu64 "\n", dsize); 
+            printf("expected dsize=%" PRIu64 "\n", dsize);
         }
         assert(0 < s.bt_nkeys && s.bt_nkeys <= N);
         assert(s.bt_ndata == s.bt_nkeys);
@@ -203,7 +202,7 @@ test_stat64 (unsigned int N) {
             printf("nkeys=%" PRIu64 "\nndata=%" PRIu64 "\ndsize=%" PRIu64 "\n",
                    s.bt_nkeys, s.bt_ndata, s.bt_dsize);
             printf("fsize=%" PRIu64 "\n", s.bt_fsize);
-            printf("expected dsize=%" PRIu64 "\n", dsize); 
+            printf("expected dsize=%" PRIu64 "\n", dsize);
         }
         assert(0 < s.bt_nkeys && s.bt_nkeys <= N);
         assert(s.bt_ndata == s.bt_nkeys);

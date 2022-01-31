@@ -54,7 +54,7 @@ static int write_root_inode(int fd, int *total_inodes)
 	root_inode.block_count = 1;
 	root_inode.dio = 0;
 	
-	off_t off = lseek(fd, 0, SEEK_CUR);
+	lseek(fd, 0, SEEK_CUR);
 	ret = write(fd, &root_inode, sizeof(root_inode));
 
 	if (ret != sizeof(root_inode)) {
@@ -116,7 +116,6 @@ static int write_temp_dir_inode(int fd, int *total_inodes)
 static int write_db_files_inode(int fd, const struct sfs_inode *i,
 				int count, int *total_inodes)
 {
-	off_t nbytes;
 	ssize_t ret;
 
 	ret = write(fd, i, sizeof(*i) * count);
@@ -299,7 +298,6 @@ int main(int argc, char *argv[])
 {
 	int fd;
 	ssize_t ret;
-	int total_inodes = 0;
 	uint64_t total_blk_num, file_size_in_bytes;
 
 	if (argc != 2) {

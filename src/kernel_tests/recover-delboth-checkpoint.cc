@@ -136,7 +136,7 @@ run_test (bool do_commit, bool do_abort) {
 	r = txn->commit(txn, 0);                                                        CKERR(r);
     } else if (do_abort) {
         r = txn->abort(txn);                                                            CKERR(r);
-        
+
         // force an fsync of the log
         r = env->txn_begin(env, NULL, &txn, 0);                                         CKERR(r);
         r = txn->commit(txn, DB_TXN_SYNC);                                              CKERR(r);
@@ -172,7 +172,7 @@ run_recover (bool UU(did_commit)) {
             break;
         assert(k.size == 1 && v.size == 1);
         unsigned char kk, vv;
-        memcpy(&kk, k.data, k.size); 
+        memcpy(&kk, k.data, k.size);
         memcpy(&vv, v.data, v.size);
         assert(kk == i);
         assert(vv == i);
@@ -243,10 +243,10 @@ static void
 	} else if (strcmp(argv[0], "-h")==0) {
 	    resultcode=0;
 	do_usage:
-	    fprintf(stderr, "Usage:\n%s [-v|-q]* [-h] {--commit | --abort | --explicit-abort | --recover-committed | --recover-aborted } \n", cmd);
+	    dprintf(STDERR, "Usage:\n%s [-v|-q]* [-h] {--commit | --abort | --explicit-abort | --recover-committed | --recover-aborted } \n", cmd);
 	    exit(resultcode);
 	} else {
-	    fprintf(stderr, "Unknown arg: %s\n", argv[0]);
+	    dprintf(STDERR, "Unknown arg: %s\n", argv[0]);
 	    resultcode=1;
 	    goto do_usage;
 	}
@@ -287,7 +287,7 @@ int test_recover_delboth_checkpoint(void) {
         run_recover_only();
     } else if (do_no_recover) {
         run_no_recover();
-    } 
+    }
 #if 0
     else {
 	do_test();

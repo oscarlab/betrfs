@@ -164,12 +164,10 @@ void toku_fs_get_write_info(time_t *enospc_last_time, uint64_t *enospc_current, 
 // XXX: Adding the logger specific function for fdatasync
 void toku_logger_maybe_sync_internal_no_flags_no_callbacks (int fd);
 
-void toku_fsync_dirfd_without_accounting(DIR *dirp);
-
 int toku_fsync_dir_by_name_without_accounting(const char *dir_name);
 
 // Get the file system free and total space for the file system that contains a path name
-// *avail_size is set to the bytes of free space in the file system available for non-root 
+// *avail_size is set to the bytes of free space in the file system available for non-root
 // *free_size is set to the bytes of free space in the file system
 // *total_size is set to the total bytes in the file system
 // Return 0 on success, otherwise an error number
@@ -190,10 +188,13 @@ int toku_fstat(int fd, toku_struct_stat *statbuf) __attribute__((__visibility__(
 // Portable linux 'dup2'
 int toku_dup2(int fd, int fd2) __attribute__((__visibility__("default")));
 
+void sb_truncate_by_fd(int fd);
 unsigned long get_kernfs_pfn(unsigned long start);
 void sb_wait_read_page(unsigned long pfn);
 void sb_lock_read_page(unsigned long pfn);
-size_t sb_read_pages(int fd, unsigned long *pfn_node, int32_t nr_pages, loff_t pos);
+size_t sb_async_read_pages(int fd, unsigned long *pfn_node, int32_t nr_pages, loff_t pos);
+unsigned long sb_alloc_leaf_page(void);
+unsigned long sb_free_leaf_page(unsigned long);
 
 // DIO interface used when the device is SSD
 ssize_t sb_sfs_dio_write(int, const void*, size_t, toku_off_t, void (*)(void*));
@@ -206,10 +207,54 @@ int fcopy(const char *, const char *, int64_t);
 int fcopy_dio(const char *, const char *, int64_t);
 // Check the device type
 bool ftfs_is_hdd(void);
+bool toku_need_compression(void);
 
-// Check if it is data db
-bool sb_sfs_is_data_db(int fd);
-bool sb_sfs_is_meta_db(int fd);
+// Check if it is data or meta db
+bool sb_is_data_db(int fd);
+bool sb_is_meta_db(int fd);
+
+#ifdef FT_INDIRECT
+/* Some Linux Utility Functions */
+void toku_dump_hex(const char *str_prefix, const void *buf, size_t len);
+void toku_dump_stack();
+
+/* Page Allocate and Free, Read and Write */
+void ftfs_wait_reserved_page(unsigned long pfn);
+unsigned long sb_alloc_nonleaf_page(void);
+void ftfs_free_page_list(unsigned long* pfn_arr, int nr_pages, bool is_leaf);
+ssize_t ftfs_write_ft_leaf(struct bp_serialize_extra *extra, loff_t pos, bool is_cloned);
+ssize_t ftfs_write_ft_nonleaf(struct bp_serialize_extra *extra, loff_t pos, bool is_cloned);
+
+void ftfs_print_page(unsigned long pfn);
+
+/////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////
+void ftfs_fifo_get_page_list(unsigned long *pfn_arr, int nr_pages);
+void ftfs_fifo_put_page_list(unsigned long *pfn_arr, int nr_pages);
+void ftfs_bn_get_page_list(unsigned long *pfn_arr, int nr_pages);
+void ftfs_bn_put_page_list(unsigned long *pfn_arr, int nr_pages);
+void ftfs_set_page_list_private(unsigned long* pfn_arr, int nr_pages, int bit);
+void ftfs_clear_page_list_private(unsigned long* head_pfn, int nr_pages, int bit);
+void ftfs_check_page_list(unsigned long *pfn_arr, int nr_pages, int expected_count, int expected_internal_count);
+/* for clone_callback */
+void ftfs_lock_page_list_for_clone(unsigned long* pfn_arr, int nr_pages);
+void ftfs_unlock_page_list_for_clone(unsigned long* pfn_arr, int nr_pages);
+
+void sb_wb_page_list_unlock(unsigned long *pfn_arr, int nr_pages, bool is_leaf);
+bool sb_is_wb_page(unsigned long *pfn_arr, int nr_pages);
+bool sb_is_page_list_bound(unsigned long* pfn_arr, int nr_pages);
+void sb_copy_page_atomic(unsigned long src, unsigned long dest, unsigned int size);
+
+/* Occasional Use for Debug */
+char *sb_map_page_atomic(unsigned long pfn, bool skip_wait);
+void sb_unmap_page_atomic(void *kaddr);
+bool sb_virt_addr_valid(void *kaddr);
+void ftfs_set_page_up_to_date(unsigned long pfn);
+int sb_sfs_truncate_page_cache(int fd);
+void sb_copy_page_atomic(unsigned long src, unsigned long dest, unsigned int size);
+#endif
 } // extern "C"
 
 #endif /* TOKU_OS_H */

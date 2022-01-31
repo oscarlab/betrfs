@@ -144,7 +144,7 @@ static void setup (void) {
     { int chk_r = db_env_create(&env, 0); CKERR(chk_r); }
     // DEP 10/25/19: This test is prone to overflowing the max memory for the lock manager
     env->set_lk_max_memory(env, 64L * 1024 * 1024 * 2);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     env->set_update(env, update_fun);
     {
         struct toku_db_key_operations key_ops;
@@ -166,9 +166,6 @@ static int do_inserts(DB_TXN *txn, DB *db) {
     DBT *keyp = dbt_init(&key, &i, sizeof(i));
     DBT *valp = dbt_init(&val, &v, sizeof(v));
     for (i = 0; i < NUM_KEYS; ++i) {
-        if (i % 20000 == 0)
-        printf("\001" "3" "interation %d", i);
-
         v = _v(i);
         r = db->put(db, txn, keyp, valp, 0); CKERR(r);
     }
@@ -198,9 +195,6 @@ static int do_verify_results(DB_TXN *txn, DB *db, void (*check_val)(const unsign
     DBT *keyp = dbt_init(&key, &i, sizeof(i));
     DBT *valp = dbt_init(&val, NULL, 0);
     for (i = 0; i < NUM_KEYS; ++i) {
-        if (i % 20000 == 0)
-        printf("\001" "3" "interation %d", i);
-
         r = db->get(db, txn, keyp, valp, 0); CKERR(r);
         assert(val.size == sizeof(*vp));
         CAST_FROM_VOIDP(vp, val.data);

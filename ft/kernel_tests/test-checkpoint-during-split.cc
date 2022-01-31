@@ -168,7 +168,7 @@ static void flusher_callback(int state, void* extra) {
 	if ((state == flt_flush_before_split && !after_split) ||
 			(state == flt_flush_during_split && after_split)) {
 		checkpoint_called = true;
-		int r = toku_pthread_create(&checkpoint_tid, NULL, do_checkpoint, NULL); 
+		int r = toku_pthread_create(&checkpoint_tid, NULL, do_checkpoint, NULL);
 		assert_zero(r);
 		while (!checkpoint_callback_called) {
 			usleep(1*1024*1024);
@@ -233,7 +233,7 @@ doit (bool after_split) {
 
 	// at this point, we have inserted two leafentries into
 	// the leaf, that should be big enough such that a split
-	// will happen    
+	// will happen
 	struct flusher_advice fa;
 	flusher_advice_init(
 			&fa,
@@ -250,11 +250,11 @@ doit (bool after_split) {
 	struct ftnode_fetch_extra bfe;
 	fill_bfe_for_min_read(&bfe, ft_handle_t->ft);
 	toku_pin_ftnode_off_client_thread(
-			ft_handle_t->ft, 
+			ft_handle_t->ft,
 			node_root,
 			toku_cachetable_hash(ft_handle_t->ft->cf, node_root),
 			&bfe,
-			PL_WRITE_EXPENSIVE, 
+			PL_WRITE_EXPENSIVE,
 			0,
 			NULL,
 			&node
@@ -268,11 +268,11 @@ doit (bool after_split) {
 
 	// now let's pin the root again and make sure it is has split
 	toku_pin_ftnode_off_client_thread(
-			ft_handle_t->ft, 
+			ft_handle_t->ft,
 			node_root,
 			toku_cachetable_hash(ft_handle_t->ft->cf, node_root),
 			&bfe,
-			PL_WRITE_EXPENSIVE, 
+			PL_WRITE_EXPENSIVE,
 			0,
 			NULL,
 			&node
@@ -282,7 +282,7 @@ doit (bool after_split) {
 	toku_unpin_ftnode(ft_handle_t->ft, node);
 
 	void *ret;
-	r = toku_pthread_join(checkpoint_tid, &ret); 
+	r = toku_pthread_join(checkpoint_tid, &ret);
 	assert_zero(r);
 
 	//
@@ -293,7 +293,7 @@ doit (bool after_split) {
 	//
 	int64_t bt_size = toku_get_largest_used_size(ft_handle_t->ft->blocktable);
 	int64_t aligned_size = roundup_to_multiple(BLOCK_ALIGNMENT, bt_size);
-        if (ftfs_is_hdd()) {
+        if (!ftfs_simplefs_dio()) {
 	    r = fcopy(TOKU_TEST_FILENAME_META, TOKU_TEST_FILENAME_DATA, aligned_size);
         } else {
 	    r = fcopy_dio(TOKU_TEST_FILENAME_META, TOKU_TEST_FILENAME_DATA, aligned_size);
@@ -312,11 +312,11 @@ doit (bool after_split) {
 	//
 	fill_bfe_for_full_read(&bfe, c_ft->ft);
 	toku_pin_ftnode_off_client_thread(
-			c_ft->ft, 
+			c_ft->ft,
 			node_root,
 			toku_cachetable_hash(c_ft->ft->cf, node_root),
 			&bfe,
-			PL_WRITE_EXPENSIVE, 
+			PL_WRITE_EXPENSIVE,
 			0,
 			NULL,
 			&node
@@ -340,11 +340,11 @@ doit (bool after_split) {
 	// now let's verify the leaves are what we expect
 	if (after_split) {
 		toku_pin_ftnode_off_client_thread(
-				c_ft->ft, 
+				c_ft->ft,
 				left_child,
 				toku_cachetable_hash(c_ft->ft->cf, left_child),
 				&bfe,
-				PL_WRITE_EXPENSIVE, 
+				PL_WRITE_EXPENSIVE,
 				0,
 				NULL,
 				&node
@@ -356,11 +356,11 @@ doit (bool after_split) {
 		toku_unpin_ftnode_off_client_thread(c_ft->ft, node);
 
 		toku_pin_ftnode_off_client_thread(
-				c_ft->ft, 
+				c_ft->ft,
 				right_child,
 				toku_cachetable_hash(c_ft->ft->cf, right_child),
 				&bfe,
-				PL_WRITE_EXPENSIVE, 
+				PL_WRITE_EXPENSIVE,
 				0,
 				NULL,
 				&node
@@ -373,11 +373,11 @@ doit (bool after_split) {
 	}
 	else {
 		toku_pin_ftnode_off_client_thread(
-				c_ft->ft, 
+				c_ft->ft,
 				left_child,
 				toku_cachetable_hash(c_ft->ft->cf, left_child),
 				&bfe,
-				PL_WRITE_EXPENSIVE, 
+				PL_WRITE_EXPENSIVE,
 				0,
 				NULL,
 				&node
@@ -406,9 +406,9 @@ doit (bool after_split) {
 }
 
 extern "C" int test_checkpoint_during_split (void);
-int test_checkpoint_during_split (void) 
+int test_checkpoint_during_split (void)
 {
-	initialize_dummymsn();    
+	initialize_dummymsn();
         int rinit = toku_ft_layer_init();
         CKERR(rinit);
         doit(false);

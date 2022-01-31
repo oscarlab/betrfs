@@ -115,7 +115,7 @@ static void loader_open_abort(int ndb) {
     CKERR(r);
     int envflags = DB_INIT_LOCK | DB_INIT_LOG | DB_INIT_MPOOL | DB_INIT_TXN | DB_CREATE | DB_PRIVATE;
     r = env->open(env, envdir, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                                            CKERR(r);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
 
     DB *dbs[ndb];
     uint32_t db_flags[ndb];
@@ -154,7 +154,7 @@ static void do_args(int argc, char * const argv[]) {
         if (strcmp(argv[0], "-h")==0) {
 	    resultcode=0;
 	do_usage:
-	    fprintf(stderr, "Usage: %s -h -v -q -p\n", cmd);
+	    dprintf(STDERR, "Usage: %s -h -v -q -p\n", cmd);
 	    exit(resultcode);
 	} else if (strcmp(argv[0], "-v")==0) {
 	    verbose++;
@@ -170,7 +170,7 @@ static void do_args(int argc, char * const argv[]) {
             if (argc > 0)
                 envdir = argv[0];
 	} else {
-	    fprintf(stderr, "Unknown arg: %s\n", argv[0]);
+	    dprintf(STDERR, "Unknown arg: %s\n", argv[0]);
 	    resultcode=1;
 	    goto do_usage;
 	}

@@ -127,17 +127,13 @@ void sb_free_sized(void* ptr, size_t size);
 void *toku_xmalloc(size_t size)  __attribute__((__visibility__("default")));
 void *toku_xrealloc(void*, size_t old_size, size_t new_size) __attribute__((__visibility__("default")));
 void *toku_xmalloc_aligned(size_t alignment, size_t size) __attribute__((__visibility__("default")));
-// Effect: Perform a os_malloc_aligned(size) with the additional property that the returned pointer is a multiple of ALIGNMENT.
+// Effect: Allocate memory with the additional property that the returned pointer is a multiple of alignment.
+//  Doesn't actually allocate aligned memory in the kernel module.
 //  Fail with a resource_assert if the allocation fails (don't return an error code).
-//  If the alloc_aligned function has been set then call it instead.
 // Requires: alignment is a power of two.
 
 void toku_free(void*) __attribute__((__visibility__("default")));
 void *toku_realloc(void *, size_t old_size, size_t new_size)  __attribute__((__visibility__("default")));
-    //void *toku_realloc_aligned(size_t alignment, void *p, size_t size) __attribute__((__visibility__("default")));
-// Effect: Perform a os_realloc_aligned(alignment, p, size) which has the additional property that the returned pointer is a multiple of ALIGNMENT.
-//  If the malloc_aligned function has been set then call it instead.
-// Requires: alignment is a power of two.
 
 /* MALLOC is a macro that helps avoid a common error:
  * Suppose I write

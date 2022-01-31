@@ -108,7 +108,24 @@ test_dump_ft(void) {
     const char *n = TOKU_TEST_FILENAME_DATA;
     FT_HANDLE t;
     CACHETABLE ct;
-    FILE *f = fopen(TOKU_TEST_FILENAME_META, "w");
+
+    /* YZJ: when ssd-specific code is enabled we have two io stack.
+     * One supports unaligned reads/writes which go through page cache;
+     * the other only support aligned reads/writes which bypass page cache.
+     * The former support file access APIs like fwrite, fread and etc.
+     * The latter support sfs_dio_* APIs.
+     * The log file is supposed to access with the former IO stack.
+     * For this unit test, let us use it for dumping ftnode to.
+     */
+    int flags = O_WRONLY;
+#ifndef TOKU_LINUX_MODULE
+    flags |= O_APPEND;
+#endif
+    int f = open(TOKU_TEST_FILENAME_LOG, flags);
+#ifndef TOKU_LINUX_MODULE
+    off_t off = lseek(f, 0, SEEK_CUR);
+    assert(off == 0);
+#endif
     assert(f);
     toku_cachetable_create(&ct, 0, ZERO_LSN, NULL_LOGGER);
     r = toku_open_ft_handle(n, 1, &t, 1<<12, 1<<9, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun); assert(r==0);
@@ -123,14 +140,10 @@ test_dump_ft(void) {
     r = toku_dump_ft(f, t); assert(r==0);
     r = toku_close_ft_handle_nolsn(t, 0); assert(r==0);
     toku_cachetable_close(&ct);
-    fclose(f);
-    
+    close(f);
+
     r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r == 0);
 
     toku_ft_layer_destroy();
-#ifdef __SUPPORT_DIRECT_IO
-    printf("\n INFO: direct io is turned on \n");
-#endif
-
     return 0;
 }

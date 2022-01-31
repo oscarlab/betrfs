@@ -111,12 +111,25 @@ struct wbuf {
     unsigned int  size;
     unsigned int  ndone;
     struct x1764  checksum;    // The checksum state
+#ifdef FT_INDIRECT
+    BP_IND_DATA ind_data;
+    unsigned int subtract_bytes;
+#endif
 };
+
+#ifdef FT_INDIRECT
+#define WB_PFN_CNT(wb) ((wb->ind_data->pfn_cnt))
+#define WB_COPY_PFN(wb, pfn) ((wb->ind_data->pfns)[wb->ind_data->pfn_cnt]) = pfn
+#endif
 
 static inline void wbuf_nocrc_init (struct wbuf *w, void *buf, DISKOFF size) {
     w->buf = (unsigned char *) buf;
     w->size = size;
     w->ndone = 0;
+#ifdef FT_INDIRECT
+    memset(&w->ind_data, 0, sizeof(w->ind_data));
+    w->subtract_bytes = 0;
+#endif
 }
 
 static inline void wbuf_init (struct wbuf *w, void *buf, DISKOFF size) {
@@ -128,6 +141,13 @@ static inline size_t wbuf_get_woffset(struct wbuf *w) {
     return w->ndone;
 }
 
+#ifdef FT_INDIRECT
+static inline size_t wbuf_reserve_uint(struct wbuf *w) {
+    size_t offset = w->ndone;
+    w->ndone += 4;
+    return offset;
+}
+#endif
 /* Write a character. */
 static inline void wbuf_nocrc_char (struct wbuf *w, unsigned char ch) {
     assert(w->ndone<w->size);
@@ -173,6 +193,13 @@ static inline void wbuf_nocrc_int (struct wbuf *w, int32_t i) {
     w->ndone += 4;
 #endif
 }
+
+#ifdef FT_INDIRECT
+static inline void wbuf_nocrc_uint_offset(struct wbuf *w, size_t offset, uint32_t i) {
+    int32_t tmp = i;
+    *(uint32_t*)(&w->buf[offset]) = toku_htod32(tmp);
+}
+#endif
 
 static inline void wbuf_int (struct wbuf *w, int32_t i) {
     wbuf_nocrc_int(w, i);

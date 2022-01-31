@@ -144,11 +144,11 @@ test (void) {
 
     /* create the dup database file */
     r = db_env_create(&env, 0);        assert(r == 0);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE|DB_INIT_MPOOL|DB_THREAD|DB_PRIVATE|DB_INIT_LOG|DB_INIT_TXN, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r = env->txn_begin(env, NULL, &null_txn, 0); assert_zero(r);
     r = db_create(&db, env, 0); assert(r == 0);
-    db->set_errfile(db,stderr); // Turn off those annoying errors
+    db->set_errfile(db, STDERR); // Turn off those annoying errors
     r = db->open(db, null_txn, fname, NULL, DB_BTREE, DB_CREATE, 0666); assert(r == 0);
 
     int i;
@@ -158,7 +158,7 @@ test (void) {
         int v = htonl(i);
         DBT key, val;
         r = db->put(db, null_txn, dbt_init(&key, &k, sizeof k), dbt_init(&val, &v, sizeof v), 0);
-        assert(r == 0); 
+        assert(r == 0);
     }
 
     for (i=0; i<ncursors; i++) {
@@ -181,10 +181,10 @@ test (void) {
 extern "C" int test_test_cursor_3(void);
 int test_test_cursor_3(void) {
 
-    pre_setup();  
+    pre_setup();
     int r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
-    assert(r==0);   
- 
+    assert(r==0);
+
     test();
     post_teardown();
     return 0;

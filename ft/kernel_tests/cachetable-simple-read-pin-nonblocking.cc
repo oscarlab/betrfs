@@ -158,21 +158,21 @@ run_test (void) {
     assert(r==0);
 
     r = toku_cachetable_openf(&f1_nb, ct, fname1, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO); assert(r == 0);
-    
+
     void* v1;
     long s1;
     CACHETABLE_WRITE_CALLBACK wc = def_write_callback(NULL);
 
     toku_pthread_t fetch_tid;
     fetch_called_nb = false;
-    r = toku_pthread_create(&fetch_tid, NULL, run_expensive_fetch, NULL); 
+    r = toku_pthread_create(&fetch_tid, NULL, run_expensive_fetch, NULL);
     sleep(1);
     r = toku_cachetable_get_and_pin(f1_nb, make_blocknum(1), 1, &v1, &s1, wc, sleep_fetch, def_pf_req_callback, def_pf_callback, false, NULL);
     assert_zero(r);
     assert(fetch_called_nb);
     r = toku_test_cachetable_unpin(f1_nb, make_blocknum(1), 1, CACHETABLE_CLEAN, make_pair_attr(8));
     assert(r==0);
-    r = toku_pthread_join(fetch_tid, &ret); 
+    r = toku_pthread_join(fetch_tid, &ret);
     assert_zero(r);
 
     // call with may_modify_node = false twice, make sure we can get it
@@ -187,15 +187,15 @@ run_test (void) {
 
     toku_pthread_t pf_tid;
     pf_called_nb = false;
-    r = toku_pthread_create(&pf_tid, NULL, run_expensive_pf, NULL); 
+    r = toku_pthread_create(&pf_tid, NULL, run_expensive_pf, NULL);
     sleep(1);
     r = toku_cachetable_get_and_pin(f1_nb, make_blocknum(1), 1, &v1, &s1, wc, sleep_fetch, def_pf_req_callback, def_pf_callback, false, NULL);
     assert_zero(r);
     assert(pf_called_nb);
     r = toku_test_cachetable_unpin(f1_nb, make_blocknum(1), 1, CACHETABLE_CLEAN, make_pair_attr(8));
     assert(r==0);
-    
-    r = toku_pthread_join(pf_tid, &ret); 
+
+    r = toku_pthread_join(pf_tid, &ret);
     assert_zero(r);
 
     toku_cachetable_verify(ct);
@@ -206,6 +206,9 @@ run_test (void) {
 extern "C" int test_cachetable_simple_readpin_nonblocking(void);
 
 int test_cachetable_simple_readpin_nonblocking(void) {
+  int rinit = toku_ft_layer_init();
+  CKERR(rinit);
   run_test();
+  toku_ft_layer_destroy();
   return 0;
 }

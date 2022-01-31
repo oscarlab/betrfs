@@ -106,17 +106,17 @@ int test_mvcc_many_committed(void) {
     uint32_t i = 0;
     uint32_t num_read_txns = 1000;
     r = db_env_create(&env, 0);                                                         CKERR(r);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                      CKERR(r);
-    
+
     DB *db;
 
     DB_TXN* create_txn;
 //    DB_TXN* read_txns[num_read_txns];
-    DB_TXN** read_txns = (DB_TXN**) toku_xmalloc(num_read_txns * 
+    DB_TXN** read_txns = (DB_TXN**) toku_xmalloc(num_read_txns *
                                 sizeof(DB_TXN*));
 
-    if (!read_txns) 
+    if (!read_txns)
         abort();
 
     DB_TXN* read_uncommitted_txn;
@@ -136,19 +136,19 @@ int test_mvcc_many_committed(void) {
         r = env->txn_begin(env, NULL, &put_txn, DB_TXN_SNAPSHOT);
         CKERR(r);
         r = db->put(
-            db, 
-            put_txn, 
-            dbt_init(&key, "a", 2), 
-            dbt_init(&val, &data, 4), 
+            db,
+            put_txn,
+            dbt_init(&key, "a", 2),
+            dbt_init(&val, &data, 4),
             0
-            );       
+            );
         CKERR(r);
         r = put_txn->commit(put_txn, 0);
         CKERR(r);
         //this should read the above put
         r = env->txn_begin(env, NULL, &read_txns[i], DB_TXN_SNAPSHOT);
         CKERR(r);
-            
+
     }
 
     for (i = 0; i < num_read_txns; i++) {
@@ -156,7 +156,7 @@ int test_mvcc_many_committed(void) {
         memset(&curr_key, 0, sizeof(curr_key));
         memset(&curr_val, 0, sizeof(curr_val));
         DBC* snapshot_cursor = NULL;
-        r = db->cursor(db, read_txns[i], &snapshot_cursor, 0); CKERR(r);        
+        r = db->cursor(db, read_txns[i], &snapshot_cursor, 0); CKERR(r);
         r = snapshot_cursor->c_get(snapshot_cursor, &curr_key, &curr_val, DB_NEXT); CKERR(r);
         assert(((char *)(curr_key.data))[0] == 'a');
         assert((*(uint32_t *)(curr_val.data)) == i);
@@ -171,13 +171,13 @@ int test_mvcc_many_committed(void) {
         r = env->txn_begin(env, NULL, &read_uncommitted_txn, DB_READ_UNCOMMITTED);
         CKERR(r);
         DBC* read_uncommitted_cursor = NULL;
-        r = db->cursor(db, read_uncommitted_txn, &read_uncommitted_cursor, 0); CKERR(r);        
+        r = db->cursor(db, read_uncommitted_txn, &read_uncommitted_cursor, 0); CKERR(r);
         r = read_uncommitted_cursor->c_get(
-            read_uncommitted_cursor, 
-            &curr_key, 
-            &curr_val, 
+            read_uncommitted_cursor,
+            &curr_key,
+            &curr_val,
             DB_NEXT
-            ); 
+            );
         CKERR(r);
         assert(((char *)(curr_key.data))[0] == 'a');
         assert((*(uint32_t *)(curr_val.data)) == (num_read_txns - 1));
@@ -193,7 +193,7 @@ int test_mvcc_many_committed(void) {
 
     r = db->close(db, 0);                                                               CKERR(r);
     r = env->close(env, 0);                                                             CKERR(r);
-  
+
 
     toku_free(read_txns);
     post_teardown();

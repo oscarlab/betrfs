@@ -122,10 +122,10 @@ setup (uint32_t flags) {
         test_shutdown();
     r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
-    r=db_env_create(&env, 0); 
+    r=db_env_create(&env, 0);
     CKERR(r);
-    env->set_errfile(env, stderr);
-    r=env->open(env, TOKU_TEST_ENV_DIR_NAME, flags, mode); 
+    env->set_errfile(env, STDERR);
+    r=env->open(env, TOKU_TEST_ENV_DIR_NAME, flags, mode);
     CKERR(r);
 }
 

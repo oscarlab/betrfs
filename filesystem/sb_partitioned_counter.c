@@ -34,9 +34,9 @@ PARTITIONED_COUNTER create_partitioned_counter(void)
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
 	err = percpu_counter_init(&pc->pcpu_counter, 0);
-#else
+#else /* LINUX_VERSION_CODE */
 	err = percpu_counter_init(&pc->pcpu_counter, 0,  GFP_KERNEL);
-#endif
+#endif /* LINUX_VERSION_CODE */
 	if (err) {
 		ftfs_error(__func__, "err creating a partitioned counter: %d",
 			err);

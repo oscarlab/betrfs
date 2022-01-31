@@ -100,7 +100,7 @@ static DB_ENV *env;
 static void setup (void) {
     { int chk_r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
     { int chk_r = db_env_create(&env, 0); CKERR(chk_r); }
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     { int chk_r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
 }
 
@@ -124,7 +124,7 @@ static void assert_desc_eight (DB* db) {
 static void run_test(void) {
     DB* db = NULL;
     DB* db2 = NULL;
-    
+
     DBT orig_desc;
     memset(&orig_desc, 0, sizeof(orig_desc));
     orig_desc.size = sizeof(four_byte_desc);
@@ -153,7 +153,7 @@ static void run_test(void) {
     assert_desc_four(db);
 
     /********************************************************************/
-    
+
     // now lets test change_descriptor
     DBT change_descriptor;
     memset(&change_descriptor, 0, sizeof(change_descriptor));
@@ -166,7 +166,7 @@ static void run_test(void) {
         assert_desc_eight(db);
         });
     assert_desc_four(db);
-    
+
     // test that close/reopen gets the right descriptor
     { int chk_r = db->close(db, 0); CKERR(chk_r); }
     db = NULL;
@@ -185,7 +185,7 @@ static void run_test(void) {
         assert_desc_eight(db);
         });
     assert_desc_eight(db);
-    
+
     // test that close/reopen gets the right descriptor
     { int chk_r = db->close(db, 0); CKERR(chk_r); }
     db = NULL;

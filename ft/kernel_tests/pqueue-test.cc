@@ -165,7 +165,10 @@ static int run_test(void)
 		r = pqueue_pop(pq, &node);   assert(r==0);
 		if (VERBOSE) printf("%d : %d\n", i, *(int*)(node->key->data));
 		if ( *(int*)(node->key->data) != i ) { 
-			if (VERBOSE) printf("FAIL\n"); return -1; 
+			if (VERBOSE) {
+				printf("FAIL\n");
+			}
+			return -1;
 		}
 	}
 	pqueue_free(pq);

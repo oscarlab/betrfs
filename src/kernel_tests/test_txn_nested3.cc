@@ -135,7 +135,7 @@ fillrandom(uint8_t buf[MAX_SIZE], uint32_t length) {
     uint32_t i;
     for (i = 0; i < length; i++) {
         buf[i] = random() & 0xFF;
-    } 
+    }
 }
 
 static void
@@ -159,9 +159,9 @@ setup_db (void) {
     int r;
     r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
     assert(r==0);
- 
+
     r = db_env_create(&env, 0); CKERR(r);
-    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL | DB_INIT_LOG | DB_INIT_LOCK | DB_INIT_TXN | DB_PRIVATE | DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); 
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL | DB_INIT_LOG | DB_INIT_LOCK | DB_INIT_TXN | DB_PRIVATE | DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
 
     {
@@ -287,7 +287,7 @@ initialize_db(void) {
 static void
 test_txn_nested_jumble (int iteration) {
     int r;
-    if (verbose) { fprintf(stderr, "%s (%s):%d [iteration # %d]\n", __FILE__, __FUNCTION__, __LINE__, iteration); fflush(stderr); }
+    if (verbose) { dprintf(STDERR, "%s (%s):%d [iteration # %d]\n", __FILE__, __FUNCTION__, __LINE__, iteration); }
 
     initialize_db();
 
@@ -330,4 +330,3 @@ int test_txn_nested3(void) {
     post_teardown();
     return 0;
 }
-

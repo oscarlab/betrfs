@@ -115,16 +115,16 @@ static int expect_value = 42; // initially 42, later 43
 
 static void
 flush (
-    CACHEFILE UU(thiscf), 
-    int UU(fd), 
-    CACHEKEY UU(key), 
-    void *value, 
+    CACHEFILE UU(thiscf),
+    int UU(fd),
+    CACHEKEY UU(key),
+    void *value,
     void** UU(dd),
-    void *UU(extraargs), 
-    PAIR_ATTR size, 
-    PAIR_ATTR* UU(new_size), 
-    bool write_me, 
-    bool keep_me, 
+    void *UU(extraargs),
+    PAIR_ATTR size,
+    PAIR_ATTR* UU(new_size),
+    bool write_me,
+    bool keep_me,
     bool UU(for_checkpoint),
         bool UU(is_clone)
     )
@@ -182,7 +182,7 @@ do_checkpoint (void *UU(v))
 // then do a flush and make sure the new items are written
 
 static void checkpoint_pending(void) {
-    if (verbose) { printf("%s:%d n=%d\n", __FUNCTION__, __LINE__, N); fflush(stdout); }
+    if (verbose) { printf("%s:%d n=%d\n", __FUNCTION__, __LINE__, N); }
     const int test_limit = N;
     int r;
     toku_cachetable_create(&ct, test_limit*sizeof(int), ZERO_LSN, NULL_LOGGER);
@@ -191,7 +191,7 @@ static void checkpoint_pending(void) {
 
     r = toku_cachetable_openf(&cf, ct, fname1, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO); assert(r == 0);
     create_dummy_functions(cf);
-    
+
     // Insert items into the cachetable. All dirty.
     int i;
     for (i=0; i<N; i++) {
@@ -216,7 +216,7 @@ static void checkpoint_pending(void) {
     r = toku_pthread_create(&update_thread,     NULL, do_update,     NULL);  assert(r==0);
     r = toku_pthread_join(checkpoint_thread, 0);                             assert(r==0);
     r = toku_pthread_join(update_thread, 0);                                 assert(r==0);
-    
+
     assert(n_flush == N && n_write_me == N && n_keep_me == N);
 
     // after the checkpoint, all of the items should be 43
@@ -247,7 +247,7 @@ test_cachetable_checkpoint_pending(void) {
 	struct timeval tv;
 	gettimeofday(&tv, 0);
 	srandom(tv.tv_sec * 1000000 + tv.tv_usec);
-    	
+
         for (N=1; N<=128; N*=2) {
 	int myvalues[N];
 	values = myvalues;

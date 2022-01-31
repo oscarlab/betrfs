@@ -7,6 +7,10 @@
 #include <linux/sched.h>
 #include <linux/completion.h>
 #include <linux/time.h>
+#include "sb_pthread_sizes.h"
+
+#define PTHREAD_ASSERT_SIZE(type, macro) _Static_assert(sizeof(type) <= macro, \
+	"sizeof(" #type ") is too large. Increase " #macro " in ./filesystem/sb_pthread_sizes.h");
 
 #define PTHREAD_MUTEX_ADAPTIVE_NP 3
 
@@ -24,7 +28,6 @@ struct true_pthread_struct {
 	struct completion event;
 };
 
-
 typedef struct pthread_condattr_t {
 } pthread_condattr_t;
 
@@ -32,6 +35,7 @@ typedef struct pthread_cond_t {
 	wait_queue_head_t wq;
 	int init;
 } pthread_cond_t;
+PTHREAD_ASSERT_SIZE(pthread_cond_t, COND_SIZE);
 
 typedef struct pthread_attr_t {
 } pthread_attr_t;
@@ -54,6 +58,7 @@ typedef struct pthread_mutex_t {
 	struct mutex mutex;
 	int init;
 } pthread_mutex_t;
+PTHREAD_ASSERT_SIZE(pthread_mutex_t, MUTEX_SIZE);
 
 //#define DEBUG_NESTED_SEMAPHORES 0
 #if defined (DEBUG_NESTED_SEMAPHORES)
@@ -69,6 +74,7 @@ typedef struct pthread_rwlock_t {
 #endif
 	int init;
 } pthread_rwlock_t;
+PTHREAD_ASSERT_SIZE(pthread_rwlock_t, RW_LOCK_SIZE);
 
 /* YZJ: copy from website */
 
@@ -121,7 +127,6 @@ extern pthread_t pthread_self(void);
 extern int
 pthread_create_debug(pthread_t *, const pthread_attr_t *,
                void *(*start_routine) (void *), void *arg, char * str);
-//extern void pthread_exit(void *);
 extern int
 pthread_create(pthread_t *, const pthread_attr_t *,
                void *(*start_routine) (void *), void *arg);
@@ -169,6 +174,7 @@ static inline void debug_nested_semaphore(struct pthread_rwlock_t *rwlock)
 	}
 	spin_unlock(&rwlock->list_lock);
 }
+
 static inline void debug_add_semaphore_owner(struct pthread_rwlock_t *rwlock)
 {
 	struct lock_holder *holder, *next;
@@ -202,11 +208,11 @@ void debug_release_semaphore_owner(struct pthread_rwlock_t *rwlock)
 	kfree(found);
 }
 
-#else
+#else /* DEBUG_NESTED_SEMAPHORES */
 #define debug_init_semaphore_holders(rwlock)
 #define debug_nested_semaphore(rwlock)
 #define debug_add_semaphore_owner(rwlock)
 #define debug_release_semaphore_owner(rwlock)
-#endif
+#endif /* DEBUG_NESTED_SEMAPHORES */
 
 #endif /* FTFS_PTHREAD_H */

@@ -136,7 +136,7 @@ run_test(void) {
         uint32_t log_size;
         r = toku_verify_logmagic_read_log_end(fd, &log_size);
         assert(r==0);
-        if ( log_size - trim > magic_sz ) {
+        if ( log_size - (uint32_t)trim > (uint32_t)magic_sz ) {
             r = toku_update_logfile_end(fd, log_size - trim);
             CKERR(r);
             close(fd);

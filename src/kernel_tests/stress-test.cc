@@ -294,7 +294,7 @@ init_db(DB_ENV **env, DB **db)
 
     { int chk_r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
     { int chk_r = db_env_create(env, 0); CKERR(chk_r); }
-    (*env)->set_errfile(*env, stderr);
+    (*env)->set_errfile(*env, STDERR);
     { int chk_r = (*env)->open(*env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE+DB_PRIVATE+DB_INIT_MPOOL+DB_INIT_LOG+DB_INIT_TXN, 0); CKERR(chk_r); }
     { int r = (*env)->txn_begin(*env, NULL, &null_txn, 0); assert_zero(r); }
     { int chk_r = db_create(db, *env, 0); CKERR(chk_r); }

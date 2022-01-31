@@ -280,6 +280,9 @@ toku_dbt_set (ITEMLEN len, bytevec val, DBT *d, struct simple_dbt *sdbt) {
             d->data = NULL;
             d->ulen = 0;
             //Fall through to DB_DBT_REALLOC
+#if __GNUC__ > 6
+            [[fallthrough]];
+#endif
         case (DB_DBT_REALLOC):
             if (d->ulen < len) {
                 size_t old_len = d->ulen;

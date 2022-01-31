@@ -89,7 +89,7 @@ PATENT RIGHTS GRANT:
 #ident "Copyright (c) 2007-2013 Tokutek Inc.  All rights reserved."
 #include "test.h"
 /* Test to see if a big nested transaction (so big that it's rollbacks spill into a file)
- * can commit properly. 
+ * can commit properly.
  *  Four Tests:
  *     big child aborts, parent aborts (This test)
  *     big child aborts, parent commits
@@ -175,10 +175,10 @@ setup (void) {
     r=toku_fs_reset(dir, S_IRWXU+S_IRWXG+S_IRWXO);       CKERR(r);
 
     r=db_env_create(&env, 0); CKERR(r);
-    
+
     r=env->set_redzone(env, 0);        CKERR(r);
 
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r=env->open(env, dir, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r=db_create(&db, env, 0); CKERR(r);
 

@@ -102,7 +102,7 @@ int test_stress_gc(void) {
       gettimeofday(&tv, 0);
       useseed = tv.tv_sec+tv.tv_usec*997;  // magic:  997 is a prime, and a million (microseconds/second) times 997 is still 32 bits.
     }
-    
+
     int r;
     r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
     assert(r==0);
@@ -110,7 +110,7 @@ int test_stress_gc(void) {
     DB_ENV *env;
     r = db_env_create(&env, 0);
     CKERR(r);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
     db_env_set_mvcc_garbage_collection_verification(1);
@@ -139,7 +139,7 @@ int test_stress_gc(void) {
             assert(txns[num_txns] == NULL);
             // 7 out of 8 times, it is snapshot, otherwise, serializable
             int is_snapshot = (random() % 8 != 0);
-            r = env->txn_begin(env, NULL, &txns[num_txns], is_snapshot ? DB_TXN_SNAPSHOT : 0); 
+            r = env->txn_begin(env, NULL, &txns[num_txns], is_snapshot ? DB_TXN_SNAPSHOT : 0);
             CKERR(r);
             num_txns++;
         }
@@ -160,10 +160,10 @@ int test_stress_gc(void) {
         r = txns[i]->commit(txns[i], 0);
         CKERR(r);
     }
-    
+
     r = env->close(env, 0);
     CKERR(r);
     toku_free(txns);
-    post_teardown();    
+    post_teardown();
     return 0;
 }

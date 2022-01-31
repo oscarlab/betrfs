@@ -93,7 +93,7 @@ PATENT RIGHTS GRANT:
 
 #include "toku_config.h"
 
-#if defined(__linux__) && USE_VALGRIND
+#if defined(__linux__) && defined(USE_VALGRIND)
 
 # include <valgrind/helgrind.h>
 # include <valgrind/drd.h>
@@ -126,7 +126,7 @@ PATENT RIGHTS GRANT:
     VALGRIND_HG_MUTEX_INIT_POST(mutex, 0); \
     VALGRIND_HG_MUTEX_LOCK_POST(mutex);
 
-#else // !defined(__linux__) || !USE_VALGRIND
+#else // defined(__linux__) && defined(USE_VALGRIND)
 
 # define NVALGRIND 1
 # define TOKU_ANNOTATE_NEW_MEMORY(p, size) ((void) 0)

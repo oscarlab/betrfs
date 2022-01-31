@@ -177,7 +177,7 @@ cachetable_test (void) {
     toku_cachetable_put(f1, make_blocknum(5), 5, NULL, make_pair_attr(1), wc, put_callback_nop);
     ct->ev.signal_eviction_thread();
     usleep(1*1024*1024);
-    
+
     flush_may_occur = true;
     r = toku_test_cachetable_unpin(f1, make_blocknum(5), 5, CACHETABLE_CLEAN, make_pair_attr(2));
     ct->ev.signal_eviction_thread();
@@ -190,6 +190,11 @@ cachetable_test (void) {
 
 extern "C" int test_cachetable_clockeviction(void);
 int test_cachetable_clockeviction(void) {
+    int rinit = toku_ft_layer_init();
+    CKERR(rinit);
+
     cachetable_test();
+
+    toku_ft_layer_destroy();
     return 0;
 }

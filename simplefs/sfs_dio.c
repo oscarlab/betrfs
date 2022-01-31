@@ -23,7 +23,7 @@
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,19,99)
 #include <linux/blk_types.h>
-#endif
+#endif /* LINUX_VERSION_CODE */
 
 #include "super.h"
 
@@ -71,7 +71,9 @@ unsigned long get_kernfs_pfn(unsigned long start)
 void sfs_wait_read_write_page(unsigned long pfn)
 {
 	struct page *page = pfn_to_page(pfn);
-	wait_on_page_locked(page);
+	if (PageReserved(page)) {
+		wait_on_page_bit(page, PG_reserved);
+	}
 }
 
 typedef void (*ftfs_free_cb)(void *);
@@ -82,8 +84,17 @@ struct sfs_dio_elem {
 	unsigned long *pfn_arr;
 	int nr_pages;
 	ftfs_free_cb free_cb;
+	bool has_buf;
 	struct list_head dio_list;
 };
+
+static inline
+struct inode *FILE_2_INODE(struct file *f)
+{
+	struct inode *inode;
+	inode = f->f_path.dentry->d_inode;
+	return inode;
+}
 
 /*
  * Use for asynchronous write with DIO interface. We add the information
@@ -100,13 +111,11 @@ static int sfs_insert_dio_data(struct file *file, uint8_t *raw_block,
 			       int nr_pages, unsigned long *pfn_arr,
 			       int64_t off, ftfs_free_cb ftfs_free)
 {
-	struct inode *inode;
+	struct inode *inode = FILE_2_INODE(file);
+	struct sfs_inode *sfs_inode = SFS_INODE(inode);
 	struct sfs_dio_elem *dio_elem;
 	struct sfs_dio_data *dio_data;
-	struct sfs_inode *sfs_inode;
-
-	inode = file->f_path.dentry->d_inode;
-	sfs_inode = SFS_INODE(inode);
+	int i;
 
 	dio_elem = kmalloc(sizeof(*dio_elem), GFP_KERNEL);
 	BUG_ON(!dio_elem);
@@ -116,9 +125,20 @@ static int sfs_insert_dio_data(struct file *file, uint8_t *raw_block,
 	dio_elem->off = off;
 	dio_elem->pfn_arr = pfn_arr;
 	dio_elem->free_cb = ftfs_free;
+	dio_elem->has_buf = (raw_block != NULL);
 
 	BUG_ON(!sfs_inode->dio);
 	dio_data = sfs_inode->dio;
+	/*
+	 * These are pages for data block, not belong to any managed
+	 * buf in ft code, we need to increase the ref count for it
+	 */
+	if (!raw_block) {
+		for (i = 0; i < nr_pages; i++) {
+			struct page* page = pfn_to_page(pfn_arr[i]);
+			get_page(page);
+		}
+	}
 
 	mutex_lock(&dio_data->lock);
 	//printk("%s: inode->i_ino=%lu get the lock, pid=%d\n", __func__, inode->i_ino, current->pid);
@@ -192,10 +212,15 @@ bool sfs_search_dio_data(struct sfs_dio_request *req)
 			 * on overlapping pages.
 			 */
 			for (i = 0; i < dio->nr_pages; i++) {
-				wait_on_page_locked(pfn_to_page(dio->pfn_arr[i]));
+				sfs_wait_read_write_page(dio->pfn_arr[i]);
+				if (!dio->has_buf) {
+					put_page(pfn_to_page(dio->pfn_arr[i]));
+				}
 			}
 			kfree(dio->pfn_arr);
-			dio->free_cb(dio->raw_block);
+			if (dio->has_buf) {
+				dio->free_cb(dio->raw_block);
+			}
 			list_del(pos);
 			kfree(dio);
 			continue;
@@ -227,7 +252,7 @@ bool sfs_search_dio_data(struct sfs_dio_request *req)
 				printk("Encounter invalid pfn_s=%lu\n", pfn_s);
 				BUG();
 			}
-			wait_on_page_locked(pfn_to_page(pfn_s));
+			sfs_wait_read_write_page(pfn_s);
 			src = kmap(pfn_to_page(pfn_s));
 			if (req->is_pfn) {
 				unsigned long pfn_d= pfn_arr[i];
@@ -257,25 +282,37 @@ sfs_bio_alloc(struct block_device *bdev, sector_t first_sector)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
 		bio->bi_bdev = bdev;
 		bio->bi_sector = first_sector;
-#else
+#else /* LINUX_VERSION_CODE */
 		bio_set_dev(bio, bdev);
 		bio->bi_iter.bi_sector = first_sector;
-#endif
+#endif /* LINUX_VERSION_CODE */
 	}
 	return bio;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
+typedef void (*end_io_cb)(struct bio *, int);
+#else /* LINUX_VERSION_CODE */
+typedef void (*end_io_cb)(struct bio *);
+#endif /* LINUX_VERSION_CODE */
+
 /*
  * define memory free function passed from ftfs.ko
  */
-
 struct sfs_page_data {
 	struct bio *bio;
 	sector_t last_block_in_bio;
-	atomic_t bio_count;
-	void *raw_block;
-	ftfs_free_cb free_cb;
+	end_io_cb end_cb;
 };
+
+static void sfs_fill_spd(struct sfs_page_data *spd,
+			 end_io_cb end_cb)
+{
+	BUG_ON(spd == NULL);
+	spd->bio = NULL;
+	spd->last_block_in_bio = 0;
+	spd->end_cb = end_cb;
+}
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
 static void sfs_page_end_io(struct bio *bio, int err)
@@ -296,19 +333,19 @@ static void sfs_page_end_io(struct bio *bio, int err)
 				BUG();
 			}
 			SetPageUptodate(page);
-			unlock_page(page);
+			ftfs_unlock_page(page);
 		} else { /* bio_data_dir(bio) == WRITE */
 			if (!uptodate) {
 				printk(KERN_ALERT "Write is not ok\n");
 				BUG();
 			}
-			unlock_page(page);
+			ftfs_unlock_page(page);
 		}
 	} while (bvec >= bio->bi_io_vec);
 
 	bio_put(bio);
 }
-#else
+#else /* LINUX_VERSION_CODE */
 /*
  * After completing I/O on a page, call this routine to update the page
  * flags appropriately
@@ -322,9 +359,9 @@ static void sfs_page_endio(struct page *page, bool is_write, int err)
 			ClearPageUptodate(page);
 			SetPageError(page);
 		}
-		unlock_page(page);
+		ftfs_unlock_page(page);
 	} else {
-		unlock_page(page);
+		ftfs_unlock_page(page);
 	}
 }
 
@@ -341,25 +378,26 @@ static void sfs_page_end_io(struct bio *bio)
 
 	bio_put(bio);
 }
-#endif
+#endif /* LINUX_VERSION_CODE */
 
 static struct bio *sfs_page_bio_submit(struct sfs_page_data *spd,
-			int rw, struct bio *bio)
+				       int rw, struct bio *bio)
 {
-	bio->bi_end_io = sfs_page_end_io;
+	bio->bi_end_io = spd->end_cb;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
 	submit_bio(rw, bio);
-#else
+#else /* LINUX_VERSION_CODE */
 	bio_set_op_attrs(bio, rw, 0);
 	submit_bio(bio);
-#endif
+#endif /* LINUX_VERSION_CODE */
 	return NULL;
 }
 
 int sfs_read_write_one_page(struct inode *inode, struct page *page,
-		off_t off, void *data, int rw, bool is_locked)
+			    off_t off, void *data, int rw, bool skip_lock)
 {
 	struct sfs_page_data *spd = data;
+	struct sfs_inode *sfs_inode = SFS_INODE(inode);
 	struct bio *bio = spd->bio;
 	const unsigned blkbits = inode->i_blkbits;
 	const unsigned blocks_per_page = PAGE_SIZE >> blkbits;
@@ -372,23 +410,17 @@ int sfs_read_write_one_page(struct inode *inode, struct page *page,
 	BUG_ON(blocks_per_page != 1);
 	block_in_file = (sector_t) off >> blkbits;
 
-	{
-		/*
-		 * YZJ: block allocation
-		 */
-		struct sfs_inode *sfs_inode;
-		sfs_inode = SFS_INODE(inode);
-		BUG_ON(block_in_file >= sfs_inode->block_count);
-		block_nr = sfs_inode->start_block_number + block_in_file;
-		bdev = inode->i_sb->s_bdev;
-	}
+	/* YZJ: block allocation */
+	BUG_ON(!sfs_inode);
+	BUG_ON(block_in_file >= sfs_inode->block_count);
+	block_nr = sfs_inode->start_block_number + block_in_file;
+	bdev = inode->i_sb->s_bdev;
   
-	if (!is_locked)
-		lock_page(page);
+	if (!skip_lock) {
+		ftfs_lock_page(page);
+	}
 
-	/*
-	 * YZJ: Submit a new bio if the block address is not contiguous
-	 */
+	/* YZJ: Submit a new bio if the block address is not contiguous */
 	if (bio && spd->last_block_in_bio != block_nr - 1) {
 		bio = sfs_page_bio_submit(spd, rw, bio);
 	}
@@ -413,37 +445,16 @@ alloc_new:
 	return ret;
 }
 
-static void sfs_fill_spd(void *raw_block, int rw,
-		ftfs_free_cb ftfs_free, struct sfs_page_data *spd)
-{
-	BUG_ON(spd == NULL);
-	spd->bio = NULL,
-	spd->last_block_in_bio = 0,
-	spd->raw_block = raw_block,
-	spd->free_cb = (rw == WRITE) ? ftfs_free : NULL,
-	atomic_set(&spd->bio_count, 0);
-}
-
 ssize_t sfs_read_write_pages(struct file *file, unsigned long *pfn_arr,
-		int nr_pages, loff_t pos, void *raw_block, int rw,
-		struct sfs_page_data *spd)
+			     int nr_pages, loff_t pos,
+			     int rw, struct sfs_page_data *spd)
 {
-	ssize_t ret = -EBADF;
-	struct dentry *dentry;
-	struct inode *inode;
-	struct sfs_inode *sfs_inode;
 	int p;
+	ssize_t ret = -EBADF;
+	struct inode *inode = FILE_2_INODE(file);
 	//struct blk_plug plug;
 
-	dentry = file->f_path.dentry;
-	inode = dentry->d_inode;
-	sfs_inode = SFS_INODE(inode);
-	/*
-	 * YZJ: allow an I/O submitter to send down multiple pieces of
-	 * I/O before handing it to the device.
-	 */
 	//blk_start_plug(&plug);
-
 	for (p = 0; p < nr_pages; p++) {
 		struct page *page = pfn_to_page(pfn_arr[p]);
 		sfs_read_write_one_page(inode, page, pos, spd, rw, false);
@@ -457,33 +468,31 @@ ssize_t sfs_read_write_pages(struct file *file, unsigned long *pfn_arr,
 }
 
 ssize_t sfs_directIO_read_write(struct file *file, uint8_t *raw_block,
-			int64_t size, int64_t offset, int rw,
-			ftfs_free_cb ftfs_free)
+				int64_t size, int64_t offset, int rw,
+				ftfs_free_cb ftfs_free)
 {
-	int i;
-	int nr_pages;
+	int nr_pages= size >> PAGE_SHIFT;
 	unsigned long *pfn_arr;
 	unsigned long addr;
 	struct sfs_page_data spd;
 	bool cached = false;
+	int i;
+
+	struct sfs_dio_request req = {
+		.file = file,
+		.size = size,
+		.offset = offset,
+		.rw = rw,
+		.data = raw_block,
+		.is_pfn = false
+	};
 
 	BUG_ON((size & (PAGE_SIZE - 1)) != 0);
-	nr_pages= size >> PAGE_SHIFT;
-	{
-		struct sfs_dio_request req = {
-			.file = file,
-			.size = size,
-			.offset = offset,
-			.rw = rw,
-			.data = raw_block,
-			.is_pfn = false
-		};
-		cached = sfs_search_dio_data(&req);
-		/* If it is read just return it is cached */
-		if (cached && rw == READ) {
-			//printk("%s: read from dio cache\n", __func__);
-			goto out;
-		}
+
+	cached = sfs_search_dio_data(&req);
+	/* If it is read just return it is cached */
+	if (cached && rw == READ) {
+		goto out;
 	}
 
 	pfn_arr = kmalloc(sizeof(unsigned long) * nr_pages, GFP_KERNEL);
@@ -494,37 +503,37 @@ ssize_t sfs_directIO_read_write(struct file *file, uint8_t *raw_block,
 		pfn_arr[i] = get_kernfs_pfn(addr);
 	}
 
-	sfs_fill_spd(raw_block, rw, ftfs_free, &spd);
-	sfs_read_write_pages(file, pfn_arr, nr_pages, offset,
-			     raw_block, rw, &spd);
+	sfs_fill_spd(&spd, sfs_page_end_io);
+	sfs_read_write_pages(file, pfn_arr, nr_pages, offset, rw, &spd);
+
 	if (rw == WRITE && ftfs_free) {
 		sfs_insert_dio_data(file, raw_block, nr_pages,
 				    pfn_arr, offset, ftfs_free);
-	} else {
-		for (i = 0; i < nr_pages; i++) {
-			sfs_wait_read_write_page(pfn_arr[i]);
-		}
-		kfree(pfn_arr);
+		goto out;
 	}
+
+	for (i = 0; i < nr_pages; i++) {
+		sfs_wait_read_write_page(pfn_arr[i]);
+	}
+	kfree(pfn_arr);
 out:
 	return (ssize_t) size;
 }
 
 /*
- * This does an asynchronous, multi-page read of an array of pages in SFS.
- * This assumes the file is continguous on disk, but not necessarily in memory.
+ * This does an asynchronous, multi-page read/write of an array
+ * of pages in SFS. This assumes the file is continguous on
+ * disk, but not necessarily in memory.
  */
-ssize_t sfs_read_pages(struct file *file, unsigned long *pfn_arr,
-		       int nr_pages, loff_t pos)
+ssize_t 
+sfs_async_read_write_pages(struct file *file, unsigned long *pfn_arr,
+			   int nr_pages, loff_t pos, int rw,
+			   bool is_blocking)
 {
 	ssize_t ret = nr_pages << PAGE_SHIFT;
-	struct dentry *dentry;
-	struct inode *inode;
-	struct sfs_inode *sfs_inode;
 	struct sfs_page_data spd;
-	struct blk_plug plug;
 	bool cached = false;
-	int p;
+	int i;
 
 	struct sfs_dio_request req = {
 		.file = file,
@@ -532,7 +541,7 @@ ssize_t sfs_read_pages(struct file *file, unsigned long *pfn_arr,
 		.offset = pos,
 		.is_pfn = true,
 		.data = pfn_arr,
-		.rw = READ
+		.rw = rw
 	};
 
 	cached = sfs_search_dio_data(&req);
@@ -541,21 +550,20 @@ ssize_t sfs_read_pages(struct file *file, unsigned long *pfn_arr,
 		goto out;
 	}
 
-	dentry = file->f_path.dentry;
-	inode = dentry->d_inode;
-	sfs_inode = SFS_INODE(inode);
-	sfs_fill_spd(NULL, 0, NULL, &spd);
-
-	blk_start_plug(&plug);
-	for (p = 0; p < nr_pages; p++) {
-		struct page *page = pfn_to_page(pfn_arr[p]);
-		sfs_read_write_one_page(inode, page, pos, &spd, 0, true);
-		pos += PAGE_SIZE;
-	} 
-	if (spd.bio != NULL) {
-		sfs_page_bio_submit(&spd, 0, spd.bio);
+	sfs_fill_spd(&spd, sfs_page_end_io);
+	ret = sfs_read_write_pages(file, pfn_arr, nr_pages, pos, rw, &spd);
+	/*
+	 * For async write, insert the data and return; for async read, just return
+	 */
+	if (!is_blocking) {
+		if (rw == WRITE)
+			sfs_insert_dio_data(file, NULL, nr_pages, pfn_arr, pos, NULL);
+		goto out;
 	}
-	blk_finish_plug(&plug);
+
+	for (i = 0; i < nr_pages; i++) {
+		sfs_wait_read_write_page(pfn_arr[i]);
+	}
 out:
 	return ret;
 }
@@ -587,7 +595,7 @@ static int sfs_wait_dio_data(struct file* file, struct inode *inode,
 		nr_pages = dio->nr_pages;
 		pfn_arr = dio->pfn_arr;
 		for (i = 0; i < nr_pages; i++) {
-			wait_on_page_locked(pfn_to_page(pfn_arr[i]));
+			sfs_wait_read_write_page(pfn_arr[i]);
 		}
 		kfree(pfn_arr);
 		dio->free_cb(dio->raw_block);

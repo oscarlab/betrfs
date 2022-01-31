@@ -89,7 +89,7 @@ PATENT RIGHTS GRANT:
 #ident "Copyright (c) 2007-2013 Tokutek Inc.  All rights reserved."
 #include "test.h"
 /* Test to see if a medium-size nested transaction (the nested pieces are not too big, but the whole thing is so big that it's rollbacks spill into a file)
- * can commit properly. 
+ * can commit properly.
  *  Four Tests:
  *     big child aborts, parent aborts
  *     big child aborts, parent commits
@@ -179,7 +179,7 @@ test_setup (void) {
 #ifndef TOKUDB
     r=env->set_lk_max_objects(env, N); CKERR(r);
 #endif
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r=env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r=db_create(&db, env, 0); CKERR(r);
 

@@ -117,7 +117,7 @@ static int update_fun(DB *UU(db),
 
 static void verify_excl_ops_fail(DB_ENV* env, const char* name) {
     DB_TXN* txn = NULL;
-    int r; 
+    int r;
     DBT extra_up;
     dbt_init(&extra_up, NULL, 0);
 
@@ -152,14 +152,14 @@ int test_directory_lock(void) {
     //uint32_t put_flags = 0;
     //uint32_t dbt_flags = 0;
     r = db_env_create(&env, 0);                                                         CKERR(r);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r = env->set_generate_row_callback_for_put(env, put_multiple_callback);
     CKERR(r);
     r = env->set_generate_row_callback_for_del(env, del_multiple_callback);
     CKERR(r);
     env->set_update(env, update_fun);
     r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                      CKERR(r);
-    
+
     DB* db;
     DB* db2;
 
@@ -195,7 +195,7 @@ int test_directory_lock(void) {
     // r = loader->abort(loader); CKERR(r);
     // loader=NULL;
     //r = txna->commit(txna, 0); CKERR(r);
-    
+
     r = env->txn_begin(env, NULL, &txna, 0); CKERR(r);
     r = env->txn_begin(env, NULL, &txnb, 0); CKERR(r);
     DBT key,val;
@@ -310,6 +310,6 @@ int test_directory_lock(void) {
     r = db->close(db, 0); CKERR(r);
     r = db2->close(db2, 0); CKERR(r);
     r = env->close(env, 0); CKERR(r);
-    post_teardown();    
+    post_teardown();
     return 0;
 }

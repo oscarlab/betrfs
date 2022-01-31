@@ -95,20 +95,6 @@ PATENT RIGHTS GRANT:
 #include "leafentry.h"
 #include <util/mempool.h>
 
-#if 0 //for implementation
-static int
-UU() verify_in_mempool(OMTVALUE lev, uint32_t UU(idx), void *mpv)
-{
-    LEAFENTRY CAST_FROM_VOIDP(le, lev);
-    struct mempool *CAST_FROM_VOIDP(mp, mpv);
-    int r = toku_mempool_inrange(mp, le, leafentry_memsize(le));
-    lazy_assert(r);
-    return 0;
-}
-            toku_omt_iterate(bn->buffer, verify_in_mempool, &bn->buffer_mempool);
-
-#endif
-
 struct klpair_struct {
     uint32_t keylen;
     uint8_t key_le[0]; // key, followed by le
@@ -147,7 +133,13 @@ class bn_data {
 public:
     void init_zero(void);
     void initialize_empty(void);
-    void initialize_from_data(uint32_t num_entries, unsigned char *buf, uint32_t data_size);
+    uint32_t update_indirect_cnt(LEAFENTRY le, int fd);
+    void initialize_from_data(uint32_t num_entries, unsigned char *buf, uint32_t data_size,
+                              unsigned long *pfn, uint32_t num_pages,
+                              uint32_t *odd_data_size, uint32_t *odd_page_cnt);
+#ifdef FT_INDIRECT
+    bool is_data_db(int fd);
+#endif
     // globals
     uint64_t get_memory_size(void);
     uint64_t get_disk_size(void);
@@ -217,26 +209,31 @@ public:
     int fetch_le_key_and_len(uint32_t idx, uint32_t *len, void** key);
 
     // Interact with another bn_data
-    void move_leafentries_to(
-                             BN_DATA dest_bd,
+    void move_leafentries_to(BN_DATA dest_bd,
+                             uint32_t *num_indirect_inserts,
+                             uint32_t *num_indirect_pages,
+                             uint32_t *num_indirect_odd_count,
+                             uint32_t *num_indirect_odd_size,
                              uint32_t lbi, //lower bound inclusive
                              uint32_t ube //upper bound exclusive
-                            );
-
+                             );
     void destroy(void);
 
     // Replaces contents, into brand new mempool.
     // Returns old mempool base, expects caller to free it.
+
     void replace_contents_with_clone_of_sorted_array(
         uint32_t num_les,
         const void** old_key_ptrs,
         uint32_t* old_keylens,
         LEAFENTRY* old_les,
         size_t *le_sizes,
-        size_t mempool_size
+        size_t mempool_size,
+        int fd
         );
 
     void clone(bn_data* orig_bn_data);
+    void clone_for_lift(bn_data* orig_bn_data);
     void delete_leafentry (
         uint32_t idx,
         uint32_t keylen,
@@ -248,6 +245,13 @@ public:
 
     void get_space_for_overwrite(uint32_t idx, const void* keyp, uint32_t keylen, uint32_t old_size, uint32_t new_size, LEAFENTRY* new_le_space);
     void get_space_for_insert(uint32_t idx, const void* keyp, uint32_t keylen, size_t size, LEAFENTRY* new_le_space);
+#ifdef FT_INDIRECT
+    uint32_t m_rebalance_indirect_odd_size;
+    uint32_t m_rebalance_indirect_odd_cnt;
+    uint32_t m_rebalance_indirect_full_size;
+    uint32_t m_rebalance_indirect_full_cnt;
+#endif
+    bool     m_is_cloned;
 private:
     // Private functions
     KLPAIR mempool_malloc_from_omt(size_t size, void **maybe_free);

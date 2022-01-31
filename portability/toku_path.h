@@ -103,18 +103,27 @@ const char *toku_test_filename(const char *default_filename);
 
 #define TOKU_TEST_FILENAME toku_test_filename(__FILE__)
 
-/* SFS Specific File */
-#define TOKU_SFS_DATA_FILE "/db/ftfs_data_2_1_19.tokudb"
-#define TOKU_SFS_META_FILE "/db/ftfs_meta_2_1_19.tokudb"
-#define TOKU_HARD_LINK_FILE "/db/hard_link_2_1_19.tokudb"
-#define TOKU_SFS_TEST_FILE_1 "/db/test_one_2_1_19.tokudb"
-#define TOKU_SFS_TEST_FILE_2 "/db/test_two_2_1_19.tokudb"
-#define TOKU_SFS_TEST_FILE_3 "/db/test_three_2_1_19.tokudb"
+#ifdef TOKU_LINUX_MODULE
+#define MNTPNT ""
+#else
+#define MNTPNT "/oscar/betrfs/user-kv/mnt"
+#endif //TOKU_LINUX_MODULE
 
-#define TOKU_SFS_DIR_FILE "/db/tokudb.directory"
-#define TOKU_SFS_ENV_FILE "/db/tokudb.environment"
-#define TOKU_SFS_ROLLBACK_FILE "/db/tokudb.rollback"
-#define TOKU_SFS_LOG_FILE "/db/log000000000000.tokulog25"
+/* SFS Specific File */
+#define TOKU_SFS_DATA_FILE MNTPNT"/db/ftfs_data_2_1_19.tokudb"
+#define TOKU_SFS_META_FILE MNTPNT"/db/ftfs_meta_2_1_19.tokudb"
+#define TOKU_HARD_LINK_FILE MNTPNT"/db/hard_link_2_1_19.tokudb"
+#define TOKU_SFS_TEST_FILE_1 MNTPNT"/db/test_one_2_1_19.tokudb"
+#define TOKU_SFS_TEST_FILE_2 MNTPNT"/db/test_two_2_1_19.tokudb"
+#define TOKU_SFS_TEST_FILE_3 MNTPNT"/db/test_three_2_1_19.tokudb"
+
+#define TOKU_SFS_DIR_FILE MNTPNT"/db/tokudb.directory"
+#define TOKU_SFS_ENV_FILE MNTPNT"/db/tokudb.environment"
+#define TOKU_SFS_ROLLBACK_FILE MNTPNT"/db/tokudb.rollback"
+#define TOKU_SFS_LOG_FILE MNTPNT"/db/log000000000000.tokulog25"
+
+/* Pre-created directory name */
+#define TOKU_TEST_ENV_DIR_NAME MNTPNT"/db"
 
 /* Define the full names of pre-created files */
 #define TOKU_TEST_FILENAME_DATA TOKU_SFS_DATA_FILE
@@ -124,9 +133,6 @@ const char *toku_test_filename(const char *default_filename);
 #define TOKU_TEST_FILENAME_THREE TOKU_SFS_TEST_FILE_3
 
 #define TOKU_TEST_FILENAME_LOG  TOKU_SFS_LOG_FILE
-
-/* Pre-created directory name */
-#define TOKU_TEST_ENV_DIR_NAME "db"
 
 /* DB name to use for unit tests */
 #define TOKU_TEST_DATA_DB_NAME "ftfs_data"

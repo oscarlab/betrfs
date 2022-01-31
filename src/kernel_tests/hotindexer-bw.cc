@@ -115,14 +115,14 @@ DB_ENV *env;
  *     - it takes a client spec which describes work to be done
  *     - direction : move to ever increasing or decreasing rows
  *     - txnwork : whether a transaction should be created or closed within the client
- *         (allows client transaction to start before or during index creation, 
+ *         (allows client transaction to start before or during index creation,
  *          and to close during or after index creation)
  */
 
 
 typedef struct {
     uint32_t num; // number of rows to write
-    uint32_t start; // approximate start row 
+    uint32_t start; // approximate start row
     int      offset; // offset from stride (= MAX_CLIENTS)
     Direction dir;
     TxnWork txnwork;
@@ -174,12 +174,12 @@ static void * client(void *arg)
             rr = env_put_multiple_test_no_array(env,
                                    cs->dbs[0],
                                    txn,
-                                   &key, 
+                                   &key,
                                    &val,
                                    NUM_DBS,
                                    cs->dbs, // dest dbs
                                    dest_keys,
-                                   dest_vals, 
+                                   dest_vals,
                                    cs->flags);
             toku_mutex_unlock(&put_lock);
             if ( rr == 0 ) break;
@@ -209,11 +209,11 @@ static void * client(void *arg)
 toku_pthread_t *client_threads;
 client_spec_t  *client_specs;
 
-static void clients_init(DB **dbs, uint32_t *flags) 
+static void clients_init(DB **dbs, uint32_t *flags)
 {
     XMALLOC_N(MAX_CLIENTS, client_threads);
     XMALLOC_N(MAX_CLIENTS, client_specs);
-    
+
     client_specs[0].client_number = 0;
 //    client_specs[0].start         = 0;
     client_specs[0].start         = num_rows - 1;
@@ -238,7 +238,7 @@ static void clients_init(DB **dbs, uint32_t *flags)
 
 }
 
-static void clients_cleanup(void) 
+static void clients_cleanup(void)
 {
     toku_free(client_threads);   client_threads = NULL;
     toku_free(client_specs);       client_specs = NULL;
@@ -247,7 +247,7 @@ static void clients_cleanup(void)
 // verify results
 //  - read the keys in the primary table, then calculate what keys should exist
 //     in the other DB.  Read the other table to verify.
-static void check_results(DB *src, DB *db) 
+static void check_results(DB *src, DB *db)
 {
     int r;
     int pass = 1;
@@ -261,10 +261,10 @@ static void check_results(DB *src, DB *db)
     unsigned int k=0, v=0;
     dbt_init(&key, &k, sizeof(unsigned int));
     dbt_init(&val, &v, sizeof(unsigned int));
-    
+
     DB_TXN *txn;
     r = env->txn_begin(env, NULL, &txn, 0); CKERR(r);
-    
+
     DBC *cursor;
     r = src->cursor(src, txn, &cursor, 0);  CKERR(r);
 
@@ -284,7 +284,7 @@ static void check_results(DB *src, DB *db)
     if ( verbose ) printf("primary table scanned, contains %d rows\n", row);
     int primary_rows = row;
     r = cursor->c_close(cursor); CKERR(r);
-    // sort the expected keys 
+    // sort the expected keys
     qsort(db_keys, primary_rows, sizeof (unsigned int), uint_cmp);
 
     if ( verbose > 1 ) {
@@ -297,7 +297,7 @@ static void check_results(DB *src, DB *db)
     //   - there should be exactly 'primary_rows' in the new index
     r = db->cursor(db, txn, &cursor, 0); CKERR(r);
     for (int i=0;i<primary_rows;i++) {
-        r = cursor->c_get(cursor, &key, &val, DB_NEXT); 
+        r = cursor->c_get(cursor, &key, &val, DB_NEXT);
         if ( r == DB_NOTFOUND ) {
             printf("scan of index finds last row is %d\n", i);
         }
@@ -336,13 +336,13 @@ static void test_indexer(DB *src, DB **dbs)
 
 
     if ( verbose ) printf("test_indexer\n");
-    for(int i=0;i<NUM_DBS;i++) { 
-        db_flags[i] = 0; 
+    for(int i=0;i<NUM_DBS;i++) {
+        db_flags[i] = 0;
     }
     clients_init(dbs, db_flags);
 
     // create and initialize indexer
-    r = env->txn_begin(env, NULL, &txn, 0);                                                               
+    r = env->txn_begin(env, NULL, &txn, 0);
     CKERR(r);
 
     if ( verbose ) printf("test_indexer create_indexer\n");
@@ -396,7 +396,7 @@ static void test_indexer(DB *src, DB **dbs)
 }
 
 
-static void run_test(void) 
+static void run_test(void)
 {
     int r;
     toku_mutex_init(&put_lock, NULL);
@@ -424,7 +424,7 @@ static void run_test(void)
         ids[i] = i;
         r = db_create(&dbs[i], env, 0); CKERR(r);
         dbs[i]->app_private = &ids[i];
-        char key_name[32]; 
+        char key_name[32];
         sprintf(key_name, "key%d", i);
         r = dbs[i]->open(dbs[i], NULL, key_name, NULL, DB_BTREE, DB_AUTO_COMMIT|DB_CREATE, 0666);   CKERR(r);
         IN_TXN_COMMIT(env, NULL, txn_desc, 0, {
@@ -465,7 +465,7 @@ do_args (int argc, char * const argv[]) {
             argc--; argv++;
             num_rows = atoi(argv[0]);
 	} else {
-	    fprintf(stderr, "Usage:\n %s [-v] [-q] [-r rows]\n", progname);
+	    dprintf(STDERR, "Usage:\n %s [-v] [-q] [-r rows]\n", progname);
 	    exit(1);
 	}
 	argc--; argv++;
@@ -501,12 +501,12 @@ int test_hotindexer_bw(void) {
                 rr = env->put_multiple(env,
                                        cs->dbs[0],
                                        txn,
-                                       &key, 
+                                       &key,
                                        &val,
                                        NUM_DBS,
                                        cs->dbs, // dest dbs
                                        dest_keys,
-                                       dest_vals, 
+                                       dest_vals,
                                        cs->flags,
                                        NULL);
                 if ( rr != 0 ) {

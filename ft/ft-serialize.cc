@@ -190,7 +190,7 @@ deserialize_descriptor_from(int fd, BLOCK_TABLE bt, DESCRIPTOR desc, int layout_
                 //printf("%s:%d read from %ld (x1764 offset=%ld) size=%ld\n", __FILE__, __LINE__, block_translation_address_on_disk, offset, block_translation_size_on_disk);
                 uint32_t stored_x1764 = toku_dtoh32(*(int*)(dbuf + size-4));
                 if (x1764 != stored_x1764) {
-                    fprintf(stderr, "Descriptor checksum failure: calc=0x%08x read=0x%08x\n", x1764, stored_x1764);
+                    dprintf(STDERR, "Descriptor checksum failure: calc=0x%08x read=0x%08x\n", x1764, stored_x1764);
                     r = TOKUDB_BAD_CHECKSUM;
                     toku_free(dbuf);
                     goto exit;
@@ -381,7 +381,7 @@ int deserialize_ft_versioned(int fd, struct rbuf *rb, FT *ftp, uint32_t version)
 
     (void) rbuf_int(rb); //Read in checksum and ignore (already verified).
     if (rb->ndone != rb->size) {
-        fprintf(stderr, "Header size did not match contents.\n");
+        dprintf(STDERR, "Header size did not match contents.\n");
         r = EINVAL;
         goto exit;
     }
@@ -469,10 +469,16 @@ serialize_ft_min_size (uint32_t version) {
     case FT_LAYOUT_VERSION_22:
     case FT_LAYOUT_VERSION_21:
         size += sizeof(MSN);       // max_msn_in_ft
+#if __GNUC__ > 6
+        [[fallthrough]];
+#endif
     case FT_LAYOUT_VERSION_20:
     case FT_LAYOUT_VERSION_19:
         size += 1; // compression method
         size += sizeof(MSN);       // highest_unused_msn_for_upgrade
+#if __GNUC__ > 6
+        [[fallthrough]];
+#endif
     case FT_LAYOUT_VERSION_18:
         size += sizeof(uint64_t);  // time_of_last_optimize_begin
         size += sizeof(uint64_t);  // time_of_last_optimize_end
@@ -480,16 +486,28 @@ serialize_ft_min_size (uint32_t version) {
         size += sizeof(MSN);       // msn_at_start_of_last_completed_optimize
         size -= 8;                 // removed num_blocks_to_upgrade_14
         size -= 8;                 // removed num_blocks_to_upgrade_13
+#if __GNUC__ > 6
+        [[fallthrough]];
+#endif
     case FT_LAYOUT_VERSION_17:
         size += 16;
         invariant(sizeof(STAT64INFO_S) == 16);
+#if __GNUC__ > 6
+        [[fallthrough]];
+#endif
     case FT_LAYOUT_VERSION_16:
     case FT_LAYOUT_VERSION_15:
         size += 4;  // basement node size
         size += 8;  // num_blocks_to_upgrade_14 (previously num_blocks_to_upgrade, now one int each for upgrade from 13, 14
         size += 8;  // time of last verification
+#if __GNUC__ > 6
+        [[fallthrough]];
+#endif
     case FT_LAYOUT_VERSION_14:
         size += 8;  //TXNID that created
+#if __GNUC__ > 6
+        [[fallthrough]];
+#endif
     case FT_LAYOUT_VERSION_13:
         size += ( 4 // build_id
                   +4 // build_id_original
@@ -497,6 +515,9 @@ serialize_ft_min_size (uint32_t version) {
                   +8 // time_of_last_modification
             );
         // fall through
+#if __GNUC__ > 6
+        [[fallthrough]];
+#endif
     case FT_LAYOUT_VERSION_12:
         size += (+8 // "tokudata"
                  +4 // version
@@ -549,11 +570,7 @@ int deserialize_ft_from_fd_into_rbuf(int fd,
         if (n==0) {
             r = TOKUDB_DICTIONARY_NO_HEADER;
         } else if (n<0) {
-#ifdef TOKU_LINUX_MODULE
             r = get_error_errno(n);
-#else
-            r = get_error_errno();
-#endif
         } else {
             r = EINVAL;
         }
@@ -615,11 +632,7 @@ int deserialize_ft_from_fd_into_rbuf(int fd,
         n = toku_os_pread(fd, rb->buf, size_to_read, offset_of_header);
         if (n != size_to_read) {
             if (n < 0) {
-#ifdef TOKU_LINUX_MODULE
                 r = get_error_errno(n);
-#else
-                r = get_error_errno();
-#endif
             } else {
                 r = EINVAL; //Header might be useless (wrong size) or could be a disk read error.
             }
@@ -637,7 +650,7 @@ int deserialize_ft_from_fd_into_rbuf(int fd,
     stored_x1764 = toku_dtoh32(*(int*)(rb->buf+rb->size-4));
     if (calculated_x1764 != stored_x1764) {
         r = TOKUDB_BAD_CHECKSUM; //Header useless
-        fprintf(stderr, "Header checksum failure: calc=0x%08x read=0x%08x\n", calculated_x1764, stored_x1764);
+        dprintf(STDERR, "Header checksum failure: calc=0x%08x read=0x%08x\n", calculated_x1764, stored_x1764);
         goto exit;
     }
 
@@ -709,7 +722,7 @@ toku_deserialize_ft_from(int fd,
         } else if (r0 == TOKUDB_DICTIONARY_TOO_OLD || r1 == TOKUDB_DICTIONARY_TOO_OLD) {
             r = TOKUDB_DICTIONARY_TOO_OLD;
         } else if (r0 == TOKUDB_BAD_CHECKSUM && r1 == TOKUDB_BAD_CHECKSUM) {
-            fprintf(stderr, "Both header checksums failed.\n");
+            dprintf(STDERR, "Both header checksums failed.\n");
             r = TOKUDB_BAD_CHECKSUM;
         } else if (r0 == TOKUDB_DICTIONARY_NO_HEADER || r1 == TOKUDB_DICTIONARY_NO_HEADER) {
             r = TOKUDB_DICTIONARY_NO_HEADER;
@@ -741,14 +754,14 @@ toku_deserialize_ft_from(int fd,
     } else if (h0_acceptable) {
         if (r1 == TOKUDB_BAD_CHECKSUM) {
             // print something reassuring
-            fprintf(stderr, "Header 2 checksum failed, but header 1 ok.  Proceeding.\n");
+            dprintf(STDERR, "Header 2 checksum failed, but header 1 ok.  Proceeding.\n");
         }
         rb = &rb_0;
         version = version_0;
     } else if (h1_acceptable) {
         if (r0 == TOKUDB_BAD_CHECKSUM) {
             // print something reassuring
-            fprintf(stderr, "Header 1 checksum failed, but header 2 ok.  Proceeding.\n");
+            dprintf(STDERR, "Header 1 checksum failed, but header 2 ok.  Proceeding.\n");
         }
         rb = &rb_1;
         version = version_1;

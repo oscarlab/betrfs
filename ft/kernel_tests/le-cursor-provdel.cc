@@ -101,7 +101,7 @@ static DB * const null_db = 0;
 static int verbose = 1;
 
 static int
-get_next_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen UU(), bytevec val UU(), void *extra, bool lock_only) {
+get_next_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen UU(), bytevec val UU(), void *extra, bool lock_only, bool UU(is_indirect)) {
     DBT *CAST_FROM_VOIDP(key_dbt, extra);
     if (!lock_only) {
         toku_dbt_set(keylen, key, key_dbt, NULL);
@@ -122,7 +122,7 @@ static int test_ft_cursor_keycompare(DB *desc __attribute__((unused)), const DBT
 // create a tree and populate it with n rows
 static void
 create_populate_tree(const char *logdir, const char *fname, int n) {
-    if (verbose) fprintf(stderr, "%s %s %s %d\n", __FUNCTION__, logdir, fname, n);
+    if (verbose) dprintf(STDERR, "%s %s %s %d\n", __FUNCTION__, logdir, fname, n);
     int error;
 
     TOKULOGGER logger = NULL;
@@ -171,13 +171,13 @@ create_populate_tree(const char *logdir, const char *fname, int n) {
 
     error = toku_close_ft_handle_nolsn(brt, NULL);
     assert(error == 0);
-    
+
     CHECKPOINTER cp = toku_cachetable_get_checkpointer(ct);
     error = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, false);
     assert(error == 0);
 
     toku_logger_close_rollback(logger);
-    
+
     error = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, false);
     assert(error == 0);
 
@@ -191,9 +191,9 @@ create_populate_tree(const char *logdir, const char *fname, int n) {
 
 // provionally delete all of the even keys
 // the LE_CURSOR should see all of the leaf entries
-static void 
+static void
 test_provdel(const char *logdir, const char *fname, int n) {
-    if (verbose) fprintf(stderr, "%s %s %s %d\n", __FUNCTION__, logdir, fname, n);
+    if (verbose) dprintf(STDERR, "%s %s %s %d\n", __FUNCTION__, logdir, fname, n);
     int error;
 
     TOKULOGGER logger = NULL;
@@ -249,9 +249,9 @@ test_provdel(const char *logdir, const char *fname, int n) {
     int i;
     for (i=0; ; i++) {
         error = le_cursor_get_next(cursor, &key);
-        if (error != 0) 
+        if (error != 0)
             break;
-        
+
         assert(key.size == sizeof (int));
         int ii = *(int *)key.data;
         assert((int) toku_htonl(n-i-1) == ii);

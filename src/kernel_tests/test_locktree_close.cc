@@ -111,10 +111,10 @@ test_cursor (void) {
 
     /* create the dup database file */
     r = db_env_create(&env, 0);        assert(r == 0);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOG | DB_INIT_TXN | DB_INIT_LOCK |DB_CREATE|DB_INIT_MPOOL|DB_THREAD|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r = db_create(&db, env, 0); CKERR(r);
-    db->set_errfile(db,stderr); // Turn off those annoying errors
+    db->set_errfile(db, STDERR); // Turn off those annoying errors
     r = db->open(db, null_txn, fname, NULL, DB_BTREE, DB_CREATE, 0666); assert(r == 0);
 
     DBC* cursor;
@@ -124,8 +124,8 @@ test_cursor (void) {
     r = env->txn_begin(env, NULL, &txn, DB_SERIALIZABLE); CKERR(r);
     r = db->cursor(db, txn, &cursor, 0); CKERR(r);
     r = cursor->c_set_bounds(
-        cursor, 
-        db->dbt_neg_infty(), 
+        cursor,
+        db->dbt_neg_infty(),
         db->dbt_pos_infty(),
         true,
         0
@@ -143,7 +143,7 @@ test_cursor (void) {
     // #4838 will improperly allow this put to succeed, whereas we should
     // be returning DB_LOCK_NOTGRANTED
     r = db->put(db, txn2, dbt_init(&key, &k, sizeof k), dbt_init(&val, &v, sizeof v), 0);
-    CKERR2(r, DB_LOCK_NOTGRANTED); 
+    CKERR2(r, DB_LOCK_NOTGRANTED);
 
     r = txn->commit(txn, 0);
     r = txn2->commit(txn2, 0);
@@ -155,9 +155,9 @@ test_cursor (void) {
 extern "C" int test_test_locktree_close(void);
 int test_test_locktree_close(void) {
 
-    pre_setup(); 
+    pre_setup();
     int r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
-    assert(r==0);    
+    assert(r==0);
 
     test_cursor();
     post_teardown();

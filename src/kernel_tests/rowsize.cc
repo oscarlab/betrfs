@@ -100,7 +100,6 @@ static void setup_env (void) {
    // snprintf(cmd, len, "rm -rf %s", envdir);
     {int r = toku_fs_reset(envdir, S_IRWXU+S_IRWXG+S_IRWXO);                                                                            CKERR(r); }
     {int r = db_env_create(&env, 0);                                                                                                    CKERR(r); }
-    //env->set_errfile(env, stderr);
 #ifdef TOKUDB
     CKERR(env->set_redzone(env, 0));
 #endif

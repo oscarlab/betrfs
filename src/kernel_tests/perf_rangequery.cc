@@ -110,7 +110,7 @@ stress_table(DB_ENV* env, DB** dbp, struct cli_args *cli_args) {
         myargs[i].operation = rangequery_op;
         myargs[i].txn_flags |= DB_TXN_READ_ONLY;
     }
-    run_workers(myargs, num_threads, cli_args->num_seconds, false, cli_args);
+    run_workers(myargs, num_threads, cli_args->num_seconds, cli_args);
 }
 
 extern "C" int test_perf_rangequery(void);

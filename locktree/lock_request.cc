@@ -200,7 +200,7 @@ bool lock_request::deadlock_exists(const txnid_set &conflicts) {
     return deadlock;
 }
 
-// try to acquire a lock described by this lock request. 
+// try to acquire a lock described by this lock request.
 int lock_request::start(void) {
     int r;
 
@@ -261,12 +261,12 @@ int lock_request::wait(uint64_t wait_time) {
         struct timespec ts = {};
         ts.tv_sec = t_wait/ 1000000;
         ts.tv_nsec = (t_wait % 1000000) * 1000;
-    
+
         int r = toku_cond_timedwait(&m_wait_cond, &m_info->mutex, &ts);
         invariant(r == 0 || r == ETIMEDOUT);
-       
+
         t_now = toku_current_time_microsec();
-        if(m_state == state::PENDING && t_now >= t_end) { 
+        if(m_state == state::PENDING && t_now >= t_end) {
            m_info->counters.timeout_count += 1;
             // if we're still pending and we timed out, then remove our
             // request from the set of lock requests and fail.
@@ -413,7 +413,7 @@ void lock_request::insert_into_lock_requests(void) {
 // remove this lock request from the locktree's set. must hold the mutex.
 void lock_request::remove_from_lock_requests(void) {
     uint32_t idx;
-    lock_request *request;
+    lock_request *request = NULL;
     int r = m_info->pending_lock_requests.find_zero<TXNID, find_by_txnid>(m_txnid, &request, &idx);
     invariant_zero(r && request == this);
     r = m_info->pending_lock_requests.delete_at(idx);

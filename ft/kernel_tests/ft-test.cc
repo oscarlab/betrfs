@@ -106,7 +106,7 @@ static void test_dump_empty_db (void) {
 
     r = toku_open_ft_handle(fname, 1, &t, 1024, 256, TOKU_DEFAULT_COMPRESSION_METHOD, ct, null_txn, toku_builtin_compare_fun);
     assert(r==0);
-    if (verbose) { r=toku_dump_ft(stdout, t); assert(r==0); }
+    if (verbose) { r=toku_dump_ft(STDOUT, t); assert(r==0); }
     r = toku_close_ft_handle_nolsn(t, 0);          assert(r==0);
     toku_cachetable_close(&ct);
 
@@ -223,7 +223,9 @@ static void  test_read_what_was_written (void) {
     int r;
     const int NVALS=10000;
 
-    if (verbose) printf("test_read_what_was_written(): "); fflush(stdout);
+    if (verbose) {
+        printf("test_read_what_was_written(): ");
+    }
 
     r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
     assert(r==0);
@@ -282,7 +284,7 @@ static void  test_read_what_was_written (void) {
 	    if (i<600) {
 		int verify_result=toku_verify_ft(brt);
 		if (verify_result) {
-		    r = toku_dump_ft(stdout, brt);
+		    r = toku_dump_ft(STDOUT, brt);
 		    assert(r==0);
 		    assert(0);
 		}

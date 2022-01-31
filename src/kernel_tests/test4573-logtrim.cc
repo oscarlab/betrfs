@@ -88,7 +88,6 @@ PATENT RIGHTS GRANT:
 
 #ident "Copyright (c) 2007-2013 Tokutek Inc.  All rights reserved."
 #include "test.h"
-#include <sys/wait.h>
 
 static const int envflags = DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE|DB_RECOVER;
 
@@ -142,12 +141,12 @@ int test_test4573_logtrim(void) {
 
     const int N = 5;
 
-    int ret = pthread_create(&child, NULL, child_func, NULL); 
-    
+    int ret = pthread_create(&child, NULL, child_func, NULL);
+
     assert(ret == 0);
     pthread_join(child, &status);
     assert(status==0);
-    
+
     // Now run recovery to see what happens.
     DB_ENV *env;
     r = db_env_create(&env, 0);                                                         CKERR(r);
@@ -174,8 +173,8 @@ int test_test4573_logtrim(void) {
     r = env->close(env, 0);                                                             CKERR(r);
 
     //toku_os_recursive_delete(TOKU_TEST_FILENAME);
- 
+
     post_teardown();
-   
+
     return 0;
 }

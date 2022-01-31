@@ -103,7 +103,6 @@ PATENT RIGHTS GRANT:
 #include <errno.h>
 #include <toku_htonl.h>
 #include <portability/toku_path.h>
-#include <portability/toku_crash.h>
 #include "toku_assert.h"
 #include <signal.h>
 #include <time.h>
@@ -129,9 +128,9 @@ static int verbose=0;
 
 #define UU(x) x __attribute__((__unused__))
 
-#define CKERR(r) ({ int __r = r; if (__r!=0) fprintf(stderr, "%s:%d error %d %s\n", __FILE__, __LINE__, __r, db_strerror(r)); assert(__r==0); })
-#define CKERR2(r,r2) do { if (r!=r2) fprintf(stderr, "%s:%d error %d %s, expected %d\n", __FILE__, __LINE__, r, db_strerror(r), r2); assert(r==r2); } while (0)
-#define CKERR2s(r,r2,r3) do { if (r!=r2 && r!=r3) fprintf(stderr, "%s:%d error %d %s, expected %d or %d\n", __FILE__, __LINE__, r, db_strerror(r), r2,r3); assert(r==r2||r==r3); } while (0)
+#define CKERR(r) ({ int __r = r; if (__r!=0) dprintf(STDERR, "%s:%d error %d %s\n", __FILE__, __LINE__, __r, db_strerror(r)); assert(__r==0); })
+#define CKERR2(r,r2) do { if (r!=r2) dprintf(STDERR, "%s:%d error %d %s, expected %d\n", __FILE__, __LINE__, r, db_strerror(r), r2); assert(r==r2); } while (0)
+#define CKERR2s(r,r2,r3) do { if (r!=r2 && r!=r3) dprintf(STDERR, "%s:%d error %d %s, expected %d or %d\n", __FILE__, __LINE__, r, db_strerror(r), r2,r3); assert(r==r2||r==r3); } while (0)
 
 /*
  * Helpers for defining pseudo-hygienic macros using a (gensym)-like
@@ -142,8 +141,7 @@ static int verbose=0;
 #define GS(symbol) CONCAT(CONCAT(__gensym_, __LINE__), CONCAT(_, symbol))
 
 #define DEBUG_LINE do { \
-    fprintf(stderr, "%s() %s:%d\n", __FUNCTION__, __FILE__, __LINE__); \
-    fflush(stderr); \
+    dprintf(STDERR, "%s() %s:%d\n", __FUNCTION__, __FILE__, __LINE__); \
 } while (0)
 
 // If the error code depends on BDB vs TDB use this
@@ -165,7 +163,7 @@ parse_args (int argc, char * const argv[]) {
 	    if (verbose<0) verbose=0;
 	} else if (strcmp(argv[1], "-h")==0) {
 	do_usage:
-	    fprintf(stderr, "Usage:\n%s [-v|-q] [-h]\n", argv0);
+	    dprintf(STDERR, "Usage:\n%s [-v|-q] [-h]\n", argv0);
 	    set_errno(resultcode);
             return;
 	} else {
@@ -373,7 +371,7 @@ default_parse_args (int argc, char * const argv[]) {
 	} else if (strcmp(argv[0],"-q")==0) {
 	    verbose=0;
 	} else {
-	    fprintf(stderr, "Usage:\n %s [-v] [-q]\n", progname);
+	    dprintf(STDERR, "Usage:\n %s [-v] [-q]\n", progname);
 	    set_errno(-1);
             return;
 	}

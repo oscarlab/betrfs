@@ -42,6 +42,7 @@ set(FT_SOURCES
   ftloader-callback
   ft_msg
   ft_node-serialize
+  ft-indirect
   ft-node-deserialize
   ft-ops
   ft-serialize
@@ -79,17 +80,10 @@ set(FT_SOURCES
   "${CMAKE_CURRENT_BINARY_DIR}/log_print"
   )
 
-if (NOT BUILD_FOR_LINUX_KERNEL_MODULE)
-  add_library(ft SHARED ${FT_SOURCES})
-  maybe_add_gcov_to_libraries(ft ft_static)
-  target_link_libraries(ft LINK_PRIVATE util_static ${LIBTOKUPORTABILITY})
-  target_link_libraries(ft LINK_PUBLIC z)
-endif (NOT BUILD_FOR_LINUX_KERNEL_MODULE)
-
 add_library(ft_static STATIC ${FT_SOURCES})
 ## we're going to link this into libtokudb.so so it needs to have PIC
 set_target_properties(ft_static PROPERTIES POSITION_INDEPENDENT_CODE ${STATIC_PIC})
-maybe_add_gcov_to_libraries(ft ft_static)
+maybe_add_gcov_to_libraries(ft_static)
 
 ## depend on other generated targets
 add_dependencies(ft_static install_tdb_h generate_log_code)
@@ -97,25 +91,4 @@ add_dependencies(ft_static install_tdb_h generate_log_code)
 ## link dependers with zlib
 target_link_libraries(ft_static LINK_PRIVATE)
 
-if (NOT BUILD_FOR_LINUX_KERNEL_MODULE)
-  ## build the bins in this directory
-  foreach(tool tokuftdump tdb_logprint tdb-recover ftverify)
-    add_executable(${tool} ${tool})
-    add_dependencies(${tool} install_tdb_h)
-    target_link_libraries(${tool} ft_static util_static z ${LIBTOKUPORTABILITY}_static ${CMAKE_THREAD_LIBS_INIT} ${EXTRA_SYSTEM_LIBS})
-    add_space_separated_property(TARGET ${tool} COMPILE_FLAGS -fvisibility=hidden)
-  endforeach(tool)
-
-  # link in math.h library just for this tool.
-  target_link_libraries(ftverify m)
-
-  install(
-    TARGETS tokuftdump
-    DESTINATION bin
-    )
-
-  add_subdirectory(tests)
-else()
-  add_subdirectory(kernel_tests)
-
-endif (NOT BUILD_FOR_LINUX_KERNEL_MODULE)
+add_subdirectory(kernel_tests)

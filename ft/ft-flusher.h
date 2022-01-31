@@ -127,6 +127,7 @@ typedef enum {
     FT_FLUSHER_MERGE_LEAF,                  // number of times leaf nodes are merged
     FT_FLUSHER_MERGE_NONLEAF,               // number of times nonleaf nodes are merged
     FT_FLUSHER_BALANCE_LEAF,                // number of times a leaf node is balanced inside brt
+    FT_DEAD_LEAF,                           // number of times a leaf is not read due to the dead leaf optimization
     FT_FLUSHER_STATUS_NUM_ROWS
 } ft_flusher_status_entry;
 
@@ -256,20 +257,20 @@ void toku_ft_flush_this_child(
     FTNODE childnode,
     int childnum) ;
 
-
 // This next chunk is basically an elaborate assert, only for debugging
 static inline void printf_slice_key(DBT * UU(key), FT UU(ft)) {
 	bool is_meta = false;
 	char *path;
-        uint64_t blocknum;
+	uint64_t blocknum;
 
+	(void)blocknum;
 	if(!key || key->data == nullptr) {
 		toku_trace_printk(" null \n");
 		return;
 	}
 
         if (ft->cf)
-            is_meta = sb_sfs_is_meta_db(toku_cachefile_get_fd(ft->cf));
+            is_meta = sb_is_meta_db(toku_cachefile_get_fd(ft->cf));
         path = (char *)key->data;
         blocknum = *(uint64_t *)(path + key->size - sizeof(uint64_t));
 

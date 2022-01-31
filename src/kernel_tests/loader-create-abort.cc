@@ -114,15 +114,15 @@ static void loader_open_abort(void) {
     r = env->set_generate_row_callback_for_put(env, put_multiple_generate);
     CKERR(r);
     int envflags = DB_INIT_LOCK | DB_INIT_LOG | DB_INIT_MPOOL | DB_INIT_TXN | DB_CREATE | DB_PRIVATE;
-    r = env->open(env, envdir, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                                            CKERR(r); 
-    env->set_errfile(env, stderr);
+    r = env->open(env, envdir, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                                            CKERR(r);
+    env->set_errfile(env, STDERR);
 
     DB_TXN *txn;
     r = env->txn_begin(env, NULL, &txn, 0); CKERR(r);
 
     DB_LOADER *loader;
     r = env->create_loader(env, txn, &loader, NULL, 0, NULL, NULL, NULL, loader_flags); CKERR(r);
-    
+
     r = loader->abort(loader); CKERR(r);
 
     r = txn->commit(txn, 0); CKERR(r);
@@ -138,7 +138,7 @@ static void do_args(int argc, char * const argv[]) {
         if (strcmp(argv[0], "-h")==0) {
 	    resultcode=0;
 	do_usage:
-	    fprintf(stderr, "Usage: [-h] [-v] [-q] [-p]\n%s\n", cmd);
+	    dprintf(STDERR, "Usage: [-h] [-v] [-q] [-p]\n%s\n", cmd);
 	    exit(resultcode);
         } else if (strcmp(argv[0], "-v")==0) {
 	    verbose++;
@@ -154,7 +154,7 @@ static void do_args(int argc, char * const argv[]) {
             if (argc > 0)
                 envdir = argv[0];
 	} else {
-	    fprintf(stderr, "Unknown arg: %s\n", argv[0]);
+	    dprintf(STDERR, "Unknown arg: %s\n", argv[0]);
 	    resultcode=1;
 	    goto do_usage;
 	}

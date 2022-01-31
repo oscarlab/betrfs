@@ -109,7 +109,6 @@ PATENT RIGHTS GRANT:
 #include "test.h"
 
 #include <stdio.h>
-//#include <math.h>
 #include <locale.h>
 
 #include <db.h>
@@ -323,7 +322,6 @@ human_print_perf_iteration(const struct cli_args *cli_args, const int current_ti
         printf("\tTotal %'12" PRIu64 " (%'12.1lf/s)\n", period_total, totalpersecond);
 #endif
     }
-    fflush(stdout);
 }
 
 static void
@@ -410,7 +408,6 @@ csv_print_perf_iteration(const struct cli_args *cli_args, const int current_time
         printf(",%" PRIu64 ",%.1lf", period_totals[op], totalpersecond);
     }
     printf("\n");
-    fflush(stdout);
 }
 
 static void
@@ -477,7 +474,6 @@ tsv_print_perf_iteration(const struct cli_args *cli_args, const int current_time
         printf("\t%" PRIu64 "\t%.1lf", period_totals[op], totalpersecond);
     }
     printf("\n");
-    fflush(stdout);
 }
 
 static void
@@ -1701,14 +1697,13 @@ static void print_matching_engine_status_rows(DB_ENV *env, const char *pattern) 
         const char *p = pattern_copy;
         for (int i = 0; i < num_patterns; i++, p += strlen(p) + 1) {
             if (strstr(row, p) != nullptr) {
-                fprintf(stderr, "%s\n", row);
+                dprintf(STDERR, "%s\n", row);
             }
         }
     }
 
     toku_free(pattern_copy);
     toku_free(buf);
-    fflush(stderr);
 }
 
 // TODO: stuff like this should be in a generalized header somwhere
@@ -1724,7 +1719,6 @@ intmin(const int a, const int b)
 struct test_time_extra {
     DB_ENV *env;
     int num_seconds;
-    bool crash_at_end;
     struct worker_extra *wes;
     int num_wes;
     struct cli_args *cli_args;
@@ -1784,9 +1778,6 @@ static void *test_time(void *arg) {
     if (verbose) {
         printf("run_test %d\n", run_test);
     }
-    if (tte->crash_at_end) {
-        toku_hard_crash_on_purpose();
-    }
     return arg;
 }
 
@@ -1809,7 +1800,6 @@ static void *sleep_and_crash(void *extra) {
     e->is_setup = true;
     if (verbose) {
         printf("Waiting %d seconds for other threads to join.\n", e->seconds);
-        fflush(stdout);
     }
     int r = toku_cond_timedwait(&e->cond, &e->mutex, &ts);
     toku_mutex_assert_locked(&e->mutex);
@@ -1817,9 +1807,12 @@ static void *sleep_and_crash(void *extra) {
         invariant(!e->threads_have_joined);
         if (verbose) {
             printf("Some thread didn't join on time, crashing.\n");
-            fflush(stdout);
         }
-        toku_crash_and_dump_core_on_purpose();
+        // DEP 12/17/20: This does not actually dump core anyway, so
+        //               falling back to a simpler abort, which panics
+        //               the kernel.
+        abort();
+        //toku_crash_and_dump_core_on_purpose();
     } else {
         assert(r == 0);
         assert(e->threads_have_joined);
@@ -1835,7 +1828,6 @@ static int run_workers(
     struct arg *thread_args,
     int num_threads,
     uint32_t num_seconds,
-    bool crash_at_end,
     struct cli_args* cli_args
     )
 {
@@ -1855,7 +1847,6 @@ static int run_workers(
     struct test_time_extra tte;
     tte.env = thread_args[0].env;
     tte.num_seconds = num_seconds;
-    tte.crash_at_end = crash_at_end;
     tte.wes = worker_extra;
     tte.num_wes = num_threads;
     tte.cli_args = cli_args;
@@ -2362,27 +2353,26 @@ struct arg_type {
 static inline void \
 help_##typename(struct arg_type *type, int width_name, int width_type) { \
     invariant(!strncmp("--", type->name, strlen("--"))); \
-    fprintf(stderr, "\t%-*s  %-*s  ", width_name, type->name, width_type, type->description->type_name); \
-    fprintf(stderr, "(default %" format "%s", type->default_val.member, type->help_suffix); \
+    dprintf(STDERR, "\t%-*s  %-*s  ", width_name, type->name, width_type, type->description->type_name); \
+    dprintf(STDERR, "(default %" format "%s", type->default_val.member, type->help_suffix); \
     if (type->min.member != MIN) { \
-        fprintf(stderr, ", min %" format "%s", type->min.member, type->help_suffix); \
+        dprintf(STDERR, ", min %" format "%s", type->min.member, type->help_suffix); \
     } \
     if (type->max.member != MAX) { \
-        fprintf(stderr, ", max %" format "%s", type->max.member, type->help_suffix); \
+        dprintf(STDERR, ", max %" format "%s", type->max.member, type->help_suffix); \
     } \
-    fprintf(stderr, ")\n"); \
+    dprintf(STDERR, ")\n"); \
 }
 
 DEFINE_NUMERIC_HELP(int32, PRId32, i32, INT32_MIN, INT32_MAX)
 DEFINE_NUMERIC_HELP(int64, PRId64, i64, INT64_MIN, INT64_MAX)
 DEFINE_NUMERIC_HELP(uint32, PRIu32, u32, 0, UINT32_MAX)
 DEFINE_NUMERIC_HELP(uint64, PRIu64, u64, 0, UINT64_MAX)
-//DEFINE_NUMERIC_HELP(double, ".2lf",  d, -HUGE_VAL, HUGE_VAL)
 static inline void
 help_bool(struct arg_type *type, int width_name, int width_type) {
     invariant(strncmp("--", type->name, strlen("--")));
     const char *default_value = type->default_val.b ? "yes" : "no";
-    fprintf(stderr, "\t--[no-]%-*s  %-*s  (default %s)\n",
+    dprintf(STDERR, "\t--[no-]%-*s  %-*s  (default %s)\n",
             width_name - (int)strlen("--[no-]"), type->name,
             width_type, type->description->type_name,
             default_value);
@@ -2392,7 +2382,7 @@ static inline void
 help_string(struct arg_type *type, int width_name, int width_type) {
     invariant(!strncmp("--", type->name, strlen("--")));
     const char *default_value = type->default_val.s ? type->default_val.s : "";
-    fprintf(stderr, "\t%-*s  %-*s  (default '%s')\n",
+    dprintf(STDERR, "\t%-*s  %-*s  (default '%s')\n",
             width_name, type->name,
             width_type, type->description->type_name,
             default_value);
@@ -2440,103 +2430,8 @@ parse_string(struct arg_type *type, int *extra_args_consumed, int argc, char *co
     *extra_args_consumed = 1;
     return 0;
 }
+
 #if 0
-static inline int
-parse_uint64(struct arg_type *type, int *extra_args_consumed, int argc, char *const argv[]) {
-    // Already verified name.
-
-    if (argc < 2) {
-        return EINVAL;
-    }
-    if (*argv[2] == '\0') {
-       return EINVAL;
-    }
-
-    char *endptr;
-    unsigned long long int result = strtoull(argv[2], &endptr, 0);
-    if (*endptr != '\0') {
-        return EINVAL;
-    }
-    if (result < type->min.u64 || result > type->max.u64) {
-        return ERANGE;
-    }
-    *((uint64_t*)type->target) = result;
-    *extra_args_consumed = 1;
-    return 0;
-}
-
-static inline int
-parse_int64(struct arg_type *type, int *extra_args_consumed, int argc, char *const argv[]) {
-    // Already verified name.
-
-    if (argc < 2) {
-        return EINVAL;
-    }
-    if (*argv[2] == '\0') {
-       return EINVAL;
-    }
-
-    char *endptr;
-    long long int result = strtoll(argv[2], &endptr, 0);
-    if (*endptr != '\0') {
-        return EINVAL;
-    }
-    if (result < type->min.i64 || result > type->max.i64) {
-        return ERANGE;
-    }
-    *((int64_t*)type->target) = result;
-    *extra_args_consumed = 1;
-    return 0;
-}
-
-static inline int
-parse_uint32(struct arg_type *type, int *extra_args_consumed, int argc, char *const argv[]) {
-    // Already verified name.
-
-    if (argc < 2) {
-        return EINVAL;
-    }
-    if (*argv[2] == '\0') {
-       return EINVAL;
-    }
-
-    char *endptr;
-    unsigned long int result = strtoul(argv[2], &endptr, 0);
-    if (*endptr != '\0') {
-        return EINVAL;
-    }
-    if (result < type->min.u32 || result > type->max.u32) {
-        return ERANGE;
-    }
-    *((int32_t*)type->target) = result;
-    *extra_args_consumed = 1;
-    return 0;
-}
-
-static inline int
-parse_int32(struct arg_type *type, int *extra_args_consumed, int argc, char *const argv[]) {
-    // Already verified name.
-
-    if (argc < 2) {
-        return EINVAL;
-    }
-    if (*argv[2] == '\0') {
-       return EINVAL;
-    }
-
-    char *endptr;
-    long int result = strtol(argv[2], &endptr, 0);
-    if (*endptr != '\0') {
-        return EINVAL;
-    }
-    if (result < type->min.i32 || result > type->max.i32) {
-        return ERANGE;
-    }
-    *((int32_t*)type->target) = result;
-    *extra_args_consumed = 1;
-    return 0;
-}
-
 static inline int
 parse_double(struct arg_type *type, int *extra_args_consumed, int argc, char *const argv[]) {
     // Already verified name.
@@ -2589,13 +2484,13 @@ struct type_description type_bool = {
 
 static inline void
 do_usage(const char *argv0, int n, struct arg_type types[/*n*/]) {
-    fprintf(stderr, "Usage:\n");
-    fprintf(stderr, "\t%s [-h|--help]\n", argv0);
-    fprintf(stderr, "\t%s [OPTIONS]\n", argv0);
-    fprintf(stderr, "\n");
-    fprintf(stderr, "OPTIONS are among:\n");
-    fprintf(stderr, "\t-q|--quiet\n");
-    fprintf(stderr, "\t-v|--verbose\n");
+    dprintf(STDERR, "Usage:\n");
+    dprintf(STDERR, "\t%s [-h|--help]\n", argv0);
+    dprintf(STDERR, "\t%s [OPTIONS]\n", argv0);
+    dprintf(STDERR, "\n");
+    dprintf(STDERR, "OPTIONS are among:\n");
+    dprintf(STDERR, "\t-q|--quiet\n");
+    dprintf(STDERR, "\t-v|--verbose\n");
     for (int i = 0; i < n; i++) {
         struct arg_type *type = &types[i];
         ARG_HELP(type, 35, 6);
@@ -2725,7 +2620,7 @@ static inline void parse_stress_test_args (struct cli_args *args) {
                     int extra_args_consumed;
                     resultcode = ARG_PARSE(type, &extra_args_consumed, argc, argv);
                     if (resultcode) {
-                        fprintf(stderr, "ERROR PARSING [%s]\n", argv[1]);
+                        dprintf(STDERR, "ERROR PARSING [%s]\n", argv[1]);
                         do_usage(argv0, num_arg_types, arg_types);
                         exit(resultcode);
                     }
@@ -2736,7 +2631,7 @@ static inline void parse_stress_test_args (struct cli_args *args) {
                 }
             }
             if (!found) {
-                fprintf(stderr, "COULD NOT PARSE [%s]\n", argv[1]);
+                dprintf(STDERR, "COULD NOT PARSE [%s]\n", argv[1]);
                 do_usage(argv0, num_arg_types, arg_types);
                 exit(EINVAL);
             }
@@ -2751,7 +2646,7 @@ static inline void parse_stress_test_args (struct cli_args *args) {
         } else if (strcmp(compression_method_s, "none") == 0) {
             args->compression_method = TOKU_NO_COMPRESSION;
         } else {
-            fprintf(stderr, "valid values for --compression_method are \"quicklz\", \"zlib\", and \"none\"\n");
+            dprintf(STDERR, "valid values for --compression_method are \"quicklz\", \"zlib\", and \"none\"\n");
             do_usage(argv0, num_arg_types, arg_types);
             exit(EINVAL);
         }
@@ -2764,13 +2659,13 @@ static inline void parse_stress_test_args (struct cli_args *args) {
         } else if (!strcmp(perf_format_s, "tsv")) {
             args->perf_output_format = TSV;
         } else {
-            fprintf(stderr, "valid values for --perf_format are \"human\", \"csv\", and \"tsv\"\n");
+            dprintf(STDERR, "valid values for --perf_format are \"human\", \"csv\", and \"tsv\"\n");
             do_usage(argv0, num_arg_types, arg_types);
             exit(EINVAL);
         }
     }
     if (args->only_create && args->only_stress) {
-        fprintf(stderr, "used --only_stress and --only_create\n");
+        dprintf(STDERR, "used --only_stress and --only_create\n");
         do_usage(argv0, num_arg_types, arg_types);
         exit(EINVAL);
     }
@@ -2879,7 +2774,7 @@ open_and_stress_tables(struct cli_args *args, bool fill_with_zeroes, int (*cmp)(
 {
     if ((args->key_size < 8 && args->key_size != 4) ||
         (args->val_size < 8 && args->val_size != 4)) {
-        fprintf(stderr, "The only valid key/val sizes are 4, 8, and > 8.\n");
+        dprintf(STDERR, "The only valid key/val sizes are 4, 8, and > 8.\n");
         return;
     }
 

@@ -162,7 +162,7 @@ test_subblock_test_compression (void) {
     initialize_dummymsn();
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
- 
+
     int n_cores = 1;
     int e = 1;
 
@@ -173,7 +173,6 @@ test_subblock_test_compression (void) {
             //run_test(size, n_cores, TOKU_ZLIB_METHOD);
             //run_test(size, n_cores, TOKU_ZLIB_WITHOUT_CHECKSUM_METHOD);
             run_test(size, n_cores, TOKU_QUICKLZ_METHOD);
-            //run_test(size, n_cores, TOKU_LZMA_METHOD);
         }
     }
 

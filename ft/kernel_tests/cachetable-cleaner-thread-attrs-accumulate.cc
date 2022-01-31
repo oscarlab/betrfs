@@ -96,7 +96,7 @@ PATENT RIGHTS GRANT:
 
 toku_mutex_t attr_mutex;
 
-// used to access engine status variables 
+// used to access engine status variables
 #define STATUS_VALUE(x) ct_status.status[x].value.num
 
 const PAIR_ATTR attrs[] = {
@@ -177,7 +177,7 @@ static void run_test (void) {
                                         def_fetch,
                                         def_pf_req_callback,
                                         def_pf_callback,
-                                        true, 
+                                        true,
                                         &expect);
         assert_zero(r);
         r = toku_test_cachetable_unpin(f1, make_blocknum(i+1), i+1, CACHETABLE_DIRTY, attrs[i]);
@@ -202,7 +202,7 @@ static void run_test (void) {
                                     def_fetch,
                                     def_pf_req_callback,
                                     def_pf_callback,
-                                    true, 
+                                    true,
                                     &expect);
     toku_test_cachetable_unpin(f1, make_blocknum(n_pairs + 1), n_pairs + 1, CACHETABLE_CLEAN,
                           make_pair_attr(test_limit - expect.size + 20));
@@ -222,7 +222,11 @@ static void run_test (void) {
 
 extern "C" int test_cachetable_cleanerthread_attrs_accumulate(void);
 int test_cachetable_cleanerthread_attrs_accumulate(void) {
+  int rinit = toku_ft_layer_init();
+  CKERR(rinit);
+
   run_test();
+  toku_ft_layer_destroy();
   return 0;
 }
 

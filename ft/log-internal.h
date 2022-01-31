@@ -143,8 +143,9 @@ struct logbuf {
     LSN  max_lsn_in_buf;
 };
 
-struct unbound_insert_entry {
-    DBT * key;
+// unbound insert (seq put) entry
+struct ubi_entry {
+    DBT key;
     struct toku_list in_or_out; // either logger->ubi_in or logger->ubi_out
     struct toku_list node_list; // this is actually in the
                                 // ftnode_nonleaf_childinfo or
@@ -153,38 +154,43 @@ struct unbound_insert_entry {
                                 // UBI_BINDING.
     LSN lsn; /* lsn of enq_unbound_insert message already in the log */
     MSN msn; /* msn of message in tree */
-//    FTNODE node;   /* if state is BOUND, this is not valid */
-    //FT_HANDLE fth; // if we need this, pass it to
-                     // toku_logger_append_unbound_insert_entry() in
-                     // toku_ft_maybe_insert()
+    FTNODE node;   /* if state is BOUND, this is not valid */
+    bool is_on_bnc;
+    bool is_on_leaf;
+    bool is_flushed;
+    bool is_applied;
     ubi_state_t state;
     DISKOFF diskoff;
     DISKOFF size;
 };
 
-static inline void destroy_unbound_insert_entry(struct unbound_insert_entry * entry) {
-	toku_destroy_dbt(entry->key);
-	toku_free(entry->key);
-	toku_free(entry);
+static inline void destroy_ubi_entry(struct ubi_entry *entry)
+{
+    toku_destroy_dbt(&entry->key);
+    toku_free(entry);
 }
+
 // Compare the keys and TXNIDS to see if the log entry refers to @msg
 //uint32_t entry->key.len
 //char *   entry->key.data
 //DBT *    msg->key
 //uint32_t msg->key->size
 //void *   msg->key->data
-static inline int msg_matches_ubi(FT_MSG msg, struct unbound_insert_entry *entry) {
-
+static inline int
+msg_matches_ubi(FT_MSG msg, struct ubi_entry *entry)
+{
     return (ft_msg_get_msn(msg).msn == entry->msn.msn);
 }
 
-static inline int fifo_entry_matches_ubi(struct fifo_entry *fifo_entry, struct unbound_insert_entry *ubi_entry) {
-
+static inline int
+fifo_entry_matches_ubi(struct fifo_entry *fifo_entry, struct ubi_entry *ubi_entry)
+{
     return (fifo_entry->msn.msn == ubi_entry->msn.msn);
 }
 
-static inline
-int unbound_entry_is_bound_or_promised(struct unbound_insert_entry *entry) {
+static inline int
+ubi_entry_is_bound_or_promised(struct ubi_entry *entry)
+{
     // if we have assigned a block_num, we have located it in our node
     // and are just waiting for writeback to update the diskoff.
     return (entry->state == UBI_BOUND || entry->state == UBI_BINDING);
@@ -197,9 +203,10 @@ int unbound_entry_is_bound_or_promised(struct unbound_insert_entry *entry) {
     // future searches.
 }
 
-static inline
-int unbound_entry_is_bound(struct unbound_insert_entry *entry) {
-    return entry->state == UBI_BOUND;
+static inline int
+ubi_entry_is_bound(struct ubi_entry *entry)
+{
+    return (entry->state == UBI_BOUND);
 }
 
 
@@ -226,8 +233,8 @@ struct tokulogger {
     bool write_log_files;
     bool trim_log_files; // for test purposes
     char *directory;  // file system directory
-    DIR *dir; // descriptor for directory
     int fd;
+    int dfd;
     CACHETABLE ct;
     uint64_t lg_max; // The size of the single file in the log.  Default is 100MB in TokuDB
 
@@ -272,6 +279,8 @@ struct tokulogger {
     CACHEFILE rollback_cachefile;
     rollback_log_node_cache rollback_cache;
     TXN_MANAGER txn_manager;
+
+    MSN max_partial_checkpoint_msn; /* max msn for all dirty nodes of a partial checkpoint */
 };
 
 int toku_logger_find_logfiles (const char *directory, char ***resultp, int *n_logfiles);
@@ -464,4 +473,5 @@ static inline char *fixup_fname(BYTESTRING *f) {
 }
 void set_logger_unbound_test_callback(bool (*)(void*), void*);
 void set_logger_write_ubi_test_callback(bool (*)(TOKULOGGER, void*), void*);
+bool is_dirty_node_avail(FTNODE node);
 #endif

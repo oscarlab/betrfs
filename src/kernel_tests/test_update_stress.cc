@@ -140,7 +140,7 @@ int_cmp(DB *UU(db), const DBT *a, const DBT *b) {
 static void setup (void) {
     { int chk_r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
     { int chk_r = db_env_create(&env, 0); CKERR(chk_r); }
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     env->set_update(env, update_fun);
     {
         struct toku_db_key_operations key_ops;

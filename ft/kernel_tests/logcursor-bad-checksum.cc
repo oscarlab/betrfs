@@ -91,7 +91,7 @@ PATENT RIGHTS GRANT:
 #include "logcursor.h"
 #include "test_logcursor.h"
 
-// log a couple of timestamp entries and verify the log by walking 
+// log a couple of timestamp entries and verify the log by walking
 // a cursor through the log entries
 
 //static int verbose = 1;
@@ -102,11 +102,11 @@ static void corrupt_the_checksum(void) {
     int r;
     memset(logname, 0, TOKU_PATH_MAX+1);
     sprintf(logname,  "%s/log000000000000.tokulog%d", TOKU_TEST_ENV_DIR_NAME, TOKU_LOG_VERSION);
-    FILE *f = fopen(logname, "r+b"); assert(f);
-    r = fseek(f, 025, SEEK_SET); assert(r == 0);
+    int f = open(logname, O_WRONLY); assert(f >= 0);
+    r = lseek(f, 025, SEEK_SET); assert(r == 025);
     char c = 100;
-    size_t n = fwrite(&c, sizeof c, 1, f); assert(n == sizeof c);
-    r = fclose(f); assert(r == 0);
+    size_t n = write(f, &c, sizeof c); assert(n == sizeof c);
+    r = close(f); assert(r == 0);
     toku_free(logname);
 }
 
@@ -121,7 +121,7 @@ test_logcursor_bad_checksum(void) {
 
     // log a couple of timestamp log entries
 
-    r = toku_logger_create(&logger); 
+    r = toku_logger_create(&logger);
     assert(r == 0);
 
     r = toku_logger_open(TOKU_TEST_ENV_DIR_NAME, logger);
@@ -147,7 +147,7 @@ test_logcursor_bad_checksum(void) {
     // walk forwards
     TOKULOGCURSOR lc = NULL;
     struct log_entry *le;
-    
+
     r = toku_logcursor_create(&lc, TOKU_TEST_ENV_DIR_NAME);
     assert(r == 0 && lc != NULL);
 

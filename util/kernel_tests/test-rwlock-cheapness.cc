@@ -144,7 +144,7 @@ static void *do_read_wait(void *arg) {
 
 static void launch_cheap_waiter(void) {
     toku_pthread_t tid;
-    int r = toku_pthread_create(&tid, NULL, do_cheap_wait, NULL); 
+    int r = toku_pthread_create(&tid, NULL, do_cheap_wait, NULL);
     assert_zero(r);
     toku_pthread_detach(tid);
     sleep(1);
@@ -152,7 +152,7 @@ static void launch_cheap_waiter(void) {
 
 static void launch_expensive_waiter(void) {
     toku_pthread_t tid;
-    int r = toku_pthread_create(&tid, NULL, do_expensive_wait, NULL); 
+    int r = toku_pthread_create(&tid, NULL, do_expensive_wait, NULL);
     assert_zero(r);
     toku_pthread_detach(tid);
     sleep(1);
@@ -160,7 +160,7 @@ static void launch_expensive_waiter(void) {
 
 static void launch_reader(void) {
     toku_pthread_t tid;
-    int r = toku_pthread_create(&tid, NULL, do_read_wait, NULL); 
+    int r = toku_pthread_create(&tid, NULL, do_read_wait, NULL);
     assert_zero(r);
     toku_pthread_detach(tid);
     sleep(1);
@@ -175,7 +175,7 @@ static bool locks_are_expensive(void) {
 }
 
 static void test_write_cheapness(void) {
-    toku_mutex_init(&mutex, NULL);    
+    toku_mutex_init(&mutex, NULL);
     w.init(&mutex);
 
     // single expensive write lock
@@ -263,7 +263,20 @@ static void test_write_cheapness(void) {
     // tricky case here, because we have a launched reader
     // that should be in the queue, a new read lock
     // should piggy back off that
+
+    // There was no point maintaining a queue for reads at userspace
+    // frwlock as kernel rwsem does its own internal maintenance,
+    // but the rest of toku code still replies on the frwlock interfaces,
+    // like checking if a read/write lock is to be expensive, to work.
+    // We kept a few counters like the num of writers, the num of
+    // expensive writers, etc, in user space frwlock to make the
+    // frwlock interface unchanged to other toku code.
+    // This change treats the kernel and the userspace code differently.
+#ifndef TOKU_LINUX_MODULE
+    assert(!w.read_lock_is_expensive());
+#else
     assert(w.read_lock_is_expensive());
+#endif
     toku_mutex_unlock(&mutex);
     release_write_lock();
     sleep(1);

@@ -93,11 +93,11 @@ PATENT RIGHTS GRANT:
 //#include <algorithm> for min and max
 static int64_t min(const int64_t a, const int64_t b) {
     return (b < a) ? b : a;
-} 
+}
 
 static int64_t max(const int64_t a, const int64_t b) {
     return (b > a) ? b : a;
-} 
+}
 
 // Unit test for db->get_key_after_bytes.
 
@@ -115,7 +115,7 @@ static void setup(DB_ENV **envp, DB **dbp, uint32_t nodesize, uint32_t basementn
     DB_ENV *env = *envp;
     r = env->set_key_ops(env, &key_ops);
     CKERR(r);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU|S_IRWXG|S_IRWXO);
     CKERR(r);
     r = db_create(dbp, env, 0);
@@ -195,9 +195,9 @@ static void check_callback(const DBT *end_key, uint64_t actually_skipped, void *
         // seem like alright bounds.
   //      double skipped_portion = (double) e->skip_len / (num_keys * 2 * sizeof(int));
     //    int key_slack = num_keys * max(min(skipped_portion, 0.25), 0.01);
-        
+
         int64_t skipped_portion_100 = (e->skip_len * 100)/ (num_keys * 2 *sizeof(int));
-            
+
         int64_t key_slack_100 = num_keys * max(min(skipped_portion_100,25),1);
 
         int key_slack = key_slack_100/100;

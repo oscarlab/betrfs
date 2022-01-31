@@ -28,7 +28,7 @@ locktree_escalation_stalls
 )
 
 add_library(locktree_kernel_static STATIC ${locktree_kernel_srcs})
-maybe_add_gcov_to_libraries(locktree_static)
+maybe_add_gcov_to_libraries(locktree_kernel_static)
 set_target_properties(locktree_kernel_static PROPERTIES POSITION_INDEPENDENT_CODE ${STATIC_PIC})
 add_dependencies(locktree_kernel_static install_tdb_h)
 

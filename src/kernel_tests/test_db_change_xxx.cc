@@ -140,7 +140,7 @@ int test_test_db_change_xxx(void) {
     const char * const fname = TOKU_TEST_DATA_DB_NAME;
     r = db->open(db, NULL, fname, NULL, DB_BTREE, DB_CREATE, 0666);
     CKERR(r);
-    
+
     r = db->get_pagesize(db, &ret_val);
     CKERR(r);
     assert(ret_val == 112024);
@@ -165,7 +165,7 @@ int test_test_db_change_xxx(void) {
     CKERR(r);
     r = db->change_compression_method(db, TOKU_QUICKLZ_METHOD);
     CKERR(r);
-    
+
     r = db->get_pagesize(db, &ret_val);
     CKERR(r);
     assert(ret_val == 100000);
@@ -178,7 +178,7 @@ int test_test_db_change_xxx(void) {
     assert(ret_method == TOKU_QUICKLZ_METHOD);
 
     r = db->close(db, 0);
-    
+
     r = db_create(&db, env, 0);
     CKERR(r);
     r = db->open(db, NULL, fname, NULL, DB_BTREE, DB_AUTO_COMMIT, 0666);

@@ -122,7 +122,7 @@ do_x1_shutdown (void) {
     r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);                                                     assert(r==0);
 
     r=db_env_create(&env, 0);                                                  assert(r==0);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r=env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE|DB_THREAD, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     {
         r=env->txn_begin(env, 0, &oldest, 0);
@@ -134,7 +134,7 @@ do_x1_shutdown (void) {
     r=db->open(db, tid, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO);               CKERR(r);
     r=tid->commit(tid, 0);                                                     assert(r==0);
 
-    
+
     r=env->txn_begin(env, 0, &tid, 0);                                         assert(r==0);
 #if 0
     {
@@ -176,7 +176,7 @@ static void
 do_x1_recover (bool UU(did_commit)) {
     int r;
     r=db_env_create(&env, 0);                                                  assert(r==0);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r=env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE|DB_THREAD|DB_RECOVER, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r=env->txn_begin(env, 0, &tid, 0);                                         assert(r==0);
     r=db_create(&db, env, 0);                                                  CKERR(r);
@@ -198,7 +198,7 @@ do_x1_recover (bool UU(did_commit)) {
 }
 
 extern "C" int test_recover_2483(void);
-int test_recover_2483(void) 
+int test_recover_2483(void)
 {
 
     pre_setup();
@@ -206,20 +206,20 @@ int test_recover_2483(void)
     vals = (char **) toku_xmalloc(sizeof(char *) *N);
     srandom(0xDEADBEEF);
     for (i=0; i<N; i++) {
-	//char ks[100];  
+	//char ks[100];
         char * ks = (char *) toku_xmalloc(sizeof(char)*100);
         snprintf(ks, 100, "k%09ld.%d", random(), i);
 	//char vs[1000];
-        char * vs = (char *) toku_xmalloc(sizeof(char)*1000); 
+        char * vs = (char *) toku_xmalloc(sizeof(char)*1000);
         snprintf(vs, 1000, "v%d.%0*d", i, (int)(1000-100), i);
 	keys[i]=toku_strdup(ks);
 	vals[i]=toku_strdup(vs);
         toku_free(ks);
         toku_free(vs);
     }
-   
+
 	do_x1_shutdown();
- 
+
 	do_x1_recover(true);
 
     for (i=0; i<N; i++) {

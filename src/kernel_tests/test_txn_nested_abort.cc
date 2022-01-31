@@ -109,7 +109,7 @@ static const char *db_error(int error) {
     static char errorbuf[32];
     switch (error) {
     case DB_NOTFOUND: return "DB_NOTFOUND";
-    case DB_LOCK_DEADLOCK: return "DB_LOCK_DEADLOCK"; 
+    case DB_LOCK_DEADLOCK: return "DB_LOCK_DEADLOCK";
     case DB_LOCK_NOTGRANTED: return "DB_LOCK_NOTGRANTED";
     case DB_KEYEXIST: return "DB_KEYEXIST";
     default:
@@ -133,12 +133,12 @@ test_txn_nested(int do_commit) {
 
     /* create the dup database file */
     r = db_env_create(&env, 0);        assert(r == 0);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE|DB_INIT_MPOOL|DB_INIT_TXN|DB_INIT_LOCK|DB_INIT_LOG |DB_THREAD |DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r = db_create(&db, env, 0); assert(r == 0);
-    db->set_errfile(db,stderr); // Turn off those annoying errors
+    db->set_errfile(db, STDERR); // Turn off those annoying errors
     r = db->open(db, null_txn, fname, NULL, DB_BTREE, DB_CREATE+DB_AUTO_COMMIT, 0666); assert(r == 0);
-   
+
     DB_TXN *t1;
     r = env->txn_begin(env, null_txn, &t1, 0); assert(r == 0);
     if (verbose) printf("t1:begin\n");
@@ -151,7 +151,7 @@ test_txn_nested(int do_commit) {
     if (verbose) printf("t1:put:%s\n", db_error(r));
 
     if (do_commit) {
-        r = t2->commit(t2, 0); 
+        r = t2->commit(t2, 0);
         if (verbose) printf("t2:commit:%s\n", db_error(r));
     } else {
         r = t2->abort(t2);
@@ -160,7 +160,7 @@ test_txn_nested(int do_commit) {
 
     r = db->close(db, 0); assert(r == 0);
 
-    r = t1->commit(t1, 0); 
+    r = t1->commit(t1, 0);
     if (verbose) printf("t1:commit:%s\n", db_error(r));
 
     r = env->close(env, 0); assert(r == 0);
@@ -170,7 +170,7 @@ test_txn_nested(int do_commit) {
 extern "C" int test_test_txn_nested_abort(void);
 int test_test_txn_nested_abort(void) {
 
-    pre_setup();  
+    pre_setup();
     test_txn_nested(0);
     test_txn_nested(1);
     post_teardown();

@@ -101,7 +101,7 @@ test_setup (void) {
     r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);       CKERR(r);
 
     r=db_env_create(&env, 0); CKERR(r);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r=env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r=db_create(&db, env, 0); CKERR(r);
 
@@ -126,12 +126,12 @@ doit (void) {
     r=db->put(db, txn, dbt_init(&key, "b", 2), dbt_init(&data, "b", 2), 0);
     r=db->put(db, txn, dbt_init(&key, "c", 2), dbt_init(&data, "c", 2), 0);
     r=txn->commit(txn, 0);    assert(r==0);
-    
+
     r=env->txn_begin(env, 0, &txn, 0); assert(r==0);
     r=db->del(db, txn, dbt_init(&key, "b", 2),  0); assert(r==0);
     r=txn->commit(txn, 0);    assert(r==0);
 
-    r=env->txn_begin(env, 0, &txn, 0); assert(r==0);    
+    r=env->txn_begin(env, 0, &txn, 0); assert(r==0);
     DBC *dbc;
     r = db->cursor(db, txn, &dbc, 0);                           assert(r==0);
     memset(&key,  0, sizeof(key));

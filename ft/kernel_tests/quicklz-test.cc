@@ -110,7 +110,7 @@ static void test_qlz_random_i (int i) {
     memset(compress_state,   0, sizeof(*compress_state));
     memset(decompress_state, 0, sizeof(*decompress_state));
     int s = qlz_compress(m, c, i, compress_state);
-    assert(s <= csize_bound);
+    assert((size_t)s <= csize_bound);
     int r = qlz_decompress(c, m2, decompress_state);
     assert(r==i);
     assert(memcmp(m, m2, i)==0);

@@ -101,7 +101,7 @@ static int verbose = 1;
 // This test verifies that if partial eviction is expensive and
 // does not estimate number of freed bytes to be greater than 0,
 // then partial eviction is not called, and normal eviction
-// is used. The verification is done ia an assert(false) in 
+// is used. The verification is done ia an assert(false) in
 // pe_callback.
 //
 
@@ -148,12 +148,12 @@ fetch (CACHEFILE f        __attribute__((__unused__)),
     return 0;
 }
 
-static void 
+static void
 pe_est_callback(
     void* UU(ftnode_pv),
-    void* UU(dd), 
-    long* bytes_freed_estimate, 
-    enum partial_eviction_cost *cost, 
+    void* UU(dd),
+    long* bytes_freed_estimate,
+    enum partial_eviction_cost *cost,
     void* UU(write_extraargs)
     )
 {
@@ -161,13 +161,13 @@ pe_est_callback(
     *cost = PE_EXPENSIVE;
 }
 
-static int 
+static int
 pe_callback (
-    void *ftnode_pv __attribute__((__unused__)), 
-    PAIR_ATTR bytes_to_free __attribute__((__unused__)), 
-    PAIR_ATTR* bytes_freed, 
+    void *ftnode_pv __attribute__((__unused__)),
+    PAIR_ATTR bytes_to_free __attribute__((__unused__)),
+    PAIR_ATTR* bytes_freed,
     void* extraargs __attribute__((__unused__))
-    ) 
+    )
 {
     assert(false);
     *bytes_freed = bytes_to_free;
@@ -228,8 +228,12 @@ cachetable_test (void) {
 extern "C" int test_cachetable_clock_eviction4(void);
 
 int test_cachetable_clock_eviction4() {
+    int rinit = toku_ft_layer_init();
+    CKERR(rinit);
 
     initialize_dummymsn();
     cachetable_test();
+
+    toku_ft_layer_destroy();
     return 0;
 }

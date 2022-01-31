@@ -10,10 +10,21 @@
  * by the file system.
  */
 
+#ifdef __KERNEL__
 #include <linux/slab.h>
 #include <linux/kallsyms.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>
+#else /* !__KERNEL__ */
+#include <assert.h>
+#include <string.h>
+#include <errno.h>
+#include <stdio.h>
+#include <stdint.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <malloc.h>
+#endif /* End of __KERNEL */
 #include "ftfs.h"
 #include "sb_malloc.h"
 #include "sb_error.h"
@@ -119,6 +130,10 @@ void init_mem_trace(void) {
 	spin_lock_init(&ht_lock);
 }
 
+#ifdef FT_INDIRECT
+#define PAGE_SIZE_MAGIC (4096*4096)
+#endif
+
 void free_mem_trace(void) {
 	int tmp;
 	struct obj_trace* cursor;
@@ -135,6 +150,12 @@ void free_mem_trace(void) {
 		printk(KERN_ALERT "size=%ld\n", cursor->size);
 		printk(KERN_ALERT "alloc_size=%ld\n", cursor->alloc_size);
 		printk(KERN_ALERT "is_vmalloc=%d\n", cursor->is_vmalloc);
+#ifdef FT_INDIRECT
+		if (cursor->size == PAGE_SIZE_MAGIC) {
+			struct page *page = (struct page*)cursor->key;
+			ftfs_print_page(page_to_pfn(page));
+		}
+#endif
 		ftfs_print_stack_trace(cursor->trace, cursor->trace_len);
 		kfree(cursor);
 	}
@@ -147,6 +168,43 @@ out:
 atomic64_t ftfs_kmalloc_in_use;
 atomic64_t ftfs_vmalloc_in_use;
 
+#if defined (FT_INDIRECT) && defined(TOKU_MEMLEAK_DETECT)
+void debug_ftfs_alloc_page(void *p)
+{
+	uint64_t tmp = (uint64_t)p;
+	struct obj_trace *data;
+	data = kmalloc(sizeof(struct obj_trace), GFP_KERNEL);
+	data->key = tmp;
+	data->size = PAGE_SIZE_MAGIC;
+	data->trace_len = ftfs_save_stack_trace(data->trace);
+	spin_lock(&ht_lock);
+	hash_add(memtrace, &data->node, tmp);
+	spin_unlock(&ht_lock);
+}
+
+void debug_ftfs_free_page(void *p)
+{
+	uint64_t tmp = (uint64_t)p;
+	struct obj_trace* cursor;
+	bool found = false;
+
+	spin_lock(&ht_lock);
+	hash_for_each_possible(memtrace, cursor,  node, tmp) {
+		if(cursor->key == tmp) {
+			hash_del(&cursor->node);
+			kfree(cursor);
+			found = true;
+			break;
+		}
+	}
+	spin_unlock(&ht_lock);
+	if (found == false) {
+		ftfs_print_page(page_to_pfn((struct page *)p));
+		printk("%s p=%p\n", __func__, p);
+		BUG();
+	}
+}
+#endif
 size_t sb_allocsize(void *p)
 {
 	if (!p)
@@ -168,7 +226,6 @@ void debug_ftfs_alloc(void *p, size_t size)
 #if (defined FTFS_DEBUG_PTRS) || (defined TOKU_MEMLEAK_DETECT)
 	size_t alloc_size = sb_allocsize(p);
 #endif
-
 	if (is_vmalloc_addr(p))
 		atomic64_add(size, &ftfs_vmalloc_in_use);
 	else
@@ -239,7 +296,7 @@ void debug_ftfs_free(void *p)
  * A long-term fix would be to change the memory allocation functions
  * in the ft code.
  */
-#define FTFS_VMALLOC_SMALL 98304UL
+#define FTFS_VMALLOC_SMALL  98304UL
 #define FTFS_VMALLOC_LARGE 163840UL
 #define FTFS_VMALLOC_SMALL_COUNT 32
 
@@ -356,6 +413,7 @@ void *sb_cache_alloc(size_t size, bool abort_on_fail)
 		p = vmalloc(FTFS_VMALLOC_LARGE);
 	} else {
 		freed = per_cpu_ptr(vcache_percpu_freed, cpu);
+
 		ptr = list_first_entry(alloced, struct ftfs_cached_ptr, list);
 		p = ptr->p;
 		BUG_ON(!p);
@@ -368,11 +426,12 @@ void *sb_cache_alloc(size_t size, bool abort_on_fail)
 		ftfs_error(__func__, "sb_cache_alloc(%ld) returned NULL", size);
 		sb_memory_debug_break();
 		BUG();
- 	}
+	}
 
 #ifdef FTFS_MEM_DEBUG
 	debug_ftfs_alloc(p, size);
 #endif
+
 	return p;
 }
 
@@ -617,7 +676,6 @@ void *sb_realloc(void *ptr, size_t old_size, size_t new_size)
 done:
 	return p;
 }
-
 void *realloc(void *ptr, size_t old_size, size_t new_size) __attribute__((alias ("sb_realloc")));
 void *toku_realloc(void *ptr, size_t old_size, size_t new_size) __attribute__((alias ("sb_realloc")));
 
@@ -660,6 +718,7 @@ void *toku_memdup(const void *v, size_t _len) {
 		p = NULL;
 	}
 
+
 	return p;
 }
 
@@ -687,10 +746,14 @@ char *toku_strdup(const char *s) {
  * not working for kmalloc. Using vmalloc for time being */
 void * toku_malloc_aligned(size_t alignment, size_t size) {
 	void * p;
+	// check alignment is a power of two
+	// SMP 06/06/21: not sure why this check is done in this implementation
+	// since we don't allocate aligned memory in the kernel.
 	if ((alignment & -alignment) != alignment) {
 		sb_set_errno(EINVAL);
 		return NULL;
 	}
+	// check size isn't too big
 	if (size > SIZE_MAX - alignment) {
 		sb_set_errno(ENOMEM);
 		return NULL;
@@ -698,7 +761,6 @@ void * toku_malloc_aligned(size_t alignment, size_t size) {
 	/* dp 1/13/15: I think the issue was 512 vs 4K alignment for direct I/O.
 	 *             kmalloc seems ok now.
 	 */
-	//p = ftfs_malloc(size);
 	/* wkj: 2/2/15 regardless of the issue with direct I/O, kmalloc will
 	 *  not return an aligned pointer... reverting to vmalloc */
 	p = vmalloc(size);
@@ -713,6 +775,7 @@ void * toku_malloc_aligned(size_t alignment, size_t size) {
 	}
 	return p;
 }
+
 
 void toku_memory_get_status(LOCAL_MEMORY_STATUS s) {
 	*s = status;
@@ -759,7 +822,6 @@ void toku_ule_put(void * ule)
 }
 
 /**
- * we overwrote portability/memory.cc's
  * toku_memory_startup|shutdown(), but we need the ft code to pass in
  * object sizes/constructors for kmem_cache creation.  Solution: we
  * call to ft code and they call back to us (using knowledge from

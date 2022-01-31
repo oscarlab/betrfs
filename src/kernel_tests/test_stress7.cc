@@ -144,7 +144,7 @@ stress_table(DB_ENV *env, DB **dbp, struct cli_args *cli_args) {
     for (int i = 4 + cli_args->num_update_threads; i < num_threads; i++) {
         myargs[i].operation = ptquery_op;
     }
-    run_workers(myargs, num_threads, cli_args->num_seconds, false, cli_args);
+    run_workers(myargs, num_threads, cli_args->num_seconds, cli_args);
 }
 
 extern "C" int test_test_stress7(void);

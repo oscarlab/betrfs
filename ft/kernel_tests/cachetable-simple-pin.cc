@@ -132,10 +132,10 @@ static void kibbutz_work(void *fe_v)
 	foo = true;
 	int r = toku_test_cachetable_unpin(f1, make_blocknum(1), 1, CACHETABLE_CLEAN, make_pair_attr(8));
 	assert(r==0);
-	remove_background_job_from_cf(f1);    
+	remove_background_job_from_cf(f1);
 }
 
-static void run_test (void) 
+static void run_test (void)
 {
 	const int test_limit = 12;
 	int r;
@@ -182,8 +182,8 @@ static void run_test (void)
 
 	check_me = false;
 	toku_cachetable_end_checkpoint(
-			cp, 
-			NULL, 
+			cp,
+			NULL,
 			NULL,
 			NULL,
 			false
@@ -195,11 +195,11 @@ static void run_test (void)
 }
 
 extern "C" int test_cachetable_simple_pin(void);
-int test_cachetable_simple_pin(void) 
+int test_cachetable_simple_pin(void)
 {
 	initialize_dummymsn();
 	int rinit = toku_ft_layer_init();
-	CKERR(rinit);	
+	CKERR(rinit);
 	run_test();
 	toku_ft_layer_destroy();
 	return 0;

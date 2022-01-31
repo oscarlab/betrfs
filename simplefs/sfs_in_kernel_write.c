@@ -30,10 +30,11 @@
 #include <trace/events/block.h>
 #include <linux/version.h>
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,19,99)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,11,0)
 #include <linux/sched/signal.h>
-#endif
+#endif /* LINUX_VERSION_CODE */
 
+extern bool sfs_is_hdd(void);
 
 static int __sfs_block_commit_write(struct inode *inode, struct page *page,
 		unsigned from, unsigned to)
@@ -167,8 +168,9 @@ static int __sfs_block_write_begin(struct page *page, loff_t pos, unsigned len,
 		if (!buffer_mapped(bh)) {
 			WARN_ON(bh->b_size != blocksize);
 			err = get_block(inode, block, bh, 1);
-			if (err)
+			if (err) {
 				break;
+			}
 			if (buffer_new(bh)) {
 				if (PageUptodate(page)) {
 					clear_buffer_new(bh);
@@ -178,20 +180,20 @@ static int __sfs_block_write_begin(struct page *page, loff_t pos, unsigned len,
 				}
 				/* YZJ: We pre-allocated the blocks, so read it in before write */
 				if (block_end > to || block_start < from) {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,8,0)
 					ll_rw_block(READ, 1, &bh);
-#else
+#else /* LINUX_VERSION_CODE */
 					ll_rw_block(REQ_OP_READ, REQ_SYNC, 1, &bh);
-#endif
+#endif /* LINUX_VERSION_CODE */
 					*wait_bh++=bh;
-				}	
+				}
 				continue;
 			}
 		}
 		if (PageUptodate(page)) {
 			if (!buffer_uptodate(bh))
 				set_buffer_uptodate(bh);
-			continue; 
+			continue;
 		}
 
 		/* YZJ: This bh should be uptodate now */
@@ -202,8 +204,9 @@ static int __sfs_block_write_begin(struct page *page, loff_t pos, unsigned len,
 	 */
 	while(wait_bh > wait) {
 		wait_on_buffer(*--wait_bh);
-		if (!buffer_uptodate(*wait_bh))
+		if (!buffer_uptodate(*wait_bh)) {
 			err = -EIO;
+		}
 	}
 	if (unlikely(err))
 		page_zero_new_buffers(page, from, to);
@@ -238,6 +241,12 @@ int sfs_block_write_begin(struct address_space *mapping, loff_t pos, unsigned le
 	return status;
 }
 
+/* Copied from generic_perform_write of kernel 3.11.10;
+ * https://elixir.bootlin.com/linux/v3.11.10/source/mm/filemap.c#L2301
+ *
+ * For v4.19.99, some code is deleted. We use LINUX_VERSION_CODE for
+ * those code pieces.
+ */
 static ssize_t sfs_perform_write(struct file *file,
 				struct iov_iter *i, loff_t pos)
 {
@@ -247,13 +256,15 @@ static ssize_t sfs_perform_write(struct file *file,
 	ssize_t written = 0;
 	unsigned int flags = 0;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,12,0)
 	/*
 	 * Copies from kernel address space cannot fail (NFSD is a big user).
+	 *
+	 * YZJ: AOP_FLAG_UNINTERRUPTIBLE no longer exist for v4.19.99.
 	 */
 	if (segment_eq(get_fs(), KERNEL_DS))
 		flags |= AOP_FLAG_UNINTERRUPTIBLE;
-#endif
+#endif /* LINUX_VERSION_CODE */
 
 	do {
 		struct page *page;
@@ -274,17 +285,20 @@ again:
 		/* YZJ: Should not encounter mmap-ed file here */
 		BUG_ON(mapping_writably_mapped(mapping));
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
+		/* YZJ: This function is not called in v4.19.99 */
 		pagefault_disable();
-#endif
+#endif /* LINUX_VERSION_CODE */
 		copied = iov_iter_copy_from_user_atomic(page, i, offset, bytes);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
+		/* YZJ: This function is not called in v4.19.99 */
 		pagefault_enable();
-#endif
+#endif /* LINUX_VERSION_CODE */
 		flush_dcache_page(page);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
+		/* YZJ: This function is not called in v4.19.99 */
 		mark_page_accessed(page);
-#endif
+#endif /* LINUX_VERSION_CODE */
 		status = a_ops->write_end(file, mapping, pos, bytes, copied,
 						page, fsdata);
 		if (unlikely(status < 0))
@@ -319,9 +333,9 @@ again:
 		 * lose background writeback for the log file. I am not
 		 * sure how important it is. YZJ -- 10/05/2019
 		 */
-#if 0
-		balance_dirty_pages_ratelimited(mapping);
-#endif
+		if (sfs_is_hdd()) {
+			balance_dirty_pages_ratelimited(mapping);
+		}
 		if (fatal_signal_pending(current)) {
 			status = -EINTR;
 			break;
@@ -331,7 +345,7 @@ again:
 	return written ? written : status;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,1,0)
 ssize_t __sfs_in_kernel_write(struct kiocb *iocb, const struct iovec *iov,
 				 unsigned long nr_segs, loff_t *ppos)
 {
@@ -361,7 +375,7 @@ ssize_t __sfs_in_kernel_write(struct kiocb *iocb, const struct iovec *iov,
 
 	if (count == 0)
 		goto out;
-	
+
 	iov_iter_init(&i, iov, nr_segs, count, written);
 	ret = sfs_perform_write(file, &i, pos);
 
@@ -398,8 +412,12 @@ ssize_t sfs_in_kernel_write(struct kiocb *iocb, const struct iovec *iov,
 	}
 	return ret;
 }
-#else
-/* Mostly copied from __generic_file_write_iter */
+#else /* LINUX_VERSION_CODE */
+/*
+ * Mostly copied from __generic_file_write_iter
+ * https://elixir.bootlin.com/linux/v4.19.99/source/mm/filemap.c#L3222
+ * There is no support for O_DIRECT.
+ */
 ssize_t __sfs_write_iter(struct kiocb *iocb, struct iov_iter *from)
 {
 	struct file *file = iocb->ki_filp;
@@ -426,7 +444,11 @@ out:
 	return written ? written : err;
 }
 
-/* Mostly copied from generic_file_write_iter */
+/*
+ * Mostly copied from generic_file_write_iter
+ * https://elixir.bootlin.com/linux/v4.19.99/source/mm/filemap.c#L3306
+ * Only replace some functions with sfs_* conterpart.
+ */
 ssize_t sfs_write_iter(struct kiocb *iocb, struct iov_iter *from)
 {
 	struct file *file = iocb->ki_filp;
@@ -443,4 +465,4 @@ ssize_t sfs_write_iter(struct kiocb *iocb, struct iov_iter *from)
 		ret = generic_write_sync(iocb, ret);
 	return ret;
 }
-#endif
+#endif /* LINUX_VERSION_CODE */

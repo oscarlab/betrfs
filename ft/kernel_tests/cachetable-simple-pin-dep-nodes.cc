@@ -165,7 +165,7 @@ cachetable_test (bool write_first, bool write_second, bool start_checkpoint) {
     CACHEFILE f1;
     r = toku_cachetable_openf(&f1, ct, fname1, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO); assert(r == 0);
     create_dummy_functions(f1);
-    
+
     void* v1;
     void* v2;
     void* v3;
@@ -228,12 +228,12 @@ cachetable_test (bool write_first, bool write_second, bool start_checkpoint) {
 
     if (start_checkpoint) {
         toku_cachetable_end_checkpoint(
-            cp, 
-            NULL, 
+            cp,
+            NULL,
             NULL,
             NULL,
            false
-	    );
+      );
     }
 
     toku_cachetable_verify(ct);
@@ -244,6 +244,9 @@ cachetable_test (bool write_first, bool write_second, bool start_checkpoint) {
 extern "C" int test_cachetable_simplepin_depnodes(void);
 
 int test_cachetable_simplepin_depnodes(void) {
+  int rinit = toku_ft_layer_init();
+  CKERR(rinit);
+
   cachetable_test(false,false,true);
   cachetable_test(false,true,true);
   cachetable_test(true,false,true);
@@ -252,5 +255,7 @@ int test_cachetable_simplepin_depnodes(void) {
   cachetable_test(false,true,false);
   cachetable_test(true,false,false);
   cachetable_test(true,true,false);
+
+  toku_ft_layer_destroy();
   return 0;
 }

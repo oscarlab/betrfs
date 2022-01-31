@@ -107,10 +107,10 @@ test_autotxn (uint32_t env_flags, uint32_t db_flags) {
     r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
     assert(r==0);
     r = db_env_create (&env, 0);           CKERR(r);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r = env->set_flags(env, env_flags, 1); CKERR(r);
-    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, 
-                  DB_CREATE | DB_PRIVATE | DB_INIT_MPOOL | 
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME,
+                  DB_CREATE | DB_PRIVATE | DB_INIT_MPOOL |
                   DB_INIT_LOG | DB_INIT_TXN | DB_INIT_LOCK, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r = db_create(&db, env, 0);
     CKERR(r);
@@ -151,10 +151,10 @@ test_autotxn (uint32_t env_flags, uint32_t db_flags) {
 extern "C" int test_test_weakxaction(void);
 int test_test_weakxaction(void) {
     pre_setup();
-    test_autotxn(DB_AUTO_COMMIT, DB_AUTO_COMMIT); 
-    test_autotxn(0,              DB_AUTO_COMMIT); 
-    test_autotxn(DB_AUTO_COMMIT, 0); 
-    test_autotxn(0,              0); 
+    test_autotxn(DB_AUTO_COMMIT, DB_AUTO_COMMIT);
+    test_autotxn(0,              DB_AUTO_COMMIT);
+    test_autotxn(DB_AUTO_COMMIT, 0);
+    test_autotxn(0,              0);
     post_teardown();
     return 0;
 }

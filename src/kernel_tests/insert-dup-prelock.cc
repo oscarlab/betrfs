@@ -106,8 +106,8 @@ static uint64_t maxk = 100000;
 
 /*
 static int usage(const char *prog) {
-    fprintf(stderr, "%s: run single row insertions with prelocking\n", prog);
-    fprintf(stderr, "[--n %" PRIu64 "]\n", maxk);
+    dprintf(STDERR, "%s: run single row insertions with prelocking\n", prog);
+    dprintf(STDERR, "[--n %" PRIu64 "]\n", maxk);
     return 1;
 }
 */
@@ -117,7 +117,7 @@ static int inserter(DB_ENV *env, DB *db, uint64_t _maxk, int putflags, int expec
     if (verbose) printf("%p %p\n", env, db);
     int r;
     for (uint64_t k = 0; k < _maxk; k++) {
-        
+
         if (verbose) printf("%" PRIu64 "\n", k);
 
         DB_TXN *txn;
@@ -172,14 +172,14 @@ static int db_init(DB_ENV *env, const char *dbname, DB **dbptr) {
     if (r == 0)
         *dbptr = db;
     return r;
-}   
+}
 
 extern "C" int test_insert_dup_prelock();
 
 int test_insert_dup_prelock(void) {
     int r;
     pre_setup();
-    
+
     /*for (int i = 1; i < argc; i++) {
         char *arg = argv[i];
         if (strcmp(arg, "--n") == 0 && i+1 < argc) {

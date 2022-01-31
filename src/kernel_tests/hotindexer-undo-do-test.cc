@@ -308,7 +308,7 @@ test_xid_state(DB_INDEXER *indexer, TXNID xid) {
     return r;
 }
 
-static void 
+static void
 test_lock_key(DB_INDEXER *indexer, TXNID xid, DB *hotdb, DBT *key) {
     invariant(indexer == test_indexer);
     invariant(hotdb == test_hotdb);
@@ -319,7 +319,7 @@ test_lock_key(DB_INDEXER *indexer, TXNID xid, DB *hotdb, DBT *key) {
     printf("\n");
 }
 
-static int 
+static int
 test_delete_provisional(DB_INDEXER *indexer, DB *hotdb, DBT *hotkey, XIDS xids) {
     invariant(indexer == test_indexer);
     invariant(hotdb == test_hotdb);
@@ -341,7 +341,7 @@ test_delete_committed(DB_INDEXER *indexer, DB *hotdb, DBT *hotkey, XIDS xids) {
     return 0;
 }
 
-static int 
+static int
 test_insert_provisional(DB_INDEXER *indexer, DB *hotdb, DBT *hotkey, DBT *hotval, XIDS xids) {
     invariant(indexer == test_indexer);
     invariant(hotdb == test_hotdb);
@@ -353,7 +353,7 @@ test_insert_provisional(DB_INDEXER *indexer, DB *hotdb, DBT *hotkey, DBT *hotval
     return 0;
 }
 
-static int 
+static int
 test_insert_committed(DB_INDEXER *indexer, DB *hotdb, DBT *hotkey, DBT *hotval, XIDS xids) {
     invariant(indexer == test_indexer);
     invariant(hotdb == test_hotdb);
@@ -381,19 +381,20 @@ split_fields(char *line, char *fields[], int maxfields) {
     int i;
     for (i = 0; i < maxfields; i++, line = NULL) {
         fields[i] = strtok(line, " ");
-        if (fields[i] == NULL) 
+        if (fields[i] == NULL)
             break;
     }
     return i;
 }
 
 static int
-read_line(char **line_ptr, size_t *len_ptr, FILE *f) {
+read_line(char **line_ptr, size_t *len_ptr, int f) {
     char *line = *line_ptr;
     size_t len = 0;
     bool in_comment = false;
     while (1) {
-        int c = fgetc(f);
+        int rv = read(f, &c, sizeof(char));
+        assert(rv == sizeof(char));
         if (c == EOF)
             break;
         else if (c == '\n') {
@@ -440,7 +441,7 @@ save_line(char** line, saved_lines_t* saved) {
 static int
 read_test(char *testname, ULE ule, DBT* key, saved_lines_t* saved) {
     int r = 0;
-    FILE *f = fopen(testname, "r");
+    int f = open(testname, O_RDONLY);
     if (f) {
         char *line = NULL;
         size_t len = 0;
@@ -486,7 +487,7 @@ read_test(char *testname, ULE ule, DBT* key, saved_lines_t* saved) {
             // insert committed|provisional XID DATA
             if (strcmp(fields[0], "insert") == 0 && nfields == 4) {
                 save_line(&line, saved);
-                UXR_S uxr_s; 
+                UXR_S uxr_s;
                 uxr_init(&uxr_s, XR_INSERT, fields[3], strlen(fields[3]), atoll(fields[2]));
                 if (fields[1][0] == 'p')
                     ule_add_provisional(ule, &uxr_s);
@@ -496,7 +497,7 @@ read_test(char *testname, ULE ule, DBT* key, saved_lines_t* saved) {
             }
             // delete committed|provisional XID
             if (strcmp(fields[0], "delete") == 0 && nfields == 3) {
-                UXR_S uxr_s; 
+                UXR_S uxr_s;
                 uxr_init(&uxr_s, XR_DELETE, NULL, 0, atoll(fields[2]));
                 if (fields[1][0] == 'p')
                     ule_add_provisional(ule, &uxr_s);
@@ -506,26 +507,26 @@ read_test(char *testname, ULE ule, DBT* key, saved_lines_t* saved) {
             }
             // placeholder XID
             if (strcmp(fields[0], "placeholder") == 0 && nfields == 2) {
-                UXR_S uxr_s; 
+                UXR_S uxr_s;
                 uxr_init(&uxr_s, XR_PLACEHOLDER, NULL, 0, atoll(fields[1]));
                 ule_add_provisional(ule, &uxr_s);
                 continue;
             }
             // placeholder provisional XID
             if (strcmp(fields[0], "placeholder") == 0 && nfields == 3 && fields[1][0] == 'p') {
-                UXR_S uxr_s; 
+                UXR_S uxr_s;
                 uxr_init(&uxr_s, XR_PLACEHOLDER, NULL, 0, atoll(fields[2]));
                 ule_add_provisional(ule, &uxr_s);
                 continue;
             }
-            fprintf(stderr, "%s???\n", line);
+            dprintf(STDERR, "%s???\n", line);
             r = EINVAL;
         }
         toku_free(line);
-        fclose(f);
+        close(f);
     } else {
         r = errno;
-        fprintf(stderr, "fopen %s errno=%d\n", testname, errno);
+        dprintf(STDERR, "fopen %s errno=%d\n", testname, errno);
     }
     return r;
  }
@@ -575,7 +576,7 @@ run_test(char *envdir, char *testname) {
     test_hotdb = dest_db;
 
     // create a ule
-    ULE ule = ule_create(); 
+    ULE ule = ule_create();
     ule_init(ule);
 
     saved_lines_t saved;
@@ -607,7 +608,7 @@ run_test(char *envdir, char *testname) {
     r = env->close(env, 0); assert_zero(r);
 
     live_destroy(&live_xids);
-    
+
     return r;
 }
 
@@ -626,7 +627,7 @@ int test_hotindexer_undo_do_test(void) {
             verbose = 0;
             continue;
         }
-        
+
         break;
     }
 
@@ -648,4 +649,3 @@ int test_hotindexer_undo_do_test(void) {
 
     return r;
 }
-

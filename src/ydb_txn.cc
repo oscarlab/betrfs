@@ -242,7 +242,7 @@ static inline txn_commit_args * txn_commit_args_alloc_init(DB_TXN * txn, uint32_
     return cur_args;
 }
 
-//this is the base part that is not involved with recursion. 
+//this is the base part that is not involved with recursion.
 static inline int base_nonrecursive_case(DB_TXN * txn, uint32_t flags, TXN_PROGRESS_POLL_FUNCTION poll, void *poll_extra, bool release_mo_lock, bool low_priority) {
     assert(!db_txn_struct_i(txn)->child);
     //Remove from parent
@@ -659,18 +659,18 @@ static inline void txn_func_init(DB_TXN *txn) {
 int toku_txn_begin(DB_ENV *env, DB_TXN * stxn, DB_TXN ** txn, uint32_t flags) {
     HANDLE_PANICKED_ENV(env);
     HANDLE_ILLEGAL_WORKING_PARENT_TXN(env, stxn); //Cannot create child while child already exists.
-    if (!toku_logger_is_open(env->i->logger)) 
+    if (!toku_logger_is_open(env->i->logger))
         return toku_ydb_do_error(env, EINVAL, "Environment does not have logging enabled\n");
-    if (!(env->i->open_flags & DB_INIT_TXN))  
+    if (!(env->i->open_flags & DB_INIT_TXN))
         return toku_ydb_do_error(env, EINVAL, "Environment does not have transactions enabled\n");
 
     uint32_t txn_flags = 0;
     txn_flags |= DB_TXN_NOWAIT; //We do not support blocking locks. RFP remove this?
 
     // handle whether txn is declared as read only
-    bool parent_txn_declared_read_only = 
-        stxn && 
-        (db_txn_struct_i(stxn)->flags & DB_TXN_READ_ONLY);    
+    bool parent_txn_declared_read_only =
+        stxn &&
+        (db_txn_struct_i(stxn)->flags & DB_TXN_READ_ONLY);
     bool txn_declared_read_only = false;
     if (flags & DB_TXN_READ_ONLY) {
         txn_declared_read_only = true;
@@ -682,12 +682,12 @@ int toku_txn_begin(DB_ENV *env, DB_TXN * stxn, DB_TXN ** txn, uint32_t flags) {
         )
     {
         return toku_ydb_do_error(
-            env, 
-            EINVAL, 
+            env,
+            EINVAL,
             "Current transaction set as read only, but parent transaction is not\n"
             );
     }
-    if (parent_txn_declared_read_only) 
+    if (parent_txn_declared_read_only)
     {
         // don't require child transaction to also set transaction as read only
         // if parent has already done so
@@ -695,20 +695,20 @@ int toku_txn_begin(DB_ENV *env, DB_TXN * stxn, DB_TXN ** txn, uint32_t flags) {
         txn_declared_read_only = true;
     }
 
-    
+
     TOKU_ISOLATION child_isolation = TOKU_ISO_SERIALIZABLE;
     uint32_t iso_flags = flags & DB_ISOLATION_FLAGS;
-    if (!(iso_flags == 0 || 
-          iso_flags == DB_TXN_SNAPSHOT || 
-          iso_flags == DB_READ_COMMITTED || 
-          iso_flags == DB_READ_UNCOMMITTED || 
-          iso_flags == DB_SERIALIZABLE || 
+    if (!(iso_flags == 0 ||
+          iso_flags == DB_TXN_SNAPSHOT ||
+          iso_flags == DB_READ_COMMITTED ||
+          iso_flags == DB_READ_UNCOMMITTED ||
+          iso_flags == DB_SERIALIZABLE ||
           iso_flags == DB_INHERIT_ISOLATION)
-       ) 
+       )
     {
         return toku_ydb_do_error(
-            env, 
-            EINVAL, 
+            env,
+            EINVAL,
             "Invalid isolation flags set\n"
             );
     }
@@ -721,10 +721,10 @@ int toku_txn_begin(DB_ENV *env, DB_TXN * stxn, DB_TXN ** txn, uint32_t flags) {
             }
             else {
                 return toku_ydb_do_error(
-                    env, 
-                    EINVAL, 
+                    env,
+                    EINVAL,
                     "Cannot set DB_INHERIT_ISOLATION when no parent exists\n"
-                    );                    
+                    );
             }
             break;
         case (DB_READ_COMMITTED):
@@ -748,11 +748,11 @@ int toku_txn_begin(DB_ENV *env, DB_TXN * stxn, DB_TXN ** txn, uint32_t flags) {
     }
     if (stxn && child_isolation != db_txn_struct_i(stxn)->iso) {
         return toku_ydb_do_error(
-            env, 
-            EINVAL, 
+            env,
+            EINVAL,
             "Cannot set isolation level of transaction to something different \
                 isolation level\n"
-            );   
+            );
     }
 
     if (flags&DB_TXN_NOWAIT) {
@@ -826,7 +826,7 @@ void toku_keep_prepared_txn_callback (DB_ENV *env, TOKUTXN tokutxn) {
     DB_TXN *result = &eresult->external_part;
     result->mgrp = env;
     txn_func_init(result);
-    
+
     result->parent = NULL;
 
     db_txn_struct_i(result)->tokutxn = tokutxn;

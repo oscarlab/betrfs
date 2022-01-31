@@ -101,8 +101,6 @@ int test_test_stress_openclose(void) {
     // it's okay for update to get DB_LOCK_NOTGRANTED, etc.
     args.crash_on_operation_failure = false;
 
-    // just run the stress test, no crashing and recovery test
-    stress_openclose_crash_at_end = false;
     stress_test_main(&args);
     post_teardown();
     return 0;

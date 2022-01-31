@@ -94,7 +94,7 @@ PATENT RIGHTS GRANT:
 #define VERBOSE 0
 
 // To use KERN_INFO
-#define KERN_SON  "\001"      
+#define KERN_SON  "\001"
 #define KERN_ALERT KERN_SON "1"
 
 
@@ -353,7 +353,7 @@ static void test_dirty(void)
     const char *fname = TOKU_TEST_FILENAME_DATA;
     r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
     assert(r == 0);
- 
+
     r = toku_cachetable_openf(&f, t, fname, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO);
     assert(r == 0);
 
@@ -486,7 +486,7 @@ static void test_size_resize(void)
     const char *fname = TOKU_TEST_FILENAME_DATA;
     r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, 0777);
     assert(r == 0);
-   
+
     r = toku_cachetable_openf(&f, t, fname, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO);
     assert(r == 0);
 
@@ -597,6 +597,8 @@ static void test_size_flush(void)
 extern "C" int test_cachetable (void);
 int test_cachetable (void)
 {
+	int rinit = toku_ft_layer_init();
+	CKERR(rinit);
 	// parse args
 	int i;
 	initialize_dummymsn();
@@ -618,6 +620,8 @@ int test_cachetable (void)
 	}
 
 	test_mutex_destroy();
+
+	toku_ft_layer_destroy();
 
 	if (VERBOSE) printf("ok\n");
 	return 0;

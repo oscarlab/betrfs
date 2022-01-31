@@ -109,7 +109,7 @@ struct toku_thread_pool;
 typedef struct toku_thread_pool *THREADPOOL;
 
 // Create a new threadpool
-// Effects: a new threadpool is allocated and initialized. the number of threads in the threadpool is limited to max_threads.  
+// Effects: a new threadpool is allocated and initialized. the number of threads in the threadpool is limited to max_threads.
 // If max_threads == 0 then there is no limit on the number of threads in the pool.
 // Initially, there are no threads in the pool. Threads are allocated by the _get or _run functions.
 // Returns: if there are no errors, the threadpool is set and zero is returned.  Otherwise, an error number is returned.
@@ -136,6 +136,6 @@ int toku_thread_pool_get(struct toku_thread_pool *pool, int dowait, int *nthread
 int toku_thread_pool_run(struct toku_thread_pool *pool, int dowait, int *nthreads, void *(*f)(void *arg), void *arg);
 
 // Print the state of the thread pool
-void toku_thread_pool_print(struct toku_thread_pool *pool, FILE *out);
+void toku_thread_pool_print(struct toku_thread_pool *pool, int out);
 
 #endif // UTIL_THREADPOOL_H

@@ -112,13 +112,13 @@ int test_test_4657(void) {
   CKERR(r);
   DB_ENV *env;
   r = db_env_create(&env, 0);                                                         CKERR(r);
-  env->set_errfile(env, stderr);
+  env->set_errfile(env, STDERR);
     struct toku_db_key_operations key_ops;
     memset(&key_ops, 0, sizeof(key_ops));
     key_ops.keycmp = int64_dbt_cmp;
     r = env->set_key_ops(env, &key_ops); CKERR(r);
   r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                      CKERR(r);
-    
+
   DB *db;
   {
     DB_TXN *txna;
@@ -147,7 +147,7 @@ int test_test_4657(void) {
           dbt_init(&key, &key_data, sizeof(key_data)),
           dbt_init(&val, &val_data, sizeof(val_data)),
           0
-          );       
+          );
       CKERR(r);
   }
   r = txn->commit(txn, 0);
@@ -163,27 +163,27 @@ int test_test_4657(void) {
   r = db->close(db, 0);
   CKERR(r);
 
-  // now reopen 
+  // now reopen
   r = db_create(&db, env, 0);
   CKERR(r);
   r = db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_THREAD, 0666);
   CKERR(r);
   DB_BTREE_STAT64 dict_stats;
   r = db->stat64(
-      db, 
-      NULL, 
+      db,
+      NULL,
       &dict_stats
       );
   CKERR(r);
   // check that stats are correct
   assert(dict_stats.bt_nkeys == 1000);
-  
+
   r = db->close(db, 0);
   CKERR(r);
-  
+
   r = env->close(env, 0);
   CKERR(r);
-    
+
   post_teardown();
     return 0;
 }

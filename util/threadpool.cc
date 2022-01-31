@@ -120,7 +120,7 @@ struct toku_thread_pool {
 
     toku_mutex_t lock;
     toku_cond_t wait_free;
-    
+
     uint64_t gets, get_blocks;
 };
 
@@ -128,7 +128,7 @@ static void *toku_thread_run_internal(void *arg);
 static void toku_thread_pool_lock(struct toku_thread_pool *pool);
 static void toku_thread_pool_unlock(struct toku_thread_pool *pool);
 
-static int 
+static int
 toku_thread_create(struct toku_thread_pool *pool, struct toku_thread **toku_thread_return) {
     int r = 0;
     struct toku_thread *MALLOC(thread);
@@ -144,7 +144,7 @@ toku_thread_create(struct toku_thread_pool *pool, struct toku_thread **toku_thre
     return r;
 }
 
-void 
+void
 toku_thread_run(struct toku_thread *thread, void *(*f)(void *arg), void *arg) {
     toku_thread_pool_lock(thread->pool);
     thread->f = f;
@@ -153,7 +153,7 @@ toku_thread_run(struct toku_thread *thread, void *(*f)(void *arg), void *arg) {
     toku_thread_pool_unlock(thread->pool);
 }
 
-static void 
+static void
 toku_thread_destroy(struct toku_thread *thread) {
     int r;
     void *ret;
@@ -166,7 +166,7 @@ toku_thread_destroy(struct toku_thread *thread) {
     toku_free(thread);
 }
 
-static void 
+static void
 toku_thread_ask_exit(struct toku_thread *thread) {
     thread->doexit = 1;
     toku_cond_signal(&thread->wait);
@@ -182,7 +182,7 @@ toku_thread_run_internal(void *arg) {
         void *(*thread_f)(void *); void *thread_arg; int doexit;
         while (1) {
             thread_f = thread->f; thread_arg = thread->arg; doexit = thread->doexit; // make copies of these variables to make helgrind happy
-            if (thread_f || doexit) 
+            if (thread_f || doexit)
                 break;
             toku_cond_wait(&thread->wait, &pool->lock);
         }
@@ -196,9 +196,9 @@ toku_thread_run_internal(void *arg) {
         toku_list_push(&pool->free_threads, &thread->free_link);
     }
     return arg;
-}      
+}
 
-int 
+int
 toku_thread_pool_create(struct toku_thread_pool **pool_return, int max_threads) {
     int r = 0;
     struct toku_thread_pool *CALLOC(pool);
@@ -215,19 +215,19 @@ toku_thread_pool_create(struct toku_thread_pool **pool_return, int max_threads) 
         r = 0;
     }
     return r;
-}    
+}
 
-static void 
+static void
 toku_thread_pool_lock(struct toku_thread_pool *pool) {
     toku_mutex_lock(&pool->lock);
 }
 
-static void 
+static void
 toku_thread_pool_unlock(struct toku_thread_pool *pool) {
     toku_mutex_unlock(&pool->lock);
 }
 
-void 
+void
 toku_thread_pool_destroy(struct toku_thread_pool **poolptr) {
     struct toku_thread_pool *pool = *poolptr;
     *poolptr = NULL;
@@ -250,18 +250,18 @@ toku_thread_pool_destroy(struct toku_thread_pool **poolptr) {
     }
 
     invariant(pool->cur_threads == 0);
-    
+
     // cleanup
     toku_cond_destroy(&pool->wait_free);
     toku_mutex_destroy(&pool->lock);
-    
+
     toku_free(pool);
 }
 
-static int 
+static int
 toku_thread_pool_add(struct toku_thread_pool *pool) {
     struct toku_thread *thread = NULL;
-    int r = toku_thread_create(pool, &thread); 
+    int r = toku_thread_create(pool, &thread);
     if (r == 0) {
         pool->cur_threads += 1;
         toku_list_push(&pool->all_threads, &thread->all_link);
@@ -269,10 +269,10 @@ toku_thread_pool_add(struct toku_thread_pool *pool) {
         toku_cond_signal(&pool->wait_free);
     }
     return r;
-}   
+}
 
-// get one thread from the free pool.  
-static int 
+// get one thread from the free pool.
+static int
 toku_thread_pool_get_one(struct toku_thread_pool *pool, int dowait, struct toku_thread **toku_thread_return) {
     int r = 0;
     toku_thread_pool_lock(pool);
@@ -299,7 +299,7 @@ toku_thread_pool_get_one(struct toku_thread_pool *pool, int dowait, struct toku_
     return r;
 }
 
-int 
+int
 toku_thread_pool_get(struct toku_thread_pool *pool, int dowait, int *nthreads, struct toku_thread **toku_thread_return) {
     int r = 0;
     int n = *nthreads;
@@ -313,7 +313,7 @@ toku_thread_pool_get(struct toku_thread_pool *pool, int dowait, int *nthreads, s
     return r;
 }
 
-int 
+int
 toku_thread_pool_run(struct toku_thread_pool *pool, int dowait, int *nthreads, void *(*f)(void *arg), void *arg) {
     int n = *nthreads;
     struct toku_thread *tids[n];
@@ -326,12 +326,12 @@ toku_thread_pool_run(struct toku_thread_pool *pool, int dowait, int *nthreads, v
     return r;
 }
 
-void 
-toku_thread_pool_print(struct toku_thread_pool *pool, FILE *out) {
-    fprintf(out, "%s:%d %p %llu %llu\n", __FILE__, __LINE__, pool, (long long unsigned) pool->gets, (long long unsigned) pool->get_blocks);
+void
+toku_thread_pool_print(struct toku_thread_pool *pool, int out) {
+    dprintf(out, "%s:%d %p %llu %llu\n", __FILE__, __LINE__, pool, (long long unsigned) pool->gets, (long long unsigned) pool->get_blocks);
 }
 
-int 
+int
 toku_thread_pool_get_current_threads(struct toku_thread_pool *pool) {
     return pool->cur_threads;
 }

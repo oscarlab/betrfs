@@ -101,7 +101,7 @@ static void test_checkpoint_callback(void *extra) {
     DB_ENV *env = (DB_ENV *) extra;
 
     // create and commit a bunch of transactions.  the last commit fsync's the log.  since the log is
-    // really small, a new log file is created before the end checkpoint is logged. 
+    // really small, a new log file is created before the end checkpoint is logged.
     int i;
     for (i=0; i<100; i++) {
         DB_TXN *txn = NULL;
@@ -137,7 +137,7 @@ static void run_test (bool do_commit, bool do_abort) {
 	r = txn->commit(txn, 0);                                                        CKERR(r);
     } else if (do_abort) {
         r = txn->abort(txn);                                                            CKERR(r);
-        
+
         // force an fsync of the log
         r = env->txn_begin(env, NULL, &txn, 0);                                         CKERR(r);
         r = txn->commit(txn, 0);                                                        CKERR(r);
@@ -203,10 +203,10 @@ bool do_commit=false, do_abort=false, do_explicit_abort=false, do_recover_commit
 	} else if (strcmp(argv[0], "-h")==0) {
 	    resultcode=0;
 	do_usage:
-	    fprintf(stderr, "Usage:\n%s [-v|-q]* [-h] {--commit | --abort | --explicit-abort | --recover-committed | --recover-aborted } \n", cmd);
+	    dprintf(STDERR, "Usage:\n%s [-v|-q]* [-h] {--commit | --abort | --explicit-abort | --recover-committed | --recover-aborted } \n", cmd);
 	    exit(resultcode);
 	} else {
-	    fprintf(stderr, "Unknown arg: %s\n", argv[0]);
+	    dprintf(STDERR, "Unknown arg: %s\n", argv[0]);
 	    resultcode=1;
 	    goto do_usage;
 	}

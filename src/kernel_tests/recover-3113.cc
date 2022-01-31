@@ -97,10 +97,10 @@ PATENT RIGHTS GRANT:
  * Bug:     Rollback log is checkpointed along with other cachefiles,
  *          but system crashes before checkpoint_end is written to recovery log.
  *          When recovery runs, it uses latest rollback log, which is out of synch
- *          with recovery log.  Latest version of rollback log would be correct for 
+ *          with recovery log.  Latest version of rollback log would be correct for
  *          last checkpoint if it completed, but version of rollback log needed
  *          is for last complete checkpoint.
- * Fix:     When opening rollback log for recovery, do not use latest, but use 
+ * Fix:     When opening rollback log for recovery, do not use latest, but use
  *          latest that is no newer than last complete checkpoint.
  * Test:    begin txn
  *          insert
@@ -111,7 +111,7 @@ PATENT RIGHTS GRANT:
  *          begin checkpoint (txn in checkpointed rollback log)
  *          crash using callback2 (just before checkpoint_end is written to disk)
  *          attempt to recover, should crash with 3113
- */        
+ */
 
 static const int envflags = DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_TXN|DB_PRIVATE;
 static const char *namea="a.db";
@@ -128,7 +128,7 @@ run_test(void) {
 
     r = db_env_create(&env, 0);                                                         CKERR(r);
     r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                      CKERR(r);
-    
+
     DB *db;
     r = db_create(&db, env, 0);                                                         CKERR(r);
     r = db->open(db, NULL, namea, NULL, DB_BTREE, DB_AUTO_COMMIT|DB_CREATE, 0666);      CKERR(r);
@@ -163,7 +163,7 @@ run_test(void) {
     r = env->txn_checkpoint(env, 0, 0, 0);                                              CKERR(r);
 
 }
- 
+
 
 static void checkpoint_callback_2(void * UU(extra)) {
     toku_hard_crash_on_purpose();
@@ -200,10 +200,10 @@ static void run_recover (void) {
 	} else if (strcmp(argv[0], "-h")==0) {
 	    resultcode=0;
 	do_usage:
-	    fprintf(stderr, "Usage:\n%s [-v|-q]* [-h] {--test | --recover } \n", cmd);
+	    dprintf(STDERR, "Usage:\n%s [-v|-q]* [-h] {--test | --recover } \n", cmd);
 	    exit(resultcode);
 	} else {
-	    fprintf(stderr, "Unknown arg: %s\n", argv[0]);
+	    dprintf(STDERR, "Unknown arg: %s\n", argv[0]);
 	    resultcode=1;
 	    goto do_usage;
 	}
@@ -224,4 +224,3 @@ int test_recover_3113(void) {
 
     return 0;
 }
-

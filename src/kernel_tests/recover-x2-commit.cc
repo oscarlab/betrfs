@@ -88,7 +88,7 @@ PATENT RIGHTS GRANT:
 
 #ident "Copyright (c) 2007-2013 Tokutek Inc.  All rights reserved."
 #ident "The technology is licensed by the Massachusetts Institute of Technology, Rutgers State University of New Jersey, and the Research Foundation of State University of New York at Stony Brook under United States of America Serial No. 11/760379 and to the patents and/or patent applications resulting from it."
-/* Transaction consistency:  
+/* Transaction consistency:
  *  fork a process:
  *   Open two tables, A and B
  *   begin transaction U
@@ -121,7 +121,7 @@ put (DB_TXN *txn, DB *db, const char *key, const char *data) {
     int r = db->put(db, txn, &k, &d, 0);
     CKERR(r);
 }
-   
+
 static void
 do_x2_shutdown (bool do_commit) {
     int r;
@@ -184,7 +184,7 @@ do_x2_recover (bool did_commit) {
 	checkcurs(c, DB_FIRST, "u.a", "u.a.data", true);
 	checkcurs(c, DB_NEXT,  "u.c", "u.c.data", true);
 	checkcurs(c, DB_NEXT,  NULL,  NULL,       false);
-	r = c->c_close(c);                                                                  CKERR(r);	
+	r = c->c_close(c);                                                                  CKERR(r);
 	r = dba->close(dba, 0);                                                             CKERR(r);
     }
     {
@@ -196,10 +196,10 @@ do_x2_recover (bool did_commit) {
 	checkcurs(c, DB_FIRST, "v.b", "v.b.data", did_commit);
 	checkcurs(c, DB_NEXT,  "v.d", "v.d.data", did_commit);
 	checkcurs(c, DB_NEXT,  NULL,  NULL,       false);
-	r = c->c_close(c);                                                                  CKERR(r);	
+	r = c->c_close(c);                                                                  CKERR(r);
 	r = dbb->close(dbb, 0);                                                             CKERR(r);
     }
- 
+
     r = txn->commit(txn, 0);                                                                CKERR(r);
     r = env->close(env, 0);                                                                 CKERR(r);
     exit(0);
@@ -226,7 +226,7 @@ do_test_internal (bool commit) {
 	assert(WIFSIGNALED(status) && WTERMSIG(status)==SIGABRT);
     }
     // Now find out what happend
-    
+
     if (0 == (pid = fork())) {
 	int r=execl(cmd, verbose ? "-v" : "-q", commit ? "--recover-committed" : "--recover-aborted", NULL);
 	assert(r==-1);
@@ -273,10 +273,10 @@ static void
 	} else if (strcmp(argv[0], "-h")==0) {
 	    resultcode=0;
 	do_usage:
-	    fprintf(stderr, "Usage:\n%s [-v|-q]* [-h] {--abort | --commit | --recover-committed | --recover-aborted } \n", cmd);
+	    dprintf(STDERR, "Usage:\n%s [-v|-q]* [-h] {--abort | --commit | --recover-committed | --recover-aborted } \n", cmd);
 	    exit(resultcode);
 	} else {
-	    fprintf(stderr, "Unknown arg: %s\n", argv[0]);
+	    dprintf(STDERR, "Unknown arg: %s\n", argv[0]);
 	    resultcode=1;
 	    goto do_usage;
 	}
@@ -307,7 +307,7 @@ int test_recover_x2_commit(void) {
 	do_x2_recover(true);
     } else if (do_recover_aborted) {
 	do_x2_recover(false);
-    } 
+    }
 #if 0
     else {
 	do_test();

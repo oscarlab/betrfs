@@ -1,1 +1,0 @@
-VBoxManage controlvm FTFSTest poweroff

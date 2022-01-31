@@ -142,26 +142,13 @@ void db_env_set_func_fdopen (FILE * (*fdopen_function)(int, const char *)) {
 }
 */
 
-void db_env_set_func_fopen (FILE * (*fopen_function)(const char *, const char *)) {
-    toku_set_func_fopen(fopen_function);
-}
-
 void db_env_set_func_open (int (*open_function)(const char *, int, int)) {
     toku_set_func_open(open_function);
-}
-
-void db_env_set_func_fclose (int (*fclose_function)(FILE*)) {
-    toku_set_func_fclose(fclose_function);
 }
 
 void db_env_set_func_pread (ssize_t (*fun)(int, void *, size_t, off_t)) {
     toku_set_func_pread(fun);
 }
-/* Function not needed
-void db_env_set_func_loader_fwrite (size_t (*fwrite_fun)(const void*,size_t,size_t,FILE*)) {
-    ft_loader_set_os_fwrite(fwrite_fun);
-}
-*/
 
 void db_env_set_func_malloc (void *(*f)(size_t)) {
     toku_set_func_malloc(f);

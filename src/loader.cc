@@ -509,11 +509,7 @@ int toku_loader_cleanup_temp_files(DB_ENV *env) {
     char * dir = env->i->real_tmp_dir;
     DIR *d = opendir(dir);
     if (d==0) {
-#ifdef TOKU_LINUX_MODULE
-        result = ENOSYS; goto exit;
-#else
-        result = get_error_errno(); goto exit;
-#endif
+        result = get_error_errno(ENOSYS); goto exit;
     }
 
     result = 0;
@@ -527,24 +523,15 @@ int toku_loader_cleanup_temp_files(DB_ENV *env) {
             // YZJ: It seems loader is never used
             assert(false);
             if (r!=0) {
-#ifdef TOKU_LINUX_MODULE
                 result = get_error_errno(r);
-#else
-                result = get_error_errno();
-#endif
                 perror("Trying to delete a rolltmp file");
             }
         }
     }
     {
         int r = closedir(d);
-#ifdef TOKU_LINUX_MODULE
         if (r < 0)
             result = get_error_errno(r);
-#else
-        if (r == -1)
-            result = get_error_errno();
-#endif
     }
 
 exit:

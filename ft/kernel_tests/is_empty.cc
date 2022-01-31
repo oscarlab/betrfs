@@ -95,18 +95,14 @@ PATENT RIGHTS GRANT:
 #include "checkpoint.h"
 #include "helper.h"
 
-
 #define FILENAME TOKU_TEST_FILENAME_DATA
 
-/* YZJ */
 static  int verbose = 1;
-/* 03/21/2014 */
-
-
 
 static void test_it (int N) {
     FT_HANDLE brt;
     int r;
+
     r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                                                                    CKERR(r);
 
     TOKULOGGER logger;
@@ -134,10 +130,8 @@ static void test_it (int N) {
     r = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, false);                             CKERR(r);
     r = toku_close_ft_handle_nolsn(brt, NULL);                                                                          CKERR(r);
 
-//    unsigned int rands[N];
-        /* YZJ */
-	int *rands = (int *)toku_malloc(N * sizeof(int));
-	assert(rands);
+    int *rands = (int *)toku_malloc(N * sizeof(int));
+    assert(rands);
 
     for (int i=0; i<N; i++) {
 	r = toku_txn_begin_txn((DB_TXN*)NULL, (TOKUTXN)0, &txn, logger, TXN_SNAPSHOT_ROOT, false);                 CKERR(r);
@@ -146,8 +140,6 @@ static void test_it (int N) {
 	toku_txn_close_txn(txn);
 
 	r = toku_txn_begin_txn((DB_TXN*)NULL, (TOKUTXN)0, &txn, logger, TXN_SNAPSHOT_ROOT, false);                 CKERR(r);
-//	char key[100],val[300];
-        /* YZJ */    
 	char *key = (char*) toku_xmalloc(100 * sizeof(char));
 	char *val = (char*) toku_xmalloc(300 * sizeof(char));
 	assert(key);
@@ -183,7 +175,6 @@ static void test_it (int N) {
 
 	r = toku_txn_begin_txn((DB_TXN*)NULL, (TOKUTXN)0, &txn, logger, TXN_SNAPSHOT_ROOT, false);                     CKERR(r);
 
-//	char key[100];
 	/* YZJ */
 	char *key = (char*) toku_xmalloc(100);
 	assert(key);
@@ -194,11 +185,11 @@ static void test_it (int N) {
 	toku_ft_delete(brt, toku_fill_dbt(&k, key, 1+strlen(key)), txn);
 
 	if (0) {
-	bool is_empty;
-        is_empty = toku_ft_is_empty_fast(brt);
-	assert(!is_empty);
+	  bool is_empty;
+    is_empty = toku_ft_is_empty_fast(brt);
+    assert(!is_empty);
 	}
-	
+
 	r = toku_txn_commit_txn(txn, false, NULL, NULL);                                 CKERR(r);
 	toku_txn_close_txn(txn);
 
@@ -218,9 +209,9 @@ static void test_it (int N) {
     toku_txn_close_txn(txn);
 
     if (0) {
-    bool is_empty;
-    is_empty = toku_ft_is_empty_fast(brt);
-    assert(is_empty);
+        bool is_empty;
+        is_empty = toku_ft_is_empty_fast(brt);
+        assert(is_empty);
     }
 
     r = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, false);                                CKERR(r);
@@ -232,12 +223,10 @@ static void test_it (int N) {
     toku_cachetable_close(&ct);
     r = toku_logger_close(&logger);                                                        assert(r==0);
 
-
-    toku_free(rands);	
-
+    toku_free(rands);
 }
- 
-extern "C" int test_is_empty(void);   
+
+extern "C" int test_is_empty(void);
 
 int test_is_empty () {
 
@@ -245,14 +234,10 @@ int test_is_empty () {
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
 
-    toku_checkpoint_init();
-
     for (int i=1; i<=64; i++) {
-//    for (int i=1; i<=10; i++) {
-	test_it(i);
+	     test_it(i);
     }
 
-    toku_checkpoint_destroy();
     toku_ft_layer_destroy();
     return 0;
 }

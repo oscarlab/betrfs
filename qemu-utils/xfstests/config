@@ -1,14 +1,21 @@
 FTINDEX_DIR=`pwd`/../../../
 FSTESTS_DIR=`pwd`/fstests
 QEMU=/usr/bin/kvm
-LINUX_SOURCE=`realpath ../../linux-3.11.10`
-KERNEL=../../../../linux-3.11.10/arch/x86_64/boot/bzImage
+KERNEL_VERSION=${KERNEL_VERSION:=3.11.10}
+MAJOR_KERNEL_VERSION=${KERNEL_VERSION:0:1}
+KERNEL_EXTRA=-ftfs
+LINUX_SOURCE=$(realpath ../..)/linux-${KERNEL_VERSION}
+KERNEL=../../../../linux-${KERNEL_VERSION}/arch/x86_64/boot/bzImage
 
 HOST=$(hostname -s)
 echo $HOST
 
-if [[ $HOST == "betrfs-dev"* ]]; then
-	LINUX_SOURCE=/usr/src/linux-source-3.11.10-ftfs
+if [[ $HOST == "betrfs-dev" ]]; then
+	## Jenkins machine
+	# We want to detect whether we're running in Jenkins since the kernel is
+	# cached at a particular location. This way we don't need to rebuild the
+	# kernel in each xfstests job.
+	LINUX_SOURCE=/usr/src/linux-source-${KERNEL_VERSION}${KERNEL_EXTRA}
 	KERNEL=${LINUX_SOURCE}/arch/x86_64/boot/bzImage
 fi
 
@@ -30,11 +37,9 @@ XFSTESTS_COMMIT=22ea2f8
 
 FIO_COMMIT=fio-2.21
 
-KERNEL_VERSION=3.11.10
+MNTOPTS=${MNTOPTS:="sb_fstype=sfs,d_dev=/dev/loop0"}
 
-MNTOPTS="sb_fstype=sfs,d_dev=/dev/loop0"
-
-KERNEL_CONFIG=kernel.config
+KERNEL_CONFIG=kernel-${KERNEL_VERSION}.config
 NR_CPU=2
 MEM=5192
 
@@ -44,57 +49,38 @@ TEST_TIMEOUT=300s
 #Tests to run. The commented tests fail as of now
 TESTS_TO_RUN="
 generic/001,\
-generic/002,\
-generic/003,\
+#generic/002,\
 generic/005,\
 generic/006,\
 generic/007,\
 generic/010,\
 #generic/011,\
 #generic/013,\
-#generic/014,\
-generic/015,\
-#generic/020,\
-generic/027,\
+generic/014,\
+generic/020,\
 generic/028,\
-generic/029,\
-generic/030,\
 generic/035,\
 #generic/037,\
 #generic/067,\
-generic/069,\
 #generic/074,\
 #generic/075,\
-generic/076,\
 generic/080,\
-generic/083,\
-generic/084,\
 generic/087,\
 generic/088,\
 generic/089,\
-generic/098,\
 generic/100,\
-generic/102,\
 #generic/107,\
-generic/109,\
 #generic/112,\
-generic/120,\
 generic/123,\
 generic/124,\
 generic/126,\
 #generic/127,\
-generic/128,\
-generic/129,\
 generic/131,\
-generic/132,\
-generic/141,\
-generic/169,\
+generic/184,\
 generic/192,\
 generic/193,\
-generic/204,\
 generic/215,\
 generic/221,\
-generic/224,\
 generic/236,\
 #generic/241,\
 generic/245,\
@@ -104,34 +90,23 @@ generic/248,\
 generic/249,\
 #generic/257,\
 generic/258,\
-generic/269,\
 #generic/273,\
-generic/275,\
 #generic/285,\
 generic/286,\
-generic/294,\
 generic/306,\
-generic/307,\
 generic/308,\
 #generic/309,\
 #generic/310,\
 #generic/313,\
 #generic/314,\
 #generic/319,\
-generic/320,\
 #generic/322,\
 #generic/336,\
 #generic/338,\
-generic/339,\
-generic/340,\
 #generic/341,\
 #generic/342,\
 #generic/343,\
-generic/344,\
-generic/345,\
-generic/346,\
 #generic/348,\
-generic/354,\
 generic/360,\
 #generic/361,\
 #generic/375,\

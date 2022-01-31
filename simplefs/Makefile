@@ -5,16 +5,22 @@ else
 endif
 
 obj-m := simplefs.o
-simplefs-objs := sfs.o sfs_in_kernel_write.o
-ccflag-y := -DSFS_DEBUG
+ccflags-y += -Wall -Werror
 
-all: clean ko mkfs-sfs
+simplefs-objs := sfs.o sfs_in_kernel_write.o
+
+.PHONY: all ko clean
+
+all: ko mkfs-sfs
 
 ko:
-	make -C $(MOD_KERN_SOURCE) M=`pwd` modules
+	$(MAKE) -C $(MOD_KERN_SOURCE) M=$(PWD) modules
 
-mkfs-sfs_SOURCES:
-	mkfs-sfs.c sfs.h
+# https://stackoverflow.com/a/52036564/13040392
+-include mkfs-sfs.d
+mkfs-sfs: mkfs-sfs.c
+	$(CC) $(ccflags-y) -MMD -MP $< -o $@
+
 clean:
-	make -C $(MOD_KERN_SOURCE) M=`pwd` clean
-	rm -rf mkfs-sfs *.ko
+	$(MAKE) -C $(MOD_KERN_SOURCE) M=$(PWD) clean
+	$(RM) mkfs-sfs mkfs-sfs.d

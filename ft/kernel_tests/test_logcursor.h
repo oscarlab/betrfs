@@ -109,14 +109,7 @@ PATENT RIGHTS GRANT:
 #include "cachetable.h"
 #include "cachetable-internal.h"
 
-#define CKERR(r) ({ int __r = r; if (__r!=0) fprintf(stderr, "%s:%d error %d %s\n", __FILE__, __LINE__, __r, strerror(r)); assert(__r==0); })
-#define CKERR2(r,r2) do { if (r!=r2) fprintf(stderr, "%s:%d error %d %s, expected %d\n", __FILE__, __LINE__, r, strerror(r), r2); assert(r==r2); } while (0)
-#define CKERR2s(r,r2,r3) do { if (r!=r2 && r!=r3) fprintf(stderr, "%s:%d error %d %s, expected %d or %d\n", __FILE__, __LINE__, r, strerror(r), r2,r3); assert(r==r2||r==r3); } while (0)
-
-#define DEBUG_LINE() do { \
-    fprintf(stderr, "%s() %s:%d\n", __FUNCTION__, __FILE__, __LINE__); \
-    fflush(stderr); \
-} while (0)
+#include "test-misc.h"
 
 const ITEMLEN len_ignore = 0xFFFFFFFF;
 
@@ -158,7 +151,7 @@ struct check_pair {
     int call_count;
 };
 static int
-lookup_checkf (ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *pair_v, bool lock_only) {
+lookup_checkf (ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *pair_v, bool lock_only, bool UU(is_indirect)) {
     if (!lock_only) {
         struct check_pair *pair = (struct check_pair *) pair_v;
         if (key!=NULL) {
@@ -371,7 +364,7 @@ default_parse_args (int argc, const char *argv[]) {
 	} else if (strcmp(argv[0],"-q")==0) {
 	    verbose=0;
 	} else {
-	    fprintf(stderr, "Usage:\n %s [-v] [-q]\n", progname);
+	    dprintf(2, "Usage:\n %s [-v] [-q]\n", progname);
 	    exit(1);
 	}
 	argc--; argv++;

@@ -89,7 +89,6 @@ PATENT RIGHTS GRANT:
 #ident "Copyright (c) 2007-2013 Tokutek Inc.  All rights reserved."
 #ident "The technology is licensed by the Massachusetts Institute of Technology, Rutgers State University of New Jersey, and the Research Foundation of State University of New York at Stony Brook under United States of America Serial No. 11/760379 and to the patents and/or patent applications resulting from it."
 #include "test.h"
-#include <sys/wait.h>
 
 static void clean_env (const char *envdir) {
     CKERR(toku_fs_reset(envdir, S_IRWXU+S_IRWXG+S_IRWXO));
@@ -97,7 +96,7 @@ static void clean_env (const char *envdir) {
 
 static void setup_env (DB_ENV **envp, const char *envdir) {
     { int chk_r = db_env_create(envp, 0); CKERR(chk_r); }
-    (*envp)->set_errfile(*envp, stderr);
+    (*envp)->set_errfile(*envp, STDERR);
 #ifdef TOKUDB
     { int chk_r = (*envp)->set_redzone(*envp, 0); CKERR(chk_r); }
 #endif
@@ -155,7 +154,7 @@ static void test1 (void) {
 
     pthread_join(child, &status);
     assert(status == 0);
-   
+
     DB_ENV *env2;
     char envdir2[TOKU_PATH_MAX+1];
     setup_env_and_prepare(&env2, toku_path_join(envdir2, 2, TOKU_TEST_FILENAME, "envdir2"), true);
@@ -195,13 +194,13 @@ int test_test_xa_prepare(void) {
     // first test: open an environment, a db, a txn, and do a prepare.   Then do txn_prepare (without even closing the environment).
     pre_setup();
     test1();
-    
+
 
     // second test: poen environment, a db, a txn, prepare, close the environment.  Then reopen and do txn_prepare.
 
     // third test: make sure there is an fsync on txn_prepare, but not on the following commit.
 
-    
+
     // Then close the environment Find out what BDB does when ask for the txn prepares.
     // Other tests: read prepared txns, 1 at a time. Then close it and read them again.
     post_teardown();

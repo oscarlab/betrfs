@@ -129,7 +129,7 @@ static unsigned long elapsed (void) {
     return tdiff(&now, &starttime);
 }
 
-static int 
+static int
 #ifndef GCOV
 __attribute__((__noreturn__))
 #endif
@@ -166,7 +166,7 @@ struct tenx {
     int counter;
 };
 
-static int run_5x (void *v) 
+static int run_5x (void *v)
 {
     struct tenx *CAST_FROM_VOIDP(tx, v);
     struct timeval now;
@@ -174,7 +174,7 @@ static int run_5x (void *v)
 
     unsigned long diff = tdiff(&now, &tx->tv);
     if (verbose1) printf(  "T=%lu tx->counter=%d\n", diff, tx->counter);
-    if (!(diff>500000 + tx->counter)) {
+    if (!(diff>500000UL + (unsigned long)tx->counter)) {
       printf(  "T=%lu tx->counter=%d\n", diff, tx->counter);
       assert(0);
     }
@@ -197,43 +197,56 @@ static void* test3 (void* v)
     return v;
 }
 
-static int run_3sec (void *v) 
+struct run_3sec_arg {
+    int counter;
+    const char *fn_name;
+};
+
+static int run_3sec (void *v)
 {
-    if (verbose1) printf(  "start3sec at %lu\n", elapsed());
-    int *CAST_FROM_VOIDP(counter, v);
-    (*counter)++;
+    struct run_3sec_arg *CAST_FROM_VOIDP(arg, v);
+    if (verbose1) printf(  "start3sec at %lu, fn=%s\n", elapsed(), arg->fn_name);
+    arg->counter++;
     sleep(3);
-    if (verbose1) printf(  "end3sec at %lu\n", elapsed());
+    if (verbose1) printf(  "end3sec at %lu, counter=%d, fn=%s\n", elapsed(), arg->counter, arg->fn_name);
     return 0;
 }
 
-static void* test4 (void *v) 
+static void* test4 (void *v)
 {
     struct minicron m;
-    int counter = 0;
+    struct run_3sec_arg arg = {0, __func__};
     ZERO_STRUCT(m);
-    int r = toku_minicron_setup(&m, 2000, run_3sec, &counter); assert(r==0);
+    int r = toku_minicron_setup(&m, 2000, run_3sec, &arg); assert(r==0);
     sleep(11);
+
+    if (verbose1) printf(  "test4 shutdown at %lu\n", elapsed());
+
     r = toku_minicron_shutdown(&m);                     assert(r==0);
-    assert(counter==3);
-    printf("counter: %d\n", counter);
+    // The 3rd run_3sec is supposed to complete at 11 sec.
+    // The 4th execution can be launched if minicron_shutdown
+    // is scheduled to run after that. Eventually, we get value 4.
+    if (arg.counter != 3 && arg.counter != 4) {
+        printf("%s: counter: %d\n", __func__, arg.counter);
+        assert(false);
+    }
     return v;
 }
 
-static void* test5 (void *v) 
+static void* test5 (void *v)
 {
     struct minicron m;
-    int counter = 0;
+    struct run_3sec_arg arg = {0, __func__};
     ZERO_STRUCT(m);
-    int r = toku_minicron_setup(&m, 10000, run_3sec, &counter); assert(r==0);
+    int r = toku_minicron_setup(&m, 10000, run_3sec, &arg); assert(r==0);
     toku_minicron_change_period(&m, 2000);
     sleep(10);
     r = toku_minicron_shutdown(&m);                     assert(r==0);
-    assert(counter==3);
+    assert(arg.counter==3);
     return v;
 }
 
-static void* test6 (void *v) 
+static void* test6 (void *v)
 {
     struct minicron m;
     ZERO_STRUCT(m);
@@ -244,15 +257,15 @@ static void* test6 (void *v)
     return v;
 }
 
-static void* test7 (void *v) 
+static void* test7 (void *v)
 {
     struct minicron m;
-    int counter = 0;
+    struct run_3sec_arg arg = {0, __func__};
     ZERO_STRUCT(m);
-    int r = toku_minicron_setup(&m, 5000, run_3sec, &counter); assert(r==0);
+    int r = toku_minicron_setup(&m, 5000, run_3sec, &arg); assert(r==0);
     sleep(17);
     r = toku_minicron_shutdown(&m);                     assert(r==0);
-    assert(counter==3);
+    assert(arg.counter==3);
     return v;
 }
 
@@ -262,16 +275,10 @@ typedef void*(*ptf)(void*);
 extern "C" int test_minicron(void);
 
 //int test_minicron2 (void);
-int test_minicron (void) 
+int test_minicron (void)
 {
-
-/*
-    int x = test_minicron2();
-    assert(x==0);
-    printf("Done!\n");
-*/
     gettimeofday(&starttime, 0);
-    ptf testfuns[] = {test1, 
+    ptf testfuns[] = {test1,
                       test2,
                       test3,
                       test4,

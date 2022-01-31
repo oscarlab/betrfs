@@ -9,9 +9,7 @@
 #include <linux/uaccess.h>
 #include "nb_proc_toku_memleak_detect.h"
 #include "ftfs_southbound.h"
-
-extern void init_mem_trace(void);
-extern void free_mem_trace(void);
+#include "ftfs.h"
 
 static struct proc_dir_entry * toku_memleak_entry;
 /**

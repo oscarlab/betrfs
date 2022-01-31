@@ -111,7 +111,18 @@ struct sub_block {
     uint32_t compressed_size_bound;   // estimated compressed size
 
     uint32_t xsum;                    // sub block checksum
+#ifdef FT_INDIRECT
+    BP_IND_DATA ind_data;
+    uint64_t *read_pfns; // for read
+    uint64_t read_offset ; // for read
+    int fd;
+#endif
 };
+
+
+#ifdef FT_INDIRECT
+void print_sub_block_ind_data(BP_IND_DATA ind_data);
+#endif
 
 struct stored_sub_block {
     uint32_t uncompressed_size;

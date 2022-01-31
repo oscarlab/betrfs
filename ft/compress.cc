@@ -107,9 +107,7 @@ unsigned long deflateBound(z_streamp dontcare, unsigned long s)
 
 static inline enum toku_compression_method
 normalize_compression_method(enum toku_compression_method method)
-// Effect: resolve "friendly" names like "fast" and "small" into their real values.
 {
-    //return TOKU_NO_COMPRESSION;
     switch (method) {
     case TOKU_DEFAULT_COMPRESSION_METHOD:
     case TOKU_FAST_COMPRESSION_METHOD:
@@ -135,7 +133,6 @@ size_t toku_compress_bound (enum toku_compression_method a, size_t size)
         /* dep 5/15/15: Kernel zlib doesn't include a bound
          * estimation.  Just use no compression size */
     case TOKU_ZLIB_METHOD:
-        //return size + 1;
         return compressBound(size);
 #endif
     case TOKU_ZLIB_WITHOUT_CHECKSUM_METHOD:
@@ -145,7 +142,7 @@ size_t toku_compress_bound (enum toku_compression_method a, size_t size)
     }
     // fall through for bad enum (thus compiler can warn us if we didn't use all the enums
 #ifndef TOKU_LINUX_MODULE
-    assert(0); 
+    assert(0);
 #else
     abort();
 #endif
@@ -218,7 +215,7 @@ void toku_compress (enum toku_compression_method a,
     }
     // default fall through to error.
 #ifndef TOKU_LINUX_MODULE
-    assert(0); 
+    assert(0);
 #else
     abort();
 #endif
@@ -273,7 +270,7 @@ void toku_decompress (Bytef       *dest,   uLongf destLen,
     }
     // default fall through to error.
 #ifndef TOKU_LINUX_MODULE
-    assert(0); 
+    assert(0);
 #else
     abort();
 #endif

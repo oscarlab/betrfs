@@ -98,7 +98,7 @@ typedef struct block_table *BLOCK_TABLE;
 //Needed by tests, ftdump
 struct block_translation_pair {
     union { // If in the freelist, use next_free_blocknum, otherwise diskoff.
-        DISKOFF  diskoff; 
+        DISKOFF  diskoff;
         BLOCKNUM next_free_blocknum;
     } u;
     DISKOFF size;    // set to 0xFFFFFFFFFFFFFFFF for free
@@ -141,8 +141,8 @@ void toku_block_table_swap_for_redirect(BLOCK_TABLE old_bt, BLOCK_TABLE new_bt);
 
 //DEBUG ONLY (ftdump included), tests included
 void toku_blocknum_dump_translation(BLOCK_TABLE bt, BLOCKNUM b);
-void toku_dump_translation_table_pretty(FILE *f, BLOCK_TABLE bt);
-void toku_dump_translation_table(FILE *f, BLOCK_TABLE bt);
+void toku_dump_translation_table_pretty(int f, BLOCK_TABLE bt);
+void toku_dump_translation_table(int f, BLOCK_TABLE bt);
 void toku_block_free(BLOCK_TABLE bt, uint64_t offset);
 typedef int(*BLOCKTABLE_CALLBACK)(BLOCKNUM b, int64_t size, int64_t address, void *extra);
 enum translation_type {TRANSLATION_NONE=0,
@@ -151,7 +151,7 @@ enum translation_type {TRANSLATION_NONE=0,
                        TRANSLATION_CHECKPOINTED,
                        TRANSLATION_DEBUG};
 
-int toku_blocktable_iterate(BLOCK_TABLE bt, enum translation_type type, BLOCKTABLE_CALLBACK f, void *extra, bool data_only, bool used_only); 
+int toku_blocktable_iterate(BLOCK_TABLE bt, enum translation_type type, BLOCKTABLE_CALLBACK f, void *extra, bool data_only, bool used_only);
 void toku_blocktable_internal_fragmentation(BLOCK_TABLE bt, int64_t *total_sizep, int64_t *used_sizep);
 
 void toku_block_table_get_fragmentation_unlocked(BLOCK_TABLE bt, TOKU_DB_FRAGMENTATION report);
@@ -178,4 +178,3 @@ enum {RESERVED_BLOCKNUM_NULL       =0,
 
 void get_diskoff_n_size_from_blocknum(BLOCK_TABLE bt, BLOCKNUM b, DISKOFF * off, DISKOFF*  size) ;
 #endif
-

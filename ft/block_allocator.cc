@@ -334,7 +334,7 @@ void block_allocator_alloc_block(BLOCK_ALLOCATOR ba, uint64_t size, uint64_t *of
 }
 
 static void dump_translation_table_pretty(BLOCK_ALLOCATOR ba) {
-    for (int64_t i = 0; i < ba->n_blocks; ++i) {
+    for (uint64_t i = 0; i < ba->n_blocks; ++i) {
         printf("%" PRId64 "\t%" PRId64 "\n", i, ba->blocks_array[i].offset);
     }
 }

@@ -112,11 +112,11 @@ run_test (void) {
     int r;
 
     r = db_env_create(&env, 0);        assert(r == 0);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     // no need to run with logging, so DB_INIT_LOG not passed in
     r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE | DB_PRIVATE | DB_INIT_MPOOL | DB_INIT_LOG | DB_INIT_TXN | DB_INIT_LOCK | DB_THREAD, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r = db_create(&db, env, 0); assert(r == 0);
-    db->set_errfile(db,stderr); // Turn off those annoying errors
+    db->set_errfile(db, STDERR); // Turn off those annoying errors
     r = db->open(db, NULL, fname, NULL, DB_BTREE, DB_CREATE, 0666); assert(r == 0);
 
     int i;
@@ -141,9 +141,9 @@ run_test (void) {
 extern "C" int test_test_updates_single_key(void);
 int test_test_updates_single_key(void) {
 
-    pre_setup();  
+    pre_setup();
     int r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
-    assert(r==0);    
+    assert(r==0);
 
     run_test();
     post_teardown();

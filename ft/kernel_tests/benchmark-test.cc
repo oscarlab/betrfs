@@ -183,7 +183,6 @@ static void biginsert (long long n_elements, struct timeval *starttime) {
 	gettimeofday(&t2,0);
 	if (verbose && do_serial) {
 	    printf("serial %" PRIu64 "s %" PRIu64 "/s    ", toku_tdiff(&t2, &t1), ITEMS_TO_INSERT_PER_ITERATION/toku_tdiff(&t2, &t1));
-	    fflush(stdout);
 	}
 	gettimeofday(&t1,0);
         if (do_random)
@@ -191,14 +190,12 @@ static void biginsert (long long n_elements, struct timeval *starttime) {
 	gettimeofday(&t2,0);
 	if (verbose && do_random) {
 	    printf("random %" PRIu64 "s %" PRIu64 "/s    ", toku_tdiff(&t2, &t1), ITEMS_TO_INSERT_PER_ITERATION/toku_tdiff(&t2, &t1));
-	    fflush(stdout);
         }
         if (verbose && (do_serial || do_random)) {
             uint64_t f = 0;
             if (do_serial) f += 1.0;
             if (do_random) f += 1.0;
 	    printf("cumulative %" PRIu64 "s %" PRIu64 "/s\n", toku_tdiff(&t2, starttime), (ITEMS_TO_INSERT_PER_ITERATION*f/toku_tdiff(&t2, starttime))*(iteration+1));
-	    fflush(stdout);
 	}
     }
 }
@@ -223,7 +220,6 @@ test_benchmark_test (void) {
 	printf("keysize=%d\n", keysize);
 	printf("valsize=%d\n", valsize);
 	printf("Serial and random insertions of %" PRId64 " per batch\n", ITEMS_TO_INSERT_PER_ITERATION);
-        fflush(stdout);
     }
     setup();
     printf("\nsuccessfully setup\n");
@@ -240,7 +236,6 @@ test_benchmark_test (void) {
         if (do_random) f += 1;
 	printf("Shutdown %" PRIu64 "s\n", toku_tdiff(&t3, &t2));
 	printf("Total time %" PRIu64 "s for %lld insertions = %lld/s\n", toku_tdiff(&t3, &t1), f*total_n_items, f*total_n_items/toku_tdiff(&t3, &t1));
-        fflush(stdout);
     }
     int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);                               assert(r==0);
 
@@ -252,4 +247,3 @@ test_benchmark_test (void) {
 
     return 0;
 }
-

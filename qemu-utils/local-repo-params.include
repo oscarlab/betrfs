@@ -1,5 +1,15 @@
+if [ $# -gt 0 ]; then
+	regex='^[0-9]+.[0-9]+.[0-9]+$'
+	if [[ "$1" =~ $regex ]]; then
+		KERNEL_VERSION=$1
+		shift
+	fi
+fi
+
 MOUNTPOINT=mnt
-USER=don
+USER=betrfs
 USERID=1000
-REPO=home/$USER/betrfs-private/
-VIRTUALDISK=linuxdisk.raw
+REPO=home/$USER/betrfs-private
+KERNEL_VERSION=${KERNEL_VERSION:="4.19.99"}
+KERNEL=../linux-${KERNEL_VERSION}/arch/x86/boot/bzImage
+VIRTUALDISK=linuxdisk-$KERNEL_VERSION.raw

@@ -247,7 +247,7 @@ query_context_with_input_init(QUERY_CONTEXT_WITH_INPUT context, DBC *c, uint32_t
     context->input_val = val;
 }
 
-static int c_getf_first_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool);
+static int c_getf_first_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool, bool);
 
 static void 
 c_query_context_init(QUERY_CONTEXT context, DBC *c, uint32_t flag, YDB_CALLBACK_FUNCTION f, void *extra) {
@@ -290,7 +290,7 @@ c_getf_first(DBC *c, uint32_t flag, YDB_CALLBACK_FUNCTION f, void *extra) {
 
 //result is the result of the query (i.e. 0 means found, DB_NOTFOUND, etc..)
 static int
-c_getf_first_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool lock_only) {
+c_getf_first_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool lock_only, bool UU(is_indirect)) {
     QUERY_CONTEXT      super_context = (QUERY_CONTEXT) extra;
     QUERY_CONTEXT_BASE context       = &super_context->base;
 
@@ -309,6 +309,9 @@ c_getf_first_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, 
     //Call application-layer callback if found and locks were successfully obtained.
     if (r==0 && key!=NULL && !lock_only) {
         DBT found_val = { .data = (void *) val, .size = vallen };
+        if (is_indirect) {
+            found_val.flags = DB_DBT_INDIRECT;
+        }
         context->r_user_callback = context->f(&found_key, &found_val, context->f_extra);
         r = context->r_user_callback;
     }
@@ -317,7 +320,7 @@ c_getf_first_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, 
     return r;
 }
 
-static int c_getf_last_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool);
+static int c_getf_last_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool, bool);
 
 static int
 c_getf_last(DBC *c, uint32_t flag, YDB_CALLBACK_FUNCTION f, void *extra) {
@@ -341,7 +344,7 @@ c_getf_last(DBC *c, uint32_t flag, YDB_CALLBACK_FUNCTION f, void *extra) {
 
 //result is the result of the query (i.e. 0 means found, DB_NOTFOUND, etc..)
 static int
-c_getf_last_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool lock_only) {
+c_getf_last_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool lock_only, bool UU(is_indirect)) {
     QUERY_CONTEXT      super_context = (QUERY_CONTEXT) extra;
     QUERY_CONTEXT_BASE context       = &super_context->base;
 
@@ -360,6 +363,9 @@ c_getf_last_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, v
     //Call application-layer callback if found and locks were successfully obtained.
     if (r==0 && key!=NULL && !lock_only) {
         DBT found_val = { .data = (void *) val, .size = vallen };
+        if (is_indirect) {
+            found_val.flags = DB_DBT_INDIRECT;
+        }
         context->r_user_callback = context->f(&found_key, &found_val, context->f_extra);
         r = context->r_user_callback;
     }
@@ -368,7 +374,7 @@ c_getf_last_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, v
     return r;
 }
 
-static int c_getf_next_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool);
+static int c_getf_next_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool, bool);
 
 static int
 c_getf_next(DBC *c, uint32_t flag, YDB_CALLBACK_FUNCTION f, void *extra) {
@@ -397,7 +403,7 @@ c_getf_next(DBC *c, uint32_t flag, YDB_CALLBACK_FUNCTION f, void *extra) {
 
 //result is the result of the query (i.e. 0 means found, DB_NOTFOUND, etc..)
 static int
-c_getf_next_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool lock_only) {
+c_getf_next_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool lock_only, bool UU(is_indirect)) {
     QUERY_CONTEXT      super_context = (QUERY_CONTEXT) extra;
     QUERY_CONTEXT_BASE context       = &super_context->base;
 
@@ -419,6 +425,9 @@ c_getf_next_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, v
     //Call application-layer callback if found and locks were successfully obtained.
     if (r==0 && key!=NULL && !lock_only) {
         DBT found_val = { .data = (void *) val, .size = vallen };
+        if (is_indirect) {
+            found_val.flags = DB_DBT_INDIRECT;
+        }
         context->r_user_callback = context->f(&found_key, &found_val, context->f_extra);
         r = context->r_user_callback;
     }
@@ -427,7 +436,7 @@ c_getf_next_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, v
     return r;
 }
 
-static int c_getf_prev_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool);
+static int c_getf_prev_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool, bool);
 
 static int
 c_getf_prev(DBC *c, uint32_t flag, YDB_CALLBACK_FUNCTION f, void *extra) {
@@ -456,7 +465,7 @@ c_getf_prev(DBC *c, uint32_t flag, YDB_CALLBACK_FUNCTION f, void *extra) {
 
 //result is the result of the query (i.e. 0 means found, DB_NOTFOUND, etc..)
 static int
-c_getf_prev_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool lock_only) {
+c_getf_prev_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool lock_only, bool UU(is_indirect)) {
     QUERY_CONTEXT      super_context = (QUERY_CONTEXT) extra;
     QUERY_CONTEXT_BASE context       = &super_context->base;
 
@@ -477,6 +486,9 @@ c_getf_prev_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, v
     //Call application-layer callback if found and locks were successfully obtained.
     if (r==0 && key!=NULL && !lock_only) {
         DBT found_val = { .data = (void *) val, .size = vallen };
+        if (is_indirect) {
+            found_val.flags = DB_DBT_INDIRECT;
+        }
         context->r_user_callback = context->f(&found_key, &found_val, context->f_extra);
         r = context->r_user_callback;
     }
@@ -485,7 +497,7 @@ c_getf_prev_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, v
     return r;
 }
 
-static int c_getf_current_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool);
+static int c_getf_current_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool, bool);
 
 static int
 c_getf_current(DBC *c, uint32_t flag, YDB_CALLBACK_FUNCTION f, void *extra) {
@@ -502,7 +514,7 @@ c_getf_current(DBC *c, uint32_t flag, YDB_CALLBACK_FUNCTION f, void *extra) {
 
 //result is the result of the query (i.e. 0 means found, DB_NOTFOUND, etc..)
 static int
-c_getf_current_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool lock_only) {
+c_getf_current_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool lock_only, bool UU(is_indirect)) {
     QUERY_CONTEXT      super_context = (QUERY_CONTEXT) extra;
     QUERY_CONTEXT_BASE context       = &super_context->base;
 
@@ -512,6 +524,9 @@ c_getf_current_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val
     if (key!=NULL && !lock_only) {
         DBT found_key = { .data = (void *) key, .size = keylen };
         DBT found_val = { .data = (void *) val, .size = vallen };
+        if (is_indirect) {
+            found_val.flags = DB_DBT_INDIRECT;
+        }
         context->r_user_callback = context->f(&found_key, &found_val, context->f_extra);
         r = context->r_user_callback;
     } else {
@@ -522,7 +537,7 @@ c_getf_current_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val
     return r;
 }
 
-static int c_getf_set_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool);
+static int c_getf_set_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool, bool);
 
 int
 toku_c_getf_set(DBC *c, uint32_t flag, DBT *key, YDB_CALLBACK_FUNCTION f, void *extra) {
@@ -547,7 +562,7 @@ toku_c_getf_set(DBC *c, uint32_t flag, DBT *key, YDB_CALLBACK_FUNCTION f, void *
 
 //result is the result of the query (i.e. 0 means found, DB_NOTFOUND, etc..)
 static int
-c_getf_set_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool lock_only) {
+c_getf_set_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool lock_only, bool UU(is_indirect)) {
     QUERY_CONTEXT_WITH_INPUT super_context = (QUERY_CONTEXT_WITH_INPUT) extra;
     QUERY_CONTEXT_BASE       context       = &super_context->base;
 
@@ -567,6 +582,9 @@ c_getf_set_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, vo
     if (r==0 && key!=NULL && !lock_only) {
         DBT found_key = { .data = (void *) key, .size = keylen };
         DBT found_val = { .data = (void *) val, .size = vallen };
+        if (is_indirect) {
+            found_val.flags = DB_DBT_INDIRECT;
+        }
         context->r_user_callback = context->f(&found_key, &found_val, context->f_extra);
         r = context->r_user_callback;
     }
@@ -575,7 +593,7 @@ c_getf_set_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, vo
     return r;
 }
 
-static int c_getf_set_range_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool);
+static int c_getf_set_range_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool, bool);
 
 static int
 c_getf_set_range(DBC *c, uint32_t flag, DBT *key, YDB_CALLBACK_FUNCTION f, void *extra) {
@@ -600,13 +618,12 @@ c_getf_set_range(DBC *c, uint32_t flag, DBT *key, YDB_CALLBACK_FUNCTION f, void 
 
 //result is the result of the query (i.e. 0 means found, DB_NOTFOUND, etc..)
 static int
-c_getf_set_range_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool lock_only) {
+c_getf_set_range_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool lock_only, bool UU(is_indirect)) {
     QUERY_CONTEXT_WITH_INPUT super_context = (QUERY_CONTEXT_WITH_INPUT) extra;
     QUERY_CONTEXT_BASE       context       = &super_context->base;
 
     int r;
     DBT found_key = { .data = (void *) key, .size = keylen };
-
     //Lock:
     //  left(key,val)  = (input_key, -infinity)
     //  right(key) = found ? found_key : infinity
@@ -623,6 +640,9 @@ c_getf_set_range_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec v
     //Call application-layer callback if found and locks were successfully obtained.
     if (r==0 && key!=NULL && !lock_only) {
         DBT found_val = { .data = (void *) val, .size = vallen };
+        if (is_indirect) {
+            found_val.flags = DB_DBT_INDIRECT;
+        }
         context->r_user_callback = context->f(&found_key, &found_val, context->f_extra);
         r = context->r_user_callback;
     }
@@ -631,7 +651,7 @@ c_getf_set_range_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec v
     return r;
 }
 
-static int c_getf_set_range_reverse_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool);
+static int c_getf_set_range_reverse_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool, bool);
 
 static int
 c_getf_set_range_reverse(DBC *c, uint32_t flag, DBT *key, YDB_CALLBACK_FUNCTION f, void *extra) {
@@ -656,7 +676,7 @@ c_getf_set_range_reverse(DBC *c, uint32_t flag, DBT *key, YDB_CALLBACK_FUNCTION 
 
 //result is the result of the query (i.e. 0 means found, DB_NOTFOUND, etc..)
 static int
-c_getf_set_range_reverse_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool lock_only) {
+c_getf_set_range_reverse_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool lock_only, bool UU(is_indirect)) {
     QUERY_CONTEXT_WITH_INPUT super_context = (QUERY_CONTEXT_WITH_INPUT) extra;
     QUERY_CONTEXT_BASE       context       = &super_context->base;
 
@@ -679,6 +699,9 @@ c_getf_set_range_reverse_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen, b
     //Call application-layer callback if found and locks were successfully obtained.
     if (r==0 && key!=NULL && !lock_only) {
         DBT found_val = { .data = (void *) val, .size = vallen };
+        if (is_indirect) {
+            found_val.flags = DB_DBT_INDIRECT;
+        }
         context->r_user_callback = context->f(&found_key, &found_val, context->f_extra);
         r = context->r_user_callback;
     }

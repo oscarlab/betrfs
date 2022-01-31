@@ -100,7 +100,7 @@ PATENT RIGHTS GRANT:
 
 #include "threaded_stress_test_helpers.h"
 
-// The intent of this test is to measure the performace of creating and destroying child 
+// The intent of this test is to measure the performace of creating and destroying child
 // transactions. Child transactions should have less work associated with them. They
 // are not added to the live root list and they should not be creating their own snapshots.
 // Nevertheless, benchmarks like tpcc and sysbench create many child transactions
@@ -109,7 +109,7 @@ PATENT RIGHTS GRANT:
 static int create_child_txn(DB_TXN* txn, ARG arg, void* UU(operation_extra), void *UU(stats_extra)) {
     DB_TXN* child_txn = NULL;
     DB_ENV* env = arg->env;
-    int r = env->txn_begin(env, txn, &child_txn, arg->txn_flags); 
+    int r = env->txn_begin(env, txn, &child_txn, arg->txn_flags);
     CKERR(r);
     r = child_txn->commit(child_txn, 0);
     CKERR(r);
@@ -126,7 +126,7 @@ stress_table(DB_ENV* env, DB** dbp, struct cli_args *cli_args) {
         arg_init(&myargs[i], dbp, env, cli_args);
         myargs[i].operation = create_child_txn;
     }
-    run_workers(myargs, num_threads, cli_args->num_seconds, false, cli_args);
+    run_workers(myargs, num_threads, cli_args->num_seconds, cli_args);
 }
 
 extern "C" int test_perf_child_txn(void);

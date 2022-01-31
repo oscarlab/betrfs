@@ -14,6 +14,7 @@
 #include <linux/fs_struct.h>
 #include <linux/kallsyms.h>
 #include <linux/dcache.h>
+#include <linux/uaccess.h>
 
 #include "ftfs_southbound.h"
 #include "sb_misc.h"
@@ -22,12 +23,6 @@
 #include "ftfs.h"
 #include "ftfs_unit_test.h"
 #include "nb_proc_toku_memleak_detect.h"
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
-#include <asm/uaccess.h>
-#else
-#include <linux/uaccess.h>
-#endif
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("BetrFS.org");
@@ -41,8 +36,8 @@ static char *sb_fstype = NULL;
 module_param(sb_fstype, charp, 0);
 MODULE_PARM_DESC(sb_fstype, "the southbound file system type (ex: ext4)");
 
-bool sb_is_rotational = 0;
-module_param(sb_is_rotational, bool, 0);
+static int sb_is_rotational = 0;
+module_param(sb_is_rotational, int, 0);
 MODULE_PARM_DESC(sb_is_rotational, "the southbound device type is hdd or not (ex: 0 or 1 )");
 
 /* Do not remove --This filename is not the testname passed to toku_run_test,
@@ -61,7 +56,12 @@ static int last_result;
 
 bool ftfs_is_hdd(void)
 {
-	return sb_is_rotational;
+	return sb_is_rotational == 1;
+}
+
+bool toku_need_compression(void)
+{
+	return sb_is_rotational == 1;
 }
 
 void ftfs_error (const char * function, const char * fmt, ...)
@@ -194,7 +194,7 @@ static void __exit ftfs_module_exit(void)
 {
 	put_ftfs_southbound();
 
-	if (sb_private_umount())
+	if (ftfs_vfs && sb_private_umount())
 		ftfs_error(__func__, "unable to umount ftfs southbound");
 	destroy_sb_vmalloc_cache();
 	toku_test_exit();
@@ -204,6 +204,7 @@ static int resolve_ftfs_symbols(void)
 {
 	if (resolve_ftfs_southbound_symbols() ||
 	    resolve_sb_files_symbols() ||
+	    resolve_sb_pfn_symbols() ||
 	    resolve_sb_malloc_symbols() ||
 	    resolve_toku_misc_symbols()) {
 		return -EINVAL;
@@ -226,6 +227,11 @@ static int __init ftfs_module_init(void)
 		return -EINVAL;
 	}
 
+	ftfs_log(__func__, "sb_is_rotational is %d", sb_is_rotational);
+	if (sb_is_rotational != 0 && sb_is_rotational != 1) {
+		return -EINVAL;
+	}
+
 	ret = resolve_ftfs_symbols();
 	if (ret) {
 		ftfs_error(__func__, "could not resolve all symbols!");
@@ -233,8 +239,6 @@ static int __init ftfs_module_init(void)
 	}
 
 	ftfs_log(__func__, "Successfully loaded all ftfs_files.c symbols");
-
-
 	/*
 	 * Now we create a disconnected mount for our southbound file
 	 * system. It will not be inserted into any mount trees, but

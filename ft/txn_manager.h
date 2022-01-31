@@ -210,7 +210,7 @@ void toku_txn_manager_increase_last_xid(TXN_MANAGER mgr, uint64_t increment);
 TXNID toku_get_youngest_live_list_txnid_for(TXNID xc, const xid_omt_t &snapshot_txnids, const rx_omt_t &referenced_xids);
 bool toku_txn_manager_is_referenced(TXN_MANAGER txn_manager, TXNID xid);
 
-bool is_txnid_live(TXN_MANAGER txn_manager, TXNID txnid);
+bool toku_txn_is_txnid_live(TXN_MANAGER mgr, TXNID txnid);
 TXNID toku_txn_manager_youngest_snapshot_older_than_xid(TXN_MANAGER txn_manager, TXNID xid);
 
 #endif // TOKUTXN_MANAGER_H

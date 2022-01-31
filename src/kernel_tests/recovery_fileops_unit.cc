@@ -110,7 +110,7 @@ static char *cmd;
 
 static void
 usage(void) {
-    fprintf(stderr, "Usage:\n%s [-v|-q]* [-h] (-c|-r) -O fileop -A# -B# -C# -D# -E# -F# [-G# -H# -I#]\n"
+    dprintf(STDERR, "Usage:\n%s [-v|-q]* [-h] (-c|-r) -O fileop -A# -B# -C# -D# -E# -F# [-G# -H# -I#]\n"
                     "  fileop = c/r/d (create/rename/delete)\n"
                     "  Where # is a single digit number > 0.\n"
                     "  A-F are required for fileop=create\n"
@@ -289,12 +289,9 @@ static void UU() crash_it(void) {
         r = env->log_flush(env, NULL); //TODO: USe a real DB_LSN* instead of NULL
         CKERR(r);
     }
-    fprintf(stderr, "HAPPY CRASH\n");
-    fflush(stdout);
-    fflush(stderr);
+    dprintf(STDERR, "HAPPY CRASH\n");
     toku_hard_crash_on_purpose();
     printf("This line should never be printed\n");
-    fflush(stdout);
 }
 
 static void checkpoint_callback_maybe_crash(void * UU(extra)) {
@@ -313,7 +310,7 @@ static void env_startup(void) {
     int envflags = DB_INIT_LOCK | DB_INIT_LOG | DB_INIT_MPOOL | DB_INIT_TXN | DB_CREATE | DB_PRIVATE | recover_flag;
     r = db_env_create(&env, 0);
     CKERR(r);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
     //Disable auto-checkpointing.
@@ -417,7 +414,7 @@ frename(void) {
     {
         //Rename in 'key/val' pair.
         DBT key,val;
-        r = db_create(&db, env, 0);                                                             
+        r = db_create(&db, env, 0);
         CKERR(r);
         r = db->open(db, txn, oldname, NULL, DB_BTREE, 0, 0666);
         CKERR(r);
@@ -512,7 +509,7 @@ static void
 maybe_open_and_close_file_again_before_fileop(void) {
     if (get_choice_txn_does_open_close_before_fileop()) {
         int r;
-        r = db_create(&db, env, 0);                                                             
+        r = db_create(&db, env, 0);
         CKERR(r);
         r = db->open(db, txn, oldname, NULL, DB_BTREE, 0, 0666);
         CKERR(r);

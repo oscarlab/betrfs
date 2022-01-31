@@ -141,10 +141,10 @@ static int checkpoint_var(DB_TXN *txn, ARG arg, void* operation_extra, void *sta
         int rand_key = random() % arg->cli->num_elements;
         DBT key, val;
         r = db->put(
-            db, 
-            txn, 
-            dbt_init(&key, &rand_key, sizeof(rand_key)), 
-            dbt_init(&val, data, sizeof(data)), 
+            db,
+            txn,
+            dbt_init(&key, &rand_key, sizeof(rand_key)),
+            dbt_init(&val, data, sizeof(data)),
             0);
         if (r != 0) {
             goto cleanup;
@@ -177,7 +177,7 @@ stress_table(DB_ENV* env, DB** dbp, struct cli_args *cli_args) {
         myargs[i].operation = checkpoint_var;
         myargs[i].operation_extra = &val_size;
     }
-    run_workers(myargs, num_threads, cli_args->num_seconds, false, cli_args);
+    run_workers(myargs, num_threads, cli_args->num_seconds, cli_args);
 }
 
 extern "C" int test_perf_checkpoint_var(void);

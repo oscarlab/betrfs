@@ -187,7 +187,7 @@ static void test_loader(DB **dbs)
         CKERR(r);
         for(int i=0;i<NUM_KV_PAIRS;i++) {
             r = cursor->c_get(cursor, &key, &val, DB_NEXT);
-	    if (r!=0) { fprintf(stderr, "r==%d, failure\n", r); }
+	    if (r!=0) { dprintf(STDERR, "r==%d, failure\n", r); }
             if (DISALLOW_PUTS) {
                 CKERR2(r, DB_NOTFOUND);
             } else {
@@ -204,7 +204,7 @@ static void test_loader(DB **dbs)
     if ( verbose ) printf("PASS\n");
 }
 
-static void run_test(void) 
+static void run_test(void)
 {
     int r;
     char rmcmd[32 + strlen(envdir)];
@@ -225,7 +225,7 @@ static void run_test(void)
 //    int envflags = DB_INIT_LOCK | DB_INIT_MPOOL | DB_INIT_TXN | DB_CREATE | DB_PRIVATE | DB_INIT_LOG;
     int envflags = DB_INIT_LOCK | DB_INIT_LOG | DB_INIT_MPOOL | DB_INIT_TXN | DB_CREATE | DB_PRIVATE | DB_INIT_LOG;
     r = env->open(env, envdir, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                                            CKERR(r);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     //Disable auto-checkpointing
     r = env->checkpointing_set_period(env, 0);                                                                CKERR(r);
 
@@ -282,7 +282,7 @@ static void do_args(int argc, char * const argv[]) {
         } else if (strcmp(argv[0], "-h")==0) {
 	    resultcode=0;
 	do_usage:
-	    fprintf(stderr, "Usage:\n%s\n", cmd);
+	    dprintf(STDERR, "Usage:\n%s\n", cmd);
 	    exit(resultcode);
         } else if (strcmp(argv[0], "-p")==0) {
             DISALLOW_PUTS = LOADER_DISALLOW_PUTS;
@@ -296,7 +296,7 @@ static void do_args(int argc, char * const argv[]) {
             if (argc > 0)
                 envdir = argv[0];
 	} else {
-	    fprintf(stderr, "Unknown arg: %s\n", argv[0]);
+	    dprintf(STDERR, "Unknown arg: %s\n", argv[0]);
 	    resultcode=1;
 	    goto do_usage;
 	}

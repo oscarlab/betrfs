@@ -107,19 +107,19 @@ static void gracefully_shutdown(DB_TXN * oldest) {
     env->close(env, 0);
     printf("shutdown\n");
     //toku_hard_crash_on_purpose();
-} 
+}
 static void
 do_x1_shutdown (void) {
-    DB_TXN *oldest;  
+    DB_TXN *oldest;
     int r;
     r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
 
     r=db_env_create(&env, 0);                                                  assert(r==0);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r=env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE|DB_THREAD, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     {
-   
+
         r=env->txn_begin(env, 0, &oldest, 0);
         CKERR(r);
     }
@@ -149,7 +149,7 @@ do_x1_recover (bool UU(did_commit)) {
     r=env->txn_begin(env, 0, &tid, 0);                                         assert(r==0);
     r=db_create(&db, env, 0);                                                  CKERR(r);
     r=db->open(db, tid, TOKU_TEST_DATA_DB_NAME , 0, DB_BTREE, 0, S_IRWXU+S_IRWXG+S_IRWXO);                       CKERR(r);
-    r=db->get(db, tid, dbt_init(&key, "a", 2), dbt_init_malloc(&data), 0);     assert(r==0); 
+    r=db->get(db, tid, dbt_init(&key, "a", 2), dbt_init_malloc(&data), 0);     assert(r==0);
     r=tid->commit(tid, 0);                                                     assert(r==0);
     toku_free(data.data);
     r=db->close(db, 0);                                                        CKERR(r);

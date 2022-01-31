@@ -89,7 +89,6 @@ PATENT RIGHTS GRANT:
 #ident "Copyright (c) 2007-2013 Tokutek Inc.  All rights reserved."
 #ident "The technology is licensed by the Massachusetts Institute of Technology, Rutgers State University of New Jersey, and the Research Foundation of State University of New York at Stony Brook under United States of America Serial No. 11/760379 and to the patents and/or patent applications resulting from it."
 #include "test.h"
-#include <sys/wait.h>
 
 static void clean_env (const char *envdir) {
     const int len = strlen(envdir)+100;
@@ -102,7 +101,7 @@ static void clean_env (const char *envdir) {
 
 static void setup_env (DB_ENV **envp, const char *envdir) {
     { int chk_r = db_env_create(envp, 0); CKERR(chk_r); }
-    (*envp)->set_errfile(*envp, stderr);
+    (*envp)->set_errfile(*envp, STDERR);
 #ifdef TOKUDB
     { int chk_r = (*envp)->set_redzone(*envp, 0); CKERR(chk_r); }
 #endif

@@ -153,8 +153,8 @@ move_unbound_entries(
     paranoid_invariant(toku_list_empty(dest_unbound_inserts));
     toku_list *list = toku_list_head(src_unbound_inserts);
     while(list != src_unbound_inserts) {
-        struct unbound_insert_entry *entry = toku_list_struct(list, struct unbound_insert_entry, node_list);
-        if(ft_slice_compare(ft, entry->key, pivot) > 0) {
+        struct ubi_entry *entry = toku_list_struct(list, struct ubi_entry, node_list);
+        if(ft_slice_compare(ft, &entry->key, pivot) > 0) {
             toku_list *to_be_removed = list;
             list = list->next;
             toku_list_remove(to_be_removed);
@@ -175,7 +175,28 @@ move_leafentries(BASEMENTNODE dest_bn, BASEMENTNODE src_bn,
 )
 //Effect: move leafentries in the range [lbi, upe) from src_omt to newly created dest_omt
 {
-    src_bn->data_buffer.move_leafentries_to(&dest_bn->data_buffer, lbi, ube);
+    uint32_t num_indirect_full_count = 0;
+    uint32_t num_indirect_odd_count = 0;
+    uint32_t num_indirect_full_size = 0;
+    uint32_t num_indirect_odd_size = 0;
+
+    src_bn->data_buffer.move_leafentries_to(&dest_bn->data_buffer,
+                                            &num_indirect_full_count,
+                                            &num_indirect_odd_count,
+                                            &num_indirect_full_size,
+                                            &num_indirect_odd_size,
+                                            lbi, ube);
+#ifdef FT_INDIRECT
+    src_bn->indirect_insert_full_count -= num_indirect_full_count;
+    dest_bn->indirect_insert_full_count += num_indirect_full_count;
+    src_bn->indirect_insert_full_size -= num_indirect_full_size;
+    dest_bn->indirect_insert_full_size += num_indirect_full_size;
+
+    src_bn->indirect_insert_odd_count -= num_indirect_odd_count;
+    dest_bn->indirect_insert_odd_count += num_indirect_odd_count;
+    src_bn->indirect_insert_odd_size -= num_indirect_odd_size;
+    dest_bn->indirect_insert_odd_size += num_indirect_odd_size;
+#endif
 }
 
 static void
@@ -459,7 +480,7 @@ ft_slice_leaf(FT ft, FTNODE parent, FTNODE node, int nodenum,
             slice_on_boundary = true;
         } else {
             n_children_in_node = childnum + 1;
-            if (idx + 1 == (int)BLB_DATA(node, childnum)->omt_size()) {
+            if (idx + 1 == BLB_DATA(node, childnum)->omt_size()) {
                 n_children_in_sib = node->n_children - n_children_in_node;
                 if (n_children_in_sib == 0)
                     n_children_in_sib = 1;

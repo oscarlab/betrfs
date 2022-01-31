@@ -15,52 +15,14 @@ set(tokudb_srcs
   toku_patent
   )
 
-## make the shared library
-if (NOT BUILD_FOR_LINUX_KERNEL_MODULE)
-  add_library(${LIBTOKUDB} SHARED ${tokudb_srcs})
-  add_dependencies(${LIBTOKUDB} install_tdb_h generate_log_code)
-  target_link_libraries(${LIBTOKUDB} LINK_PRIVATE locktree_static ft_static util_static ${LIBTOKUPORTABILITY})
-  target_link_libraries(${LIBTOKUDB} LINK_PUBLIC z)
-  maybe_add_gcov_to_libraries(${LIBTOKUDB})
-  set_property(TARGET ${LIBTOKUDB} APPEND PROPERTY COMPILE_DEFINITIONS _GNU_SOURCE)
-
-  ## add a version script and set -fvisibility=hidden for the shared library
-  configure_file(export.map . COPYONLY)
-  if (NOT CMAKE_SYSTEM_NAME STREQUAL Darwin)
-    add_space_separated_property(TARGET ${LIBTOKUDB} COMPILE_FLAGS "-fvisibility=hidden -fvisibility-inlines-hidden")
-    add_space_separated_property(TARGET ${LIBTOKUDB} LINK_FLAGS "-Wl,--version-script=${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/export.map")
-  endif ()
-
-endif (NOT BUILD_FOR_LINUX_KERNEL_MODULE)
-
 ## make the static library
 add_library(tokudb_static_conv STATIC ${tokudb_srcs})
 add_dependencies(tokudb_static_conv install_tdb_h generate_log_code)
 set_target_properties(tokudb_static_conv PROPERTIES POSITION_INDEPENDENT_CODE $(STATIC_PIC))
 set(tokudb_source_libs tokudb_static_conv locktree_static ft_static util_static)
-toku_merge_static_libs(${LIBTOKUDB}_static ${LIBTOKUDB}_static "${tokudb_source_libs}")
 
 ## add gcov and define _GNU_SOURCE
 maybe_add_gcov_to_libraries(tokudb_static_conv)
 set_property(TARGET tokudb_static_conv APPEND PROPERTY COMPILE_DEFINITIONS _GNU_SOURCE)
 
-# detect when we are being built as a subproject
-if (NOT DEFINED MYSQL_PROJECT_NAME_DOCSTRING)
-  if (BUILD_FOR_LINUX_KERNEL_MODULE)
-    install(
-      TARGETS ${LIBTOKUDB}_static
-      DESTINATION lib
-      )
-  else ()
-    install(
-      TARGETS ${LIBTOKUDB} ${LIBTOKUDB}_static
-      DESTINATION lib
-      )
-  endif (BUILD_FOR_LINUX_KERNEL_MODULE)
-endif ()
-
-if (NOT BUILD_FOR_LINUX_KERNEL_MODULE)
-  add_subdirectory(tests)
-else()
-  add_subdirectory(kernel_tests)
-endif (NOT BUILD_FOR_LINUX_KERNEL_MODULE)
+add_subdirectory(kernel_tests)

@@ -1,7 +1,11 @@
-include $(PWD)/.mkinclude
+ifdef M
+	include $(M)/.mkinclude
+else
+	include $(PWD)/.mkinclude
+endif
 
 obj-m += ftfs.o
-ccflags-y += -fno-builtin
+ccflags-y += -fno-builtin -Wall -Werror
 
 ftfs-objs := \
 	ftfs_module.o \
@@ -14,7 +18,6 @@ ftfs-objs := \
 	sb_files.o \
 	sb_malloc.o \
 	ftfs_southbound.o \
-	sb_dir.o \
 	sb_stat.o \
 	sb_assert.o \
 	sb_stdio.o \
@@ -27,23 +30,41 @@ ftfs-objs := \
 	nb_proc_toku_flusher.o \
 	nb_proc_toku_dump_node.o \
 	nb_proc_toku_memleak_detect.o \
+	nb_proc_pfn.o \
 	sb_zlib.o \
 	libftindex.o \
 	sb_flock.o \
-	sb_sfs_ops.o
+	sb_sfs_ops.o \
+	nb_readahead.o \
+	sb_pfn.o
 
-#KBUILD_CFLAGS += -DUSE_SFS_DIO
 #KBUILD_CFLAGS += -DFTFS_CIRCLE
 #KBUILD_CFLAGS += -DFTFS_SMART_PIVOT
 KBUILD_CFLAGS += -DFTFS_PFSPLIT
 KBUILD_CFLAGS += -DFTFS_NO_PRINT
-#KBUILD_CFLAGS += -DFTFS_DEBUG
-#KBUILD_CFLAGS += -DFTFS_MEM_DEBUG
-#KBUILD_CFLAGS += -DTOKU_MEMLEAK_DETECT
-#KBUILD_CFLAGS += -DTOKU_DEBUG_PTRS
-#KBUILD_CFLAGS += -DSOUTHBOUND_DEBUG
 KBUILD_CFLAGS += -DRMDIR_RANGE_DELETE
-#KBUILD_CFLAGS += -DFTFS_EMPTY_DIR_VERIFY
+KBUILD_CFLAGS += -DFT_INDIRECT
+#KBUILD_CFLAGS += -DREAD_DIR_OPT
+
+# TODO: couldn't figure out how to set KBUILD_CFLAGS only for debug target. So,
+# just create a debug flags variables, and use it directly in the debug target.
+# There has to be a better way, but we're on a deadline.
+FTFS_DEBUG_CFLAGS := -ggdb -g3 -Og
+
+# This flag enables extremely verbose output and only enables only one extra
+# check. If enabled by for all debug builds, we'd need to increase Jenkins jobs
+# timeouts simply due to the verbosity.
+# FTFS_DEBUG_CFLAGS += -DFTFS_DEBUG
+
+# We don't understand why, but xattrs are causing performance regressions.
+# Enable them only for the debug build, since one xfstest uses xattrs.
+FTFS_DEBUG_CFLAGS += -DFTFS_XATTR
+FTFS_DEBUG_CFLAGS += -DFT_PAGE_DEBUG
+# FTFS_DEBUG_CFLAGS += -DFTFS_MEM_DEBUG
+# FTFS_DEBUG_CFLAGS += -DSOUTHBOUND_DEBUG
+# FTFS_DEBUG_CFLAGS += -DTOKU_MEMLEAK_DETECT
+# FTFS_DEBUG_CFLAGS += -DFTFS_EMPTY_DIR_VERIFY
+
 #include $(PWD)/.turnoff-opts.mkinclude
 
 LIBSRC-OBJS = \
@@ -77,6 +98,7 @@ libft/ft-flusher.cc.o \
 libft/ft-hot-flusher.cc.o \
 libft/ft_msg.cc.o \
 libft/ft_node-serialize.cc.o \
+libft/ft-indirect.cc.o \
 libft/ft-node-deserialize.cc.o \
 libft/ft-ops.cc.o \
 libft/ft-serialize.cc.o \
@@ -130,14 +152,11 @@ libutil/threadpool.cc.o
 #libutil/partitioned_counter.cc.o
 
 LIBPORTABILITY-OBJS = \
-libportability/huge_page_detection.cc.o \
 libportability/file.cc.o \
-libportability/os_malloc.cc.o \
 libportability/portability.cc.o \
 libportability/toku_path.cc.o \
 libportability/toku_pthread.cc.o \
 libportability/toku_time.cc.o
-#libportability/memory.cc.o \
 #libportability/toku_crash.cc.o \
 # libportability/toku_assert.cc.o
 # Thread-local storage
@@ -153,12 +172,18 @@ liblocktree/keyrange.cc.o \
 liblocktree/wfg.cc.o
 
 all: libftindex.o
-	make -C $(MOD_KERN_SOURCE) M=$(PWD) modules
+	$(MAKE) -C $(MOD_KERN_SOURCE) M=$(PWD) modules
+
+bench: libftindex.o
+	$(MAKE) -C $(MOD_KERN_SOURCE) M=$(PWD) modules
+
+debug: libftindex.o
+	$(MAKE) -C $(MOD_KERN_SOURCE) M=$(PWD) ccflags-y="$(ccflags-y) $(FTFS_DEBUG_CFLAGS)" modules
 
 libftindex.o: $(LIBPORTABILITY-OBJS) $(LIBFT-OBJS) $(LIBUTIL-OBJS) $(LIBLOCKTREE-OBJS) $(LIBSRC-OBJS)
 	ld -r $^ -o $@
 
-libsrc/%.o: ../build/src/libtokufractaltree_static.a
+libsrc/%.o: ../build/src/libtokudb_static_conv.a
 	(cd libsrc; ar x ../$< $*.o)
 
 libft/%.o: ../build/ft/libft_static.a
@@ -174,4 +199,4 @@ liblocktree/%.o: ../build/locktree/liblocktree_static.a
 	(cd liblocktree; ar x ../$< $*.o)
 
 clean:
-	make -C /lib/modules/$(KDIR)/build M=$(PWD) clean
+	$(MAKE) -C $(MOD_KERN_SOURCE) M=$(PWD) clean

@@ -123,10 +123,8 @@ static void do_1381_maybe_lock (int _do_loader, uint64_t *raw_count) {
     DB_TXN * const null_txn = 0;
 
     int do_loader = _do_loader;
-    #ifdef TOKU_LINUX_MODULE
     if(_do_loader == 1) do_loader = 0;
-    #endif
-    
+
     r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
     assert(r==0);
 
@@ -134,7 +132,7 @@ static void do_1381_maybe_lock (int _do_loader, uint64_t *raw_count) {
     {
 	DB_ENV *env;
 	DB *db;
-	
+
 	const int envflags = DB_CREATE|DB_INIT_MPOOL|DB_INIT_LOG|DB_INIT_TXN|DB_INIT_LOCK|DB_THREAD|DB_PRIVATE;
 
 	r = db_env_create(&env, 0);                                           CKERR(r);
@@ -153,7 +151,7 @@ static void do_1381_maybe_lock (int _do_loader, uint64_t *raw_count) {
 	DB_ENV *env;
 	DB *db;
 	const int envflags = DB_CREATE|DB_INIT_MPOOL|DB_INIT_LOG|DB_INIT_TXN|DB_INIT_LOCK|DB_THREAD |DB_PRIVATE;
-	
+
 	r = db_env_create(&env, 0);                                           CKERR(r);
 	r = env->set_redzone(env, 0);                                         CKERR(r);
         r = env->set_generate_row_callback_for_put(env, generate_row_for_put); CKERR(r);
@@ -169,12 +167,12 @@ static void do_1381_maybe_lock (int _do_loader, uint64_t *raw_count) {
         DB_LOADER* loader = NULL;
 	if (do_loader) {
 	    r = env->create_loader(
-                env, 
-                txn, 
-                &loader, 
+                env,
+                txn,
+                &loader,
                 NULL, // no src_db needed
-                1, 
-                &db, 
+                1,
+                &db,
                 &mult_put_flags,
                 &mult_dbt_flags,
                 LOADER_COMPRESS_INTERMEDIATES
@@ -232,7 +230,7 @@ do_1381 (void) {
     for (do_table_lock = 0; do_table_lock < 2 ; do_table_lock++) {
 	do_1381_maybe_lock(do_table_lock, &raw_counts[do_table_lock]);
     }
-//    assert(raw_counts[0] > raw_counts[1]); // the raw counts should be less for the tablelock case. 
+//    assert(raw_counts[0] > raw_counts[1]); // the raw counts should be less for the tablelock case.
 // NOTE: we are not using loader. the assert is not applicable
 }
 

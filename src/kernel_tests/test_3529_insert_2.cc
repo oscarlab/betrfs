@@ -165,7 +165,7 @@ static void
 run_test(void) {
     int r;
     r = db_env_create(&env, 0); CKERR(r);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r = env->set_redzone(env, 0); CKERR(r);
     r = env->set_generate_row_callback_for_put(env, my_generate_row); CKERR(r);
     struct toku_db_key_operations key_ops;

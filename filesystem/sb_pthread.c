@@ -314,12 +314,11 @@ static int kthread_func(void *arg) {
 /* pthread_attr_t is never used in tokukv */
 int
 pthread_create_debug(pthread_t *thread, const pthread_attr_t *attr,
-	       void *(*start_routine) (void *), void *arg, char * debug_str)
+                     void *(*start_routine) (void *), void *arg, char * debug_str)
 {
 	thread->tps = kmalloc(sizeof(struct true_pthread_struct), GFP_KERNEL);
-	if (thread->tps == NULL) {
+	if (thread->tps == NULL)
 		return EAGAIN;
-	}
 
 	init_completion(&thread->tps->event);
 	thread->tps->func = start_routine;
@@ -333,26 +332,12 @@ pthread_create_debug(pthread_t *thread, const pthread_attr_t *attr,
 	}
 	return 0;
 }
+
 int
 pthread_create(pthread_t *thread, const pthread_attr_t *attr,
-	       void *(*start_routine) (void *), void *arg)
+               void *(*start_routine) (void *), void *arg)
 {
-	thread->tps = kmalloc(sizeof(struct true_pthread_struct), GFP_KERNEL);
-	if (thread->tps == NULL) {
-		return EAGAIN;
-	}
-
-	init_completion(&thread->tps->event);
-	thread->tps->func = start_routine;
-	thread->tps->arg = arg;
-	thread->tps->ret_val = 0;
-	thread->tps->errno = 0;
-	thread->tps->t = kthread_run(kthread_func, thread->tps, "ftfs_thread");
-	if (IS_ERR(thread->tps->t)) {
-		kfree(thread->tps);
-		return EAGAIN;
-	}
-	return 0;
+	return pthread_create_debug(thread, attr, start_routine, arg, "ftfs_thread");
 }
 
 void *kthread_data(struct task_struct *task)

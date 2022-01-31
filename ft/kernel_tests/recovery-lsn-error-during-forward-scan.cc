@@ -108,21 +108,21 @@ static void recover_callback_at_turnaround(void *UU(arg)) {
     int r;
     char logname[TOKU_PATH_MAX+1];
     sprintf(logname, "%s/log000000000000.tokulog%d", TOKU_TEST_ENV_DIR_NAME, TOKU_LOG_VERSION);
-    FILE *f = fopen(logname, "r+b"); assert(f);
+    int f = open(logname, O_WRONLY); assert(f);
 
     long int lsn_offset_2nd_log = log_superblock_size +
                                   log_begin_checkpoint_size +
                                   log_end_checkpoint_size +
                                   log_comment_lsn_low_offset;
-    r = fseek(f, lsn_offset_2nd_log, SEEK_SET); assert(r == 0);
+    r = lseek(f, lsn_offset_2nd_log, SEEK_SET); assert(r == lsn_offset_2nd_log);
 
     char c = 100;
-    size_t n = fwrite(&c, sizeof c, 1, f); assert(n == sizeof c);
-    r = fclose(f); assert(r == 0);
+    size_t n = write(f, &c, sizeof(c)); assert(n == sizeof(c));
+    r = close(f); assert(r == 0);
 }
 
 
-static int 
+static int
 run_test(void) {
     int r;
 
@@ -168,11 +168,11 @@ run_test(void) {
     r = tokudb_recover(NULL,
 		       NULL_prepared_txn_callback,
 		       NULL_keep_cachetable_callback,
-		       NULL_logger, TOKU_TEST_ENV_DIR_NAME, TOKU_TEST_ENV_DIR_NAME, &dummy_ftfs_key_ops, 0, 0, NULL, 0); 
+		       NULL_logger, TOKU_TEST_ENV_DIR_NAME, TOKU_TEST_ENV_DIR_NAME, &dummy_ftfs_key_ops, 0, 0, NULL, 0);
     assert(r != 0);
 
     r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU); assert(r == 0);
-    
+
     //reset the callback so it does not screw other tests
     toku_recover_set_callback(NULL, NULL);
     return 0;
@@ -185,7 +185,7 @@ test_recovery_lsn_error_during_forward_scan() {
     initialize_dummymsn();
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
- 
+
     r = run_test();
 
     toku_ft_layer_destroy();

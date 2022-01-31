@@ -100,6 +100,11 @@ PATENT RIGHTS GRANT:
 //#include "ft/wbuf.h"
 //#include "ft/rbuf.h"
 
+#ifdef FT_INDIRECT
+unsigned int ft_msg_ubi_page_count(FT_MSG ft_msg);
+void ft_msg_set_page_list_private(FT_MSG ft_msg, int bit);
+void ft_msg_clear_page_list_private(FT_MSG ft_msg, int bit);
+#endif
 uint32_t ft_msg_get_keylen(FT_MSG ft_msg);
 
 uint32_t ft_msg_get_vallen(FT_MSG ft_msg);
@@ -130,6 +135,9 @@ bool is_dbt_empty(const DBT *);
 const DBT * get_dbt_empty(void);
 
 void ft_msg_write_to_wbuf(FT_MSG, struct wbuf *, int );
+
+uint32_t ft_get_indirect_msg_size(FT_MSG ft_msg);
+
 
 #endif  // FT_MSG_H
 

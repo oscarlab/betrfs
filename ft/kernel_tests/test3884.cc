@@ -105,9 +105,19 @@ static const int bnsize = 256;    // Target basement node size
 static const int eltsperbn = 256 / 64;  // bnsize / eltsize
 static const int keylen = sizeof(long);
 // vallen is eltsize - keylen and leafentry overhead
+#ifdef FT_INDIRECT
+static const int vallen = 64 - sizeof(long) - (sizeof(((LEAFENTRY)NULL)->indirect_insert_offsets)  // overhead from LE_CLEAN_MEMSIZE
+                                               +sizeof(((LEAFENTRY)NULL)->num_indirect_inserts)
+                                               +sizeof(((LEAFENTRY)NULL)->type)
+                                               +sizeof(uint32_t)
+                                               +sizeof(((LEAFENTRY)NULL)->u.clean.vallen));
+#else
 static const int vallen = 64 - sizeof(long) - (sizeof(((LEAFENTRY)NULL)->type)  // overhead from LE_CLEAN_MEMSIZE
                                                +sizeof(uint32_t)
                                                +sizeof(((LEAFENTRY)NULL)->u.clean.vallen));
+
+#endif
+
 #define dummy_msn_3884 ((MSN) { (uint64_t) 3884 * MIN_MSN.msn })
 
 static TOKUTXN const null_txn = 0;
@@ -130,6 +140,10 @@ le_add_to_bn(bn_data* bn, uint32_t idx, const  char *key, int keysize, const cha
     r->type = LE_CLEAN;
     r->u.clean.vallen = valsize;
     memcpy(r->u.clean.val, val, valsize);
+#ifdef FT_INDIRECT
+    r->indirect_insert_offsets = NULL;
+    r->num_indirect_inserts = 0;
+#endif
 }
 
 
@@ -357,9 +371,16 @@ test_split_on_boundary_of_last_node(void)
             // we want this to be slightly smaller than all the rest of
             // the data combined, so the halfway mark will be just to its
             // left and just this element will end up on the right of the split
+#ifdef FT_INDIRECT
+            big_val_size -= 1 + (sizeof(((LEAFENTRY)NULL)->indirect_insert_offsets)  // overhead from LE_CLEAN_MEMSIZE
+                                 + sizeof(((LEAFENTRY)NULL)->num_indirect_inserts)
+                                 +sizeof(((LEAFENTRY)NULL)->type)  // overhead from LE_CLEAN_MEMSIZE
+                                 +sizeof(((LEAFENTRY)NULL)->u.clean.vallen));
+#else
             big_val_size -= 1 + (sizeof(((LEAFENTRY)NULL)->type)  // overhead from LE_CLEAN_MEMSIZE
                                  +sizeof(uint32_t) // sizeof(keylen)
                                  +sizeof(((LEAFENTRY)NULL)->u.clean.vallen));
+#endif
             invariant(big_val_size <= maxbnsize);
             char * XMALLOC_N(big_val_size, big_val);
             memset(big_val, k, big_val_size);

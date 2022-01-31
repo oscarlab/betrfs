@@ -97,6 +97,7 @@ PATENT RIGHTS GRANT:
 #include <stdint.h>
 
 
+// returns difference of two struct timevals in microseconds
 static inline uint64_t toku_tdiff (struct timeval *a, struct timeval *b) {
     return (1000000*(a->tv_sec - b->tv_sec) + (a->tv_usec - b->tv_usec));
 }

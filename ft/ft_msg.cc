@@ -94,6 +94,8 @@ PATENT RIGHTS GRANT:
 #include "xids.h"
 #include "ft_msg.h"
 
+#include "leafentry.h"
+#include "ule-internal.h"
 
 uint32_t 
 ft_msg_get_keylen(FT_MSG ft_msg) {
@@ -105,6 +107,12 @@ uint32_t
 ft_msg_get_vallen(FT_MSG ft_msg) {
     uint32_t rval = ft_msg->val->size;
     return rval;
+}
+
+uint32_t 
+ft_get_indirect_msg_size(FT_MSG ft_msg) {
+    struct ftfs_indirect_val *val = (struct ftfs_indirect_val*) ft_msg->val->data;
+    return val->size;
 }
 
 XIDS
@@ -149,6 +157,26 @@ ft_msg_get_pm_status(FT_MSG ft_msg) {
     assert(FT_DELETE_MULTICAST == ft_msg->type);
     return ft_msg -> u.rd_extra.pm_status;
 }
+
+
+#ifdef FT_INDIRECT
+unsigned int ft_msg_ubi_page_count(FT_MSG ft_msg) {
+    assert(FT_UNBOUND_INSERT == (enum ft_msg_type) (char) ft_msg->type);
+    return 1;
+}
+
+void ft_msg_set_page_list_private(FT_MSG ft_msg, int bit) {
+    assert(FT_UNBOUND_INSERT == (enum ft_msg_type) (char) ft_msg->type);
+    struct ftfs_indirect_val *msg_val = (struct ftfs_indirect_val *) ft_msg->val->data;
+    ftfs_set_page_list_private(&msg_val->pfn, 1, bit);
+}
+
+void ft_msg_clear_page_list_private(FT_MSG ft_msg, int bit) {
+    assert(FT_UNBOUND_INSERT == (enum ft_msg_type) (char) ft_msg->type);
+    struct ftfs_indirect_val *msg_val = (struct ftfs_indirect_val *) ft_msg->val->data;
+    ftfs_clear_page_list_private(&msg_val->pfn, 1, bit);
+}
+#endif
 
 MSN 
 ft_msg_get_msn(FT_MSG ft_msg) {

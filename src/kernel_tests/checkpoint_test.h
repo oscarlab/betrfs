@@ -1,4 +1,4 @@
-/* -*- mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*- */ 
+/* -*- mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 // vim: ft=cpp:expandtab:ts=8:sw=4:softtabstop=4:
 
 /*
@@ -197,7 +197,7 @@ env_startup(const char *envdir, int64_t bytes, int recovery_flags) {
     int envflags = DB_INIT_LOCK | DB_INIT_MPOOL | DB_INIT_LOG | DB_INIT_TXN | DB_CREATE | DB_PRIVATE | recovery_flags;
     r = env->open(env, envdir, envflags, S_IRWXU+S_IRWXG+S_IRWXO);
         CKERR(r);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r = env->checkpointing_set_period(env, 0); //Disable auto-checkpointing.
         CKERR(r);
 }
@@ -438,8 +438,6 @@ insert_n(DB *db1, DB *db2, DB_TXN *txn, int firstkey, int n, int offset) {
     //    printf("db1 = 0x%08lx, db2 = 0x%08lx, *txn = 0x%08lx, firstkey = %d, n = %d\n",
     //	   (unsigned long) db1, (unsigned long) db2, (unsigned long) txn, firstkey, n);
 
-    fflush(stdout);
-
     for (i = 0; i<n; i++) {
 	int64_t kk = firstkey+i;
 	v = generate_val(kk) + offset;
@@ -514,7 +512,7 @@ verify_sequential_rows(DB* compare_db, int64_t firstkey, int64_t numkeys) {
         assert(r1==0);
 	assert(key1.size==8 && val1.size==8 && *(int64_t*)key1.data==k && *(int64_t*)val1.data==v);
     }
-    // now verify that there are no rows after the last expected 
+    // now verify that there are no rows after the last expected
     r1 = c1->c_get(c1, &key1, &val1, DB_NEXT);
     assert(r1 == DB_NOTFOUND);
 

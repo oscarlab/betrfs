@@ -115,7 +115,7 @@ static int put_multiple_generate(DB *dest_db, DB *src_db, DBT_ARRAY *dest_keys, 
     (void) src_db;
 
     uint32_t which = (uint32_t) (intptr_t) dest_db->app_private;
-    
+
     if (which == NUM_DBS) {
 	// primary
 	dbt_init(dest_key, src_key->data, src_key->size);
@@ -141,7 +141,7 @@ static int poll_print(void *extra, float progress) {
 
 const char *src_name="src.db";
 
-static void run_test(void) 
+static void run_test(void)
 {
     int r;
     toku_os_recursive_delete(TOKU_TEST_FILENAME);
@@ -155,7 +155,7 @@ static void run_test(void)
     r = env->set_generate_row_callback_for_put(env, put_multiple_generate);      CKERR(r);
     int envflags = DB_INIT_LOCK | DB_INIT_LOG | DB_INIT_MPOOL | DB_INIT_TXN | DB_CREATE | DB_PRIVATE | DB_INIT_LOG;
     r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);               CKERR(r);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     //Disable auto-checkpointing
     r = env->checkpointing_set_period(env, 0);                                   CKERR(r);
 
@@ -177,14 +177,14 @@ static void run_test(void)
     DB *dbs[NUM_DBS];
     for (int i = 0; i < NUM_DBS; i++) {
         r = db_create(&dbs[i], env, 0); CKERR(r);
-        char key_name[32]; 
+        char key_name[32];
         sprintf(key_name, "key%d", i);
         r = dbs[i]->open(dbs[i], NULL, key_name, NULL, DB_BTREE, DB_AUTO_COMMIT|DB_CREATE, 0666);   CKERR(r);
         dbs[i]->app_private = (void *) (intptr_t) i;
     }
 
     DB_TXN *hottxn;
-    r = env->txn_begin(env, NULL, &hottxn, 0);                                                               
+    r = env->txn_begin(env, NULL, &hottxn, 0);
     CKERR(r);
 
     DB_INDEXER *indexer;
@@ -197,11 +197,11 @@ static void run_test(void)
 
     // setup putm
     DB *putm_dbs[NUM_DBS+1];
-    for (int i = 0; i < NUM_DBS; i++) 
+    for (int i = 0; i < NUM_DBS; i++)
 	putm_dbs[i] = dbs[i];
     putm_dbs[NUM_DBS] = src_db;
 
-    DBT putm_keys[NUM_DBS+1], putm_vals[NUM_DBS+1]; 
+    DBT putm_keys[NUM_DBS+1], putm_vals[NUM_DBS+1];
 
     uint32_t putm_flags[NUM_DBS+1];
     for (int i = 0; i < NUM_DBS+1; i++)
@@ -230,7 +230,7 @@ static void run_test(void)
     CKERR(r);
     r = hottxn->commit(hottxn, DB_TXN_SYNC);
     CKERR(r);
-    
+
     r = txn->commit(txn, DB_TXN_SYNC);                                           CKERR(r);
 
     for(int i=0;i<NUM_DBS;i++) {
@@ -264,10 +264,10 @@ static void do_args(int argc, char * const argv[]) {
         } else if (strcmp(argv[0], "-h")==0) {
 	    resultcode=0;
 	do_usage:
-	    fprintf(stderr, "Usage:\n%s\n", cmd);
+	    dprintf(STDERR, "Usage:\n%s\n", cmd);
 	    exit(resultcode);
 	} else {
-	    fprintf(stderr, "Unknown arg: %s\n", argv[0]);
+	    dprintf(STDERR, "Unknown arg: %s\n", argv[0]);
 	    resultcode=1;
 	    goto do_usage;
 	}

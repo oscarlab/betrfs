@@ -118,31 +118,38 @@ extern "C" int sb_get_errno(void);
 extern "C" void sb_set_errno(int);
 extern "C" int __trace_printk(unsigned long ip, const char *fmt, ...);
 
-#define TOKU_TRACE_PRINTK 0
-#if TOKU_TRACE_PRINTK
+#ifdef FT_DEBUGGING
 #define toku_trace_printk(fmt, ...)                          \
 do {                                                    \
                  __trace_printk(0, fmt, ##__VA_ARGS__);    \
 } while (0)
-#else
+#else /* FT_DEBUGGING */
 #define toku_trace_printk(fmt, ...)                          \
 ((void)1)
-#endif
-static inline int
-get_maybe_error_errno(int r)
+#endif /* FT_DEBUGGING */
+
+static 
+inline int get_maybe_error_errno(int r)
 {
     if (r < 0)
         return -r;
     return r;
 }
 
-
- static inline void
+static inline void
 set_errno(int new_errno)
 {
- //   bogus_errno = new_errno;
     sb_set_errno(new_errno);
 }
+#else
+static inline void
+set_errno(int new_errno)
+{
+    errno = new_errno;
+}
+
+#define toku_trace_printk(fmt, ...)                          \
+((void)1)
 
 #endif
 
@@ -166,7 +173,7 @@ void sb_do_assert_expected_fail(uintptr_t/*expr*/, uintptr_t /*expected*/, const
 
 extern void (*do_assert_hook)(void); // Set this to a function you want called after printing the assertion failure message but before calling abort().  By default this is NULL.
 
-#if defined(GCOV) || TOKU_WINDOWS
+#if defined(GCOV)
 #define assert(expr)      toku_do_assert((expr) != 0, #expr, __FUNCTION__, __FILE__, __LINE__, get_maybe_error_errno())
 #define assert_zero(expr) toku_do_assert((expr) == 0, #expr, __FUNCTION__, __FILE__, __LINE__, get_maybe_error_errno())
 #define assert_equals(expr, expected) toku_do_assert((expr) == (expected), (expected), #expr, __FUNCTION__, __FILE__, __LINE__, get_maybe_error_errno())
@@ -176,10 +183,10 @@ extern void (*do_assert_hook)(void); // Set this to a function you want called a
 #define assert_equals(expr, expected) ((expr) == (expected) ? (void)0 : sb_do_assert_expected_fail((uintptr_t)(expr), (uintptr_t)(expected), #expr, __FUNCTION__, __FILE__, __LINE__, 0))
 #define assert_null(expr) ((expr) == nullptr ? (void)0 : sb_do_assert_zero_fail((uintptr_t)(expr), #expr, __FUNCTION__, __FILE__, __LINE__, 0))
 #else
-#define assert(expr)      ((expr)      ? (void)0 : sb_do_assert_fail(#expr, __FUNCTION__, __FILE__, __LINE__, get_maybe_error_errno()))
-#define assert_zero(expr) ((expr) == 0 ? (void)0 : sb_do_assert_zero_fail((uintptr_t)(expr), #expr, __FUNCTION__, __FILE__, __LINE__, get_maybe_error_errno()))
-#define assert_equals(expr, expected) ((expr) == (expected) ? (void)0 : sb_do_assert_expected_fail((uintptr_t)(expr), (uintptr_t)(expected), #expr, __FUNCTION__, __FILE__, __LINE__, get_maybe_error_errno()))
-#define assert_null(expr) ((expr) == nullptr ? (void)0 : sb_do_assert_zero_fail((uintptr_t)(expr), #expr, __FUNCTION__, __FILE__, __LINE__, get_maybe_error_errno()))
+#define assert(expr)      ((expr)      ? (void)0 : sb_do_assert_fail(#expr, __FUNCTION__, __FILE__, __LINE__, errno))
+#define assert_zero(expr) ((expr) == 0 ? (void)0 : sb_do_assert_zero_fail((uintptr_t)(expr), #expr, __FUNCTION__, __FILE__, __LINE__, errno))
+#define assert_equals(expr, expected) ((expr) == (expected) ? (void)0 : sb_do_assert_expected_fail((uintptr_t)(expr), (uintptr_t)(expected), #expr, __FUNCTION__, __FILE__, __LINE__, errno))
+#define assert_null(expr) ((expr) == nullptr ? (void)0 : sb_do_assert_zero_fail((uintptr_t)(expr), #expr, __FUNCTION__, __FILE__, __LINE__, errno))
 #endif
 
 #ifdef GCOV
@@ -224,6 +231,7 @@ get_error_errno(int rv)
         return -rv;
     return rv;
 #else
+    (void)rv;
     invariant(errno);
     return errno;
 #endif

@@ -214,12 +214,12 @@ dump_header(FT ft) {
 
 static int
 print_le(
-    const void* key, 
-    const uint32_t keylen, 
-    const LEAFENTRY &le, 
-    const uint32_t idx UU(), 
+    const void* key,
+    const uint32_t keylen,
+    const LEAFENTRY &le,
+    const uint32_t idx UU(),
     void *const ai UU()
-    ) 
+    )
 {
     print_klpair(stdout, key, keylen, le);
     printf("\n");
@@ -251,7 +251,7 @@ static int dump_nonleaf(FT_MSG msg, bool UU(is_fresh), void * UU(args)) {
                                  case FT_OPTIMIZE: printf("OPTIMIZE"); goto ok;
                                  case FT_OPTIMIZE_FOR_UPGRADE: printf("OPTIMIZE_FOR_UPGRADE"); goto ok;
                                  case FT_UPDATE:   printf("UPDATE"); goto ok;
-                                 case FT_UPDATE_BROADCAST_ALL: 
+                                 case FT_UPDATE_BROADCAST_ALL:
                                  printf("UPDATE_BROADCAST_ALL"); goto ok;
                                  case FT_DELETE_MULTICAST:
                                  printf("DELETE_MULTICAST"); goto ok;
@@ -273,7 +273,7 @@ static int dump_nonleaf(FT_MSG msg, bool UU(is_fresh), void * UU(args)) {
                                      print_item(data, datalen);
                                  }
                                  printf("\n");
-                                return 0; 
+                                return 0;
 
 }
 static void
@@ -300,10 +300,10 @@ dump_node (int f, BLOCKNUM blocknum, FT h) {
     printf(" layout_version_read_from_disk=%d\n", n->layout_version_read_from_disk);
     printf(" build_id=%d\n", n->build_id);
     printf(" max_msn_applied_to_node_on_disk=%" PRId64 " (0x%" PRIx64 ")\n", n->max_msn_applied_to_node_on_disk.msn, n->max_msn_applied_to_node_on_disk.msn);
-    printf("io time %lf decompress time %lf deserialize time %lf\n", 
-        tokutime_to_seconds(bfe.io_time), 
-        tokutime_to_seconds(bfe.decompress_time), 
-        tokutime_to_seconds(bfe.deserialize_time) 
+    printf("io time %lf decompress time %lf deserialize time %lf\n",
+        tokutime_to_seconds(bfe.io_time),
+        tokutime_to_seconds(bfe.decompress_time),
+        tokutime_to_seconds(bfe.deserialize_time)
         );
 
     printf(" n_children=%d\n", n->n_children);
@@ -323,7 +323,7 @@ dump_node (int f, BLOCKNUM blocknum, FT h) {
         if (n->height > 0) {
             printf("   child %d: %" PRId64 "\n", i, BP_BLOCKNUM(n, i).b);
             NONLEAF_CHILDINFO bnc = BNC(n, i);
-            unsigned int n_bytes = toku_bnc_nbytesinbuf(bnc); 
+            unsigned int n_bytes = toku_bnc_nbytesinbuf(bnc);
             int n_entries = toku_bnc_n_entries(bnc);
             if (n_bytes > 0 || n_entries > 0) {
                 printf("   buffer contains %u bytes (%d items)\n", n_bytes, n_entries);
@@ -343,7 +343,7 @@ dump_node (int f, BLOCKNUM blocknum, FT h) {
     toku_free(ndd);
 }
 
-static void 
+static void
 dump_block_translation(FT h, uint64_t offset) {
     toku_blocknum_dump_translation(h->blocktable, make_blocknum(offset));
 }
@@ -417,7 +417,7 @@ dump_garbage_stats(int f, FT ft) {
     printf("used_size\t%" PRIu64 "\n", used_space);
 }
 
-static uint32_t 
+static uint32_t
 get_unaligned_uint32(unsigned char *p) {
     return *(uint32_t *)p;
 }
@@ -437,9 +437,10 @@ sub_block_deserialize(struct dump_sub_block *sb, unsigned char *sub_block_header
 
 static void
 verify_block(unsigned char *cp, uint64_t file_offset, uint64_t size) {
+#ifdef FT_DEBUGGING
     // verify the header checksum
     const size_t node_header = 8 + sizeof (uint32_t) + sizeof (uint32_t) + sizeof (uint32_t);
-    
+
     printf("%.8s layout_version=%u %u build=%d\n", cp, get_unaligned_uint32(cp+8), get_unaligned_uint32(cp+12), get_unaligned_uint32(cp+16));
 
     unsigned char *sub_block_header = &cp[node_header];
@@ -477,6 +478,7 @@ verify_block(unsigned char *cp, uint64_t file_offset, uint64_t size) {
     }
     if (offset != size)
         printf("offset %u expected %" PRIu64 "\n", offset, size);
+#endif //FT_DEBUGGING
 }
 
 static void
@@ -556,7 +558,7 @@ dump_node_wrapper(BLOCKNUM b, int64_t UU(size), int64_t UU(address), void *extra
     return 0;
 }
 
-static void 
+static void
 interactive_help(void) {
     fprintf(stderr, "help\n");
     fprintf(stderr, "header\n");
@@ -580,7 +582,7 @@ getuint64(const char *f) {
         return strtoull(f, 0, 10);
 }
 
-int 
+int
 main (int argc, const char *const argv[]) {
     int interactive = 0;
     int fragmentation = 0;
@@ -639,7 +641,7 @@ main (int argc, const char *const argv[]) {
             const int maxfields = 4;
             char *fields[maxfields];
             int nfields = split_fields(line, fields, maxfields);
-            if (nfields == 0) 
+            if (nfields == 0)
                 continue;
             if (strcmp(fields[0], "help") == 0) {
                 interactive_help();

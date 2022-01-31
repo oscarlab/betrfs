@@ -164,7 +164,6 @@ report(int64_t blocks_done, int64_t blocks_failed, int64_t total_blocks)
         double pct_actually_done = (100.0 * blocks_done) / total_blocks;
         printf("% 3.3lf%% | %" PRId64 " blocks checked, %" PRId64 " bad block(s) detected\n",
                pct_actually_done, blocks_done, blocks_failed);
-        fflush(stdout);
     }
 }
 
@@ -216,7 +215,7 @@ deserialize_headers(int fd, struct ft **h1p, struct ft **h2p)
 
     // If either header is too new, the dictionary is unreadable
     if (r0 == TOKUDB_DICTIONARY_TOO_NEW || r1 == TOKUDB_DICTIONARY_TOO_NEW) {
-        fprintf(stderr, "This dictionary was created with too new a version of TokuDB.  Aborting.\n");
+        dprintf(STDERR, "This dictionary was created with too new a version of TokuDB.  Aborting.\n");
         abort();
     }
     if (h0_acceptable) {
@@ -252,8 +251,8 @@ struct check_block_table_extra {
 };
 
 // Check non-upgraded (legacy) node.
-// NOTE: These nodes have less checksumming than more 
-// recent nodes.  This effectively means that we are 
+// NOTE: These nodes have less checksumming than more
+// recent nodes.  This effectively means that we are
 // skipping over these nodes.
 static int
 check_old_node(FTNODE node, struct rbuf *rb, int version)
@@ -267,7 +266,7 @@ check_old_node(FTNODE node, struct rbuf *rb, int version)
         rb->ndone = rb->size - 4;
         r = check_legacy_end_checksum(rb);
     }
-    
+
     return r;
 }
 
@@ -291,9 +290,9 @@ check_block(BLOCKNUM blocknum, int64_t UU(blocksize), int64_t UU(address), void 
 
     // Allocate the node.
     FTNODE XMALLOC(node);
-    
+
     initialize_ftnode(node, blocknum);
-    
+
     r = read_and_check_magic(&rb);
     if (r == DB_BADFORMAT) {
         printf(" Magic failed.\n");
@@ -311,7 +310,7 @@ check_block(BLOCKNUM blocknum, int64_t UU(blocksize), int64_t UU(address), void 
       ////////////////////////////
      // UPGRADE FORK GOES HERE //
     ////////////////////////////
-    
+
     // Check nodes before major layout changes in version 15.
     // All newer versions should follow the same layout, for now.
     // This predicate would need to be changed if the layout
@@ -325,7 +324,7 @@ check_block(BLOCKNUM blocknum, int64_t UU(blocksize), int64_t UU(address), void 
             failure++;
             goto cleanup;
         }
-        
+
         // Check the end-to-end checksum.
         r = check_old_node(node, &nrb, version);
         if (r != 0) {
@@ -376,7 +375,7 @@ check_block(BLOCKNUM blocknum, int64_t UU(blocksize), int64_t UU(address), void 
             failure++;
         }
         just_decompress_sub_block(&sb);
-	
+
         r = verify_ftnode_sub_block(&sb);
         if (r != 0) {
             printf(" Uncompressed child partition %d checksum failed.\n", i);
@@ -417,7 +416,6 @@ check_block_table(int fd, BLOCK_TABLE bt, struct ft *h)
     int64_t num_blocks = toku_block_get_blocks_in_use_unlocked(bt);
     printf("Starting verification of checkpoint containing");
     printf(" %" PRId64 " blocks.\n", num_blocks);
-    fflush(stdout);
 
     struct check_block_table_extra extra = { .fd = fd,
 					     .blocks_done = 0,
@@ -425,7 +423,7 @@ check_block_table(int fd, BLOCK_TABLE bt, struct ft *h)
 					     .total_blocks = num_blocks,
 					     .h = h };
     int r = 0;
-    r = toku_blocktable_iterate(bt, 
+    r = toku_blocktable_iterate(bt,
 				TRANSLATION_CURRENT,
 				check_block,
 				&extra,
@@ -439,7 +437,6 @@ check_block_table(int fd, BLOCK_TABLE bt, struct ft *h)
     printf("Finished verification. ");
     printf(" %" PRId64 " blocks checked,", extra.blocks_done);
     printf(" %" PRId64 " bad block(s) detected\n", extra.blocks_failed);
-    fflush(stdout);
 }
 
 int
@@ -450,8 +447,8 @@ main(int argc, char const * const argv[])
     int dictfd;
     const char *dictfname, *outfname;
     if (argc < 3 || argc > 4) {
-        fprintf(stderr, "%s: Invalid arguments.\n", argv[0]);
-        fprintf(stderr, "Usage: %s <dictionary> <logfile> [report%%]\n", argv[0]);
+        dprintf(STDERR, "%s: Invalid arguments.\n", argv[0]);
+        dprintf(STDERR, "Usage: %s <dictionary> <logfile> [report%%]\n", argv[0]);
         r = EX_USAGE;
         goto exit;
     }

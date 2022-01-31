@@ -22,4 +22,3 @@ hugepage
 fsync-directory
 flock
 fsync-files
-fgetc

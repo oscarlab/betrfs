@@ -109,7 +109,7 @@ string_cmp(DB* UU(db), const DBT *a, const DBT *b)
 }
 
 static int
-found(ITEMLEN UU(keylen), bytevec key, ITEMLEN UU(vallen), bytevec UU(val), void *UU(extra), bool lock_only)
+found(ITEMLEN UU(keylen), bytevec key, ITEMLEN UU(vallen), bytevec UU(val), void *UU(extra), bool lock_only, bool UU(is_indirect))
 {
     assert(key != NULL && !lock_only);
     return 0;

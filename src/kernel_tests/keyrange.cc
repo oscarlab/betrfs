@@ -149,7 +149,7 @@ static void open_env(void) {
     memset(&key_ops, 0, sizeof(key_ops));
     key_ops.keycmp = my_compare;
     int r = db_env_create(&env, 0); CKERR(r);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r = env->set_redzone(env, 0); CKERR(r);
     r = env->set_generate_row_callback_for_put(env, my_generate_row); CKERR(r);
     r = env->set_key_ops(env, &key_ops); CKERR(r);
@@ -321,15 +321,15 @@ run_test(void) {
 /*
 static int
 usage(void) {
-    fprintf(stderr, "-v (verbose)\n");
-    fprintf(stderr, "-q (quiet)\n");
-    fprintf(stderr, "--nrows %" PRIu64 " (number of rows)\n", nrows);
-    fprintf(stderr, "--nrows %" PRIu64 " (number of rows)\n", nrows);
-    fprintf(stderr, "--loader %u (use the loader to load the keys)\n", use_loader);
-    fprintf(stderr, "--get %u (get all keys before keyrange)\n", get_all);
-    fprintf(stderr, "--random_keys %u\n", random_keys);
-    fprintf(stderr, "--page_size %u\n", db_page_size);
-    fprintf(stderr, "--basement_size %u\n", db_basement_size);
+    dprintf(STDERR, "-v (verbose)\n");
+    dprintf(STDERR, "-q (quiet)\n");
+    dprintf(STDERR, "--nrows %" PRIu64 " (number of rows)\n", nrows);
+    dprintf(STDERR, "--nrows %" PRIu64 " (number of rows)\n", nrows);
+    dprintf(STDERR, "--loader %u (use the loader to load the keys)\n", use_loader);
+    dprintf(STDERR, "--get %u (get all keys before keyrange)\n", get_all);
+    dprintf(STDERR, "--random_keys %u\n", random_keys);
+    dprintf(STDERR, "--page_size %u\n", db_page_size);
+    dprintf(STDERR, "--basement_size %u\n", db_basement_size);
     return 1;
 }
 */

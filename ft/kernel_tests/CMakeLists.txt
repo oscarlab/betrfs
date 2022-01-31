@@ -193,7 +193,6 @@ recovery-range-delete
 )
 
 add_library(tokuft_kernel_static STATIC ${tokuft_kernel_srcs})
-maybe_add_gcov_to_libraries(tokuft_static_conv)
+maybe_add_gcov_to_libraries(tokuft_kernel_static)
 set_target_properties(tokuft_kernel_static PROPERTIES POSITION_INDEPENDENT_CODE ${STATIC_PIC})
-add_dependencies(tokuft_kernel_static build_jemalloc)
-
+add_dependencies(tokuft_kernel_static install_tdb_h generate_config_h generate_log_code)

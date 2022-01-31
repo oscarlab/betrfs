@@ -194,6 +194,9 @@ struct ftnode_fetch_extra {
     tokutime_t io_time;
     tokutime_t decompress_time;
     tokutime_t deserialize_time;
+#ifdef FT_INDIRECT
+    int debug_flags;
+#endif
 };
 
 struct toku_fifo_entry_key_msn_heaviside_extra {
@@ -226,7 +229,13 @@ typedef toku::omt<int32_t, int32_t, true> marked_off_omt_t;
 struct ftnode_nonleaf_childinfo {
     //SOSP
     struct toku_list unbound_inserts;
-    uint32_t unbound_insert_count;
+    uint32_t unbound_insert_count;  // unbound insert count in the fifo
+#ifdef FT_INDIRECT
+    uint32_t indirect_insert_full_count; // accumlated unbound insert count in the buffer
+    uint32_t indirect_insert_full_size; // accumlated unbound inserted pages in the buffer
+    uint32_t indirect_insert_odd_count;
+    uint32_t indirect_insert_odd_size;
+#endif
 
     FIFO buffer;
     off_omt_t broadcast_list;
@@ -234,16 +243,38 @@ struct ftnode_nonleaf_childinfo {
     off_omt_t stale_message_tree;
 };
 
-//SOSP
-unsigned int toku_bnc_n_unbound_insert_entries(NONLEAF_CHILDINFO bnc);
+struct ind_size_count {
+    int32_t full_count;
+    int32_t full_size;
+    int32_t odd_count;
+    int32_t odd_size;
+};
 
 unsigned int toku_bnc_nbytesinbuf(NONLEAF_CHILDINFO bnc);
 int toku_bnc_n_entries(NONLEAF_CHILDINFO bnc);
 long toku_bnc_memory_size(NONLEAF_CHILDINFO bnc);
 long toku_bnc_memory_used(NONLEAF_CHILDINFO bnc);
-void toku_bnc_insert_msg(NONLEAF_CHILDINFO bnc, struct unbound_insert_entry *ubi_insert, FT_MSG msg, bool is_fresh, DESCRIPTOR desc, ft_compare_func cmp);
+void toku_bnc_insert_msg(NONLEAF_CHILDINFO bnc, struct ubi_entry *ubi_insert,
+                         FT_MSG msg, bool is_fresh, DESCRIPTOR desc, ft_compare_func cmp);
 void toku_bnc_empty(NONLEAF_CHILDINFO bnc);
 void toku_bnc_flush_to_child(FT h, NONLEAF_CHILDINFO bnc, FTNODE child, TXNID oldest_referenced_xid);
+
+struct pacman_opt_mgmt {
+	    struct toku_list msg_list; //ptr to the 1st msg
+	    bool done;  //if the last round opt does not change the size of the list, the opt is done
+	    size_t dismissed_size;  // remaining size has to take this into account.
+	    int n_range_delete;
+	    struct toku_list range_delete_list;
+};
+
+struct opt_msg {
+    FT_MSG msg; //ptr to the msg
+    bool is_fresh; //we need it later
+    struct ubi_entry *ubi_entry; // need this to rebuild msg in a new bnc
+    struct toku_list all_msgs; //next msg and prev msg
+    struct toku_list range_delete_msgs; //next and prev range delete msgs;
+};
+
 void toku_bnc_flush_to_child_pacman(FT h, NONLEAF_CHILDINFO bnc, struct pacman_opt_mgmt *, FTNODE child, TXNID oldest_referenced_xid);
 
 bool toku_bnc_should_promote(FT ft, NONLEAF_CHILDINFO bnc) __attribute__((const, nonnull));
@@ -259,8 +290,13 @@ uint32_t get_leaf_num_entries(FTNODE node);
 struct ftnode_leaf_basement_node {
     //SOSP
     struct toku_list unbound_inserts;
-    uint32_t unbound_insert_count;
-
+    uint32_t unbound_insert_count;    // unbound insert on the liked list
+#ifdef FT_INDIRECT
+    uint32_t indirect_insert_full_count; // accumlated unbound insert count in the buffer
+    uint32_t indirect_insert_full_size; // accumlated unbound inserted pages in the buffer
+    uint32_t indirect_insert_odd_count;
+    uint32_t indirect_insert_odd_size;
+#endif
     bn_data data_buffer;
     unsigned int seqinsert;         // number of sequential inserts to this leaf
     MSN max_msn_applied;            // max message sequence number applied
@@ -272,7 +308,8 @@ enum   pt_state {  // declare this to be packed so that when used below it will 
     PT_INVALID = 0,
     PT_ON_DISK = 1,
     PT_COMPRESSED = 2,
-    PT_AVAIL = 3};
+    PT_AVAIL = 3,
+};
 
 enum  ftnode_child_tag {
     BCT_INVALID = 0,
@@ -291,7 +328,23 @@ typedef struct  ftnode_child_pointer {
     enum ftnode_child_tag tag;
 } FTNODE_CHILD_POINTER;
 
-
+#ifdef FT_INDIRECT
+struct ftnode_page_data {
+    uint32_t page_start;
+    uint32_t page_size;
+};
+// defined in ft-indirect.cc
+int toku_bnc_n_pages(NONLEAF_CHILDINFO bnc);
+uint32_t serialize_node_header_increased_size_with_indirect(FTNODE);
+void serialize_node_header_page_data(FTNODE, FTNODE_DISK_DATA, struct wbuf *);
+uint32_t serialize_ftnode_partition_size_no_pages(FTNODE node, int i);
+uint32_t get_leafentry_ind_data_size(LEAFENTRY);
+int get_node_info_from_rbuf(struct sub_block *, struct rbuf *, uint32_t);
+int toku_read_bp_page(FTNODE, FTNODE_DISK_DATA, int, sub_block *, DISKOFF, int);
+int deserialize_ftnode_partition_with_indirect(struct rbuf *, struct sub_block *, FTNODE, int, DESCRIPTOR, ft_compare_func, unsigned char);
+int ft_ind_decompress_sub_block(FTNODE node, struct rbuf *rb, struct sub_block *sb, int *page_data_len);
+void compress_ftnode_sub_block_with_indirect(struct sub_block *sb, enum toku_compression_method method, bool is_cloned, int height);
+#endif
 struct ftnode_disk_data {
     //
     // stores the offset to the beginning of the partition on disk from the ftnode, and the length, needed to read a partition off of disk
@@ -302,11 +355,19 @@ struct ftnode_disk_data {
     //  However, later when we are doing aligned writes, we won't be able to store the size from the end since we want things to align.
     uint32_t start;
     uint32_t size;
+#ifdef FT_INDIRECT
+    struct ftnode_page_data pg_data;
+    struct rbuf rbuf;
+#endif
 };
 #define BP_START(node_dd,i) ((node_dd)[i].start)
 #define BP_SIZE(node_dd,i) ((node_dd)[i].size)
 
-
+#ifdef FT_INDIRECT
+#define BP_PAGE_DATA(node_dd,i) ((node_dd)[i].pg_data)
+#define BP_PAGE_DATA_START(node_dd,i) ((node_dd)[i].pg_data.page_start)
+#define BP_PAGE_DATA_SIZE(node_dd,i) ((node_dd)[i].pg_data.page_size)
+#endif
 // a ftnode partition, associated with a child of a node
 struct ftnode_partition {
     // the following three variables are used for nonleaf nodes
@@ -347,6 +408,7 @@ struct ftnode_partition {
     // Related to basement prefetching
     bool is_prefetched;
     int nr_pages;
+    int page_start_index;
     unsigned long *pfns;
     unsigned char *buf;
 };
@@ -371,7 +433,22 @@ struct ftnode {
     // aggregated count for the purpose of writeback...
     // number of messages whose values are unlogged.
     uint32_t unbound_insert_count;
+#ifdef FT_INDIRECT
+    uint32_t indirect_insert_full_count;
+    uint32_t indirect_insert_odd_count;
+    uint32_t indirect_insert_full_size;
+    uint32_t indirect_insert_odd_size;
 
+    unsigned long *pfn_array;
+
+    uint32_t node_info_size;
+    uint32_t leaf_le_num;
+    uint32_t nonleaf_fifo_entries;
+
+    bool is_cloned;
+    bool is_rebalancing;
+    BP_IND_DATA ind_data_arr;
+#endif
     // What's the oldest referenced xid that this node knows about? The real oldest
     // referenced xid might be younger, but this is our best estimate. We use it
     // as a heuristic to transition provisional mvcc entries from provisional to
@@ -401,6 +478,7 @@ struct ftnode {
 #define BP_LIFT(node, i) ((node)->bp[i].lift)
 
 #define BP_PREFETCH_PFN(node, i) ((node)->bp[i].pfns)
+#define BP_PREFETCH_PAGE_START_IDX(node, i) ((node)->bp[i].page_start_index)
 #define BP_PREFETCH_PFN_CNT(node, i) ((node)->bp[i].nr_pages)
 #define BP_PREFETCH_FLAG(node, i) ((node)->bp[i].is_prefetched)
 #define BP_PREFETCH_BUF(node, i) ((node)->bp[i].buf)
@@ -675,9 +753,29 @@ int toku_serialize_rollback_log_to (int fd, ROLLBACK_LOG_NODE log, SERIALIZED_RO
                                     FT h, bool for_checkpoint);
 void toku_serialize_rollback_log_to_memory_uncompressed(ROLLBACK_LOG_NODE log, SERIALIZED_ROLLBACK_LOG_NODE serialized);
 int toku_deserialize_rollback_log_from (int fd, BLOCKNUM blocknum, ROLLBACK_LOG_NODE *logp, FT h);
+#ifdef FT_INDIRECT
+int toku_deserialize_bp_from_disk_indirect(FTNODE node, FTNODE_DISK_DATA ndd, int childnum, int fd, struct ftnode_fetch_extra* bfe, sub_block *sb);
+int toku_serialize_ftnode_to_with_indirect(int fd, BLOCKNUM, FTNODE node, FTNODE_DISK_DATA* ndd, bool do_rebalancing, FT h, bool for_checkpoint, DISKOFF * offset, DISKOFF *size, bool is_blocking);
+#endif
 int toku_deserialize_bp_from_disk(FTNODE node, FTNODE_DISK_DATA ndd, int childnum, int fd, struct ftnode_fetch_extra* bfe);
 int toku_deserialize_bp_from_compressed(FTNODE node, int childnum, struct ftnode_fetch_extra *bfe);
 int toku_deserialize_ftnode_from (int fd, BLOCKNUM off, uint32_t /*fullhash*/, FTNODE *ftnode, FTNODE_DISK_DATA* ndd, struct ftnode_fetch_extra* bfe);
+
+uint32_t serialize_node_header_size(FTNODE node);
+void serialize_node_header(FTNODE node, FTNODE_DISK_DATA ndd, struct wbuf *wbuf);
+void serialize_ftnode_info(FTNODE node, SUB_BLOCK sb);
+uint32_t serialize_ftnode_partition_size(FTNODE node, int i);
+uint32_t serialize_ftnode_info_size(FTNODE node);
+void serialize_ftnode_partition(FTNODE node, int i, struct sub_block *sb);
+int serialize_msg_fn(FT_MSG msg, bool is_fresh, void* args);
+int serialize_ubi_msg(FT_MSG msg, bool is_fresh, struct wbuf *wb);
+void serialize_nonleaf_childinfo(NONLEAF_CHILDINFO bnc, struct wbuf *wb);
+int wbufwriteleafentry(const void* key, const uint32_t keylen,
+                       const LEAFENTRY &le, const uint32_t UU(idx),
+                       struct wbuf * const wb);
+void deserialize_child_buffer(NONLEAF_CHILDINFO bnc, struct rbuf *rbuf,
+                              DESCRIPTOR desc, ft_compare_func cmp,
+                              BP_IND_DATA bp_ind);
 
 // <CER> For verifying old, non-upgraded nodes (versions 13 and 14).
 int
@@ -746,17 +844,26 @@ NONLEAF_CHILDINFO toku_create_empty_nl(void);
 // FIXME needs toku prefix
 void destroy_basement_node (BASEMENTNODE bn);
 // FIXME needs toku prefix
+
 void destroy_nonleaf_childinfo (NONLEAF_CHILDINFO nl);
+#ifdef FT_INDIRECT
+void basement_node_free_pages(BASEMENTNODE bn, bool is_cloned);
+void toku_nonleaf_put_page_list (NONLEAF_CHILDINFO nl);
+void toku_nonleaf_get_page_list (NONLEAF_CHILDINFO nl);
+void destroy_nonleaf_ubi_vals (NONLEAF_CHILDINFO nl);
+#endif
 void toku_destroy_ftnode_internals(FTNODE node);
 void toku_ftnode_free (FTNODE *node);
 bool is_entire_node_in_memory(FTNODE node);
 void toku_assert_entire_node_in_memory(FTNODE node);
+void ftnode_initialize_bp(FTNODE node, unsigned int i);
 
 // append a child node to a parent node
 void toku_ft_nonleaf_append_child(FTNODE node, FTNODE child, const DBT *pivotkey);
 
 // append a cmd to a nonleaf node child buffer
-void toku_ft_append_to_child_buffer(ft_compare_func compare_fun, DESCRIPTOR desc, struct unbound_insert_entry *ubi_insert, FTNODE node, int childnum, FT_MSG msg, bool is_fresh);
+void toku_ft_append_to_child_buffer(ft_compare_func compare_fun, DESCRIPTOR desc, struct ubi_entry *ubi_entry,
+                                    FTNODE node, int childnum, FT_MSG msg, bool is_fresh);
 
 STAT64INFO_S toku_get_and_clear_basement_stats(FTNODE leafnode);
 
@@ -772,6 +879,7 @@ void toku_ft_status_update_flush_reason(FTNODE node, uint64_t uncompressed_bytes
 
 void toku_ft_status_update_serialize_times(FTNODE node, tokutime_t serialize_time, tokutime_t compress_time);
 void toku_ft_status_update_deserialize_times(FTNODE node, tokutime_t deserialize_time, tokutime_t decompress_time);
+void toku_ft_status_update_deserialize_times_and_pages(FTNODE node, tokutime_t deserialize_time, tokutime_t decompress_time, int nr_pages);
 
 void toku_ftnode_clone_callback(void* value_data, void** cloned_value_data, long* clone_size, PAIR_ATTR* new_attr, bool for_checkpoint, void* write_extraargs);
 void toku_ftnode_checkpoint_complete_callback(void *value_data);
@@ -1078,7 +1186,7 @@ int toku_testsetup_insert_to_nonleaf (FT_HANDLE brt, BLOCKNUM, enum ft_msg_type,
 void toku_pin_node_with_min_bfe(FTNODE* node, BLOCKNUM b, FT_HANDLE t);
 
 // toku_ft_root_put_cmd() accepts non-constant cmd because this is where we set the msn
-void toku_ft_root_put_cmd(FT h, FT_MSG_S * cmd, struct unbound_insert_entry *ubi_entry, TXNID oldest_referenced_xid, GC_INFO gc_info);
+void toku_ft_root_put_cmd(FT h, FT_MSG_S *cmd, struct ubi_entry *ubi_entry, TXNID oldest_referenced_xid, GC_INFO gc_info);
 
 void
 toku_get_node_for_verify(
@@ -1212,10 +1320,12 @@ typedef enum {
     FT_LEAF_SERIALIZE_TOKUTIME, // seconds spent serializing leaf node to memory
     FT_LEAF_DECOMPRESS_TOKUTIME, // seconds spent decompressing leaf nodes to memory
     FT_LEAF_DESERIALIZE_TOKUTIME, // seconds spent deserializing leaf nodes to memory
+    FT_LEAF_DESERIALIZE_PAGES, // pages when deserializing leaf nodes to memory
     FT_NONLEAF_COMPRESS_TOKUTIME, // seconds spent compressing nonleaf nodes to memory
     FT_NONLEAF_SERIALIZE_TOKUTIME, // seconds spent serializing nonleaf nodes to memory
     FT_NONLEAF_DECOMPRESS_TOKUTIME, // seconds spent decompressing nonleaf nodes to memory
     FT_NONLEAF_DESERIALIZE_TOKUTIME, // seconds spent deserializing nonleaf nodes to memory
+    FT_NONLEAF_DESERIALIZE_PAGES, // pages of deserializing nonleaf nodes to memory
     FT_PRO_NUM_ROOT_SPLIT,
     FT_PRO_NUM_ROOT_H0_INJECT,
     FT_PRO_NUM_ROOT_H1_INJECT,
@@ -1235,6 +1345,13 @@ typedef enum {
     FT_DISK_IO_HEADER,
     FT_DISK_IO_PREALLOC,
     FT_DISK_IO_ROLLBACK,
+    FT_PACMAN_GOBBLED,
+    FT_PACMAN_CHERRIES,
+    FT_PACMAN_BLINKY,
+    FT_PACMAN_PINKY,
+    FT_PACMAN_RTR,
+    FT_PACMAN_RTP,
+    FT_PACMAN_LEVELS_COMPLETED,
     FT_STATUS_NUM_ROWS
 } ft_status_entry;
 
@@ -1250,7 +1367,7 @@ void toku_ft_get_status(FT_STATUS);
 void
 toku_ft_bn_apply_cmd_once (
     BASEMENTNODE bn,
-    struct unbound_insert_entry *ubi_entry,
+    struct ubi_entry *ubi_entry,
     const FT_MSG cmd,
     uint32_t idx,
     LEAFENTRY le,
@@ -1264,7 +1381,7 @@ void
 toku_ft_bn_apply_cmd (
     FT ft,
     DESCRIPTOR desc,
-    struct unbound_insert_entry *ubi_entry,
+    struct ubi_entry *ubi_entry,
     BASEMENTNODE bn,
     FT_MSG cmd,
     TXNID oldest_referenced_xid,
@@ -1277,7 +1394,7 @@ void
 toku_ft_leaf_apply_cmd (
     FT ft,
     DESCRIPTOR desc,
-    struct unbound_insert_entry *ubi_entry,
+    struct ubi_entry *ubi_entry,
     FTNODE node,
     int target_childnum,
     FT_MSG cmd,
@@ -1290,7 +1407,7 @@ void
 toku_ft_node_put_cmd (
     FT ft,
     DESCRIPTOR desc,
-    struct unbound_insert_entry *entry,
+    struct ubi_entry *entry,
     FTNODE node,
     int target_childnum,
     FT_MSG cmd,
@@ -1302,8 +1419,11 @@ void ftnode_remove_unbound_insert_list_and_reset_count(FTNODE);
 void ftnode_flip_unbound_msgs_type(FTNODE);
 void toku_flusher_thread_set_callback(void (*callback_f)(int, void*), void* extra);
 static inline bool has_unbound_msgs(FTNODE node){
-	return node->unbound_insert_count>0;
+       return node->unbound_insert_count>0;
 }
+
+void ftfs_print_count(FTNODE node, const char *func, int line);
+
 int toku_upgrade_subtree_estimates_to_stat64info(int fd, FT h) __attribute__((nonnull));
 int toku_upgrade_msn_from_root_to_header(int fd, FT h) __attribute__((nonnull));
 void ftnode_reset_unbound_counter(FTNODE);
@@ -1316,7 +1436,6 @@ extern void get_child_bounds_for_msg_put(ft_compare_func cmp, DESCRIPTOR desc, F
 int default_pacman_opt_iterate(struct pacman_opt_mgmt *pacman_manager, int(*f)(FT_MSG, bool, void*), void * args) ;
 void default_run_optimization(struct pacman_opt_mgmt * pacman_manager, FT ft);
 int iterate_fn_bnc_build_pacman_opt(struct fifo_entry *e, void * args, FT_MSG & msg);
-
 void pacman_opt_mgmt_init(struct pacman_opt_mgmt * & pacman_mgmt);
 void pacman_opt_mgmt_destroy(struct pacman_opt_mgmt * pacman_mgmt);
 FT_MSG pacman_get_first_msg(struct pacman_opt_mgmt * pacman_manager);

@@ -17,9 +17,9 @@
 
 #if LINUX_VERSION_CODE <  KERNEL_VERSION(4,19,99)
 #include <linux/sched.h>
-#else
+#else /* LINUX_VERSION_CODE */
 #include <linux/sched/task.h>
-#endif
+#endif /* LINUX_VERSION_CODE */
 
 #include <linux/init.h>
 #include <linux/export.h>
@@ -30,9 +30,9 @@ void __sb_init_rwsem(struct rw_semaphore *sem, const char *name)
 {
 #if LINUX_VERSION_CODE <  KERNEL_VERSION(4,19,99)
 	sem->count = FTFS_RWSEM_UNLOCKED_VALUE;
-#else
+#else /* LINUX_VERSION_CODE */
 	atomic_long_set(&sem->count, FTFS_RWSEM_UNLOCKED_VALUE);
-#endif
+#endif /* LINUX_VERSION_CODE */
 	raw_spin_lock_init(&sem->wait_lock);
 	INIT_LIST_HEAD(&sem->wait_list);
 }
@@ -187,11 +187,7 @@ ftfs_rwsem_down_failed_common(struct rw_semaphore *sem, pthread_mutex_t * mux,
 	struct task_struct *tsk = current;
 	signed long count;
 
-#if LINUX_VERSION_CODE <  KERNEL_VERSION(4,19,99)
-	set_task_state(tsk, TASK_UNINTERRUPTIBLE);
-#else
 	set_current_state(TASK_UNINTERRUPTIBLE);
-#endif
 	/* set up my own style of waitqueue */
 	raw_spin_lock_irq(&sem->wait_lock);
 	waiter.task = tsk;
@@ -225,14 +221,10 @@ ftfs_rwsem_down_failed_common(struct rw_semaphore *sem, pthread_mutex_t * mux,
 		if (!waiter.task)
 			break;
 		schedule();
-#if LINUX_VERSION_CODE <  KERNEL_VERSION(4,19,99)
-		set_task_state(tsk, TASK_UNINTERRUPTIBLE);
-#else
 		set_current_state(TASK_UNINTERRUPTIBLE);
-#endif
 	}
+	__set_current_state(TASK_RUNNING);
         if(mux) pthread_mutex_lock(mux);
-	tsk->state = TASK_RUNNING;
 
 	return sem;
 }

@@ -101,15 +101,12 @@ int test_log5 (void)
     int r;
 
     r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);    assert(r==0);
-    printf("I am here0 %lu\n", sizeof(TOKULOGGER));
 
     TOKULOGGER logger;
 
-    printf("I am here1\n");
     r = toku_logger_create(&logger);
     assert(r == 0);
 
-    printf("I am here1\n");
     r = toku_logger_open(TOKU_TEST_ENV_DIR_NAME, logger);
     assert(r == 0);
     int i;
@@ -131,11 +128,9 @@ int test_log5 (void)
 	toku_logger_fsync(logger);
     }
 
-    printf("I am here2\n");
     r = toku_logger_close(&logger);
     assert(r == 0);
 
-    printf("I am here3\n");
     r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);    assert(r==0);
     return 0;
 }

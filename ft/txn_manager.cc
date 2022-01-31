@@ -117,7 +117,7 @@ static bool is_txnid_live(TXN_MANAGER txn_manager, TXNID txnid) {
 //Heaviside function to search through an OMT by a TXNID
 int find_by_xid (const TOKUTXN &txn, const TXNID &txnidfind);
 
- bool is_txnid_live(TXN_MANAGER txn_manager, TXNID txnid) {
+static bool is_txnid_live(TXN_MANAGER txn_manager, TXNID txnid) {
     TOKUTXN result = NULL;
     TXNID_PAIR id = { .parent_id64 = txnid, .child_id64 = TXNID_NONE };
     toku_txn_manager_id2txn_unlocked(txn_manager, id, &result);
@@ -139,9 +139,7 @@ verify_snapshot_system(TXN_MANAGER txn_manager UU()) {
 #ifndef TOKU_LINUX_MODULE
     TXNID       snapshot_txnids[num_snapshot_txnids];
     TOKUTXN     snapshot_txns[num_snapshot_txnids];
-   
     TOKUTXN     live_txns[num_live_txns];
-    
     struct      referenced_xid_tuple  *referenced_xid_tuples[num_referenced_xid_tuples];
 #else
     TXNID * snapshot_txnids = (TXNID *) toku_xmalloc(sizeof(TXNID) * num_snapshot_txnids);
@@ -159,7 +157,7 @@ verify_snapshot_system(TXN_MANAGER txn_manager UU()) {
         &snapshot_txnids_omt,
         &referenced_xids_omt,
         &live_root_txns_omt
-        );    
+        );
 
     int r;
     uint32_t i;
@@ -1099,6 +1097,15 @@ toku_txn_manager_txns_exist(TXN_MANAGER mgr) {
     return retval;
 }
 
+// This function is public and can be used exernally
+// since it acquires the manager lock.
+// Instead is_txnid_live can only be used inside this file.
+bool toku_txn_is_txnid_live(TXN_MANAGER mgr, TXNID txnid) {
+    txn_manager_lock(mgr);
+    bool retval = is_txnid_live(mgr, txnid);
+    txn_manager_unlock(mgr);
+    return retval;
+}
 
 // Test-only function
 void

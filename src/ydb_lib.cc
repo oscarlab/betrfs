@@ -99,14 +99,16 @@ PATENT RIGHTS GRANT:
 #if defined(__GNUC__)
 
 static void __attribute__((constructor)) libtokudb_init(void) {
-    // printf("%s:%s:%d\n", __FILE__, __FUNCTION__, __LINE__);
+#ifdef TOKU_LINUX_MODULE
     int r = toku_ydb_init();
     assert(r==0);
+#endif
 }
 
 static void __attribute__((destructor)) libtokudb_destroy(void) {
-    // printf("%s:%s:%d\n", __FILE__, __FUNCTION__, __LINE__);
+#ifdef TOKU_LINUX_MODULE
     toku_ydb_destroy();
+#endif
 }
 
 #endif

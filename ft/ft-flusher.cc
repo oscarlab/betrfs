@@ -140,6 +140,7 @@ void toku_ft_flusher_status_init(void) {
     STATUS_INIT(FT_FLUSHER_MERGE_LEAF,                         nullptr, UINT64, "leaf node merges", TOKU_ENGINE_STATUS);
     STATUS_INIT(FT_FLUSHER_MERGE_NONLEAF,                      nullptr, UINT64, "nonleaf node merges", TOKU_ENGINE_STATUS);
     STATUS_INIT(FT_FLUSHER_BALANCE_LEAF,                       nullptr, UINT64, "leaf node balances", TOKU_ENGINE_STATUS);
+    STATUS_INIT(FT_DEAD_LEAF,                                  nullptr, UINT64, "leaves not read due to dead leaf", TOKU_ENGINE_STATUS);
 
     STATUS_VALUE(FT_FLUSHER_CLEANER_MIN_BUFFER_SIZE) = UINT64_MAX;
     STATUS_VALUE(FT_FLUSHER_CLEANER_MIN_BUFFER_WORKDONE) = UINT64_MAX;
@@ -180,27 +181,34 @@ find_heaviest_child(FTNODE node)
 {
     int max_child = 0;
     unsigned long max_weight = toku_bnc_nbytesinbuf(BNC(node, 0)) + BP_WORKDONE(node, 0);
+#ifdef FT_INDIRECT
+    max_weight += BNC(node,0)->indirect_insert_full_size;
+    max_weight += BNC(node,0)->indirect_insert_odd_size;
+#endif
+
     int i;
 
-    if (0) printf("%s:%d weights: %lu\n", __FILE__, __LINE__, max_weight);
-    paranoid_invariant(node->n_children>0);
-    for (i=1; i<node->n_children; i++) {
+    paranoid_invariant(node->n_children > 0);
+    for (i=1; i < node->n_children; i++) {
 #ifdef TOKU_DEBUG_PARANOID
-        if (BP_WORKDONE(node,i)) {
-            assert(toku_bnc_nbytesinbuf(BNC(node,i)) > 0);
+        if (BP_WORKDONE(node, i)) {
+            assert(toku_bnc_nbytesinbuf(BNC(node, i)) > 0);
         }
 #endif
-	unsigned long bytes = toku_bnc_nbytesinbuf(BNC(node,i));
-	unsigned long workdone = BP_WORKDONE(node,i);
+        unsigned long bytes = toku_bnc_nbytesinbuf(BNC(node, i));
+        unsigned long workdone = BP_WORKDONE(node, i);
         unsigned long this_weight = bytes + workdone;
+#ifdef FT_INDIRECT
+        this_weight += BNC(node,i)->indirect_insert_full_size;
+        this_weight += BNC(node,i)->indirect_insert_odd_size;
+#endif
 
-        if (0) printf("this_weight: %lu + %lu = %lu\n", bytes, workdone, this_weight);
         if (max_weight < this_weight) {
             max_child = i;
             max_weight = this_weight;
         }
     }
-    //if (0) printf("\n");
+
     return max_child;
 }
 
@@ -667,7 +675,7 @@ toku_ft_leaf_relift(FT ft, FTNODE node, DBT *old_lifted, DBT *new_lifted)
         }
         BASEMENTNODE bn = BLB(node, i);
         bn_data data_buffer_copy;
-        data_buffer_copy.clone(&bn->data_buffer);
+        data_buffer_copy.clone_for_lift(&bn->data_buffer);
         bn->data_buffer.destroy();
         data_buffer_copy.relift_leafentries(&bn->data_buffer, ft,
                                             old_lifted, new_lifted);
@@ -716,7 +724,6 @@ handle_split_of_child(
     toku_assert_entire_node_in_memory(childb);
     NONLEAF_CHILDINFO old_bnc = BNC(node, childnum);
     paranoid_invariant(toku_bnc_nbytesinbuf(old_bnc)==0);
-    NONLEAF_CHILDINFO new_bnc = toku_create_empty_nl();
     int cnum;
     WHEN_NOT_GCOV(
     if (toku_ft_debug_mode) {
@@ -777,19 +784,17 @@ handle_split_of_child(
     for (cnum=node->n_children; cnum>childnum+1; cnum--) {
         node->bp[cnum] = node->bp[cnum-1];
     }
-    memset(&node->bp[childnum+1],0,sizeof(node->bp[0]));
     node->n_children++;
 
     paranoid_invariant(BP_BLOCKNUM(node, childnum).b==childa->thisnodename.b); // use the same child
 
+    ftnode_initialize_bp(node, childnum+1);
     BP_BLOCKNUM(node, childnum+1) = childb->thisnodename;
-    BP_WORKDONE(node, childnum+1)  = 0;
     BP_STATE(node,childnum+1) = PT_AVAIL;
+    set_BNC(node, childnum+1, toku_create_empty_nl());
 
     // update lifting
     toku_copy_dbt(&BP_LIFT(node, childnum + 1), lift_r);
-    set_BNC(node, childnum+1, new_bnc);
-
     toku_cleanup_dbt(&BP_LIFT(node, childnum));
     toku_copy_dbt(&BP_LIFT(node, childnum), lift_l);
 
@@ -844,6 +849,12 @@ ftleaf_disk_size(FTNODE node)
     uint64_t retval = 0;
     for (int i = 0; i < node->n_children; i++) {
         retval += BLB_DATA(node, i)->get_disk_size();
+#ifdef FT_INDIRECT
+        uint32_t num_le = BLB_DATA(node, i)->omt_size();
+        retval += (BLB(node, i)->indirect_insert_odd_size);
+        retval += (BLB(node, i)->indirect_insert_full_size);
+        retval -= (num_le * sizeof(unsigned int*));
+#endif
     }
     return retval;
 }
@@ -851,6 +862,8 @@ ftleaf_disk_size(FTNODE node)
 static void setkey_func(const DBT *new_key, void *extra)
 {
     DBT *splitk = (DBT *)extra;
+    assert(new_key != NULL);
+    assert(new_key->data != NULL);
     toku_clone_dbt(splitk, *new_key);
 }
 
@@ -859,7 +872,8 @@ ftleaf_get_pf_split_loc(FT ft, FTNODE node, enum split_mode split_mode,
                         int *num_left_bns, int *num_left_les, DBT *splitk)
 {
     DBT minpvt, maxpvt;
-    int i, j, rr;
+    int32_t i, j;
+    int rr;
     BN_DATA bd;
 
     uint64_t sumlesizes = ftleaf_disk_size(node);
@@ -902,7 +916,7 @@ ftleaf_get_pf_split_loc(FT ft, FTNODE node, enum split_mode split_mode,
         for (i = 0; i < node->n_children; i++) {
             bd = BLB_DATA(node, i);
             n_leafentries = bd->omt_size();
-            for (j = 0; j < n_leafentries; j++) {
+            for (j = 0; j < (int)n_leafentries; j++) {
                 rr = bd->fetch_klpair_disksize(j, &size_this_le);
                 invariant_zero(rr);
                 if (size_so_far == 0) {
@@ -931,7 +945,7 @@ ftleaf_get_pf_split_loc(FT ft, FTNODE node, enum split_mode split_mode,
         for (i = 0; i < node->n_children; i++) {
             bd = BLB_DATA(node, i);
             n_leafentries = bd->omt_size();
-            for (j = 0; j < n_leafentries; j++) {
+            for (j = 0; j < (int)n_leafentries; j++) {
                 rr = bd->fetch_klpair_disksize(j, &size_this_le);
                 invariant_zero(rr);
                 size_so_far += size_this_le;
@@ -1066,23 +1080,6 @@ ftleaf_get_split_loc(
                             abort();
                         }
                     }
-
-                    // SOSP: Bill force splits on boundaries when unbound_inserts exist at the split
-		    //SOSP: Jun -undo the force on-the-boundary
-	            #if 0
-                    if(BLB(node, *num_left_bns - 1)->unbound_insert_count) {
-                        if ((*num_left_les != 0) && (*num_left_les != (int) BLB_DATA(node, *num_left_bns - 1)->omt_size())) {
-                            if (*num_left_bns < node->n_children) {
-                                *num_left_les = (int) BLB_DATA(node, *num_left_bns - 1)->omt_size();
-                            } else {
-                                /* num_left_bns == node->n_children */
-                                //*num_left_bns -= 1;
-                                //*num_left_les = BLB_DATA(node, *num_left_bns)->omt_size();
-                                *num_left_les = 0;
-                            }
-                        }
-                    }
-		   #endif
                     goto exit;
                 }
             }
@@ -1108,44 +1105,41 @@ split_node_update_bound(FTNODE a, FTNODE b, const void *key, uint32_t keylen)
 {
     a->totalchildkeylens = a->totalchildkeylens + keylen - a->bound_r.size;
     b->totalchildkeylens = b->totalchildkeylens + keylen + a->bound_r.size;
-
     toku_copy_dbt(&b->bound_r, a->bound_r);
+    a->bound_r.data = NULL;
+    a->bound_r.size = 0;
     toku_memdup_dbt(&b->bound_l, key, keylen);
     toku_memdup_dbt(&a->bound_r, key, keylen);
 }
 
-// TODO: (Zardosht) possibly get rid of this function and use toku_omt_split_at in
-// ftleaf_split
 static void
-move_unbound_entries(
-FTNODE B,
-FTNODE node,
-BASEMENTNODE dest_bn,
-BASEMENTNODE src_bn,
-DBT * pivot,
-FT ft
-) {
-	toku_list * src_unbound_inserts = &src_bn->unbound_inserts;
-	toku_list * dest_unbound_inserts = &dest_bn->unbound_inserts;
-	paranoid_invariant(toku_list_empty(dest_unbound_inserts));
-	toku_list * list = toku_list_head(src_unbound_inserts);
-	while(list != src_unbound_inserts) {
-
-            struct unbound_insert_entry * entry = toku_list_struct(list, struct unbound_insert_entry, node_list);
-		if(ft_compare_pivot(&ft->cmp_descriptor, ft->key_ops.keycmp, entry->key, pivot) > 0) {
-			toku_list * to_be_removed = list;
-			list = list -> next;
-			toku_list_remove(to_be_removed);
-			toku_list_push(dest_unbound_inserts, to_be_removed);
-			src_bn->unbound_insert_count --;
-			node->unbound_insert_count --;
-			dest_bn->unbound_insert_count ++;
-			B->unbound_insert_count ++;
-     		} else {
-            		list = list->next;
-		}
-	}
+move_ubi_entries(FTNODE dst_node, FTNODE src_node, int dst_idx, int src_idx,
+                     DBT *pivot, FT ft)
+{
+    BASEMENTNODE dst_bn = BLB(dst_node, dst_idx);
+    BASEMENTNODE src_bn = BLB(src_node, src_idx);
+    toku_list *src_unbound_inserts = &src_bn->unbound_inserts;
+    toku_list *dst_unbound_inserts = &dst_bn->unbound_inserts;
+    paranoid_invariant(toku_list_empty(dst_unbound_inserts));
+    toku_list *list = toku_list_head(src_unbound_inserts);
+    while(list != src_unbound_inserts) {
+        struct ubi_entry *entry;
+        entry = toku_list_struct(list, struct ubi_entry, node_list);
+        if(ft_compare_pivot(&ft->cmp_descriptor, ft->key_ops.keycmp, &entry->key, pivot) > 0) {
+            toku_list *to_be_removed = list;
+            list = list->next;
+            toku_list_remove(to_be_removed);
+            toku_list_push(dst_unbound_inserts, to_be_removed);
+            src_node->unbound_insert_count--;
+            src_bn->unbound_insert_count--;
+            dst_node->unbound_insert_count++;
+            dst_bn->unbound_insert_count++;
+        } else {
+            list = list->next;
+        }
+    }
 }
+
 static void
 move_leafentries(
     BASEMENTNODE dest_bn,
@@ -1155,7 +1149,29 @@ move_leafentries(
     )
 //Effect: move leafentries in the range [lbi, upe) from src_omt to newly created dest_omt
 {
-    src_bn->data_buffer.move_leafentries_to(&dest_bn->data_buffer, lbi, ube);
+    uint32_t num_indirect_full_count = 0;
+    uint32_t num_indirect_full_size = 0;
+    uint32_t num_indirect_odd_count = 0;
+    uint32_t num_indirect_odd_size = 0;
+
+    src_bn->data_buffer.move_leafentries_to(
+                        &dest_bn->data_buffer,
+                        &num_indirect_full_count,
+                        &num_indirect_full_size,
+                        &num_indirect_odd_count,
+                        &num_indirect_odd_size,
+                        lbi, ube);
+#ifdef FT_INDIRECT
+    src_bn->indirect_insert_full_count -= num_indirect_full_count;
+    src_bn->indirect_insert_full_size -= num_indirect_full_size;
+    src_bn->indirect_insert_odd_count -= num_indirect_odd_count;
+    src_bn->indirect_insert_odd_size -= num_indirect_odd_size;
+
+    dest_bn->indirect_insert_full_count += num_indirect_full_count;
+    dest_bn->indirect_insert_full_size += num_indirect_full_size;
+    dest_bn->indirect_insert_odd_count += num_indirect_odd_count;
+    dest_bn->indirect_insert_odd_size += num_indirect_odd_size;
+#endif
 }
 
 static void ftnode_finalize_split(FTNODE node, FTNODE B, MSN max_msn_applied_to_node) {
@@ -1207,7 +1223,6 @@ ftleaf_split(
         bn->stat64_delta = delta_for_leafnode;
     }
 
-
     FTNODE B = nullptr;
     uint32_t fullhash;
     BLOCKNUM name;
@@ -1246,8 +1261,8 @@ ftleaf_split(
     // variables that say where we will do the split.
     // After the split, there will be num_left_bns basement nodes in the left node,
     // and the last basement node in the left node will have num_left_les leafentries.
-    int num_left_bns;
-    int num_left_les;
+    int num_left_bns = 0;
+    int num_left_les = 0;
     paranoid_invariant(splitk != NULL);
     toku_init_dbt(splitk);
     if (h->key_ops.keypfsplit != NULL) {
@@ -1274,13 +1289,15 @@ ftleaf_split(
             B->fullhash = fullhash;
         } else {
             B = *nodeb;
+            // make sure the nodeb has no valid internal data before reallocating and zero-initializing
+            for (int i = 0; i < B->n_children; i++) {
+                assert(BP_STATE(B, i) == PT_INVALID);
+            }
             REALLOC_N(num_children_in_b - 1, B->n_children - 1, B->childkeys);
             REALLOC_N(num_children_in_b, B->n_children, B->bp);
             B->n_children = num_children_in_b;
             for (int i = 0; i < num_children_in_b; i++) {
-                BP_BLOCKNUM(B, i).b = 0;
-                BP_STATE(B, i) = PT_AVAIL;
-                BP_WORKDONE(B, i) = 0;
+                ftnode_initialize_bp(B, i);
                 set_BLB(B, i, toku_create_empty_bn());
             }
         }
@@ -1304,12 +1321,9 @@ ftleaf_split(
                 int rr = bd->fetch_le_key_and_len(bd->omt_size() - 1, &keylen, &key);
                 invariant_zero(rr);
                 DBT future_pivot;
-                toku_memdup_dbt(&future_pivot, key, keylen);
-                move_unbound_entries(B, node,
-                                     BLB(B, curr_dst_bn_idx),
-                                     BLB(node, curr_src_bn_idx),
-                                     &future_pivot, h);
-                toku_destroy_dbt(&future_pivot);
+                toku_fill_dbt(&future_pivot, key, keylen);
+                move_ubi_entries(B, node, curr_dst_bn_idx, curr_src_bn_idx,
+                                 &future_pivot, h);
             }
             BLB_MAX_MSN_APPLIED(B, curr_dst_bn_idx) = BLB_MAX_MSN_APPLIED(node, curr_src_bn_idx);
             curr_dst_bn_idx++;
@@ -1320,12 +1334,14 @@ ftleaf_split(
             destroy_basement_node(BLB(B, curr_dst_bn_idx));
             set_BNULL(B, curr_dst_bn_idx);
             B->bp[curr_dst_bn_idx] = node->bp[curr_src_bn_idx];
+            BP_STATE(B, curr_dst_bn_idx) = PT_AVAIL;
             uint32_t ubi_count = BLB(node, curr_src_bn_idx)->unbound_insert_count;
             if (ubi_count) {
                 paranoid_invariant(node->unbound_insert_count >= ubi_count);
                 node->unbound_insert_count -= ubi_count;
                 B->unbound_insert_count += ubi_count;
             }
+            ftnode_initialize_bp(node, curr_src_bn_idx);
         }
         if (curr_dst_bn_idx < B->n_children) {
             // we copied everything, but we may still leave some bp UNAVAIL
@@ -1342,14 +1358,10 @@ ftleaf_split(
         // get splitk (the pvt for the parent)
         if (split_on_boundary && num_left_bns < node->n_children) {
             if (splitk->data == NULL) {
-                split_node_update_bound(node, B,
-                                        node->childkeys[num_left_bns - 1].data,
-                                        node->childkeys[num_left_bns - 1].size);
-                node->totalchildkeylens -= node->childkeys[num_left_bns - 1].size;
                 toku_copy_dbt(splitk, node->childkeys[num_left_bns - 1]);
+                node->totalchildkeylens -= node->childkeys[num_left_bns - 1].size;
                 toku_init_dbt(&node->childkeys[num_left_bns - 1]);
             } else {
-                split_node_update_bound(node, B, splitk->data, splitk->size);
                 node->totalchildkeylens -= node->childkeys[num_left_bns - 1].size;
                 toku_destroy_dbt(&node->childkeys[num_left_bns - 1]);
             }
@@ -1360,12 +1372,10 @@ ftleaf_split(
                 void *key;
                 int rr = bd->fetch_le_key_and_len(bd->omt_size() - 1, &keylen, &key);
                 invariant_zero(rr);
-                split_node_update_bound(node, B, key, keylen);
                 toku_memdup_dbt(splitk, key, keylen);
-            } else {
-                split_node_update_bound(node, B, splitk->data, splitk->size);
             }
         }
+        split_node_update_bound(node, B, splitk->data, splitk->size);
         // cleanup node
         REALLOC_N(num_children_in_node, node->n_children, node->bp);
         REALLOC_N(num_children_in_node - 1, node->n_children - 1, node->childkeys);
@@ -1692,7 +1702,9 @@ merge_leaf_nodes(FT ft, FTNODE parent, int childnuma, FTNODE a, FTNODE b,
 
     uint32_t offset = a_has_tail ? a->n_children : a->n_children - 1;
     for (int i = 0; i < b->n_children; i++) {
+        // moving bp
         a->bp[i+offset] = b->bp[i];
+        // moving childkeys
         if (i < (b->n_children-1)) {
             a->totalchildkeylens += b->childkeys[i].size;
             toku_copy_dbt(&a->childkeys[i+offset], b->childkeys[i]);
@@ -1702,11 +1714,8 @@ merge_leaf_nodes(FT ft, FTNODE parent, int childnuma, FTNODE a, FTNODE b,
     merge_node_update_bound(a, b);
 
     for (int i = 0; i < b->n_children ; ++i) {
-        // Set both the state to invalid, and the tag to null
-        BP_STATE(b,i) = PT_INVALID;
-        set_BNULL(b, i);
+        ftnode_initialize_bp(b, i);
     }
-
     a->n_children = num_children;
 
     //SOSP:Jun node-level bookkeeping of unbound inserts.
@@ -1726,8 +1735,10 @@ merge_leaf_nodes(FT ft, FTNODE parent, int childnuma, FTNODE a, FTNODE b,
         memmove(&parent->bp[childnuma + 1], &parent->bp[childnuma + 2],
                 (parent->n_children - childnuma - 1) * sizeof(parent->bp[0]));
         REALLOC_N(parent->n_children, parent->n_children + 1, parent->bp);
-        memmove(&parent->childkeys[childnuma], &parent->childkeys[childnuma + 1],
-                (parent->n_children - childnuma - 1) * sizeof(parent->childkeys[0]));
+        if (parent->n_children > 1) {
+            memmove(&parent->childkeys[childnuma], &parent->childkeys[childnuma + 1],
+                    (parent->n_children - childnuma - 1) * sizeof(parent->childkeys[0]));
+        }
         REALLOC_N(parent->n_children - 1, parent->n_children, parent->childkeys);
     }
 }
@@ -1887,9 +1898,13 @@ maybe_merge_pinned_nonleaf_nodes(
 
     merge_node_update_bound(a, b);
 
+    // b has been merge to a. Everything belonged to b
+    // belongs to a now. Don't forget to cleanup/unreference
+    // the prefixes (BP_LIFT) of each partition.
+    // Otherwise BP_LIFT will be freed when b is
+    // destroyed even though it belongs to a now.
     for (int i = 0; i < b->n_children ; ++i) {
-        BP_STATE(b,i) = PT_INVALID;
-        set_BNULL(b, i);
+        ftnode_initialize_bp(b, i);
     }
 
     a->unbound_insert_count += b->unbound_insert_count;
@@ -2352,7 +2367,6 @@ static void ft_flush_some_child(
 
     paranoid_invariant(child->thisnodename.b!=0);
     //VERIFY_NODE(brt, child);
-
     // only do the following work if there is a flush to perform
     if (toku_bnc_n_entries(BNC(parent, childnum)) > 0 || parent->height == 1) {
         if (!parent->dirty) {
@@ -2362,8 +2376,7 @@ static void ft_flush_some_child(
         // detach buffer
         BP_WORKDONE(parent, childnum) = 0;  // this buffer is drained, no work has been done by its contents
         bnc = BNC(parent, childnum);
-        NONLEAF_CHILDINFO new_bnc = toku_create_empty_nl();
-        set_BNC(parent, childnum, new_bnc);
+        set_BNC(parent, childnum, toku_create_empty_nl());
         if(bnc->unbound_insert_count) {
             // we just detached a bnc with unbound inserts, so update parent bookkeeping
             paranoid_invariant(parent->unbound_insert_count >= bnc->unbound_insert_count);
@@ -2401,6 +2414,7 @@ static void ft_flush_some_child(
             const DBT * key = first_msg->key;
             const DBT *max_key = first_msg->max_key;
             if(FT_DELETE_MULTICAST == ft_msg_get_type(first_msg)) {
+                STATUS_VALUE(FT_DEAD_LEAF)++;
                 count_d++;
                 //test
                 call_flusher_thread_callback(flt_flush_enter_blind_write);
@@ -2494,6 +2508,7 @@ static void ft_flush_some_child(
     // it is possible that the flush got rid of some values
     // and now the parent is no longer reactive
     child_re = get_node_reactivity(child, ft->h->nodesize);
+
     // if the parent has been unpinned above, then
     // this is our only option, even if the child is not stable
     // if the child is not stable, we'll handle it the next
@@ -2839,8 +2854,7 @@ void toku_ft_flush_node_on_background_thread(FT h, FTNODE parent)
             parent->dirty = 1;
             BP_WORKDONE(parent, childnum) = 0;  // this buffer is drained, no work has been done by its contents
             NONLEAF_CHILDINFO bnc = BNC(parent, childnum);
-            NONLEAF_CHILDINFO new_bnc = toku_create_empty_nl();
-            set_BNC(parent, childnum, new_bnc);
+            set_BNC(parent, childnum, toku_create_empty_nl());
 
             if(bnc->unbound_insert_count) {
                 // we just detached a bnc with unbound inserts, so update parent bookkeeping

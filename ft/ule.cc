@@ -116,7 +116,6 @@ PATENT RIGHTS GRANT:
 #include "ule-internal.h"
 #include <util/status.h>
 
-
 #define ULE_DEBUG 0
 
 static uint32_t ule_get_innermost_numbytes(ULE ule, uint32_t keylen);
@@ -314,38 +313,36 @@ xid_reads_committed_xid(TXNID tl1, TXNID xc, const xid_omt_t &snapshot_txnids, c
 // than oldest_referenced_xid. All elements below this entry are garbage,
 // so we get rid of them.
 //
-#if 1
 static bool
 ule_contains_unbound_uxr(ULE ule) {
-	for(uint32_t i =0; i < ule->num_cuxrs + ule->num_puxrs; i++) {
-		if(ule->uxrs[i].type == XR_UNBOUND_INSERT) {
-			return true;
-		}
-	}
-	return false;
+    for (uint32_t i =0; i < ule->num_cuxrs + ule->num_puxrs; i++) {
+        if (ule->uxrs[i].type == XR_UNBOUND_INSERT) {
+            return true;
+        }
+    }
+    return false;
 }
+
 static int
 ule_num_unbound_uxr(ULE ule) {
-	int ret = 0;
-	for(uint32_t i =0; i < ule->num_cuxrs + ule->num_puxrs; i++) {
-		if(ule->uxrs[i].type == XR_UNBOUND_INSERT) {
-			//printf("\nhit the unbound\n");
-			ret ++;
-		} else {
-	//		printf("\n index =%d, type of the ule is %d\n", i, ule->uxrs[i].type);
-		}
-	}
-	return ret;
+    int ret = 0;
+    for (uint32_t i =0; i < ule->num_cuxrs + ule->num_puxrs; i++) {
+        if(ule->uxrs[i].type == XR_UNBOUND_INSERT) {
+            ret ++;
+        }
+    }
+    return ret;
 }
-#endif
+
 static void
 ule_simple_garbage_collection(ULE ule, TXNID oldest_referenced_xid, GC_INFO gc_info) {
     uint32_t curr_index = 0;
     uint32_t num_entries;
-
+#ifndef FT_INDIRECT
     if(ule_contains_unbound_uxr(ule)) {
-	goto done;
+        goto done;
     }
+#endif
     if (ule->num_cuxrs == 1) {
         goto done;
     }
@@ -369,6 +366,18 @@ ule_simple_garbage_collection(ULE ule, TXNID oldest_referenced_xid, GC_INFO gc_i
         goto done;
     }
 
+#ifdef FT_INDIRECT
+    for (int i = 0; i < curr_index; i++) {
+        if (ule->uxrs[i].type == XR_UNBOUND_INSERT) {
+            struct ftfs_indirect_val *msg_val = (struct ftfs_indirect_val*) ule->uxrs[i].valp;
+            unsigned long pfn = msg_val->pfn;
+            ftfs_set_page_list_private(&pfn, 1, FT_MSG_VAL_GC_1);
+            ftfs_free_page_list(&pfn, 1, true);
+            ule->num_indirect_inserts--;
+        }
+    }
+#endif
+
     // now get rid of the entries below curr_index
     num_entries = ule->num_cuxrs + ule->num_puxrs - curr_index;
     memmove(&ule->uxrs[0], &ule->uxrs[curr_index], num_entries * sizeof(ule->uxrs[0]));
@@ -379,14 +388,16 @@ done:;
 }
 
 static void
-ule_garbage_collect(ULE ule, const xid_omt_t &snapshot_xids, const rx_omt_t &referenced_xids, const xid_omt_t &live_root_txns) {
+ule_garbage_collect(ULE ule, bool UU(ule_is_cloned), const xid_omt_t &snapshot_xids, const rx_omt_t &referenced_xids, const xid_omt_t &live_root_txns) {
     if (ule->num_cuxrs == 1) goto done;
     // will fail if too many num_cuxrs
     bool necessary_static[MAX_TRANSACTION_RECORDS];
     bool *necessary;
+#ifndef FT_INDIRECT
     if(ule_contains_unbound_uxr(ule)) {
     	goto done;
     }
+#endif
     necessary = necessary_static;
     if (ule->num_cuxrs >= MAX_TRANSACTION_RECORDS) {
         XMALLOC_N(ule->num_cuxrs, necessary);
@@ -460,6 +471,20 @@ ule_garbage_collect(ULE ule, const xid_omt_t &snapshot_xids, const rx_omt_t &ref
         if (necessary[i]) {
             ule->uxrs[first_free] = ule->uxrs[i];
             first_free++;
+        } else if (ule->uxrs[i].type == XR_UNBOUND_INSERT) {
+#ifdef FT_INDIRECT
+            struct ftfs_indirect_val *msg_val = (struct ftfs_indirect_val*) ule->uxrs[i].valp;
+            unsigned long pfn = msg_val->pfn;
+            ftfs_set_page_list_private(&pfn, 1, FT_MSG_VAL_GC_2);
+            if (ule_is_cloned) {
+                ftfs_bn_put_page_list(&pfn, 1);
+                // It is garbage collected, so just unlock it
+                ftfs_unlock_page_list_for_clone(&pfn, 1);
+            } else {
+                ftfs_free_page_list(&pfn, 1, true);
+            }
+            ule->num_indirect_inserts--;
+#endif
         }
     }
     uint32_t saved;
@@ -477,6 +502,56 @@ ule_garbage_collect(ULE ule, const xid_omt_t &snapshot_xids, const rx_omt_t &ref
     }
 done:;
 }
+
+#ifdef FT_INDIRECT
+uint32_t LE_NUM_VALS(LEAFENTRY le) {
+    if (le->type == LE_CLEAN) {
+        return 1;
+    } else {
+        return le->u.mvcc.num_cxrs + le->u.mvcc.num_pxrs;
+    }
+}
+
+static void
+get_ind_size_count(LEAFENTRY le, struct ind_size_count *ind_size_count_p) {
+    int num_ubi = le->num_indirect_inserts;
+
+    for (int i = 0 ; num_ubi > 0 && i < LE_NUM_VALS(le); i++) {
+        if (le->indirect_insert_offsets[i] > 0) {
+            struct ftfs_indirect_val *val = (struct ftfs_indirect_val *) ((uint8_t*)le + le->indirect_insert_offsets[i]);
+            unsigned int size = val->size;
+            if (size < FTFS_PAGE_SIZE) {
+                ind_size_count_p->odd_count += 1;
+                ind_size_count_p->odd_size += size;
+            } else {
+                assert(size == FTFS_PAGE_SIZE);
+                ind_size_count_p->full_count += 1;
+                ind_size_count_p->full_size += size;
+            }
+            num_ubi--;
+        }
+    }
+}
+
+/*
+ * Assume the node lock is held. It is okay to modify/read the counter of
+ * leaf entry for indirect values.
+ */
+int le_get_ind_size(LEAFENTRY le) {
+    int num_ubi = le->num_indirect_inserts;
+    int ind_size = 0;
+
+    for (int i = 0 ; num_ubi > 0 && i < LE_NUM_VALS(le); i++) {
+        if (le->indirect_insert_offsets[i] > 0) {
+            struct ftfs_indirect_val *val = (struct ftfs_indirect_val *) ((uint8_t*)le + le->indirect_insert_offsets[i]);
+            unsigned int size = val->size;
+            ind_size += size;
+            num_ubi--;
+        }
+    }
+    return ind_size;
+}
+#endif
 
 /////////////////////////////////////////////////////////////////////////////////
 // This is the big enchilada.  (Bring Tums.)  Note that this level of abstraction
@@ -500,7 +575,8 @@ toku_le_apply_msg(FT_MSG   msg,
                   TXNID oldest_referenced_xid,
                   GC_INFO gc_info,
                   LEAFENTRY *new_leafentry_p,
-                  int64_t * numbytes_delta_p) {  // change in total size of key and val, not including any overhead
+                  int64_t * numbytes_delta_p, // change in total size of key and val, not including any overhead
+                  struct ind_size_count *UU(ind_size_count_p)) {  // indirect value size and count
     ULE_S *ule;
     int64_t oldnumbytes = 0;
     int64_t newnumbytes = 0;
@@ -508,7 +584,22 @@ toku_le_apply_msg(FT_MSG   msg,
     uint32_t keylen = ft_msg_get_keylen(msg);
     LEAFENTRY copied_old_le = NULL;
     bool old_le_malloced = false;
-    size_t old_le_size = 0;
+#ifdef FT_INDIRECT
+    struct ind_size_count old_size_count = {
+        .full_count = 0,
+        .full_size = 0,
+        .odd_count = 0,
+        .odd_size = 0,
+    };
+
+    struct ind_size_count new_size_count = {
+        .full_count = 0,
+        .full_size = 0,
+        .odd_count = 0,
+        .odd_size = 0,
+    };
+#endif
+    size_t old_le_size;
     if (old_leafentry) {
         old_le_size = leafentry_memsize(old_leafentry);
         assert(old_le_size > 0);
@@ -533,6 +624,9 @@ toku_le_apply_msg(FT_MSG   msg,
         msg_init_empty_ule(ule);
     } else {
         oldmemsize = leafentry_memsize(old_leafentry);
+#ifdef FT_INDIRECT
+        get_ind_size_count(old_leafentry, &old_size_count);
+#endif
         le_unpack(ule, copied_old_le); // otherwise unpack leafentry
         oldnumbytes = ule_get_innermost_numbytes(ule, keylen);
     }
@@ -548,18 +642,29 @@ toku_le_apply_msg(FT_MSG   msg,
         oldmemsize,
         new_leafentry_p
         );
-#ifdef DEBUG_SEQ_IO
-    if(msg->type == FT_UNBOUND_INSERT) {
-	assert(toku_le_unbound_count(*new_leafentry_p) > 0);
-    }
-#endif
     invariant_zero(rval);
     if (new_leafentry_p) {
         newnumbytes = ule_get_innermost_numbytes(ule, keylen);
+#ifdef FT_INDIRECT
+        if (*new_leafentry_p) {
+            get_ind_size_count(*new_leafentry_p, &new_size_count);
+            if ((*new_leafentry_p)->type == LE_CLEAN) {
+                assert((*new_leafentry_p)->num_indirect_inserts <= 1);
+            }
+        }
+#endif
     }
     *numbytes_delta_p = newnumbytes - oldnumbytes;
-    //ule_cleanup(ule);
-    //toku_free(ule);
+
+#ifdef FT_INDIRECT
+    if (ind_size_count_p) {
+        ind_size_count_p->full_count = new_size_count.full_count - old_size_count.full_count;
+        ind_size_count_p->full_size = new_size_count.full_size - old_size_count.full_size;
+        ind_size_count_p->odd_count = new_size_count.odd_count - old_size_count.odd_count;
+        ind_size_count_p->odd_size = new_size_count.odd_size - old_size_count.odd_size;
+    }
+#endif
+
     toku_ule_free(ule);
     if (old_le_malloced) {
         sb_free_sized(copied_old_le, old_le_size);
@@ -706,7 +811,6 @@ toku_le_unbound_count(LEAFENTRY old_leaf_entry) {
     return ret;
 }
 
-
 void
 toku_le_garbage_collect(LEAFENTRY old_leaf_entry,
                         bn_data* data_buffer,
@@ -718,11 +822,29 @@ toku_le_garbage_collect(LEAFENTRY old_leaf_entry,
                         const rx_omt_t &referenced_xids,
                         const xid_omt_t &live_root_txns,
                         TXNID oldest_referenced_xid_known,
-                        int64_t * numbytes_delta_p) {
+                        bool bn_is_cloned,
+                        int64_t * numbytes_delta_p,
+                        struct ind_size_count *UU(ind_size_count_p)) {
     ULE_S *ule;
     int64_t oldnumbytes = 0;
     int64_t newnumbytes = 0;
     LEAFENTRY copied_old_le = NULL;
+#ifdef FT_INDIRECT
+    struct ind_size_count old_size_count = {
+        .full_count = 0,
+        .full_size = 0,
+        .odd_count = 0,
+        .odd_size = 0,
+    };
+
+    struct ind_size_count new_size_count = {
+        .full_count = 0,
+        .full_size = 0,
+        .odd_count = 0,
+        .odd_size = 0,
+    };
+#endif
+
     bool old_le_malloced = false;
     size_t old_le_size = 0;
     if (old_leaf_entry) {
@@ -742,8 +864,10 @@ toku_le_garbage_collect(LEAFENTRY old_leaf_entry,
         memcpy(copied_old_le, old_leaf_entry, old_le_size);
     }
     ule = toku_ule_get();
+#ifdef FT_INDIRECT
+    get_ind_size_count(copied_old_le, &old_size_count);
+#endif
     le_unpack(ule, copied_old_le);
-
     uint32_t old_mem_size = 0;
     oldnumbytes = ule_get_innermost_numbytes(ule, keylen);
     old_mem_size = leafentry_memsize(old_leaf_entry);
@@ -756,7 +880,7 @@ toku_le_garbage_collect(LEAFENTRY old_leaf_entry,
     // garbage in leafentries.
     TXNID oldest_possible_live_xid = oldest_referenced_xid_known;
     ule_try_promote_provisional_outermost(ule, oldest_possible_live_xid);
-    ule_garbage_collect(ule, snapshot_xids, referenced_xids, live_root_txns);
+    ule_garbage_collect(ule, bn_is_cloned, snapshot_xids, referenced_xids, live_root_txns);
     int r = le_pack(
         ule,
         data_buffer,
@@ -766,10 +890,28 @@ toku_le_garbage_collect(LEAFENTRY old_leaf_entry,
         old_mem_size,
         new_leaf_entry
         );
+
     assert(r == 0);
     if (new_leaf_entry) {
         newnumbytes = ule_get_innermost_numbytes(ule, keylen);
+#ifdef FT_INDIRECT
+        if (*new_leaf_entry) {
+            get_ind_size_count(*new_leaf_entry, &new_size_count);
+            if ((*new_leaf_entry)->type == LE_CLEAN) {
+                assert((*new_leaf_entry)->num_indirect_inserts <= 1);
+            }
+        }
+#endif
     }
+
+#ifdef FT_INDIRECT
+    if (ind_size_count_p) {
+        ind_size_count_p->full_count = new_size_count.full_count - old_size_count.full_count;
+        ind_size_count_p->full_size = new_size_count.full_size - old_size_count.full_size;
+        ind_size_count_p->odd_count = new_size_count.odd_count - old_size_count.odd_count;
+        ind_size_count_p->odd_size = new_size_count.odd_size - old_size_count.odd_size;
+    }
+#endif
     *numbytes_delta_p = newnumbytes - oldnumbytes;
     toku_ule_free(ule);
     if (old_le_malloced) {
@@ -808,6 +950,9 @@ msg_modify_ule(ULE ule, FT_MSG msg) {
         //else it is just an insert, so
         //fall through to FT_INSERT on purpose.
     }
+#if __GNUC__ > 6
+    [[fallthrough]];
+#endif
    case FT_INSERT: {
         uint32_t vallen = ft_msg_get_vallen(msg);
         invariant(IS_VALID_LEN(vallen));
@@ -848,9 +993,6 @@ msg_modify_ule(ULE ule, FT_MSG msg) {
     case FT_UPDATE_BROADCAST_ALL:
         assert(false); // These messages don't get this far.  Instead they get translated (in setval_fun in do_update) into FT_INSERT messages.
         break;
-    //default:
-      //  assert(false /* illegal FT_MSG.type */);
-        //break;
     }
 }
 
@@ -906,7 +1048,16 @@ le_unpack(ULE ule, LEAFENTRY le) {
             ule->num_cuxrs = 1;
             ule->num_puxrs = 0;
             UXR uxr     = ule->uxrs;
+#ifdef FT_INDIRECT
+            ule->num_indirect_inserts = le->num_indirect_inserts;
+            if (ule->num_indirect_inserts == 0) {
+                uxr->type   = XR_INSERT;
+            } else {
+                uxr->type   = XR_UNBOUND_INSERT;
+            }
+#else
             uxr->type   = XR_INSERT;
+#endif
 	    uxr->vallen = toku_dtoh32(le->u.clean.vallen);
             uxr->valp   = le->u.clean.val;
             uxr->xid    = TXNID_NONE;
@@ -916,6 +1067,9 @@ le_unpack(ULE ule, LEAFENTRY le) {
         }
         case LE_MVCC:
         case LE_MVCC_INNER_DEL:
+#ifdef FT_INDIRECT
+            ule->num_indirect_inserts = le->num_indirect_inserts;
+#endif
             ule->num_cuxrs = toku_dtoh32(le->u.mvcc.num_cxrs);
             invariant(ule->num_cuxrs);
             ule->num_puxrs = le->u.mvcc.num_pxrs;
@@ -1070,7 +1224,6 @@ uxr_unpack_length_and_bit(UXR uxr, uint8_t *p) {
     if (IS_UNBOUND_INSERT(length_and_bit)) {
         uxr->type = XR_UNBOUND_INSERT;
         uxr->vallen = GET_UNBOUND_LENGTH(length_and_bit);
-
 	//printf("ahh hit UNBOUND INSERT %s:%d, the unpack len is %u\n", __func__, __LINE__, uxr->vallen);
     }
     else if (IS_INSERT(length_and_bit)) {
@@ -1127,6 +1280,9 @@ le_pack(ULE ule, // data to be packed into new leafentry
     invariant(ule->uxrs[0].xid == TXNID_NONE);
     int rval;
     size_t memsize = 0;
+#ifdef FT_INDIRECT
+    uint8_t *p_begin = NULL;
+#endif
     {
         // The unpacked leafentry may contain no inserts anywhere on its stack.
         // If so, then there IS no leafentry to pack, we should return NULL
@@ -1150,17 +1306,29 @@ found_insert:;
     memsize = le_memsize_from_ule(ule);
     LEAFENTRY new_leafentry;
     get_space_for_le(data_buffer, idx, keyp, keylen, old_le_size, memsize, &new_leafentry);
+#ifdef FT_INDIRECT
+    /* allocate space for indirect_insert_offsets */
+    if (ule->num_indirect_inserts > 0) {
+        int num = ule->num_cuxrs + ule->num_puxrs;
+        XMALLOC_N(num, new_leafentry->indirect_insert_offsets);
+        memset(new_leafentry->indirect_insert_offsets, 0, num * sizeof(unsigned int));
+    } else {
+        new_leafentry->indirect_insert_offsets = NULL;
+    }
+    new_leafentry->num_indirect_inserts = ule->num_indirect_inserts;
+    p_begin = (uint8_t*)new_leafentry;
+#endif
 
     //p always points to first unused byte after leafentry we are packing
     uint8_t *p;
     invariant(ule->num_cuxrs>0);
 
     //Type specific data
+#ifdef FT_INDIRECT
+    if (ule->num_cuxrs == 1 && ule->num_puxrs == 0) {
+#else
     if (ule->num_cuxrs == 1 && ule->num_puxrs == 0 && !ule_contains_unbound_uxr(ule)) {
-
-        //Pack a 'clean leafentry' (no uncommitted transactions, only one committed value)
-
-	//printf("hit LE_CLEAN!! %s, %d\n", __func__, __LINE__);
+#endif
         new_leafentry->type = LE_CLEAN;
 
         uint32_t vallen = ule->uxrs[0].vallen;
@@ -1170,8 +1338,14 @@ found_insert:;
         //Store actual val
         memcpy(new_leafentry->u.clean.val, ule->uxrs[0].valp, vallen);
 
-       //Set p to after leafentry
+        //Set p to after leafentry
         p = new_leafentry->u.clean.val + vallen;
+#ifdef FT_INDIRECT
+        // update indirect_insert_offsets
+        if (uxr_is_unbound_insert(&ule->uxrs[0])) {
+            new_leafentry->indirect_insert_offsets[0] = new_leafentry->u.clean.val - p_begin;
+        }
+#endif
     }
     else {
         uint32_t i;
@@ -1192,15 +1366,28 @@ found_insert:;
 
         p = new_leafentry->u.mvcc.xrs;
 
-        //printf("hit MVCC!! %s, %d\n", __func__, __LINE__);
+#ifdef FT_INDIRECT
 	if(ule->num_puxrs == 0 && ule->num_cuxrs == 1) {
-		//printf("hit it!! %s, %d\n", __func__, __LINE__);
+            assert(ule_contains_unbound_uxr(ule));
+            p += uxr_pack_txnid(ule->uxrs, p);
+            p += uxr_pack_length_and_bit(ule->uxrs, p);
+            if (uxr_is_unbound_insert(ule->uxrs)) {
+                new_leafentry->indirect_insert_offsets[0] = p - p_begin;
+                p += uxr_pack_data(ule->uxrs, p);
+            } else { 
+                p += uxr_pack_data(ule->uxrs, p);
+            }
+            goto done;		
+	}
+#else
+	if(ule->num_puxrs == 0 && ule->num_cuxrs == 1) {
 		assert(ule_contains_unbound_uxr(ule));
 		p += uxr_pack_txnid(ule->uxrs, p);
 		p += uxr_pack_length_and_bit(ule->uxrs, p);
             	p += uxr_pack_data(ule->uxrs, p);
 		goto done;
 	}
+#endif
         //pack interesting TXNIDs inner to outer.
         if (ule->num_puxrs!=0) {
             UXR outermost = ule->uxrs + ule->num_cuxrs;
@@ -1221,6 +1408,54 @@ found_insert:;
         }
 
         //pack interesting values inner to outer
+#ifdef FT_INDIRECT
+        if (ule->num_puxrs!=0) {
+            UXR innermost = ule->uxrs + ule->num_cuxrs + ule->num_puxrs - 1;
+            int index = ule->num_cuxrs + ule->num_puxrs - 1;
+            if (uxr_is_unbound_insert(innermost)) {
+                new_leafentry->indirect_insert_offsets[index] = p - p_begin;
+                p += uxr_pack_data(innermost, p);
+            } else { 
+                p += uxr_pack_data(innermost, p);
+            }
+        }
+        for (i = 0; i < ule->num_cuxrs; i++) {
+            int index = ule->num_cuxrs - 1 - i;
+            if (uxr_is_unbound_insert(ule->uxrs + index)) {
+                new_leafentry->indirect_insert_offsets[index] = p - p_begin;
+                p += uxr_pack_data(ule->uxrs + index, p);
+            } else { 
+                p += uxr_pack_data(ule->uxrs + index, p);
+            }
+        }
+
+        //pack provisional xrs outer to inner
+        if (ule->num_puxrs > 1) {
+            {
+                //pack length, bit, data for outermost uncommitted
+                UXR outermost = ule->uxrs + ule->num_cuxrs;
+                p += uxr_pack_type_and_length(outermost, p);
+                int index = ule->num_cuxrs;
+                if (uxr_is_unbound_insert(ule->uxrs + index)) {
+                    new_leafentry->indirect_insert_offsets[index] = p - p_begin;
+                    p += uxr_pack_data(outermost, p);
+                } else { 
+                    p += uxr_pack_data(outermost, p);
+                }
+            }
+            //pack txnid, length, bit, data for non-outermost, non-innermost
+            for (i = ule->num_cuxrs + 1; i < ule->num_cuxrs + ule->num_puxrs - 1; i++) {
+                UXR uxr = ule->uxrs + i;
+                p += uxr_pack_txnid(uxr, p);
+                p += uxr_pack_type_and_length(uxr, p);
+                if (uxr_is_unbound_insert(ule->uxrs + i)) {
+                    new_leafentry->indirect_insert_offsets[i] = p - p_begin;
+                    p += uxr_pack_data(uxr, p);
+                } else { 
+                    p += uxr_pack_data(uxr, p);
+                }
+            }
+#else
         if (ule->num_puxrs!=0) {
             UXR innermost = ule->uxrs + ule->num_cuxrs + ule->num_puxrs - 1;
             p += uxr_pack_data(innermost, p);
@@ -1244,6 +1479,7 @@ found_insert:;
                 p += uxr_pack_type_and_length(uxr, p);
                 p += uxr_pack_data(uxr, p);
             }
+#endif
             {
                 //Just pack txnid for innermost
                 UXR innermost = ule->uxrs + ule->num_cuxrs + ule->num_puxrs - 1;
@@ -1259,7 +1495,6 @@ done:
     /* YZJ: the special byte is not packed */
     bytes_written = (size_t)p - (size_t)new_leafentry;
     invariant(bytes_written == memsize);
-
 #if ULE_DEBUG
     if (omt) { //Disable recursive debugging.
         size_t memsize_verify = leafentry_memsize(new_leafentry);
@@ -1285,7 +1520,6 @@ done:
         toku_ule_free(ule);
     }
 #endif
-
     *new_leafentry_p = (LEAFENTRY)new_leafentry;
     rval = 0;
 cleanup:
@@ -1305,16 +1539,34 @@ le_memsize_from_ule (ULE ule) {
     if (ule->num_cuxrs == 1 && ule->num_puxrs == 0) {
         UXR committed = ule->uxrs;
         invariant(uxr_is_insert(committed));
+#ifdef FT_INDIRECT
+        rval = 8                    //indirect_insert_offsets
+              +1                    //num_indirect_inserts
+              +1                    //type
+              +4                    //vallen
+              +committed->vallen;   //actual val
+#else
         rval = 1                    //type
               +4                    //vallen
               +committed->vallen;   //actual val
+#endif
     }
     else {
+#ifdef FT_INDIRECT
+        rval = 8                    //indirect_insert_offsets
+              +1                    //num_indirect_inserts
+              +1                    //type
+              +4                    //num_cuxrs
+              +1                    //num_puxrs
+              +4*(ule->num_cuxrs)   //types+lengths for committed
+              +8*(ule->num_cuxrs + ule->num_puxrs - 1);  //txnids (excluding superroot)
+#else
         rval = 1                    //type
               +4                    //num_cuxrs
               +1                    //num_puxrs
               +4*(ule->num_cuxrs)   //types+lengths for committed
               +8*(ule->num_cuxrs + ule->num_puxrs - 1);  //txnids (excluding superroot)
+#endif
         uint32_t i;
         //Count data from committed uxrs and innermost puxr
         for (i = 0; i < ule->num_cuxrs; i++) {
@@ -1393,6 +1645,132 @@ leafentry_rest_memsize(uint32_t num_puxrs, uint32_t num_cuxrs, uint8_t* start) {
     return rval;
 }
 
+#ifdef FT_INDIRECT
+/**
+ * Perform the same work of leafentry_rest_memsize.
+ * As a open struct, a leafentry's size cannot be gotten from sizeof operator.
+ * It parses the bytes starting from start with the knowledge
+ * of num_puxrs and num_cuxrs. When p hits the last byte, the size can
+ * be calculate by p - le_start.
+ * Compared with leafentry_rest_memsize, this function
+ * also returns the offsets of indirect values in the leafentry.
+ * When p hits a ubi value, it updates indirect_insert_offsets accordingly.
+ * The result is in indirect_insert_offsets.
+ */
+size_t
+leafentry_rest_memsize_fixup(uint32_t num_puxrs,
+                             uint32_t num_cuxrs,
+                             uint8_t* start,
+                             unsigned int *indirect_insert_offsets,
+                             uint8_t *le_start,
+                             int tmp_size)
+{
+    UXR_S uxr;
+    size_t   lengths = 0;
+    uint8_t* p = start;
+
+    //Skip TXNIDs
+    if (num_puxrs!=0) {
+        p += sizeof(TXNID);
+    }
+    p += (num_cuxrs-1)*sizeof(TXNID);
+    //////////////// For indirect_insert_offsets ////////////////
+    int innermost_puxr_insert_len = 0;
+    bool innermost_puxr_is_unbound = false;
+    /////////////////////End////////////////////
+
+    //Retrieve interesting lengths inner to outer.
+    if (num_puxrs!=0) {
+        p += uxr_unpack_length_and_bit(&uxr, p);
+        if (uxr_is_insert(&uxr)) {
+            lengths += uxr.vallen;
+            // If innermost puxr is unbound
+            if (uxr_is_unbound_insert(&uxr)) {
+                innermost_puxr_is_unbound = true;
+                innermost_puxr_insert_len = uxr.vallen;
+            } else {
+                innermost_puxr_insert_len = uxr.vallen;
+            }
+        }
+    }
+
+    //////////////// For indirect_insert_offsets ////////////////
+    int *cuxr_insert_len= (int *)toku_malloc(num_cuxrs*sizeof(int));
+    bool *cuxr_is_unbound= (bool *)toku_malloc(num_cuxrs*sizeof(bool));
+    assert(cuxr_insert_len);
+    assert(cuxr_is_unbound);
+    /////////////////////End////////////////////
+    uint32_t i;
+    for (i = 0; i < num_cuxrs; i++) {
+        p += uxr_unpack_length_and_bit(&uxr, p);
+        if (uxr_is_insert(&uxr)) {
+            lengths += uxr.vallen;
+            if (uxr_is_unbound_insert(&uxr)) {
+                cuxr_insert_len[i] = uxr.vallen;
+                cuxr_is_unbound[i] = true;
+            } else{
+                cuxr_is_unbound[i] = false;
+                cuxr_insert_len[i] = uxr.vallen;
+            }
+        } else {
+            cuxr_is_unbound[i] = false;
+            cuxr_insert_len[i] = 0;
+        }
+    }
+
+    //////////////// For indirect_insert_offsets ///////
+    if (num_puxrs != 0) {
+        if (innermost_puxr_is_unbound) {
+            indirect_insert_offsets[num_cuxrs + num_puxrs - 1] = (p - le_start) + tmp_size;
+        }
+        p += innermost_puxr_insert_len;
+    }
+
+    for (i = 0; i < num_cuxrs; i++) {
+         if (cuxr_is_unbound[i]) {
+             indirect_insert_offsets[num_cuxrs - 1 - i] =  (p - le_start) + tmp_size;
+         }
+         p += cuxr_insert_len[i];
+    }
+    /////////////////////End////////////////////
+
+    //unpack provisional xrs outer to inner
+    if (num_puxrs > 1) {
+        {
+            p += uxr_unpack_type_and_length(&uxr, p);
+            p += uxr_unpack_data(&uxr, p);
+            /////  For indirect_insert_offsets /////
+            int index = num_cuxrs;
+            if (uxr_is_unbound_insert(&uxr)) {
+                indirect_insert_offsets[index] = ((uint8_t *)uxr.valp - le_start) + tmp_size;
+            }
+            ///////////  The end ///////////
+        }
+        //unpack txnid, length, bit, data for non-outermost, non-innermost
+        for (i = 0; i < num_puxrs - 2; i++) {
+            p += uxr_unpack_txnid(&uxr, p);
+            p += uxr_unpack_type_and_length(&uxr, p);
+            p += uxr_unpack_data(&uxr, p);
+
+            /////  For indirect_insert_offsets /////
+            int index = num_cuxrs + 1 + i;
+            if (uxr_is_unbound_insert(&uxr)) {
+                indirect_insert_offsets[index] = ((uint8_t*)uxr.valp - le_start) + tmp_size;
+            }
+            ///////////  The end ///////////
+        }
+        {
+            //Just unpack txnid for innermost
+            p += uxr_unpack_txnid(&uxr, p);
+        }
+    }
+    toku_free(cuxr_insert_len);
+    toku_free(cuxr_is_unbound);
+    size_t rval = (size_t)p - (size_t)start;
+    return rval;
+}
+#endif
+
 size_t
 leafentry_memsize (LEAFENTRY le) {
     size_t rval = 0;
@@ -1419,19 +1797,6 @@ leafentry_memsize (LEAFENTRY le) {
         default:
             invariant(false);
     }
-#if ULE_DEBUG
-    ULE_S *ule = (ULE_S *)toku_xmalloc(sizeof(ULE_S));
-    le_unpack(ule, le);
-    size_t slow_rval = le_memsize_from_ule(ule);
-    if (slow_rval!=rval) {
-        int r = print_klpair(stderr, le, NULL, 0);
-        fprintf(stderr, "\nSlow: [%" PRIu64 "] Fast: [%" PRIu64 "]\n", slow_rval, rval);
-        invariant(r==0);
-    }
-    assert(slow_rval == rval);
-    ule_cleanup(ule);
-    toku_free(ule);
-#endif
     return rval;
 }
 
@@ -1522,7 +1887,7 @@ le_has_xids(LEAFENTRY le, XIDS xids) {
 }
 
 void*
-le_latest_val_and_len (LEAFENTRY le, uint32_t *len) {
+le_latest_val_and_len (LEAFENTRY le, uint32_t *len, bool *UU(is_indirect)) {
     uint8_t  type = le->type;
     void *valp;
 
@@ -1554,6 +1919,15 @@ le_latest_val_and_len (LEAFENTRY le, uint32_t *len) {
             if (uxr_is_insert(&uxr)) {
                 *len = uxr.vallen;
                 valp = p + (num_cuxrs - 1 + (num_puxrs!=0))*sizeof(uint32_t);
+#ifdef FT_INDIRECT
+                *is_indirect = false;
+                if (uxr_is_unbound_insert(&uxr)) {
+                    *is_indirect = true;
+                    if (sizeof(struct ftfs_indirect_val) != uxr.vallen) {
+                        toku_dump_hex("val:", valp, *len);
+                    }
+                }
+#endif
             }
             else {
                 *len = 0;
@@ -1758,6 +2132,9 @@ ule_init_empty_ule(ULE ule) {
     ule->num_cuxrs = 1;
     ule->num_puxrs = 0;
     ule->uxrs      = ule->uxrs_static;
+#ifdef FT_INDIRECT
+    ule->num_indirect_inserts = 0;
+#endif
     ule->uxrs[0]   = committed_delete;
 }
 
@@ -1830,6 +2207,23 @@ ule_promote_provisional_innermost_to_committed(ULE ule) {
     assert(!uxr_is_placeholder(old_innermost_uxr));
 
     UXR old_outermost_uncommitted_uxr = &ule->uxrs[ule->num_cuxrs];
+#ifdef FT_INDIRECT
+    // YZJ: save the index of innermost uxr
+    int old_innermost_index = ule->num_cuxrs + ule->num_puxrs - 1;
+    // old_innermost will be inserted again so do not free the page
+    for (int i = ule->num_cuxrs; i <= old_innermost_index; i++) {
+        if (ule->uxrs[i].type == XR_UNBOUND_INSERT) {
+            ule->num_indirect_inserts--;
+            // for the case i == old_innermost_index, we do not free pages
+            if (i < old_innermost_index) {
+                struct ftfs_indirect_val *msg_val = (struct ftfs_indirect_val*) ule->uxrs[i].valp;
+                unsigned long pfn = msg_val->pfn;
+                ftfs_set_page_list_private(&pfn, 1, FT_MSG_VAL_GC_3);
+                ftfs_free_page_list(&pfn, 1, true);
+            }
+        }
+    }
+#endif
 
     ule->num_puxrs = 0; //Discard all provisional uxrs.
     if (uxr_is_delete(old_innermost_uxr)) {
@@ -1872,8 +2266,26 @@ ule_promote_provisional_innermost_to_index(ULE ule, uint32_t index) {
     //Must actually be promoting.
     invariant(index < ule->num_cuxrs + ule->num_puxrs - 1);
     UXR old_innermost_uxr = ule_get_innermost_uxr(ule);
+#ifdef FT_INDIRECT
+    // YZJ: save the innermost index
+    int old_innermost_index = ule->num_cuxrs + ule->num_puxrs - 1;
+#endif
     assert(!uxr_is_placeholder(old_innermost_uxr));
     TXNID new_innermost_xid = ule->uxrs[index].xid;
+#ifdef FT_INDIRECT
+    // old_innermost will be inserted again so do not free the page
+    for (int i = index; i <= old_innermost_index; i++) {
+        if (ule->uxrs[i].type == XR_UNBOUND_INSERT) {
+            ule->num_indirect_inserts--;
+            if (i < old_innermost_index) {
+                struct ftfs_indirect_val *msg_val = (struct ftfs_indirect_val*) ule->uxrs[i].valp;
+                unsigned long pfn = msg_val->pfn;
+                ftfs_set_page_list_private(&pfn, 1, FT_MSG_VAL_GC_4);
+                ftfs_free_page_list(&pfn, 1, true);
+            }
+        }
+    }
+#endif
     ule->num_puxrs = index - ule->num_cuxrs; //Discard old uxr at index (and everything inner)
     if (uxr_is_delete(old_innermost_uxr)) {
         ule_push_delete_uxr(ule, false, new_innermost_xid);
@@ -1898,6 +2310,11 @@ static void
 ule_apply_insert(ULE ule, XIDS xids, uint32_t vallen, void * valp, enum uxr_type type) {
     ule_prepare_for_new_uxr(ule, xids);
     TXNID this_xid = xids_get_innermost_xid(xids);  // xid of transaction doing this insert
+#ifdef FT_INDIRECT
+    if (ule->num_indirect_inserts > 0) {
+        assert(this_xid != TXNID_NONE);
+    }
+#endif
     ule_push_insert_uxr(ule, this_xid == TXNID_NONE, this_xid, vallen, valp, type);
 }
 
@@ -2003,6 +2420,17 @@ void ule_apply_commit(ULE ule, XIDS xids) {
 static void
 ule_push_insert_uxr(ULE ule, bool is_committed, TXNID xid, uint32_t vallen, void * valp, enum uxr_type type) {
     UXR uxr     = ule_get_first_empty_uxr(ule);
+#ifdef FT_INDIRECT
+    /* add the unbound val to the array */
+    if (type == XR_UNBOUND_INSERT) {
+        struct ftfs_indirect_val *msg_val = (struct ftfs_indirect_val*) valp;
+        unsigned long *pfn_arr = &msg_val->pfn; 
+        if (sb_is_wb_page(pfn_arr, 1)) {
+            sb_wb_page_list_unlock(pfn_arr, 1, true);
+        }
+        ule->num_indirect_inserts++;
+    }
+#endif
     if (is_committed) {
         invariant(ule->num_puxrs==0);
         ule->num_cuxrs++;
@@ -2198,6 +2626,40 @@ uxr_is_insert(UXR uxr) {
     return uxr_type_is_insert(uxr->type);
 }
 
+#ifdef FT_INDIRECT
+static inline bool
+uxr_type_is_unbound_insert(uint8_t type) {
+    bool rval = (bool)(type == XR_UNBOUND_INSERT);
+    return rval;
+}
+
+bool
+uxr_is_regular_insert(UXR uxr) {
+    return uxr_type_is_regular_insert(uxr->type);
+}
+
+bool
+uxr_is_unbound_insert(UXR uxr) {
+    return uxr_type_is_unbound_insert(uxr->type);
+}
+
+void debug_le_val(LEAFENTRY le) {
+     ULE_S *ule = (ULE_S *)toku_xmalloc(sizeof(ULE_S));
+     le_unpack(ule, le);
+
+     printf("ule->cuxrs=%d, ule->puxrs=%d\n", ule->num_cuxrs, ule->num_puxrs);
+     UXR uxr = ule->uxrs + 0;
+     if (uxr_is_insert(uxr)) {
+         //toku_dump_hex("val0:", uxr->valp, uxr->vallen);
+     }
+     uxr = ule->uxrs + 1;
+     if (uxr_is_insert(uxr)) {
+         //toku_dump_hex("val1:", uxr->valp, uxr->vallen);
+     }
+     ule_cleanup(ule);
+     toku_free(ule);
+}
+#endif
 static inline bool
 uxr_type_is_delete(uint8_t type) {
     bool rval = (bool)(type == XR_DELETE);
@@ -2369,21 +2831,32 @@ cleanup:
 //    context - parameter for f
 //
 int
-le_iterate_val(LEAFENTRY le, LE_ITERATE_CALLBACK f, void** valpp, uint32_t *vallenp, TOKUTXN context) {
+le_iterate_val(LEAFENTRY le, LE_ITERATE_CALLBACK f, void** valpp, uint32_t *vallenp, bool *UU(is_indirect), TOKUTXN context) {
 #if ULE_DEBUG
     ULE_S *ule = (ULE_S *)toku_xmalloc(sizeof(ULE_S));
     le_unpack(ule, le);
 #endif
-
     uint8_t type = le->type;
     int r;
     uint32_t vallen = 0;
     void *valp = NULL;
+    uint32_t num_cuxrs = 0;
+    uint32_t num_puxrs = 0;
+    uint32_t index = 0;
+
     switch (type) {
         case LE_CLEAN: {
             vallen = toku_dtoh32(le->u.clean.vallen);
             valp   = le->u.clean.val;
             r = 0;
+#ifdef FT_INDIRECT
+            if (le->num_indirect_inserts > 0) {
+                *is_indirect = true;
+            } else {
+                *is_indirect = false;
+            }
+#endif
+
 #if ULE_DEBUG
             invariant(ule->num_cuxrs == 1);
             invariant(ule->num_puxrs == 0);
@@ -2395,14 +2868,11 @@ le_iterate_val(LEAFENTRY le, LE_ITERATE_CALLBACK f, void** valpp, uint32_t *vall
         }
         case LE_MVCC:
         case LE_MVCC_INNER_DEL:
-            uint32_t num_cuxrs;
             num_cuxrs = toku_dtoh32(le->u.mvcc.num_cxrs);
-            uint32_t num_puxrs;
             num_puxrs = le->u.mvcc.num_pxrs;
             uint8_t *p;
             p = le->u.mvcc.xrs;
 
-            uint32_t index;
             uint32_t num_interesting;
             num_interesting = num_cuxrs + (num_puxrs != 0);
             TXNID *xids;
@@ -2433,6 +2903,13 @@ le_iterate_val(LEAFENTRY le, LE_ITERATE_CALLBACK f, void** valpp, uint32_t *vall
             if (uxr_is_delete(&temp)) {
                 goto verify_is_empty;
             }
+#ifdef FT_INDIRECT
+            if (uxr_is_unbound_insert(&temp)) {
+                *is_indirect = true;
+            } else {
+                *is_indirect = false;
+            }
+#endif
             vallen = temp.vallen;
 
             // move p past the length and bits, now points to beginning of data
@@ -2471,6 +2948,18 @@ cleanup:
     if (!r) {
         *valpp   = valp;
         *vallenp = vallen;
+        if (*is_indirect) {
+#ifdef FT_INDIRECT_DEBUG_ULE
+            uint32_t has_p = (num_puxrs != 0);
+            uint32_t ule_index = (index==0) ? num_cuxrs + num_puxrs - 1 : num_cuxrs - 1 + has_p - index;
+            struct ftfs_indirect_val msg;
+            memcpy(&msg, (uint8_t*)valp, sizeof(msg));
+            printf("%s: pfn=%lu, offset=%d, size=%d\n", __func__, msg->pfn, msg->offset, msg->len);
+            char *addr = ftfs_map_page(msg->pfn);
+            toku_dump_hex("page_data:", addr, 16);
+            ftfs_unmap_page(addr);
+#endif
+        }
     }
     return r;
 }

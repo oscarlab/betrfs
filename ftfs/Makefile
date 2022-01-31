@@ -5,7 +5,7 @@ else
 endif
 
 obj-m += ftfs.o
-ccflags-y += -fno-builtin
+ccflags-y += -fno-builtin -Wall -Werror
 
 ftfs-objs := \
 	ftfs_module.o \
@@ -18,7 +18,6 @@ ftfs-objs := \
 	sb_pthread.o \
 	sb_files.o \
 	ftfs_southbound.o \
-	sb_dir.o \
 	sb_stat.o \
 	sb_assert.o \
 	sb_stdio.o \
@@ -32,19 +31,32 @@ ftfs-objs := \
 	sb_zlib.o \
 	libftindex.o \
 	sb_flock.o \
+	sb_pfn.o \
 	sb_sfs_ops.o
 
 KBUILD_CFLAGS += -DSOUTHBOUND_TESTING
-#KBUILD_CFLAGS += -DFTFS_DEBUG
-#KBUILD_CFLAGS += -DFTFS_MEM_DEBUG
-#KBUILD_CFLAGS += -DTOKU_MEMLEAK_DETECT
+KBUILD_CFLAGS += -DFT_INDIRECT
+
+# TODO: couldn't figure out how to set KBUILD_CFLAGS only for debug target. So,
+# just create a debug flags variables, and use it directly in the debug target.
+# There has to be a better way, but we're on a deadline.
+FTFS_DEBUG_CFLAGS := -ggdb -g3 -Og
+
+# This flag enables extremely verbose output and only enables only one extra
+# check. If enabled by for all debug builds, we'd need to increase Jenkins jobs
+# timeouts simply due to the verbosity.
+# FTFS_DEBUG_CFLAGS += -DFTFS_DEBUG
+
+# FTFS_DEBUG_CFLAGS += -DFTFS_MEM_DEBUG
+# FTFS_DEBUG_CFLAGS += -DSOUTHBOUND_DEBUG
+# FTFS_DEBUG_CFLAGS += -DTOKU_MEMLEAK_DETECT
+# FTFS_DEBUG_CFLAGS += -DFTFS_EMPTY_DIR_VERIFY
+# FTFS_DEBUG_CFLAGS += -DFT_INDIRECT_DEBUG
 
 # CFLAGS_REMOVE_ftfs_module.o = -O2
 # CFLAGS_ftfs_module.o = -g -O0
 # CFLAGS_REMOVE_toku_linkage.o = -O2
 # CFLAGS_toku_linkage.o = -g -O0
-# CFLAGS_REMOVE_ftfs_malloc.o = -O2
-# CFLAGS_ftfs_malloc.o = -g -O0
 # CFLAGS_REMOVE_ftfs_random.o = -O2
 # CFLAGS_ftfs_random.o = -g -O0
 # CFLAGS_REMOVE_ftfs_error.o = -O2
@@ -100,8 +112,6 @@ libsrc/test/update.cc.o \
 libsrc/test/test_db_env_set_lg_dir.cc.o \
 libsrc/test/test_db_env_set_tmp_dir.cc.o \
 libsrc/test/test-prepare.cc.o \
-libsrc/test/test-prepare2.cc.o \
-libsrc/test/test-prepare3.cc.o \
 libsrc/test/test_kv_limits.cc.o \
 libsrc/test/test_restrict.cc.o \
 libsrc/test/test_db_change_xxx.cc.o \
@@ -398,12 +408,12 @@ libsrc/test/test_update_stress.cc.o \
 libsrc/test/test_db_env_strdup_null.cc.o \
 libsrc/test/seqwrites-no-txn.cc.o \
 libsrc/test/rename-simple.cc.o \
-libsrc/test/circle-log-overflow.cc.o
+libsrc/test/circle-log-overflow.cc.o \
 #libsrc/test/bench.cc.o \
+#libsrc/test/test_set_func_malloc.cc.o \
 #libsrc/indexer-undo-do.cc.o \
 #libsrc/toku_patent.cc.o \
 #libsrc/test/create-datadir.cc.o \
-#libsrc/test/test_set_func_malloc.cc.o \
 
 LIBFT-OBJS = \
 libft/background_job_manager.cc.o \
@@ -421,6 +431,7 @@ libft/ft-flusher.cc.o \
 libft/ft-hot-flusher.cc.o \
 libft/ft_msg.cc.o \
 libft/ft_node-serialize.cc.o \
+libft/ft-indirect.cc.o \
 libft/ft-node-deserialize.cc.o \
 libft/ft-ops.cc.o \
 libft/ft-serialize.cc.o \
@@ -644,6 +655,7 @@ libft/test/le-cursor-right.cc.o \
 libft/test/cachetable-clone-partial-fetch-pinned-node.cc.o \
 libft/test/quicklz-test.cc.o \
 libft/test/test-pick-child-to-flush.cc.o \
+libft/test/test-ft-overflow.cc.o \
 libft/test/test-ubi-root-chkpt.cc.o \
 libft/test/recovery-range-delete.cc.o
 
@@ -657,7 +669,6 @@ libft/test/recovery-range-delete.cc.o
 # libft/dbufio.cc.o \
 # libft/pqueue.cc.o \
 # libft/queue.cc.o \
-# libft/test/test-ft-overflow.cc.o \
 
 LIBUTIL-OBJS = \
 libutil/frwlock.cc.o \
@@ -681,7 +692,6 @@ libutil/test/test_partitioned_counter.cc.o
 #libutil/partitioned_counter.cc.o
 
 LIBPORTABILITY-OBJS = \
-libportability/huge_page_detection.cc.o \
 libportability/file.cc.o \
 libportability/portability.cc.o \
 libportability/toku_path.cc.o \
@@ -699,17 +709,14 @@ libportability/test/test-pthread-rwlock-rwr.cc.o \
 libportability/test/test-pthread-rwlock-rdlock.cc.o \
 libportability/test/test-flock.cc.o \
 libportability/test/test-snprintf.cc.o \
-libportability/test/test-hugepage.cc.o \
 libportability/test/test-fsync.cc.o \
 libportability/test/test-fsync-directory.cc.o \
 libportability/test/test-toku-malloc.cc.o \
 libportability/test/test-memory-status.cc.o \
 libportability/test/test-pwrite4g.cc.o
-#libportability/memory.cc.o \
 #libportability/toku_crash.cc.o \
 # Thread-local storage
 #libportability/toku_fair_rwlock.cc.o
-#libportability/os_malloc.cc.o \
 
 LIBLOCKTREE-OBJS = \
 liblocktree/locktree.cc.o \
@@ -746,17 +753,24 @@ liblocktree/test/lock_request_wait_time_callback.cc.o \
 liblocktree/test/manager_status.cc.o \
 liblocktree/test/manager_locktree_map.cc.o
 
-all: libftindex.o
-	make -C  /lib/modules/$(KDIR)/build M=$(PWD) modules
 
-libftindex.o: $(LIBPORTABILITY-OBJS) $(LIBFT-OBJS) $(LIBUTIL-OBJS) $(LIBLOCKTREE-OBJS) $(LIBSRC-OBJS) 
+all: libftindex.o
+	$(MAKE) -C $(MOD_KERN_SOURCE) M=$(PWD) modules
+
+bench: libftindex.o
+	$(MAKE) -C $(MOD_KERN_SOURCE) M=$(PWD) modules
+
+debug: libftindex.o
+	$(MAKE) -C $(MOD_KERN_SOURCE) M=$(PWD) ccflags-y="$(ccflags-y) $(FTFS_DEBUG_CFLAGS)" modules
+
+libftindex.o: $(LIBPORTABILITY-OBJS) $(LIBFT-OBJS) $(LIBUTIL-OBJS) $(LIBLOCKTREE-OBJS) $(LIBSRC-OBJS)
 	ld -r $^ -o $@
 
 
 libsrc/test/%.o: ../build/src/kernel_tests/libtokusrc_kernel_static.a
 	(mkdir -p libsrc/test; cd libsrc/test; ar x ../../$< $*.o)
 
-libsrc/%.o: ../build/src/libtokufractaltree_static.a
+libsrc/%.o: ../build/src/libtokudb_static_conv.a
 	(mkdir -p libsrc; cd libsrc; ar x ../$< $*.o)
 
 libft/test/%.o: ../build/ft/kernel_tests/libtokuft_kernel_static.a
@@ -784,15 +798,5 @@ liblocktree/test/%.o: ../build/locktree/kernel_tests/liblocktree_kernel_static.a
 liblocktree/%.o: ../build/locktree/liblocktree_static.a
 	(mkdir -p liblocktree; cd liblocktree; ar x ../$< $*.o)
 
-insmod:
-	git diff-index --exit-code --quiet HEAD || git commit -a -m "doing insmod test"
-	git push imola
-	sudo insmod ftfs.ko
-
-rmmod:
-	git diff-index --exit-code --quiet HEAD || git commit -a -m "doing rmmod"
-	git push imola
-	sudo rmmod ftfs
-
 clean:
-	make -C /lib/modules/$(KDIR)/build M=$(PWD) clean
+	$(MAKE) -C $(MOD_KERN_SOURCE) M=$(PWD) clean

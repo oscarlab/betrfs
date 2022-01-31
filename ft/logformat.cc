@@ -227,23 +227,23 @@ const struct logtype logtypes[] = {
                             NULLFIELD}, IGNORE_LOG_BEGIN},
     //We do not use a TXNINFO struct since recovery log has
     //FILENUMS and TOKUTXN has FTs (for open_fts)
-    {"xstillopen", 's', FA{{"TXNID_PAIR", "xid", 0}, 
-                           {"TXNID_PAIR", "parentxid", 0}, 
-                           {"uint64_t", "rollentry_raw_count", 0}, 
+    {"xstillopen", 's', FA{{"TXNID_PAIR", "xid", 0},
+                           {"TXNID_PAIR", "parentxid", 0},
+                           {"uint64_t", "rollentry_raw_count", 0},
                            {"FILENUMS",  "open_filenums", 0},
-                           {"uint8_t",  "force_fsync_on_commit", 0}, 
-                           {"uint64_t", "num_rollback_nodes", 0}, 
-                           {"uint64_t", "num_rollentries", 0}, 
-                           {"BLOCKNUM",  "spilled_rollback_head", 0}, 
-                           {"BLOCKNUM",  "spilled_rollback_tail", 0}, 
-                           {"BLOCKNUM",  "current_rollback", 0}, 
+                           {"uint8_t",  "force_fsync_on_commit", 0},
+                           {"uint64_t", "num_rollback_nodes", 0},
+                           {"uint64_t", "num_rollentries", 0},
+                           {"BLOCKNUM",  "spilled_rollback_head", 0},
+                           {"BLOCKNUM",  "spilled_rollback_tail", 0},
+                           {"BLOCKNUM",  "current_rollback", 0},
                            NULLFIELD}, ASSERT_BEGIN_WAS_LOGGED}, // record all transactions
     // prepared txns need a gid
     {"xstillopenprepared", 'p', FA{{"TXNID_PAIR", "xid", 0},
                                    {"XIDP",  "xa_xid", 0}, // prepared transactions need a gid, and have no parentxid.
-                                   {"uint64_t", "rollentry_raw_count", 0}, 
+                                   {"uint64_t", "rollentry_raw_count", 0},
                                    {"FILENUMS",  "open_filenums", 0},
-                                   {"uint8_t",  "force_fsync_on_commit", 0}, 
+                                   {"uint8_t",  "force_fsync_on_commit", 0},
                                    {"uint64_t", "num_rollback_nodes", 0},
                                    {"uint64_t", "num_rollentries", 0},
                                    {"BLOCKNUM",  "spilled_rollback_head", 0},
@@ -629,7 +629,7 @@ generate_log_writer (void) {
 static void
 generate_log_reader (void) {
     DO_LOGTYPES(lt, {
-                        fprintf(cf, "static int toku_log_fread_%s (FILE *infile, uint32_t len1, struct logtype_%s *data, struct x1764 *checksum)", lt->name, lt->name);
+                        fprintf(cf, "static int toku_log_fread_%s (int infile, uint32_t len1, struct logtype_%s *data, struct x1764 *checksum)", lt->name, lt->name);
                         fprintf(cf, " {\n");
                         fprintf(cf, "  int r=0;\n");
                         fprintf(cf, "  uint32_t actual_len=5; // 1 for the command, 4 for the first len.\n");
@@ -643,7 +643,7 @@ generate_log_reader (void) {
                         fprintf(cf, "  return 0;\n");
                         fprintf(cf, "}\n\n");
                     });
-    fprintf2(cf, hf, "int toku_log_fread (FILE *infile, struct log_entry *le)");
+    fprintf2(cf, hf, "int toku_log_fread (int infile, struct log_entry *le)");
     fprintf(hf, ";\n");
     fprintf(cf, " {\n");
     fprintf(cf, "  uint32_t len1; uint32_t len2; int fd; int r;\n");
@@ -661,26 +661,27 @@ generate_log_reader (void) {
     fprintf(cf, "  // 1 fseek of len1 would take me from the start of len1 in the entry to the end of len2\n");
     fprintf(cf, "  // I want to go from the end of len1 to the start of len2, thus the -8\n");
     fprintf(cf, "  dst = (long)(len1 - 8);\n");
-    fprintf(cf, "  pos = ftell(infile);\n");
+    fprintf(cf, "  pos = lseek(infile, 0, SEEK_CUR);\n");
     fprintf(cf, "  if (pos<0) return pos;\n");
-    fprintf(cf, "  fd = fileno(infile);\n");
+    fprintf(cf, "  fd = infile;\n");
     fprintf(cf, "  r = toku_fstat(fd, &tsb);\n");
     fprintf(cf, "  if (r!=0) return r;\n");
     fprintf(cf, "  end = tsb.st_size;\n");
     fprintf(cf, "  if (pos + dst >= end) {\n");
-    fprintf(cf, "    r = fseek(infile, pos + dst - end + sizeof(struct log_super_block), SEEK_SET);\n");
+    fprintf(cf, "    r = lseek(infile, pos + dst - end + sizeof(struct log_super_block), SEEK_SET);\n");
     fprintf(cf, "  } else {\n");
-    fprintf(cf, "    r = fseek(infile, pos + dst, SEEK_SET);\n");
+    fprintf(cf, "    r = lseek(infile, pos + dst, SEEK_SET);\n");
     fprintf(cf, "  }\n");
-    fprintf(cf, "  if (r!=0) return r;\n");
+    fprintf(cf, "  if (r<0) return r;\n");
     fprintf(cf, "  // Read the length of this entry as stored at the end\n");
     fprintf(cf, "  r = toku_fread_uint32_t_nocrclen(infile, &len2); if (r!=0) return r;\n");
     fprintf(cf, "  // If these two lengths don't agree we are reading garbage\n");
     fprintf(cf, "  if (len1 != len2) return DB_BADFORMAT;\n");
-    fprintf(cf, "  r = fseek(infile, pos, SEEK_SET); if (r!=0) return r;\n");
+    fprintf(cf, "  r = lseek(infile, pos, SEEK_SET); if (r!=pos) return r;\n");
     fprintf(cf, "  // End comparison of lengths\n");
-    fprintf(cf, "  int cmd=fgetc(infile);\n");
-    fprintf(cf, "  if (cmd==EOF) return EOF;\n");
+    fprintf(cf, "  int cmd = 0;\n");
+    fprintf(cf, "  int rv = read(infile, &cmd, sizeof(unsigned char));\n");
+    fprintf(cf, "  if (rv < 0) return EOF;\n");
     fprintf(cf, "  char cmdchar = (char)cmd;\n");
     fprintf(cf, "  x1764_add(&checksum, &cmdchar, 1);\n");
     fprintf(cf, "  le->cmd=(enum lt_cmd)cmd;\n");
@@ -694,53 +695,41 @@ generate_log_reader (void) {
     fprintf(cf, "}\n\n");
     //fprintf2(cf, hf, "// Return 0 if there is something to read, return -1 if nothing to read, abort if an error.\n");
     fprintf2(cf, hf, "// Return 0 if there is something to read, -1 if nothing to read, >0 on error\n");
-    fprintf2(cf, hf, "int toku_log_fread_backward (FILE *infile, struct log_entry *le)");
+    fprintf2(cf, hf, "int toku_log_fread_backward (int infile, struct log_entry *le)");
     fprintf(hf, ";\n");
     fprintf(cf, "{\n");
     fprintf(cf, "  memset(le, 0, sizeof(*le));\n");
-    fprintf(cf, "  long pos = ftell(infile);\n");
+    fprintf(cf, "  long pos = lseek(infile, 0, SEEK_CUR);\n");
     fprintf(cf, "  int r;\n");
-    fprintf(cf, "  if (pos <= sizeof(struct log_super_block) - 4) {\n");
+    fprintf(cf, "  if ((size_t)pos <= sizeof(struct log_super_block) - 4) {\n");
     fprintf(cf, "    return -1;\n");
-    fprintf(cf, "  } else if (pos < sizeof(struct log_super_block)) {\n");
-    fprintf(cf, "    r = fseek(infile, pos - sizeof(struct log_super_block), SEEK_END);\n");
+    fprintf(cf, "  } else if ((size_t)pos < sizeof(struct log_super_block)) {\n");
+    fprintf(cf, "    r = lseek(infile, pos - sizeof(struct log_super_block), SEEK_END);\n");
     fprintf(cf, "  } else {\n");
-    fprintf(cf, "    r = fseek(infile, -4, SEEK_CUR);\n");
+    fprintf(cf, "    r = lseek(infile, -4, SEEK_CUR);\n");
     fprintf(cf, "  }\n");
-    fprintf(cf, "#ifdef TOKU_LINUX_MODULE\n");//                     assert(r==0);
-    fprintf(cf, "  if (r!=0) return get_error_errno(r);\n");
-    fprintf(cf, "#else\n");
-    fprintf(cf, "  if (r!=0) return get_error_errno();\n");
-    fprintf(cf, "#endif\n");
+    fprintf(cf, "  if (r<0) return get_error_errno(r);\n");
     fprintf(cf, "  uint32_t len;\n");
     fprintf(cf, "  r = toku_fread_uint32_t_nocrclen(infile, &len); \n");
     fprintf(cf, "  if (r!=0) return 1;\n");//                        assert(r==0);
     fprintf(cf, "  if (pos - len < (signed long) sizeof(struct log_super_block)) {\n");
-    fprintf(cf, "    r = fseek(infile, -((int)len - (pos - sizeof(struct log_super_block))), SEEK_END);\n");
+    fprintf(cf, "    r = lseek(infile, -((int)len - (pos - sizeof(struct log_super_block))), SEEK_END);\n");
     fprintf(cf, "  } else {\n");
-    fprintf(cf, "    r = fseek(infile, -(int)len, SEEK_CUR) ;  \n");
+    fprintf(cf, "    r = lseek(infile, -(int)len, SEEK_CUR) ;  \n");
     fprintf(cf, "  }\n");
     fprintf(cf, "\n");
-    fprintf(cf, "#ifdef TOKU_LINUX_MODULE\n");//                     assert(r==0);
-    fprintf(cf, "  if (r!=0) return get_error_errno(r);\n");
-    fprintf(cf, "#else\n");
-    fprintf(cf, "  if (r!=0) return get_error_errno();\n");
-    fprintf(cf, "#endif\n");
+    fprintf(cf, "  if (r<0) return get_error_errno(r);\n");
     fprintf(cf, "  r = toku_log_fread(infile, le); \n");
     fprintf(cf, "  if (r!=0) return 1;\n");//                        assert(r==0);
-    fprintf(cf, "  long afterpos = ftell(infile);\n");
+    fprintf(cf, "  long afterpos = lseek(infile, 0, SEEK_CUR);\n");
     fprintf(cf, "  if (afterpos != pos) return 1;\n");
     fprintf(cf, "  if (pos - len < (signed long) sizeof(struct log_super_block)) {\n");
-    fprintf(cf, "    r = fseek(infile, -((int)len - (pos - sizeof(struct log_super_block))), SEEK_END);\n");
+    fprintf(cf, "    r = lseek(infile, -((int)len - (pos - sizeof(struct log_super_block))), SEEK_END);\n");
     fprintf(cf, "  } else {\n");
-    fprintf(cf, "    r = fseek(infile, -(int)len, SEEK_CUR) ;  \n");
+    fprintf(cf, "    r = lseek(infile, -(int)len, SEEK_CUR) ;  \n");
     fprintf(cf, "  }\n");
     fprintf(cf, "\n");
-    fprintf(cf, "#ifdef TOKU_LINUX_MODULE\n");//                     assert(r==0);
-    fprintf(cf, "  if (r!=0) return get_error_errno(r);\n");
-    fprintf(cf, "#else\n");
-    fprintf(cf, "  if (r!=0) return get_error_errno();\n");
-    fprintf(cf, "#endif\n");
+    fprintf(cf, "  if (r<0) return get_error_errno(r);\n");
     fprintf(cf, "  return 0;\n");
     fprintf(cf, "}\n\n");
     DO_LOGTYPES(lt, ({
@@ -768,7 +757,7 @@ generate_log_reader (void) {
 static void
 generate_logprint (void) {
     unsigned maxnamelen=0;
-    fprintf2(pf, hf, "int toku_logprint_one_record(FILE *outf, FILE *f)");
+    fprintf2(pf, hf, "int toku_logprint_one_record(int outf, int f)");
     fprintf(hf, ";\n");
     fprintf(pf, " {\n");
     fprintf(pf, "    int cmd, r;\n");
@@ -778,8 +767,8 @@ generate_logprint (void) {
     fprintf(pf, "    x1764_init(&checksum);\n");
     fprintf(pf, "    r=toku_fread_uint32_t(f, &len1, &checksum, &ignorelen);\n");
     fprintf(pf, "    if (r==EOF) return EOF;\n");
-    fprintf(pf, "    cmd=fgetc(f);\n");
-    fprintf(pf, "    if (cmd==EOF) return DB_BADFORMAT;\n");
+    fprintf(pf, "    r = read(f, &cmd, sizeof(unsigned char));\n");
+    fprintf(pf, "    if (r < 0) return DB_BADFORMAT;\n");
     fprintf(pf, "    uint32_t len_in_file, len=1+4; // cmd + len1\n");
     fprintf(pf, "    char charcmd = (char)cmd;\n");
     fprintf(pf, "    x1764_add(&checksum, &charcmd, 1);\n");
@@ -789,9 +778,9 @@ generate_logprint (void) {
                 unsigned char cmd = (unsigned char)(0xff&lt->command_and_flags);
                 fprintf(pf, "    case LT_%s: \n", lt->name);
                 // We aren't using the log reader here because we want better diagnostics as soon as things go wrong.
-                fprintf(pf, "        fprintf(outf, \"%%-%us \", \"%s\");\n", maxnamelen, lt->name);
-                if (isprint(cmd)) fprintf(pf,"        fprintf(outf, \" '%c':\");\n", cmd);
-                else                      fprintf(pf,"        fprintf(outf, \"0%03o:\");\n", cmd);
+                fprintf(pf, "        dprintf(outf, \"%%-%us \", \"%s\");\n", maxnamelen, lt->name);
+                if (isprint(cmd)) fprintf(pf,"        dprintf(outf, \" '%c':\");\n", cmd);
+                else                      fprintf(pf,"        dprintf(outf, \"0%03o:\");\n", cmd);
                 fprintf(pf, "        r = toku_logprint_%-16s(outf, f, \"lsn\", &checksum, &len, 0);     if (r!=0) return r;\n", "LSN");
                 DO_FIELDS(field_type, lt, {
                             fprintf(pf, "        r = toku_logprint_%-16s(outf, f, \"%s\", &checksum, &len,", field_type->type, field_type->name);
@@ -802,18 +791,18 @@ generate_logprint (void) {
                 fprintf(pf, "        {\n");
                 fprintf(pf, "          uint32_t actual_murmur = x1764_finish(&checksum);\n");
                 fprintf(pf, "          r = toku_fread_uint32_t_nocrclen (f, &crc_in_file); len+=4; if (r!=0) return r;\n");
-                fprintf(pf, "          fprintf(outf, \" crc=%%08x\", crc_in_file);\n");
-                fprintf(pf, "          if (crc_in_file!=actual_murmur) fprintf(outf, \" checksum=%%08x\", actual_murmur);\n");
+                fprintf(pf, "          dprintf(outf, \" crc=%%08x\", crc_in_file);\n");
+                fprintf(pf, "          if (crc_in_file!=actual_murmur) dprintf(outf, \" checksum=%%08x\", actual_murmur);\n");
                 fprintf(pf, "          r = toku_fread_uint32_t_nocrclen (f, &len_in_file); len+=4; if (r!=0) return r;\n");
-                fprintf(pf, "          fprintf(outf, \" len=%%u\", len_in_file);\n");
-                fprintf(pf, "          if (len_in_file!=len) fprintf(outf, \" actual_len=%%u\", len);\n");
+                fprintf(pf, "          dprintf(outf, \" len=%%u\", len_in_file);\n");
+                fprintf(pf, "          if (len_in_file!=len) dprintf(outf, \" actual_len=%%u\", len);\n");
                 fprintf(pf, "          if (len_in_file!=len || crc_in_file!=actual_murmur) return DB_BADFORMAT;\n");
                 fprintf(pf, "        };\n");
-                fprintf(pf, "        fprintf(outf, \"\\n\");\n");
+                fprintf(pf, "        dprintf(outf, \"\\n\");\n");
                 fprintf(pf, "        return 0;\n\n");
             });
     fprintf(pf, "    }\n");
-    fprintf(pf, "    fprintf(outf, \"Unknown command %%d ('%%c')\", cmd, cmd);\n");
+    fprintf(pf, "    dprintf(outf, \"Unknown command %%d ('%%c')\", cmd, cmd);\n");
     fprintf(pf, "    return DB_BADFORMAT;\n");
     fprintf(pf, "}\n\n");
 }
@@ -825,7 +814,7 @@ generate_rollbacks (void) {
                     DO_FIELDS(field_type, lt, {
                         if ( strcmp(field_type->type, "BYTESTRING") == 0 ) {
                             fprintf2(cf, hf, ", BYTESTRING *%s_ptr", field_type->name);
-                        } 
+                        }
                         else if ( strcmp(field_type->type, "FILENUMS") == 0 ) {
                             fprintf2(cf, hf, ", FILENUMS *%s_ptr", field_type->name);
                         }
@@ -966,8 +955,8 @@ int main (int argc, const char *const argv[]) {
     assert(argc==2); // the single argument is the directory into which to put things
     const char *dir = argv[1];
     size_t codepathlen   = sizeof(codefile) + strlen(dir) + 4;
-    size_t printpathlen  = sizeof(printfile) + strlen(dir) + 4; 
-    size_t headerpathlen = sizeof(headerfile) + strlen(dir) + 4; 
+    size_t printpathlen  = sizeof(printfile) + strlen(dir) + 4;
+    size_t headerpathlen = sizeof(headerfile) + strlen(dir) + 4;
     char codepath[codepathlen];
     char printpath[printpathlen];
     char headerpath[headerpathlen];
@@ -1015,4 +1004,3 @@ int main (int argc, const char *const argv[]) {
     }
     return 0;
 }
-

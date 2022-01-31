@@ -98,9 +98,9 @@ PATENT RIGHTS GRANT:
 #include "log-internal.h"
 #include "txn_manager.h"
 #include "rollback_log_node_cache.h"
-#include "huge_page_detection.h"
 #include <util/status.h>
 #include "checkpoint.h"
+#include <portability/toku_path.h>
 
 #include "logsuperblock.h"
 
@@ -114,20 +114,20 @@ static void grab_output(TOKULOGGER logger, LSN *fsynced_lsn);
 //TODO:
 //static void release_output(TOKULOGGER logger, LSN fsynced_lsn);
 extern "C" void toku_dump_stack(void);
-static void toku_print_bytes (FILE *outf, uint32_t len, char *data) {
-    fprintf(outf, "\"");
+static void toku_print_bytes (int outf, uint32_t len, char *data) {
+    dprintf(outf, "\"");
     uint32_t i;
     for (i=0; i<len; i++) {
         switch (data[i]) {
-        case '"':  fprintf(outf, " \\\""); break;
-        case '\\': fprintf(outf, " \\\\"); break;
-        case '\n': fprintf(outf, " \\n");  break;
+        case '"':  dprintf(outf, " \\\""); break;
+        case '\\': dprintf(outf, " \\\\"); break;
+        case '\n': dprintf(outf, " \\n");  break;
         default:
-            if (isprint(data[i])) fprintf(outf, " %c", data[i]);
-            else fprintf(outf, " \\%03o", (unsigned char)(data[i]));
+            if (isprint(data[i])) dprintf(outf, " %c", data[i]);
+            else dprintf(outf, " \\%03o", (unsigned char)(data[i]));
         }
     }
-    fprintf(outf, " \"");
+    dprintf(outf, " \"");
 }
 
 static bool is_a_logfile_any_version (const char *name, uint64_t *number_result, uint32_t *version_of_log) {
@@ -158,11 +158,6 @@ static bool is_a_logfile_any_version (const char *name, uint64_t *number_result,
 extern TOKULOGGER global_logger;
 // TODO: can't fail
 int toku_logger_create (TOKULOGGER *resultp) {
-    if (complain_and_return_true_if_huge_pages_are_enabled()) {
-        *resultp = NULL;
-        set_errno(TOKUDB_HUGE_PAGES_ENABLED);
-        return TOKUDB_HUGE_PAGES_ENABLED;
-    }
     TOKULOGGER CALLOC(result);
     if (result==0) {
         return ENOMEM;
@@ -175,19 +170,13 @@ int toku_logger_create (TOKULOGGER *resultp) {
     result->new_env=false;
     result->write_log_files = true;
     result->trim_log_files = false;
-    result->directory=0;
     result->remove_finalize_callback = NULL;
     // fd is uninitialized on purpose
     // ct is uninitialized on purpose
-#ifdef USE_SFS
-    toku_struct_stat *sbuf;
-    sbuf = (toku_struct_stat *) toku_xmalloc(sizeof(toku_struct_stat));
-    toku_stat("/db/log000000000000.tokulog25", sbuf);
-    result->lg_max = sbuf->st_size;
-    toku_free(sbuf);
-#else
-    result->lg_max = FTFS_LOG_SIZE; // 2GB
-#endif
+    toku_struct_stat sbuf;
+    memset(&sbuf, 0, sizeof(toku_struct_stat));
+    toku_stat(TOKU_SFS_LOG_FILE, &sbuf);
+    result->lg_max = sbuf.st_size;
     // lsn is uninitialized
     result->inbuf  = (struct logbuf) {0, LOGGER_MIN_BUF_SIZE, (char *) toku_xmalloc(LOGGER_MIN_BUF_SIZE), ZERO_LSN};
     result->outbuf = (struct logbuf) {0, LOGGER_MIN_BUF_SIZE, (char *) toku_xmalloc(LOGGER_MIN_BUF_SIZE), ZERO_LSN};
@@ -207,7 +196,9 @@ int toku_logger_create (TOKULOGGER *resultp) {
     bjm_init(&result->bjm);
     int num_processors = toku_os_get_number_active_processors();
     result->writeback_kibbutz = toku_kibbutz_create_debug(num_processors, "toku_logger_wb");
+    // SMP 06/03/21: thread name "toku_logger_wb" is never referenced again, so not sure why it's named. Maybe for debugging?
 
+    result->max_partial_checkpoint_msn = ZERO_MSN;
     result->write_block_size = FT_DEFAULT_NODE_SIZE; // default logging size is the same as the default brt block size
     toku_logfilemgr_create(&result->logfilemgr);
     *resultp=result;
@@ -221,27 +212,10 @@ int toku_logger_create (TOKULOGGER *resultp) {
     return 0;
 }
 
-static int open_logdir(TOKULOGGER logger, const char *directory) {
-    if (toku_os_is_absolute_name(directory)) {
-        logger->directory = toku_strdup(directory);
-    } else {
-        char cwd[2] = "/";
-        char *MALLOC_N(strlen(cwd) + strlen(directory) + 2, new_log_dir);
-        if (new_log_dir == NULL) {
-            return -2;
-        }
-        sprintf(new_log_dir, "%s/%s", cwd, directory);
-        logger->directory = new_log_dir;
-    }
-    if (logger->directory==0) return ENOMEM;
-
-    logger->dir = opendir(logger->directory);
-    if ( logger->dir == NULL ) return -1;
-    return 0;
-}
-
 static int close_logdir(TOKULOGGER logger) {
-    return closedir(logger->dir);
+    close(logger->dfd);
+    logger->dfd = -1;
+    return 0;
 }
 
 int
@@ -251,7 +225,7 @@ toku_logger_open_with_last_xid(const char *directory, TOKULOGGER logger, TXNID l
     int r;
     TXNID last_xid_if_clean_shutdown;
     r = toku_logfilemgr_init(logger->logfilemgr, directory, &last_xid_if_clean_shutdown);
-    fprintf(stderr, "toku_logger_open_with_last_xid 1: %d\n", r);
+    dprintf(STDERR, "toku_logger_open_with_last_xid 1: %d\n", r);
     if ( r!=0 )
         return r;
 
@@ -262,8 +236,8 @@ toku_logger_open_with_last_xid(const char *directory, TOKULOGGER logger, TXNID l
     logger->outbuf.max_lsn_in_buf = logger->lsn;
 
     // open directory, save pointer for fsyncing t:2445
-    r = open_logdir(logger, directory);
-    fprintf(stderr, "toku_logger_open_with_last_xid 2: %d\n", r);
+    logger->dfd = open(directory, O_RDONLY|O_NDELAY|O_DIRECTORY|O_LARGEFILE, S_IRWXU);
+    dprintf(STDERR, "toku_logger_open_with_last_xid 2: %d\n", r);
     if (r!=0) return r;
 
     // YZJ: always use the same log file
@@ -271,11 +245,11 @@ toku_logger_open_with_last_xid(const char *directory, TOKULOGGER logger, TXNID l
     logger->next_log_file_number = 0;
 
     r = open_logfile(logger);
-    fprintf(stderr, "toku_logger_open_with_last_xid 4: %d\n", r);
+    dprintf(STDERR, "toku_logger_open_with_last_xid 4: %d\n", r);
     if (r!=0) return r;
     if (last_xid == TXNID_NONE) {
         last_xid = last_xid_if_clean_shutdown;
-    	printf("__func__,last xid is %" PRIu64 "\n", last_xid);
+        printf("%s: last xid is %" PRIu64 "\n", __func__, last_xid);
     }
     toku_txn_manager_set_last_xid_from_logger(logger->txn_manager, last_xid);
 
@@ -306,11 +280,7 @@ int toku_verify_logmagic_read_log_end (int fd, uint32_t *log_end) {
     }
     {
         off_t pos=lseek(fd, TOKU_LOG_END_OFFSET, SEEK_SET);
-#ifdef TOKU_LINUX_MODULE
-    if (pos != TOKU_LOG_END_OFFSET) return get_error_errno(pos);
-#else
-    if (pos != TOKU_LOG_END_OFFSET) return get_error_errno();
-#endif
+        if (pos != TOKU_LOG_END_OFFSET) return get_error_errno(pos);
     }
     {
         int r=toku_os_read(fd, log_end, 4);
@@ -325,11 +295,7 @@ int toku_verify_logmagic_read_log_end (int fd, uint32_t *log_end) {
 int toku_update_logfile_end(int fd, uint32_t log_end)
 {
     off_t pos = lseek(fd, TOKU_LOG_END_OFFSET, SEEK_SET);
-#ifdef TOKU_LINUX_MODULE
     if (pos != TOKU_LOG_END_OFFSET) return get_error_errno(pos);
-#else
-    if (pos != TOKU_LOG_END_OFFSET) return get_error_errno();
-#endif
     int r = toku_os_write(fd, &log_end, 4);
     if (r != 0) return r;
     printf("%s: r=%d\n", __func__, r);
@@ -340,11 +306,7 @@ int toku_update_logfile_end(int fd, uint32_t log_end)
 int toku_update_logfile_start(int fd, uint32_t log_start)
 {
     off_t pos = lseek(fd, TOKU_LOG_START_OFFSET, SEEK_SET);
-#ifdef TOKU_LINUX_MODULE
     if (pos != TOKU_LOG_START_OFFSET) return get_error_errno(pos);
-#else
-    if (pos != TOKU_LOG_START_OFFSET) return get_error_errno();
-#endif
     int r = toku_os_write(fd, &log_start, 4);
     if (r != 0) return r;
     printf("%s: r=%d\n", __func__, r);
@@ -378,27 +340,16 @@ static int toku_logger_update_both_and_verify(TOKULOGGER logger)
    if (logger->fd != -1) {
         // Get a backup of current pos */
         off_t old_pos = lseek(logger->fd, 0, SEEK_CUR);
-#ifdef TOKU_LINUX_MODULE
         if (old_pos != logger->n_in_file) return get_error_errno(old_pos);
-#else
-        if (old_pos != logger->n_in_file) return get_error_errno();
-#endif
         // Seek to the super block */
         off_t pos = lseek(logger->fd, TOKU_LOG_START_OFFSET, SEEK_SET);
-#ifdef TOKU_LINUX_MODULE
         if (pos != TOKU_LOG_START_OFFSET) return get_error_errno(pos);
-#else
-        if (pos != TOKU_LOG_START_OFFSET) return get_error_errno();
-#endif
         uint32_t vals[2] = {logger->n_in_file, logger->n_in_file};
         toku_os_full_write(logger->fd, vals, 8);
         // Go back to the previous position */
         pos = lseek(logger->fd, old_pos, SEEK_SET);
-#ifdef TOKU_LINUX_MODULE
         if (pos != old_pos) return get_error_errno(pos);
-#else
-        if (pos != old_pos) return get_error_errno();
-#endif
+
         return 0;
     } else {
         return -EBADF;
@@ -410,28 +361,16 @@ static int toku_logger_file_size_update_and_verify(TOKULOGGER logger)
    if (logger->fd != -1) {
         // Get a backup of current pos */
         off_t old_pos = lseek(logger->fd, 0, SEEK_CUR);
-#ifdef TOKU_LINUX_MODULE
         if (old_pos != logger->n_in_file) return get_error_errno(old_pos);
-#else
-        if (old_pos != logger->n_in_file) return get_error_errno();
-#endif
 
         // Seek to the super block */
         off_t pos = lseek(logger->fd, TOKU_LOG_END_OFFSET, SEEK_SET);
-#ifdef TOKU_LINUX_MODULE
         if (pos != TOKU_LOG_END_OFFSET) return get_error_errno(pos);
-#else
-        if (pos != TOKU_LOG_END_OFFSET) return get_error_errno();
-#endif
         uint32_t log_end = logger->n_in_file;
         toku_os_full_write(logger->fd, &log_end, 4);
         // Go back to the previous position */
         pos = lseek(logger->fd, old_pos, SEEK_SET);
-#ifdef TOKU_LINUX_MODULE
         if (pos != old_pos) return get_error_errno(pos);
-#else
-        if (pos != old_pos) return get_error_errno();
-#endif
         return 0;
     } else {
         return -EBADF;
@@ -446,47 +385,10 @@ bool toku_logger_rollback_is_open (TOKULOGGER logger) {
     return logger->rollback_cachefile != NULL;
 }
 
-#if 0
-// The logger maintains a list of unbound_insert entries, with pointers to their values.
-// Each entry contains the information necessary to identify that particular log entry
-//   but initially lacks the information needed to locate the entry's data in the tree.
-// It is the job of the logger to patch the log with this information BEFORE the log is written to disk.
-// This function finds and updates the log entry referred to by a @msg with its location (NODENUM -> (DISKOFF,DISKOFF))
-
-int
-toku_node_bind_insert_location(FTNODE node, FT_MSG msg,
-                               DISKOFF diskoff, DISKOFF size)
-//Pre: logger->ubi_lock is held
-//Post: logger->ubi_lock is still held
-{
-    struct unbound_insert_entry *entry;
-    struct toku_list *head = node->unbound_inserts;
-    struct toku_list *lst = toku_list_head(head);
-    while (lst != head) {
-        entry = toku_list_struct(lst, struct unbound_insert_entry, node_list);
-        if (msg_matches_ubi(msg, entry))
-            goto update_entry;
-        lst = lst->next;
-    }
-
-    printf("could not find unbound_insert to bind. it should be there.\n");
-    assert(0); // this is a bug... it should be there!
-    goto unlock_out;
-
-update_entry:
-    paranoid_invariant(entry->state != UBI_BOUND);
-    entry->diskoff = diskoff;
-    entry->size = size;
-    entry->state = UBI_BOUND;
-unlock_out:
-    return 0;
-}
-#endif
-
 // SOSP TODO: add the size of a sync_unbound_insert log message to
 // logger->inbuf.n_in_buf to avoid a "deadlock" when doing a
 // capacity log flush
-void toku_logger_append_unbound_insert_entry(TOKULOGGER logger, struct unbound_insert_entry * entry)
+void toku_logger_append_ubi_entry(TOKULOGGER logger, struct ubi_entry *entry)
 //Entry and exit: hold input_lock
 {
     toku_list_init(&entry->in_or_out);
@@ -496,24 +398,26 @@ void toku_logger_append_unbound_insert_entry(TOKULOGGER logger, struct unbound_i
     toku_mutex_unlock(&logger->ubi_lock);
 }
 
-
-struct unbound_insert_entry *
-toku_alloc_unbound_insert_entry(ubi_state_t state, LSN lsn,// FT_HANDLE ft_h,
- MSN msn, DBT *k)
 //Entry and exit: hold input_lock
+struct ubi_entry *toku_alloc_ubi_entry(ubi_state_t state, LSN lsn, MSN msn, DBT *k)
 {
-    struct unbound_insert_entry * XMALLOC(entry);
-    XMALLOC(entry->key);
-    //entry->key = keybs;
+
+    struct ubi_entry *XMALLOC(entry);
     entry->lsn = lsn;
     entry->msn = msn;
     entry->state = state;
-    //entry->fth = ft_h;
     entry->diskoff = 0;
     entry->size = 0;
-    toku_clone_dbt(entry->key, *k);
+    toku_clone_dbt(&entry->key, *k);
     toku_list_init(&entry->in_or_out);
     toku_list_init(&entry->node_list);
+#ifdef FT_DEBUGGING
+    entry->node = NULL;
+    entry->is_on_bnc = false;
+    entry->is_on_leaf = false;
+    entry->is_flushed = false;
+    entry->is_applied = false;
+#endif
     return entry;
 }
 
@@ -626,7 +530,6 @@ is_closed:
     toku_cond_destroy(&logger->output_condition);
     toku_cond_destroy(&logger->input_swapped);
     toku_txn_manager_destroy(logger->txn_manager);
-    if (logger->directory) toku_free(logger->directory);
     toku_logfilemgr_destroy(&logger->logfilemgr);
     if (global_logger == logger) {
         global_logger = nullptr;
@@ -769,58 +672,25 @@ swap_inbuf_outbuf (TOKULOGGER logger, unsigned int *n_ubi)
 
     logger->unbound_insert_lsn = logger->lsn;
     logger->lsn.lsn += *n_ubi;
-
-//    struct toku_list * tmp2 = logger->ubi_in;
-//    logger->ubi_in = logger->ubi_out;
-//    logger->ubi_out = tmp2;
-//    assert(toku_list_empty(logger->ubi_in));
-
-    // reserve LSNs for our unbound_inserts in the outbuf
-//    logger->unbound_insert_lsn = logger->lsn;
-//    logger->lsn.lsn += logger->n_unbound_inserts;
-
-    // ubi_in list is now empty
-//    logger->n_unbound_inserts = 0;
 }
-#if 0
-static bool logger_has_unbound_inserts(TOKULOGGER logger) {
-	struct unbound_insert_entry * entry;
-	struct toku_list * head = logger->ubi_out;
-	struct toku_list * lst = head->next;
-	while(lst != head) {
-        	entry = toku_list_struct(lst, struct unbound_insert_entry, in_or_out);
-        	if (!unbound_entry_is_bound(entry)) {
-            		return true;
-        	}
-		lst = lst->next;
-	}
-	return false;
-}
-#else
+
 static int logger_has_unbound_msg_since_last_flush(TOKULOGGER logger) {
 	return !toku_list_empty(logger->ubi_out);
 }
-#endif
 
 static int
 write_unbound_insert_nodes(TOKULOGGER logger)
 {
-    if(logger_has_unbound_msg_since_last_flush(logger)) {
-
-    	CHECKPOINTER cp = toku_cachetable_get_checkpointer(logger->ct);
-	int r;
-
-        //printf("%s:%d going to start a partial chkpt\n", __func__, __LINE__);
-	if(is_checkpoint_goingon()) {
-	        //printf("%s:%d Yes, it is going on a chkpt\n", __func__, __LINE__);
-    		r = toku_partial_checkpoint_locked(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT);
-	} else {
-	        //printf("%s:%d No, it is not going on a chkpt\n", __func__, __LINE__);
-    		r = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, true);
-	}
-	//printf("%s:%d finished a partial chkpt\n", __func__, __LINE__);
-	assert_zero(r);
-   }
+    if (logger_has_unbound_msg_since_last_flush(logger)) {
+        CHECKPOINTER cp = toku_cachetable_get_checkpointer(logger->ct);
+        int r;
+        if (is_checkpoint_goingon()) {
+            r = toku_partial_checkpoint_locked(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT);
+        } else {
+            r = toku_checkpoint(cp, logger, NULL, NULL, NULL, NULL, CLIENT_CHECKPOINT, true);
+        }
+        assert_zero(r);
+    }
     return 0;
 }
 
@@ -830,13 +700,7 @@ toku_logger_assert_space_in_outbuf(TOKULOGGER logger, unsigned int buflen, unsig
 //Effect complain if there is no space in the outbuf
 {
   // we are guaranteeing that there is space in the outbuf...
-    if ((logger->outbuf.n_in_buf + buflen*n) > logger->outbuf.buf_size) {
-        #if 0
-	printf("We do not have enough space in our outbuf."
-               "Bill said he would fix this, but currently we hack it.\n");
-	#endif
- //       assert(0);
-
+    if ((logger->outbuf.n_in_buf + buflen*n) > (unsigned int)logger->outbuf.buf_size) {
 	logger->outbuf.buf = (char *)toku_xrealloc(logger->outbuf.buf, logger->outbuf.buf_size,
                                                    logger->outbuf.n_in_buf+buflen*n);
  	logger->outbuf.buf_size = logger->outbuf.n_in_buf + buflen*n;
@@ -845,11 +709,11 @@ toku_logger_assert_space_in_outbuf(TOKULOGGER logger, unsigned int buflen, unsig
 
 static void
 toku_logger_restore_outbuf_size(TOKULOGGER logger, unsigned int old_buf_size) {
-	if(logger->outbuf.buf_size > old_buf_size) {
+	if((unsigned int)logger->outbuf.buf_size > old_buf_size) {
             logger->outbuf.buf = (char*) toku_xrealloc(logger->outbuf.buf, logger->outbuf.buf_size,
                                                        old_buf_size);
             logger->outbuf.buf_size = old_buf_size;
-	} else if(logger->outbuf.buf_size < old_buf_size) {
+	} else if((unsigned int)logger->outbuf.buf_size < old_buf_size) {
             assert(0);
 	}
 }
@@ -904,7 +768,7 @@ outbuf_append_unbound_inserts(TOKULOGGER logger, unsigned int n_unbound_inserts)
 //Effect: This function appends sync_unbound_insert messages (which contain the physical locations of the insert values) to logger->outbuf.
 // Entry and exit: Holds permission to modify output (and doesn't let it go, so it's ok to also hold the inlock).
 {
-    struct unbound_insert_entry *entry;
+    struct ubi_entry *entry;
     unsigned int buflen = (+4 // len at the beginning
                               +1 // log command
                               +8 // lsn
@@ -918,13 +782,16 @@ outbuf_append_unbound_inserts(TOKULOGGER logger, unsigned int n_unbound_inserts)
     struct toku_list *lst = head->next;
     toku_logger_assert_space_in_outbuf(logger, buflen, n_unbound_inserts);
     while (lst != head) {
-        entry = toku_list_struct(lst, struct unbound_insert_entry, in_or_out);
+        entry = toku_list_struct(lst, struct ubi_entry, in_or_out);
         //debug only
-        if (!unbound_entry_is_bound(entry)) {
+        if (!ubi_entry_is_bound(entry)) {
             printf("entry unbound!\n");
             printf("\tstate:%d, MSN: %" PRIu64 ", (DISKOFF)offset: %" PRIu64 ", "
-                   "(DISKOFF)size: %" PRIu64 "\n", entry->state, entry->msn.msn,
-                   entry->diskoff, entry->size);
+                   "(DISKOFF)size: %" PRIu64 ", logger->max_msn: %" PRIu64 ","
+                   "on_bnc=%d, on_leaf=%d, is_applied=%d, is_flushed=%d\n",
+                   entry->state, entry->msn.msn, entry->diskoff, entry->size,
+                   logger->max_partial_checkpoint_msn.msn, entry->is_on_bnc,
+                   entry->is_on_leaf, entry->is_applied, entry->is_flushed);
             return -1;
         }
         //assert the size and realloc the logger outbuf
@@ -945,37 +812,71 @@ void set_logger_write_ubi_test_callback(bool (*cb) (TOKULOGGER, void *), void *e
 	ubi_callback_extra = extra;
 }
 
+#ifdef FT_DEBUGGING
+static int list_length(toku_list *head)
+{
+    struct toku_list *list = head->next;
+    int cnt = 0;
+    while(list != head) {
+        list = list->next;
+        cnt += 1;
+    }
+    return cnt;
+}
+#endif
+
 //TODO: make static again
 //static
 void
-write_outbuf_to_logfile (TOKULOGGER logger, LSN *UU(fsynced_lsn), unsigned int n_unbound_inserts, int update_log_start)
+write_outbuf_to_logfile(TOKULOGGER logger, LSN *UU(fsynced_lsn), unsigned int n_unbound_inserts, int update_log_start)
 // Effect:  If any unbound_inserts exist, write the nodes containing those messages. Then append sync messages for those unbound_inserts to the outbuf. Then write the contents of outbuf to logfile.  Don't necessarily fsync (but it might, in which case fynced_lsn is updated).
 //  If the logfile gets too big, open the next one (that's the case where an fsync might happen).
 // Entry and exit: Holds permission to modify output (and doesn't let it go, so it's ok to also hold the inlock).
 {
     unsigned int old_buf_size = logger->outbuf.buf_size;
     if (!toku_list_empty(logger->ubi_out)) {
+#ifdef FT_DEBUGGING
+        // make sure the logger->ubi_out is not changed during a
+        // partial checkpoint
+        toku_list *old_first= toku_list_head(logger->ubi_out)->next;
+        toku_list *old_last = toku_list_tail(logger->ubi_out)->prev;
+        int old_len = list_length(logger->ubi_out);
+#endif
         int r = write_unbound_insert_nodes(logger);
         assert_zero(r);
 
-	//just for testing
-	if(logger_write_ubi_test_callback)
-	logger_write_ubi_test_callback(logger, ubi_callback_extra);
-
+        // just for testing
+        if (logger_write_ubi_test_callback) {
+            logger_write_ubi_test_callback(logger, ubi_callback_extra);
+        }
+#ifdef FT_DEBUGGING
+        assert(old_first == toku_list_head(logger->ubi_out)->next);
+        assert(old_last == toku_list_tail(logger->ubi_out)->prev);
+        assert(old_len == list_length(logger->ubi_out));
+#endif
         // need to figure out what to do if this pushes us over outbuf capacity...
-	r = outbuf_append_unbound_inserts(logger, n_unbound_inserts);
-	assert_zero(r);
+        r = outbuf_append_unbound_inserts(logger, n_unbound_inserts);
+#ifdef FT_DEBUGGING
+        assert(old_first == toku_list_head(logger->ubi_out)->next);
+        assert(old_last == toku_list_tail(logger->ubi_out)->prev);
+        assert(old_len == list_length(logger->ubi_out));
+#endif
+        assert_zero(r);
 
         // cleanup outlist -- Done.
-	toku_list * head = logger->ubi_out;
-	toku_mutex_lock(&logger->ubi_lock);
-	while(!toku_list_empty(head)){
-		toku_list * item = toku_list_pop(head);
-		struct unbound_insert_entry * entry = toku_list_struct(item, struct unbound_insert_entry, in_or_out);
-		destroy_unbound_insert_entry(entry);
-	}
-
-	toku_mutex_unlock(&logger->ubi_lock);
+        toku_list * head = logger->ubi_out;
+        toku_mutex_lock(&logger->ubi_lock);
+#ifdef FT_DEBUGGING
+        assert(old_first == toku_list_head(logger->ubi_out)->next);
+        assert(old_last == toku_list_tail(logger->ubi_out)->prev);
+        assert(old_len == list_length(logger->ubi_out));
+#endif
+        while(!toku_list_empty(head)){
+            toku_list * item = toku_list_pop(head);
+            struct ubi_entry * entry = toku_list_struct(item, struct ubi_entry, in_or_out);
+            destroy_ubi_entry(entry);
+        }
+        toku_mutex_unlock(&logger->ubi_lock);
     }
 
     if (logger->outbuf.n_in_buf>0) {
@@ -1008,10 +909,8 @@ write_outbuf_to_logfile (TOKULOGGER logger, LSN *UU(fsynced_lsn), unsigned int n
         } else {
             r = toku_logger_file_size_update_and_verify(logger);
         }
-
         assert(r == 0);
-	toku_logger_restore_outbuf_size(logger, old_buf_size);
-
+        toku_logger_restore_outbuf_size(logger, old_buf_size);
     }
 }
 
@@ -1040,8 +939,8 @@ toku_logger_make_space_in_inbuf (TOKULOGGER logger, int n_bytes_needed)
     if (logger->inbuf.n_in_buf + n_bytes_needed <= LOGGER_MIN_BUF_SIZE) {
         return;
     }
-//we wait until the in buf has space
-	wait_till_input_has_space(logger, n_bytes_needed);
+    // we wait until the in buf has space
+    wait_till_input_has_space(logger, n_bytes_needed);
 }
 
 #else
@@ -1151,7 +1050,7 @@ void toku_logger_set_cachetable (TOKULOGGER logger, CACHETABLE ct) {
 int toku_logger_set_lg_max(TOKULOGGER logger, uint32_t lg_max) {
     if (logger==0) return EINVAL; // no logger
     if (logger->is_open) return EINVAL;
-    if (lg_max>(1<<31)) return EINVAL; // too big
+    if (lg_max>(1U<<31)) return EINVAL; // too big
     logger->lg_max = lg_max;
     return 0;
 }
@@ -1224,11 +1123,7 @@ int toku_logger_find_logfiles (const char *directory, char ***resultp, int *n_lo
     int fd = open(fname, O_CREAT+O_RDWR+O_BINARY, S_IRWXU);
     if (fd < 0) {
         int err;
-#ifdef TOKU_LINUX_MODULE
         err = get_error_errno(fd);
-#else
-        err = get_error_errno();
-#endif
         printf("Open log %s failed, case 1 - %d\n", fname, err);
         toku_free(result);
         toku_free(fname);
@@ -1260,7 +1155,7 @@ int toku_logger_find_logfiles (const char *directory, char ***resultp, int *n_lo
 static int open_logfile (TOKULOGGER logger)
 // Entry and Exit: This thread has permission to modify the output.
 {
-    char fname[] = "/db/log000000000000.tokulog25";
+    char fname[] = TOKU_SFS_LOG_FILE;
     long long index = logger->next_log_file_number;
     uint32_t log_end;
     int r;
@@ -1274,7 +1169,7 @@ static int open_logfile (TOKULOGGER logger)
         r = toku_verify_logmagic_read_log_end(logger->fd, &log_end);
         if (r)
             goto no_log;
-        if (log_end > (1<<31)) {
+        if (log_end > (1U<<31)) {
             printf("The log size is corrupted\n");
             return DB_BADFORMAT;
         }
@@ -1289,11 +1184,8 @@ static int open_logfile (TOKULOGGER logger)
         r = toku_logfilemgr_add_logfile_info(logger->logfilemgr, lf_info);
         if (r != 0) return r;
         off_t pos = lseek(logger->fd, log_end, SEEK_SET);
-#ifdef TOKU_LINUX_MODULE
         if (pos != log_end) return get_error_errno(pos);
-#else
-        if (pos != log_end) return get_error_errno();
-#endif
+
         return 0;
     } else {
         // DEP 3/9/19: Don't bother opening a file if we don't want to write
@@ -1505,6 +1397,7 @@ void toku_logger_log_fdelete (TOKUTXN txn, FILENUM filenum) {
 
 
 
+// XXX: Discuss: Still relevant in SFS?
 /* fopen isn't really an action.  It's just for bookkeeping.  We need to know the filename that goes with a filenum. */
 void toku_logger_log_fopen (TOKUTXN txn, const char * fname, FILENUM filenum, uint32_t treeflags) {
     if (txn) {
@@ -1515,33 +1408,33 @@ void toku_logger_log_fopen (TOKUTXN txn, const char * fname, FILENUM filenum, ui
     }
 }
 
-static int toku_fread_uint8_t_nocrclen (FILE *f, uint8_t *v) {
-    int vi = fgetc(f);
-    if (vi == EOF) {
-        int r = fseek(f, sizeof(struct log_super_block), SEEK_SET);
-        assert(r == 0);
-        vi = fgetc(f);
+static int toku_fread_uint8_t_nocrclen (int f, uint8_t *v) {
+    uint8_t vc = 0;
+    int rv = read(f, &vc, sizeof(unsigned char));
+    if (rv == 0) {
+        int r = lseek(f, sizeof(struct log_super_block), SEEK_SET);
+        assert(r == sizeof(struct log_super_block));
+        rv = read(f, &vc, sizeof(unsigned char));
     }
-    uint8_t vc=(uint8_t)vi;
     *v = vc;
     return 0;
 }
 
-int toku_fread_uint8_t (FILE *f, uint8_t *v, struct x1764 *mm, uint32_t *len) {
-    int vi = fgetc(f);
-    if (vi == EOF) {
-        int r = fseek(f, sizeof(struct log_super_block), SEEK_SET);
-        assert(r == 0);
-        vi = fgetc(f);
+int toku_fread_uint8_t (int f, uint8_t *v, struct x1764 *mm, uint32_t *len) {
+    uint8_t vc = 0;
+    int rv = read(f, &vc, sizeof(unsigned char));
+    if (rv == 0) {
+        int r = lseek(f, sizeof(struct log_super_block), SEEK_SET);
+        assert(r == sizeof(struct log_super_block));
+        rv = read(f, &vc, sizeof(unsigned char));
     }
-    uint8_t vc=(uint8_t)vi;
     x1764_add(mm, &vc, 1);
     (*len)++;
     *v = vc;
     return 0;
 }
 
-int toku_fread_uint32_t_nocrclen (FILE *f, uint32_t *v) {
+int toku_fread_uint32_t_nocrclen (int f, uint32_t *v) {
     uint32_t result;
     uint8_t *cp = (uint8_t*)&result;
     int r;
@@ -1553,7 +1446,7 @@ int toku_fread_uint32_t_nocrclen (FILE *f, uint32_t *v) {
 
     return 0;
 }
-int toku_fread_uint32_t (FILE *f, uint32_t *v, struct x1764 *checksum, uint32_t *len) {
+int toku_fread_uint32_t (int f, uint32_t *v, struct x1764 *checksum, uint32_t *len) {
     uint32_t result;
     uint8_t *cp = (uint8_t*)&result;
     int r;
@@ -1565,7 +1458,7 @@ int toku_fread_uint32_t (FILE *f, uint32_t *v, struct x1764 *checksum, uint32_t 
     return 0;
 }
 
-int toku_fread_uint64_t (FILE *f, uint64_t *v, struct x1764 *checksum, uint32_t *len) {
+int toku_fread_uint64_t (int f, uint64_t *v, struct x1764 *checksum, uint32_t *len) {
     uint32_t v1,v2;
     int r;
     r=toku_fread_uint32_t(f, &v1, checksum, len);    if (r!=0) return r;
@@ -1574,7 +1467,7 @@ int toku_fread_uint64_t (FILE *f, uint64_t *v, struct x1764 *checksum, uint32_t 
     return 0;
 }
 
-int toku_fread_int64_t (FILE *f, int64_t *v, struct x1764 *checksum, uint32_t *len) {
+int toku_fread_int64_t (int f, int64_t *v, struct x1764 *checksum, uint32_t *len) {
     uint32_t v1,v2;
     uint64_t tmp;
     int r;
@@ -1590,7 +1483,7 @@ int toku_fread_int64_t (FILE *f, int64_t *v, struct x1764 *checksum, uint32_t *l
 }
 
 
-int toku_fread_bool (FILE *f, bool *v, struct x1764 *mm, uint32_t *len) {
+int toku_fread_bool (int f, bool *v, struct x1764 *mm, uint32_t *len) {
     uint8_t iv;
     int r = toku_fread_uint8_t(f, &iv, mm, len);
     if (r == 0) {
@@ -1599,31 +1492,31 @@ int toku_fread_bool (FILE *f, bool *v, struct x1764 *mm, uint32_t *len) {
     return r;
 }
 
-int toku_fread_LSN     (FILE *f, LSN *lsn, struct x1764 *checksum, uint32_t *len) {
+int toku_fread_LSN     (int f, LSN *lsn, struct x1764 *checksum, uint32_t *len) {
     return toku_fread_uint64_t (f, &lsn->lsn, checksum, len);
 }
 
-int toku_fread_MSN     (FILE *f, MSN *msn, struct x1764 *checksum, uint32_t *len) {
+int toku_fread_MSN     (int f, MSN *msn, struct x1764 *checksum, uint32_t *len) {
     return toku_fread_uint64_t (f, &msn->msn, checksum, len);
 }
 
-int toku_fread_DISKOFF (FILE *f, DISKOFF *d, struct x1764 *checksum, uint32_t *len) {
+int toku_fread_DISKOFF (int f, DISKOFF *d, struct x1764 *checksum, uint32_t *len) {
     return toku_fread_int64_t (f, d, checksum, len);
 }
 
-int toku_fread_BLOCKNUM (FILE *f, BLOCKNUM *b, struct x1764 *checksum, uint32_t *len) {
+int toku_fread_BLOCKNUM (int f, BLOCKNUM *b, struct x1764 *checksum, uint32_t *len) {
     return toku_fread_uint64_t (f, (uint64_t*)&b->b, checksum, len);
 }
 
-int toku_fread_FILENUM (FILE *f, FILENUM *filenum, struct x1764 *checksum, uint32_t *len) {
+int toku_fread_FILENUM (int f, FILENUM *filenum, struct x1764 *checksum, uint32_t *len) {
     return toku_fread_uint32_t (f, &filenum->fileid, checksum, len);
 }
 
-int toku_fread_TXNID   (FILE *f, TXNID *txnid, struct x1764 *checksum, uint32_t *len) {
+int toku_fread_TXNID   (int f, TXNID *txnid, struct x1764 *checksum, uint32_t *len) {
     return toku_fread_uint64_t (f, txnid, checksum, len);
 }
 
-int toku_fread_TXNID_PAIR   (FILE *f, TXNID_PAIR *txnid, struct x1764 *checksum, uint32_t *len) {
+int toku_fread_TXNID_PAIR   (int f, TXNID_PAIR *txnid, struct x1764 *checksum, uint32_t *len) {
     TXNID parent;
     TXNID child;
     int r;
@@ -1635,7 +1528,7 @@ int toku_fread_TXNID_PAIR   (FILE *f, TXNID_PAIR *txnid, struct x1764 *checksum,
 }
 
 
-int toku_fread_XIDP    (FILE *f, XIDP *xidp, struct x1764 *checksum, uint32_t *len) {
+int toku_fread_XIDP    (int f, XIDP *xidp, struct x1764 *checksum, uint32_t *len) {
     // These reads are verbose because XA defined the fields as "long", but we use 4 bytes, 1 byte and 1 byte respectively.
     TOKU_XA_XID *XMALLOC(xid);
     {
@@ -1667,7 +1560,7 @@ int toku_fread_XIDP    (FILE *f, XIDP *xidp, struct x1764 *checksum, uint32_t *l
 }
 
 // fills in the bs with malloced data.
-int toku_fread_BYTESTRING (FILE *f, BYTESTRING *bs, struct x1764 *checksum, uint32_t *len) {
+int toku_fread_BYTESTRING (int f, BYTESTRING *bs, struct x1764 *checksum, uint32_t *len) {
     int r=toku_fread_uint32_t(f, (uint32_t*)&bs->len, checksum, len);
     if (r!=0) return r;
     XMALLOC_N(bs->len, bs->data);
@@ -1684,7 +1577,7 @@ int toku_fread_BYTESTRING (FILE *f, BYTESTRING *bs, struct x1764 *checksum, uint
 }
 
 // fills in the fs with malloced data.
-int toku_fread_FILENUMS (FILE *f, FILENUMS *fs, struct x1764 *checksum, uint32_t *len) {
+int toku_fread_FILENUMS (int f, FILENUMS *fs, struct x1764 *checksum, uint32_t *len) {
     int r=toku_fread_uint32_t(f, (uint32_t*)&fs->num, checksum, len);
     if (r!=0) return r;
     XMALLOC_N(fs->num, fs->filenums);
@@ -1700,156 +1593,156 @@ int toku_fread_FILENUMS (FILE *f, FILENUMS *fs, struct x1764 *checksum, uint32_t
     return 0;
 }
 
-int toku_logprint_LSN (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format __attribute__((__unused__))) {
+int toku_logprint_LSN (int outf, int inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format __attribute__((__unused__))) {
     LSN v;
     int r = toku_fread_LSN(inf, &v, checksum, len);
     if (r!=0) return r;
-    fprintf(outf, " %s=%" PRIu64, fieldname, v.lsn);
+    dprintf(outf, " %s=%" PRIu64, fieldname, v.lsn);
     return 0;
 }
 
-int toku_logprint_MSN (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format __attribute__((__unused__))) {
+int toku_logprint_MSN (int outf, int inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format __attribute__((__unused__))) {
     MSN v;
     int r = toku_fread_MSN(inf, &v, checksum, len);
     if (r!=0) return r;
-    fprintf(outf, " %s=%" PRIu64, fieldname, v.msn);
+    dprintf(outf, " %s=%" PRIu64, fieldname, v.msn);
     return 0;
 }
 
-int toku_logprint_TXNID (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format __attribute__((__unused__))) {
+int toku_logprint_TXNID (int outf, int inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format __attribute__((__unused__))) {
     TXNID v;
     int r = toku_fread_TXNID(inf, &v, checksum, len);
     if (r!=0) return r;
-    fprintf(outf, " %s=%" PRIu64, fieldname, v);
+    dprintf(outf, " %s=%" PRIu64, fieldname, v);
     return 0;
 }
 
-int toku_logprint_TXNID_PAIR (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format __attribute__((__unused__))) {
+int toku_logprint_TXNID_PAIR (int outf, int inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format __attribute__((__unused__))) {
     TXNID_PAIR v;
     int r = toku_fread_TXNID_PAIR(inf, &v, checksum, len);
     if (r!=0) return r;
-    fprintf(outf, " %s=%" PRIu64 ",%" PRIu64, fieldname, v.parent_id64, v.child_id64);
+    dprintf(outf, " %s=%" PRIu64 ",%" PRIu64, fieldname, v.parent_id64, v.child_id64);
     return 0;
 }
 
-int toku_logprint_XIDP (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format __attribute__((__unused__))) {
+int toku_logprint_XIDP (int outf, int inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format __attribute__((__unused__))) {
     XIDP vp;
     int r = toku_fread_XIDP(inf, &vp, checksum, len);
     if (r!=0) return r;
-    fprintf(outf, "%s={formatID=0x%lx gtrid_length=%ld bqual_length=%ld data=", fieldname, vp->formatID, vp->gtrid_length, vp->bqual_length);
+    dprintf(outf, "%s={formatID=0x%lx gtrid_length=%ld bqual_length=%ld data=", fieldname, vp->formatID, vp->gtrid_length, vp->bqual_length);
     toku_print_bytes(outf, vp->gtrid_length + vp->bqual_length, vp->data);
-    fprintf(outf, "}");
+    dprintf(outf, "}");
     toku_free(vp);
     return 0;
 }
 
-int toku_logprint_uint8_t (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format) {
+int toku_logprint_uint8_t (int outf, int inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format) {
     uint8_t v;
     int r = toku_fread_uint8_t(inf, &v, checksum, len);
     if (r!=0) return r;
-    fprintf(outf, " %s=%d", fieldname, v);
-    if (format) fprintf(outf, format, v);
-    else if (v=='\'') fprintf(outf, "('\'')");
-    else if (isprint(v)) fprintf(outf, "('%c')", v);
+    dprintf(outf, " %s=%d", fieldname, v);
+    if (format) dprintf(outf, format, v);
+    else if (v=='\'') dprintf(outf, "('\'')");
+    else if (isprint(v)) dprintf(outf, "('%c')", v);
     else {}/*nothing*/
     return 0;
 }
 
-int toku_logprint_uint32_t (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format) {
+int toku_logprint_uint32_t (int outf, int inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format) {
     uint32_t v;
     int r = toku_fread_uint32_t(inf, &v, checksum, len);
     if (r!=0) return r;
-    fprintf(outf, " %s=", fieldname);
-    fprintf(outf, format ? format : "%d", v);
+    dprintf(outf, " %s=", fieldname);
+    dprintf(outf, format ? format : "%d", v);
     return 0;
 }
 
-int toku_logprint_uint64_t (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format) {
+int toku_logprint_uint64_t (int outf, int inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format) {
     uint64_t v;
     int r = toku_fread_uint64_t(inf, &v, checksum, len);
     if (r!=0) return r;
-    fprintf(outf, " %s=", fieldname);
-    fprintf(outf, format ? format : "%" PRId64, v);
+    dprintf(outf, " %s=", fieldname);
+    dprintf(outf, format ? format : "%" PRId64, v);
     return 0;
 }
 
-int toku_logprint_int64_t (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format) {
+int toku_logprint_int64_t (int outf, int inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format) {
     int64_t v;
     int r = toku_fread_int64_t(inf, &v, checksum, len);
     if (r!=0) return r;
-    fprintf(outf, " %s=", fieldname);
-    fprintf(outf, format ? format : "%" PRId64, v);
+    dprintf(outf, " %s=", fieldname);
+    dprintf(outf, format ? format : "%" PRId64, v);
     return 0;
 }
 
-int toku_logprint_bool (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format __attribute__((__unused__))) {
+int toku_logprint_bool (int outf, int inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format __attribute__((__unused__))) {
     bool v;
     int r = toku_fread_bool(inf, &v, checksum, len);
     if (r!=0) return r;
-    fprintf(outf, " %s=%s", fieldname, v ? "true" : "false");
+    dprintf(outf, " %s=%s", fieldname, v ? "true" : "false");
     return 0;
 
 }
 
-void toku_print_BYTESTRING (FILE *outf, uint32_t len, char *data) {
-    fprintf(outf, "{len=%u data=", len);
+void toku_print_BYTESTRING (int outf, uint32_t len, char *data) {
+    dprintf(outf, "{len=%u data=", len);
     toku_print_bytes(outf, len, data);
-    fprintf(outf, "}");
+    dprintf(outf, "}");
 
 }
 
-int toku_logprint_BYTESTRING (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format __attribute__((__unused__))) {
+int toku_logprint_BYTESTRING (int outf, int inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format __attribute__((__unused__))) {
     BYTESTRING bs;
     int r = toku_fread_BYTESTRING(inf, &bs, checksum, len);
     if (r!=0) return r;
-    fprintf(outf, " %s=", fieldname);
+    dprintf(outf, " %s=", fieldname);
     toku_print_BYTESTRING(outf, bs.len, bs.data);
     toku_free(bs.data);
     return 0;
 }
 
-int toku_logprint_BLOCKNUM (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format) {
+int toku_logprint_BLOCKNUM (int outf, int inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format) {
     return toku_logprint_uint64_t(outf, inf, fieldname, checksum, len, format);
 
 }
 
-int toku_logprint_DISKOFF (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format) {
+int toku_logprint_DISKOFF (int outf, int inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format) {
     return toku_logprint_int64_t(outf, inf, fieldname, checksum, len, format);
 
 }
 
-int toku_logprint_FILENUM (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format) {
+int toku_logprint_FILENUM (int outf, int inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format) {
     return toku_logprint_uint32_t(outf, inf, fieldname, checksum, len, format);
 
 }
 
 static void
-toku_print_FILENUMS (FILE *outf, uint32_t num, FILENUM *filenums) {
-    fprintf(outf, "{num=%u filenums=\"", num);
+toku_print_FILENUMS (int outf, uint32_t num, FILENUM *filenums) {
+    dprintf(outf, "{num=%u filenums=\"", num);
     uint32_t i;
     for (i=0; i<num; i++) {
         if (i>0)
-            fprintf(outf, ",");
-        fprintf(outf, "0x%" PRIx32, filenums[i].fileid);
+            dprintf(outf, ",");
+        dprintf(outf, "0x%" PRIx32, filenums[i].fileid);
     }
-    fprintf(outf, "\"}");
+    dprintf(outf, "\"}");
 
 }
 
-int toku_logprint_FILENUMS (FILE *outf, FILE *inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format __attribute__((__unused__))) {
+int toku_logprint_FILENUMS (int outf, int inf, const char *fieldname, struct x1764 *checksum, uint32_t *len, const char *format __attribute__((__unused__))) {
     FILENUMS bs;
     int r = toku_fread_FILENUMS(inf, &bs, checksum, len);
     if (r!=0) return r;
-    fprintf(outf, " %s=", fieldname);
+    dprintf(outf, " %s=", fieldname);
     toku_print_FILENUMS(outf, bs.num, bs.filenums);
     toku_free(bs.filenums);
     return 0;
 }
 
-int toku_read_and_print_logmagic (FILE *f, uint32_t *versionp) {
+int toku_read_and_print_logmagic (int f, uint32_t *versionp) {
     {
         char magic[8];
-        int r=fread(magic, 1, 8, f);
+        int r = read(f, magic, 8);
         if (r!=8) {
             return DB_BADFORMAT;
         }
@@ -1859,7 +1752,7 @@ int toku_read_and_print_logmagic (FILE *f, uint32_t *versionp) {
     }
     {
         int version;
-            int r=fread(&version, 1, 4, f);
+        int r = read(f, &version, sizeof(version));
         if (r!=4) {
             return DB_BADFORMAT;
         }
@@ -1870,10 +1763,10 @@ int toku_read_and_print_logmagic (FILE *f, uint32_t *versionp) {
     return 0;
 }
 
-int toku_read_logmagic (FILE *f, uint32_t *versionp) {
+int toku_read_logmagic (int f, uint32_t *versionp) {
     {
         char magic[8];
-        int r=fread(magic, 1, 8, f);
+        int r = read(f, magic, 8);
         if (r!=8) {
             return DB_BADFORMAT;
         }
@@ -1883,7 +1776,7 @@ int toku_read_logmagic (FILE *f, uint32_t *versionp) {
     }
     {
         int version;
-            int r=fread(&version, 1, 4, f);
+        int r = read(f, &version, sizeof(version));
         if (r!=4) {
             return DB_BADFORMAT;
         }
@@ -1969,8 +1862,6 @@ toku_logger_get_status(TOKULOGGER logger, LOGGER_STATUS statp) {
     *statp = logger_status;
 }
 
-
-
 //////////////////////////////////////////////////////////////////////////////////////////////////////
 // Used for upgrade:
 // if any valid log files exist in log_dir, then
@@ -1986,11 +1877,7 @@ toku_get_version_of_logs_on_disk(const char *log_dir, bool *found_any_logs, uint
     int fd = open(fname, O_CREAT+O_RDWR+O_BINARY, S_IRWXU);
     if (fd < 0) {
         int err;
-#ifdef TOKU_LINUX_MODULE
         err = get_error_errno(fd);
-#else
-        err = get_error_errno();
-#endif
         printf("Open log %s failed, case 1 - %d\n", fname, err);
         return err;
     }

@@ -177,9 +177,8 @@ static void
 printtdiff (const char *str) {
     struct timeval thistime;
     gettimeofday(&thistime, 0);
-    if (verbose) 
-        //printf("%10.6f %s\n", toku_tdiff(&thistime, &prevtime), str);
-        printf("you can't use floating point in the kernel buddy. fix this. (str: %s\n", str);
+    if (verbose)
+        printf("%10lu %s\n", toku_tdiff(&thistime, &prevtime), str);
     prevtime = thistime;
 }
 

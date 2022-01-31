@@ -4,8 +4,6 @@
  CFLAGS_ftfs_module.o = -g -O0
  CFLAGS_REMOVE_toku_linkage.o = -O2
  CFLAGS_toku_linkage.o = -g -O0
- CFLAGS_REMOVE_ftfs_malloc.o = -O2
- CFLAGS_ftfs_malloc.o = -g -O0
  CFLAGS_REMOVE_ftfs_random.o = -O2
  CFLAGS_ftfs_random.o = -g -O0
  CFLAGS_REMOVE_ftfs_error.o = -O2

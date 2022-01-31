@@ -153,12 +153,12 @@ other_flush (CACHEFILE f __attribute__((__unused__)),
        ) {
 }
 
-static void 
+static void
 pe_est_callback(
-    void* UU(ftnode_pv), 
+    void* UU(ftnode_pv),
     void* UU(dd),
-    long* bytes_freed_estimate, 
-    enum partial_eviction_cost *cost, 
+    long* bytes_freed_estimate,
+    enum partial_eviction_cost *cost,
     void* UU(write_extraargs)
     )
 {
@@ -166,13 +166,13 @@ pe_est_callback(
     *cost = PE_EXPENSIVE;
 }
 
-static int 
+static int
 pe_callback (
-    void *ftnode_pv, 
-    PAIR_ATTR UU(bytes_to_free), 
-    PAIR_ATTR* bytes_freed, 
+    void *ftnode_pv,
+    PAIR_ATTR UU(bytes_to_free),
+    PAIR_ATTR* bytes_freed,
     void* extraargs __attribute__((__unused__))
-    ) 
+    )
 {
     *bytes_freed = make_pair_attr(bytes_to_free.size-1);
     usleep(1*1024*1024);
@@ -184,13 +184,13 @@ pe_callback (
     return 0;
 }
 
-static int 
+static int
 other_pe_callback (
-    void *ftnode_pv __attribute__((__unused__)), 
-    PAIR_ATTR bytes_to_free __attribute__((__unused__)), 
-    PAIR_ATTR* bytes_freed __attribute__((__unused__)), 
+    void *ftnode_pv __attribute__((__unused__)),
+    PAIR_ATTR bytes_to_free __attribute__((__unused__)),
+    PAIR_ATTR* bytes_freed __attribute__((__unused__)),
     void* extraargs __attribute__((__unused__))
-    ) 
+    )
 {
     *bytes_freed = bytes_to_free;
     return 0;
@@ -273,7 +273,11 @@ cachetable_test (void) {
 extern "C" int test_cachetable_clock_eviction3(void);
 
 int test_cachetable_clock_eviction3() {
+    int rinit = toku_ft_layer_init();
+    CKERR(rinit);
+
     initialize_dummymsn();
     cachetable_test();
+    toku_ft_layer_destroy();
     return 0;
 }

@@ -121,13 +121,11 @@ int toku_ft_loader_close (FTLOADER bl,
 			   ft_loader_error_func error_callback, void *error_callback_extra,
 			   ft_loader_poll_func  poll_callback,  void *poll_callback_extra);
 
-int toku_ft_loader_abort(FTLOADER bl, 
+int toku_ft_loader_abort(FTLOADER bl,
                           bool is_error);
 
 // For test purposes only
 void toku_ft_loader_set_size_factor (uint32_t factor);
-
-void ft_loader_set_os_fwrite (size_t (*fwrite_fun)(const void*,size_t,size_t,FILE*));
 
 size_t ft_loader_leafentry_size(size_t key_size, size_t val_size, TXNID xid);
 

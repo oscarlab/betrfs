@@ -124,6 +124,10 @@ le_add_to_bn(bn_data* bn, uint32_t idx, const  char *key, int keylen, const char
     r->type = LE_CLEAN;
     r->u.clean.vallen = vallen;
     memcpy(r->u.clean.val, val, vallen);
+#ifdef FT_INDIRECT
+    r->indirect_insert_offsets = NULL;
+    r->num_indirect_inserts = 0;
+#endif
 }
 
 
@@ -160,10 +164,24 @@ test1(int fd, FT brt_h, FTNODE *dn) {
     toku_ftnode_pe_callback(*dn, attr, &attr, brt_h);
     for (int i = 0; i < (*dn)->n_children; i++) {
         if (!is_leaf) {
-            assert(BP_STATE(*dn,i) == PT_COMPRESSED);
+            if (!ftfs_is_hdd()) {
+                assert(BP_STATE(*dn,i) == PT_AVAIL);
+            } else {
+                assert(BP_STATE(*dn,i) == PT_COMPRESSED);
+            }
         }
         else {
             assert(BP_STATE(*dn,i) == PT_ON_DISK);
+        }
+    }
+
+    if (!ftfs_is_hdd()) {
+        // The test below is not suitable for nonleaf node
+        // because there is not compression anymore.
+        if ((*dn)->height > 0) {
+            toku_free(ndd);
+            toku_ftnode_free(dn);
+            return;
         }
     }
     PAIR_ATTR size;
@@ -178,7 +196,11 @@ test1(int fd, FT brt_h, FTNODE *dn) {
     toku_ftnode_pe_callback(*dn, attr, &attr, brt_h);
     for (int i = 0; i < (*dn)->n_children; i++) {
         if (!is_leaf) {
-            assert(BP_STATE(*dn,i) == PT_COMPRESSED);
+            if (!ftfs_is_hdd()) {
+                assert(BP_STATE(*dn,i) == PT_AVAIL);
+            } else {
+                assert(BP_STATE(*dn,i) == PT_COMPRESSED);
+            }
         }
         else {
             assert(BP_STATE(*dn,i) == PT_ON_DISK);
@@ -251,12 +273,29 @@ test2(int fd, FT brt_h, FTNODE *dn) {
     PAIR_ATTR attr;
     memset(&attr,0,sizeof(attr));
     toku_ftnode_pe_callback(*dn, attr, &attr, brt_h);
-    assert(BP_STATE(*dn, 0) == ((is_leaf) ? PT_ON_DISK : PT_COMPRESSED));
+    if (!ftfs_is_hdd()) {
+        assert(BP_STATE(*dn, 0) == ((is_leaf) ? PT_ON_DISK : PT_AVAIL));
+    } else {
+        assert(BP_STATE(*dn, 0) == ((is_leaf) ? PT_ON_DISK : PT_COMPRESSED));
+    }
     assert(BP_STATE(*dn, 1) == PT_AVAIL);
     assert(BP_SHOULD_EVICT(*dn, 1));
     toku_ftnode_pe_callback(*dn, attr, &attr, brt_h);
-    assert(BP_STATE(*dn, 1) == ((is_leaf) ? PT_ON_DISK : PT_COMPRESSED));
+    if (!ftfs_is_hdd()) {
+        assert(BP_STATE(*dn, 1) == ((is_leaf) ? PT_ON_DISK : PT_AVAIL));
+    } else {
+        assert(BP_STATE(*dn, 1) == ((is_leaf) ? PT_ON_DISK : PT_COMPRESSED));
+    }
 
+    if (!ftfs_is_hdd()) {
+        // The test below is not suitable for nonleaf node
+        // because there is not compression anymore.
+        if ((*dn)->height > 0) {
+            toku_free(ndd);
+            toku_ftnode_free(dn);
+            return;
+        }
+    }
     bool req = toku_ftnode_pf_req_callback(*dn, &bfe_subset);
     assert(req);
     toku_ftnode_pf_callback(*dn, ndd, &bfe_subset, fd, &attr);
@@ -320,6 +359,11 @@ test_serialize_nonleaf(void) {
     sn.dirty = 1;
     sn.oldest_referenced_xid_known = TXNID_NONE;
     sn.unbound_insert_count = 0;
+#ifdef FT_INDIRECT
+    // page sharing-specific fields initialization
+    sn.is_cloned = false;
+    sn.is_rebalancing = false;
+#endif
     hello_string = toku_strdup("hello");
     MALLOC_N(2, sn.bp);
     MALLOC_N(1, sn.childkeys);
@@ -395,7 +439,11 @@ test_serialize_nonleaf(void) {
         assert(size   == 100);
     }
     FTNODE_DISK_DATA ndd = NULL;
+#ifdef FT_INDIRECT
+    r = toku_serialize_ftnode_to_with_indirect(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false, &offset, &size, true);
+#else
     r = toku_serialize_ftnode_to(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false, &offset, &size, true);
+#endif
     assert(r==0);
 
     test1(fd, brt_h, &dn);
@@ -437,6 +485,10 @@ test_serialize_leaf(void) {
     sn.height = 0;
     sn.n_children = 2;
     sn.dirty = 1;
+#ifdef FT_INDIRECT
+    sn.is_cloned = false;
+    sn.is_rebalancing = false;
+#endif
     sn.oldest_referenced_xid_known = TXNID_NONE;
     sn.unbound_insert_count = 0;
     MALLOC_N(sn.n_children, sn.bp);
@@ -486,7 +538,11 @@ test_serialize_leaf(void) {
         assert(size   == 100);
     }
     FTNODE_DISK_DATA ndd = NULL;
+#ifdef FT_INDIRECT
+    r = toku_serialize_ftnode_to_with_indirect(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false, &offset, &size, true);
+#else
     r = toku_serialize_ftnode_to(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false, &offset, &size, true);
+#endif
     assert(r==0);
     test1(fd, brt_h, &dn);
     test3_leaf(fd, brt_h,&dn);

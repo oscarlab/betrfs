@@ -105,9 +105,9 @@ int test_mvcc_create_table(void) {
 
     DB_ENV *env;
     r = db_env_create(&env, 0);                                                         CKERR(r);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                      CKERR(r);
-    
+
     DB *db;
 
     DB_TXN* txna = NULL;
@@ -139,7 +139,7 @@ int test_mvcc_create_table(void) {
     r = db->close(db, 0);                                                               CKERR(r);
     r = env->close(env, 0);                                                             CKERR(r);
 
-    post_teardown();    
+    post_teardown();
 
     return 0;
 }

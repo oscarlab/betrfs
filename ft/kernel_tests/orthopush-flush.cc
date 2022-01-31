@@ -218,7 +218,7 @@ insert_random_message_to_bn(
    *keylenp = keydbt->size;
     *keyp = toku_xmemdup(keydbt->data, keydbt->size);
     int64_t numbytes;
-    toku_le_apply_msg(&msg, NULL, NULL, 0, TXNID_NONE, make_gc_info(false), save, &numbytes);
+    toku_le_apply_msg(&msg, NULL, NULL, 0, TXNID_NONE, make_gc_info(false), save, &numbytes, NULL);
     toku_ft_bn_apply_cmd(t->ft, NULL, NULL, blb, &msg, TXNID_NONE, make_gc_info(false), NULL, NULL);
     if (msn.msn > blb->max_msn_applied.msn) {
         blb->max_msn_applied = msn;
@@ -268,7 +268,7 @@ insert_same_message_to_bns(
    *keylenp = keydbt->size;
     *keyp = toku_xmemdup(keydbt->data, keydbt->size);
     int64_t numbytes;
-    toku_le_apply_msg(&msg, NULL, NULL, 0, TXNID_NONE, make_gc_info(false), save, &numbytes);
+    toku_le_apply_msg(&msg, NULL, NULL, 0, TXNID_NONE, make_gc_info(false), save, &numbytes, NULL);
     toku_ft_bn_apply_cmd(t->ft, NULL, NULL, blb1, &msg, TXNID_NONE, make_gc_info(false), NULL, NULL);
     if (msn.msn > blb1->max_msn_applied.msn) {
         blb1->max_msn_applied = msn;
@@ -857,7 +857,8 @@ flush_to_leaf(FT_HANDLE t, bool make_leaf_up_to_date, bool use_flush) {
                 void *valp = NULL;
                 r = BLB_DATA(child, j)->fetch_klpair(idx, &le, &keylen, &keyp);
                 assert_zero(r);
-                valp = le_latest_val_and_len(le, &vallen);
+                bool indirect = false;
+                valp = le_latest_val_and_len(le, &vallen, &indirect);
                 toku_fill_dbt(&keydbt, keyp, keylen);
                 toku_fill_dbt(&valdbt, valp, vallen);
             }
@@ -878,7 +879,8 @@ flush_to_leaf(FT_HANDLE t, bool make_leaf_up_to_date, bool use_flush) {
                 DBT childkeydbt, childvaldbt;
                 {
                     uint32_t vallen;
-                    void *valp = le_latest_val_and_len(child_messages[i], &vallen);
+                    bool indirect = false;
+                    void *valp = le_latest_val_and_len(child_messages[i], &vallen, &indirect);
                     toku_fill_dbt(&childkeydbt, key_pointers[i], keylens[i]);
                     toku_fill_dbt(&childvaldbt, valp, vallen);
                 }
@@ -1295,8 +1297,9 @@ compare_apply_and_flush(FT_HANDLE t, bool make_leaf_up_to_date) {
                 uint32_t keylen, vallen;
                 void *keyp = NULL;
                 r = first->fetch_klpair(idx, &le1, &keylen, &keyp);
-                assert_zero(r);
-                void *valp = le_latest_val_and_len(le1, &vallen);
+                assert_zero(r);                
+                bool indirect = false;
+                void *valp = le_latest_val_and_len(le1, &vallen, &indirect);
                 toku_fill_dbt(&key1dbt, keyp, keylen);
                 toku_fill_dbt(&val1dbt, valp, vallen);
             }
@@ -1304,8 +1307,9 @@ compare_apply_and_flush(FT_HANDLE t, bool make_leaf_up_to_date) {
                 uint32_t keylen, vallen;
                 void *keyp = NULL;
                 r = second->fetch_klpair(idx, &le2, &keylen, &keyp);
-                assert_zero(r);
-                void *valp = le_latest_val_and_len(le2, &vallen);
+                assert_zero(r);                
+                bool indirect = false;
+                void *valp = le_latest_val_and_len(le2, &vallen, &indirect);
                 toku_fill_dbt(&key2dbt, keyp, keylen);
                 toku_fill_dbt(&val2dbt, valp, vallen);
             }

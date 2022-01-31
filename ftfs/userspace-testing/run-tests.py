@@ -7,12 +7,24 @@ DEF_PRE="default-pre.py"
 DEF_POST="default-post.py"
 procfile="/proc/toku_test"
 
+force_ssd = False
+force_hdd = False
 use_sfs = False
 DEF_PRE_SFS="default-pre.py --sfs"
 
 def format_sfs(cv):
     print "Format SFS"
-    command = "./mkfs-sfs.sh {} ${{PWD}}/../../simplefs/tmp".format(cv["southbound device"])
+    command = str()
+    if force_ssd == True and force_hdd == False:
+        command = "./mkfs-sfs.sh {} ${{PWD}}/../../simplefs/ {}".format(cv["southbound device"], "--force-ssd")
+    elif force_hdd == True and force_ssd == False:
+        command = "./mkfs-sfs.sh {} ${{PWD}}/../../simplefs/ {}".format(cv["southbound device"], "--force-hdd")
+    elif force_hdd == False and force_ssd == False:
+        command = "./mkfs-sfs.sh {} ${{PWD}}/../../simplefs/".format(cv["southbound device"])
+    else:
+        print "Cannot force both hdd and ssd!"
+        sys.exit(2)
+
     ret = subprocess.call(command, shell=True)
     if ret != 0 :
         print "ERROR! Failed to format SFS"
@@ -80,10 +92,20 @@ def run_test_set(test_array):
 
     for test in test_array :
         if (len(test) == 1) :
-	    if use_sfs == True:
-                ret = run_one_test(test[0], DEF_INTERP, DEF_PRE_SFS, DEF_POST)
+            pre_cmd = ""
+            if use_sfs == True:
+                pre_cmd = DEF_PRE_SFS
             else:
-                ret = run_one_test(test[0], DEF_INTERP, DEF_PRE, DEF_POST)
+                pre_cmd = DEF_PRE
+            if force_ssd == True:
+                pre_cmd = pre_cmd + " --force-ssd"
+            elif force_hdd == True:
+                pre_cmd = pre_cmd + " --force-hdd"
+            else:
+                print "Invalid argument!"
+                exit(1)
+
+            ret = run_one_test(test[0], DEF_INTERP, pre_cmd, DEF_POST)
         else :
             ret = run_one_test(test[0], test[1], test[2], test[3])
 
@@ -96,6 +118,8 @@ def run_test_set(test_array):
             print "Test passed: " + test[0]
             success = success + 1
 
+    # do not simply change the format of these two prints. In particular, Jenkins is looking for a
+    # non-zero number of failures to indicate that a job failed, so don't just remove that print().
     print "Successes: {0}".format(success)
     print "Failures:  {0}".format(failure)
     return failure
@@ -162,7 +186,11 @@ try:
        if x == "--sfs":
           use_sfs = True
        if x == "-s":
-          shuffle = True;
+          shuffle = True
+       if x == "--force-ssd":
+          force_ssd = True
+       if x == "--force-hdd":
+          force_hdd = True
 
     if use_sfs:
        format_sfs(config_values) 

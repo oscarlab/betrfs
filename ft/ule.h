@@ -119,6 +119,10 @@ int ule_is_committed(ULEHANDLE ule, uint64_t ith);
 int ule_is_provisional(ULEHANDLE ule, uint64_t ith);
 
 bool uxr_is_insert(UXRHANDLE uxr);
+#ifdef FT_INDIRECT
+bool uxr_is_regular_insert(UXRHANDLE uxr);
+bool uxr_is_unbound_insert(UXRHANDLE uxr);
+#endif
 bool uxr_is_delete(UXRHANDLE uxr);
 bool uxr_is_placeholder(UXRHANDLE uxr);
 void *uxr_get_val(UXRHANDLE uxr);

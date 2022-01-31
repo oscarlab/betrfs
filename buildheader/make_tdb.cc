@@ -303,6 +303,7 @@ static void print_defines (void) {
 #endif
         dodefine_track(dbt_flags, DB_DBT_REALLOC);
         dodefine_track(dbt_flags, DB_DBT_USERMEM);
+        dodefine_track(dbt_flags, DB_DBT_INDIRECT);
     }
 
     // flags for the env->set_flags function
@@ -378,7 +379,7 @@ static void print_db_env_struct (void) {
     printf("    int (*keypfsplit) (DB *, const DBT *, const DBT *, void (*set_key)(const DBT *new_key, void *set_extra), void *extra);\n");
     printf("    int (*keyrename) (DB *, const DBT *old_prefix, const DBT *new_prefix, const DBT *, void (*set_key)(const DBT *new_key, void *set_extra), void *set_extra);\n");
     printf("    void (*keyprint) (const DBT *key, bool is_tracable_print);\n");
-    printf("    int (*keylift) (const DBT *lpivot, const DBT *rpivot, void (*set_lift)(const DBT *lift, void *set_extra), void *set_extra);\n");
+    printf("    int (*keylift) (DB *db, const DBT *lpivot, const DBT *rpivot, void (*set_lift)(const DBT *lift, void *set_extra), void *set_extra);\n");
     printf("    int (*keyliftkey) (const DBT *key, const DBT *lifted, void (*set_key)(const DBT *new_key, void *set_extra), void *set_extra);\n");
     printf("    int (*keyunliftkey) (const DBT *key, const DBT *lifted, void (*set_key)(const DBT *new_key, void *set_extra), void *set_extra);\n");
     printf("};\n");
@@ -403,7 +404,7 @@ static void print_db_env_struct (void) {
 #if DB_VERSION_MAJOR == 4 && DB_VERSION_MINOR >= 3
     STRUCT_SETUP(DB_ENV, set_errcall, "void (*%s) (DB_ENV *, void (*)(const DB_ENV *, const char *, const char *))");
 #endif
-    STRUCT_SETUP(DB_ENV, set_errfile, "void (*%s) (DB_ENV *, FILE*)");
+    STRUCT_SETUP(DB_ENV, set_errfile, "void (*%s) (DB_ENV *, int)");
     STRUCT_SETUP(DB_ENV, set_errpfx, "void (*%s) (DB_ENV *, const char *)");
     STRUCT_SETUP(DB_ENV, set_flags, "int  (*%s) (DB_ENV *, uint32_t, int)");
     STRUCT_SETUP(DB_ENV, set_lg_bsize, "int  (*%s) (DB_ENV *, uint32_t)");
@@ -524,11 +525,10 @@ static void print_db_struct (void) {
     STRUCT_SETUP(DB, key_range,      "int (*%s) (DB *, DB_TXN *, DBT *, DB_KEY_RANGE *, uint32_t)");
     STRUCT_SETUP(DB, open,           "int (*%s) (DB *, DB_TXN *, const char *, const char *, DBTYPE, uint32_t, int)");
     STRUCT_SETUP(DB, put,            "int (*%s) (DB *, DB_TXN *, DBT *, DBT *, uint32_t)");
-    STRUCT_SETUP(DB, set_errfile,    "void (*%s) (DB *, FILE*)");
+    STRUCT_SETUP(DB, set_errfile,    "void (*%s) (DB *, int)");
     STRUCT_SETUP(DB, set_flags,      "int (*%s) (DB *, uint32_t)");
     STRUCT_SETUP(DB, set_pagesize,   "int (*%s) (DB *, uint32_t)");
     STRUCT_SETUP(DB, stat,           "int (*%s) (DB *, void *, uint32_t)");
-    STRUCT_SETUP(DB, verify,         "int (*%s) (DB *, const char *, const char *, FILE *, uint32_t)");
     const char *extra[]={
                          "int (*key_range64)(DB*, DB_TXN *, DBT *, uint64_t *less, uint64_t *equal, uint64_t *greater, int *is_exact)",
                          "int (*get_key_after_bytes)(DB *, DB_TXN *, const DBT *, uint64_t, void (*callback)(const DBT *, uint64_t, void *), void *, uint32_t); /* given start_key and skip_len, find largest end_key such that the elements in [start_key,end_key) sum to <= skip_len bytes */",
@@ -645,7 +645,6 @@ int main (int argc, char *const argv[] __attribute__((__unused__))) {
     printf("#include <stdbool.h>\n");
     printf("#include <stdint.h>\n");
     printf("#else\n");
-    printf("#include \"faked_std.h\"\n");
     printf("#include \"sb_files.h\"\n");
     printf("#endif //__KERNEL__\n");
     //printf("#include <inttypes.h>\n");
@@ -858,12 +857,8 @@ int main (int argc, char *const argv[] __attribute__((__unused__))) {
     printf("void db_env_set_func_full_pwrite (ssize_t (*)(int, const void *, size_t, toku_off_t, bool)) %s;\n", VISIBLE);
     printf("void db_env_set_func_write (ssize_t (*)(int, const void *, size_t)) %s;\n", VISIBLE);
     printf("void db_env_set_func_full_write (ssize_t (*)(int, const void *, size_t)) %s;\n", VISIBLE);
-    printf("void db_env_set_func_fdopen (FILE* (*)(int, const char *)) %s;\n", VISIBLE);
-    printf("void db_env_set_func_fopen (FILE* (*)(const char *, const char *)) %s;\n", VISIBLE);
     printf("void db_env_set_func_open (int (*)(const char *, int, int)) %s;\n", VISIBLE);
-    printf("void db_env_set_func_fclose (int (*)(FILE*)) %s;\n", VISIBLE);
     printf("void db_env_set_func_pread (ssize_t (*)(int, void *, size_t, off_t)) %s;\n", VISIBLE);
-    printf("void db_env_set_func_loader_fwrite (size_t (*fwrite_fun)(const void*,size_t,size_t,FILE*)) %s;\n", VISIBLE);
     printf("void db_env_set_checkpoint_callback (void (*)(void*), void*) %s;\n", VISIBLE);
     printf("void db_env_set_checkpoint_callback2 (void (*)(void*), void*) %s;\n", VISIBLE);
     printf("void db_env_set_recover_callback (void (*)(void*), void*) %s;\n", VISIBLE);

@@ -110,13 +110,13 @@ int toku_logcursor_create(TOKULOGCURSOR *lc, const char *log_dir);
 //   - creates a logcusor (lc) that only knows about the file log_file
 int toku_logcursor_create_for_file(TOKULOGCURSOR *lc, const char *log_dir, const char *log_file);
 // toku_logcursor_destroy()
-//    - frees all resources associated with the logcursor, including the log_entry 
+//    - frees all resources associated with the logcursor, including the log_entry
 //       associated with the latest cursor action
 int toku_logcursor_destroy(TOKULOGCURSOR *lc);
 
 // toku_logcursor_[next,prev,first,last] take care of malloc'ing and free'ing log_entrys.
-//    - routines NULL out the **le pointers on entry, then set the **le pointers to 
-//        the malloc'ed entries when successful, 
+//    - routines NULL out the **le pointers on entry, then set the **le pointers to
+//        the malloc'ed entries when successful,
 int toku_logcursor_next(TOKULOGCURSOR lc, struct log_entry **le);
 int toku_logcursor_prev(TOKULOGCURSOR lc, struct log_entry **le);
 
@@ -128,5 +128,6 @@ int toku_logcursor_log_exists(const TOKULOGCURSOR lc);
 
 void toku_logcursor_print(TOKULOGCURSOR lc);
 
+int toku_logcursor_cur_fp(TOKULOGCURSOR lc);
 
 #endif // TOKULOGCURSOR_H

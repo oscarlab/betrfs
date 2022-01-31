@@ -9,11 +9,8 @@ set(CMAKE_SHARED_LIBRARY_LINK_CXX_FLAGS "")
 
 include(TokuFeatureDetection)
 include(TokuSetupCompiler)
-include(TokuSetupCTest)
-include(TokuThirdParty)
 
 set(TOKU_CMAKE_SCRIPT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-include(TokuMergeLibs)
 
 ## need a way to change the name of libs we build
 set(LIBTOKUPORTABILITY "tokuportability" CACHE STRING "Name of libtokuportability.so")
@@ -23,7 +20,6 @@ include_directories(
   ${VALGRIND_INCLUDE_DIR}
   )
 include_directories(
-  ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/toku_include
   ${CMAKE_CURRENT_SOURCE_DIR}/portability
   ${CMAKE_CURRENT_SOURCE_DIR}  ## so you can include <ft/ft-ops.h> from inside src/
@@ -48,19 +44,6 @@ add_subdirectory(portability)
 add_subdirectory(ft)
 add_subdirectory(locktree)
 add_subdirectory(src)
-if (NOT BUILD_FOR_LINUX_KERNEL_MODULE)
-  add_subdirectory(utils)
-endif (NOT BUILD_FOR_LINUX_KERNEL_MODULE)
 
 ## subdirectories that just install things
-add_subdirectory(include)
 add_subdirectory(toku_include)
-add_subdirectory(examples)
-
-install(
-  FILES README.md README-TOKUDB
-  DESTINATION .
-  )
-
-## build tags
-include(TokuBuildTagDatabases)

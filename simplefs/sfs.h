@@ -30,13 +30,13 @@ const uint64_t SFS_INODETABLE_BLOCK_NUMBER = 1;
 #include <linux/pagevec.h>
 #include <linux/version.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,1,0)
 ssize_t sfs_in_kernel_write(struct kiocb *iocb,
 		const struct iovec *iov,
 		unsigned long nr_segs, loff_t pos);
-#else
+#else /* LINUX_VERSION_CODE */
 ssize_t sfs_write_iter(struct kiocb *iocb, struct iov_iter *from);
-#endif
+#endif /* LINUX_VERSION_CODE */
 
 int sfs_generic_write_end(struct file *file,
 		struct address_space *mapping,

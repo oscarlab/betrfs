@@ -176,21 +176,21 @@ static int put_multiple_generate(DB *dest_db, DB *src_db, DBT_ARRAY *dest_key_ar
 #define NUM_DBS 1
 
 // Create loader, insert row(s)
-static void 
+static void
 load(DB **dbs) {
     int r;
     DB_TXN    *txn;
     DB_LOADER *loader;
     uint32_t db_flags[MAX_DBS];
     uint32_t dbt_flags[MAX_DBS];
-    for(int i=0;i<MAX_DBS;i++) { 
-        db_flags[i] = DB_NOOVERWRITE; 
+    for(int i=0;i<MAX_DBS;i++) {
+        db_flags[i] = DB_NOOVERWRITE;
         dbt_flags[i] = 0;
     }
     uint32_t loader_flags = LOADER_COMPRESS_INTERMEDIATES;
 
     // create and initialize loader
-    r = env->txn_begin(env, NULL, &txn, 0);                                                               
+    r = env->txn_begin(env, NULL, &txn, 0);
     CKERR(r);
     r = env->create_loader(env, txn, &loader, dbs[0], NUM_DBS, dbs, db_flags, dbt_flags, loader_flags);
     CKERR(r);
@@ -212,7 +212,7 @@ load(DB **dbs) {
 
 static void
 checkpoint_callback(void * UU(extra)){
-    printf("Deliberately crash during checkpoint\n"); 
+    printf("Deliberately crash during checkpoint\n");
     fflush(stdout);
     int r = env->log_flush(env, NULL); //TODO: USe a real DB_LSN* instead of NULL
     CKERR(r);
@@ -227,7 +227,7 @@ do_x1_shutdown (void) {
     CKERR(r);
 
     r=db_env_create(&env, 0);                                                  assert(r==0);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r = env->set_default_bt_compare(env, uint_dbt_cmp);                                                       CKERR(r);
     r = env->set_generate_row_callback_for_put(env, put_multiple_generate);
     CKERR(r);
@@ -275,7 +275,7 @@ do_x1_recover (bool UU(did_commit)) {
     r=env->txn_begin(env, 0, &tid, 0);                                         assert(r==0);
     r=db_create(&db, env, 0);                                                  CKERR(r);
     r=db->open(db, tid, "foo.db", 0, DB_BTREE, 0, S_IRWXU+S_IRWXG+S_IRWXO);                       CKERR(r);
-    r=db->get(db, tid, dbt_init(&key, "a", 2), dbt_init_malloc(&data), 0);     assert(r==0); 
+    r=db->get(db, tid, dbt_init(&key, "a", 2), dbt_init_malloc(&data), 0);     assert(r==0);
     r=tid->commit(tid, 0);                                                     assert(r==0);
     toku_free(data.data);
     r=db->close(db, 0);                                                        CKERR(r);
@@ -302,10 +302,10 @@ static void
 	} else if (strcmp(argv[0], "-h")==0) {
 	    resultcode=0;
 	do_usage:
-	    fprintf(stderr, "Usage:\n%s [-v|-q]* [-h] {--commit | --abort | --explicit-abort | --recover-committed | --recover-aborted } \n", cmd);
+	    dprintf(STDERR, "Usage:\n%s [-v|-q]* [-h] {--commit | --abort | --explicit-abort | --recover-committed | --recover-aborted } \n", cmd);
 	    exit(resultcode);
 	} else {
-	    fprintf(stderr, "Unknown arg: %s\n", argv[0]);
+	    dprintf(STDERR, "Unknown arg: %s\n", argv[0]);
 	    resultcode=1;
 	    goto do_usage;
 	}
@@ -331,7 +331,7 @@ int test_recover_test_logsuppress_put(void) {
 	do_x1_shutdown();
     } else if (do_recover_committed) {
 	do_x1_recover(true);
-    } 
+    }
 #if 0
     else {
 	do_test();

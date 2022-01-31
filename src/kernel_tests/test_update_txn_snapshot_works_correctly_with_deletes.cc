@@ -118,7 +118,7 @@ static void setup (void) {
     int r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
     assert(r==0);
     { int chk_r = db_env_create(&env, 0); CKERR(chk_r); }
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     env->set_update(env, update_fun);
     { int chk_r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
 }

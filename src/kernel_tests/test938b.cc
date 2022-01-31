@@ -147,7 +147,7 @@ int test_test938b(void) {
     {
         r = db_env_create(&env, 0);                                   CKERR(r);
 	r=env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
-	env->set_errfile(env, stderr);
+	env->set_errfile(env, STDERR);
 	r=env->txn_begin(env, 0, &txn, 0);                            CKERR(r);
 	r=db_create(&db, env, 0);                                     CKERR(r);
 	r=db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO);  CKERR(r);

@@ -1,5 +1,4 @@
 set(tokusrc_kernel_srcs
-#seq-io
 big-nested-abort-abort
 big-nested-abort-commit
 big-nested-commit-abort
@@ -245,10 +244,10 @@ test_3645
 test_3755
 test_4015 #(drd test)
 test_4368
-#test4573-logtrim
+test4573-logtrim
 test_4657
 test_5015
-#test5092
+test5092
 test-5138 #(custom test)
 test_5469
 test_789
@@ -348,9 +347,7 @@ test_multiple_checkpoints_block_commit
 test_nested
 test-nested-xopen-eclose
 test_nodup_set
-#test-prepare2
-#test-prepare3
-#test-prepare
+test-prepare
 test_query  #loooong test
 test_rand_insert
 test_read_txn_invalid_ops
@@ -426,8 +423,8 @@ test_update_txn_snapshot_works_concurrently
 test_update_txn_snapshot_works_correctly_with_deletes
 test_update_with_empty_table
 test_weakxaction
-#test-xa-prepare
-#test-xopen-eclose
+test-xa-prepare
+test-xopen-eclose
 test_zero_length_keys
 transactional_fileops
 update
@@ -449,6 +446,6 @@ seqwrites-no-txn
 rename-simple
 )
 add_library(tokusrc_kernel_static STATIC ${tokusrc_kernel_srcs})
-maybe_add_gcov_to_libraries(tokusrc_static_conv)
+maybe_add_gcov_to_libraries(tokusrc_kernel_static)
 set_target_properties(tokusrc_kernel_static PROPERTIES POSITION_INDEPENDENT_CODE ${STATIC_PIC})
 add_dependencies(tokusrc_kernel_static install_tdb_h generate_log_code)

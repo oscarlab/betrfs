@@ -809,12 +809,6 @@ toku_rollback_load (FILENUM    UU(old_filenum),
         char *fname_in_cwd = toku_cachetable_get_fname_in_cwd(ct, fname_in_env);
         // YZJ: Should not happend
         assert(false);
-
-#ifdef TOKU_LINUX_MODULE
-        assert(r == 0 || get_error_errno(r) == ENOENT);
-#else
-        assert(r == 0 || get_error_errno() == ENOENT);
-#endif
         toku_free(fname_in_cwd);
         r = 0;
     } else {

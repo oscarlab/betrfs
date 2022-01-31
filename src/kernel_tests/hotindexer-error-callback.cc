@@ -104,14 +104,14 @@ typedef enum {TXN_NONE = 0, TXN_CREATE = 1, TXN_END = 2} TxnWork;
 DB_ENV *env;
 
 int error_cb_count = 0;
-static void error_callback(DB *db, int which_db, int err, DBT *key, DBT *val, void *extra) 
+static void error_callback(DB *db, int which_db, int err, DBT *key, DBT *val, void *extra)
 {
     error_cb_count++;
     if ( verbose ) {
-        printf("error_callback (%d) : db_p = %p, which_db = %d, error = %d, key_p = %p, val_p = %p, extra_p = %p\n", 
-               error_cb_count, 
-               db, which_db, 
-               err, 
+        printf("error_callback (%d) : db_p = %p, which_db = %d, error = %d, key_p = %p, val_p = %p, extra_p = %p\n",
+               error_cb_count,
+               db, which_db,
+               err,
                key, val, extra);
     }
 }
@@ -124,12 +124,12 @@ static void test_indexer(DB *src, DB **dbs)
     uint32_t db_flags[NUM_DBS];
 
     if ( verbose ) printf("test_indexer\n");
-    for(int i=0;i<NUM_DBS;i++) { 
-        db_flags[i] = DB_NOOVERWRITE; 
+    for(int i=0;i<NUM_DBS;i++) {
+        db_flags[i] = DB_NOOVERWRITE;
     }
 
     // create and initialize loader
-    r = env->txn_begin(env, NULL, &txn, 0);                                                               
+    r = env->txn_begin(env, NULL, &txn, 0);
     CKERR(r);
 
     if ( verbose ) printf("test_indexer create_indexer\n");
@@ -157,7 +157,7 @@ static void test_indexer(DB *src, DB **dbs)
 }
 
 
-static void run_test(void) 
+static void run_test(void)
 {
     int r;
     toku_os_recursive_delete(TOKU_TEST_FILENAME);
@@ -173,7 +173,7 @@ static void run_test(void)
     r = env->set_generate_row_callback_for_put(env, put_multiple_generate);      CKERR(r);
     int envflags = DB_INIT_LOCK | DB_INIT_LOG | DB_INIT_MPOOL | DB_INIT_TXN | DB_CREATE | DB_PRIVATE | DB_INIT_LOG;
     r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);               CKERR(r);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     //Disable auto-checkpointing
     r = env->checkpointing_set_period(env, 0);                                   CKERR(r);
 
@@ -195,7 +195,7 @@ static void run_test(void)
         idx[i] = i+1;
         r = db_create(&dbs[i], env, 0); CKERR(r);
         dbs[i]->app_private = &idx[i];
-        char key_name[32]; 
+        char key_name[32];
         sprintf(key_name, "key%d", i);
         r = dbs[i]->open(dbs[i], NULL, key_name, NULL, DB_BTREE, DB_AUTO_COMMIT|DB_CREATE, 0666);   CKERR(r);
         IN_TXN_COMMIT(env, NULL, txn_desc, 0, {

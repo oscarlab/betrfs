@@ -110,11 +110,11 @@ setup (void) {
     r=env->set_redzone(env, 0); CKERR(r);
     r = env->set_key_ops(env, &key_ops); CKERR(r);
 #endif
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
 #ifdef USE_BDB
     r=env->set_lk_max_objects(env, 2*num_insert); CKERR(r);
 #endif
-    
+
     r=env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r=db_create(&db, env, 0); CKERR(r);
 
@@ -202,4 +202,3 @@ int test_cursor_more_than_a_leaf_provdel(void) {
     post_teardown();
     return 0;
 }
-

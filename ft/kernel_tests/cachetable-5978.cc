@@ -282,8 +282,11 @@ int cachetable_5978(void) {
     uint32_t num_test_runs = 30;
     for (uint32_t i = 0; i < num_test_runs; i++) {
         printf("starting test run %" PRIu32 " \n", i);
+        int rinit = toku_ft_layer_init();
+        CKERR(rinit);
 	initialize_dummymsn();
         cachetable_test();
+        toku_ft_layer_destroy();
     }
     return 0;
 }

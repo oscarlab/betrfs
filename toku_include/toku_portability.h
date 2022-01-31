@@ -168,7 +168,7 @@ typedef int64_t toku_off_t;
 #include <stdio.h>
 
 #define static_assert(foo, bar)
-#endif 
+#endif
 
 #if defined(__cplusplus)
 # define cast_to_typeof(v) (decltype(v))
@@ -238,13 +238,24 @@ typedef int64_t toku_off_t;
 #include "toku_os.h"
 #include "toku_htod.h"
 #include "toku_assert.h"
-#include "toku_crash.h"
 
 #define UU(x) x __attribute__((__unused__))
 
 #if defined(__cplusplus)
 extern "C" {
 #endif
+
+/* Poison  things we are retiring from the southbound */
+#pragma GCC poison   fread
+#pragma GCC poison   fwrite
+#pragma GCC poison   fprintf
+#pragma GCC poison   feof
+#pragma GCC poison   fgetc
+#pragma GCC poison   fileno
+#pragma GCC poison   ftello
+#pragma GCC poison   fseek
+#define STDOUT 1
+#define STDERR 2
 
 // Deprecated functions.
 #if !defined(TOKU_ALLOW_DEPRECATED)
@@ -351,28 +362,6 @@ extern void *realloc(void*, size_t)            __THROW __attribute__((__deprecat
 };
 #endif
 
-void *os_malloc(size_t) __attribute__((__visibility__("default")));
-// Effect: See man malloc(2)
-
-void *os_malloc_aligned(size_t /*alignment*/, size_t /*size*/) __attribute__((__visibility__("default")));
-// Effect: Perform a malloc(size) with the additional property that the returned pointer is a multiple of ALIGNMENT.
-// Requires: alignment is a power of two.
-
-
-void *os_realloc(void*,size_t) __attribute__((__visibility__("default")));
-// Effect: See man realloc(2)
-
-void *os_realloc_aligned(size_t/*alignment*/, void*,size_t) __attribute__((__visibility__("default")));
-// Effect: Perform a realloc(p, size) with the additional property that the returned pointer is a multiple of ALIGNMENT.
-// Requires: alignment is a power of two.
-
-void os_free(void*) __attribute__((__visibility__("default")));
-// Effect: See man free(2)
-
-size_t os_malloc_usable_size(const void *p) __attribute__((__visibility__("default")));
-// Effect: Return an estimate of the usable size inside a pointer.  If this function is not defined the memory.cc will
-//  look for the jemalloc, libc, or darwin versions of the function for computing memory footprint.
-
 // full_pwrite and full_write performs a pwrite, and checks errors.  It doesn't return unless all the data was written. */
 void toku_os_full_pwrite (int fd, const void *buf, size_t len, toku_off_t off, bool is_blocking) __attribute__((__visibility__("default")));
 void toku_os_full_write (int fd, const void *buf, size_t len) __attribute__((__visibility__("default")));
@@ -382,7 +371,7 @@ ssize_t toku_os_pwrite (int fd, const void *buf, size_t len, toku_off_t off) __a
 int toku_os_write (int fd, const void *buf, size_t len) __attribute__((__visibility__("default")));
 
 // wrappers around file system calls
-FILE * toku_os_fdopen(int fildes, const char *mode);    
+FILE * toku_os_fdopen(int fildes, const char *mode);
 FILE * toku_os_fopen(const char *filename, const char *mode);
 int toku_os_open(const char *path, int oflag, int mode);
 int toku_os_open_direct(const char *path, int oflag, int mode);
@@ -417,6 +406,8 @@ int toku_fallocate(int fd, off_t offset, off_t len);
 int toku_portability_init(void);
 void toku_portability_destroy(void);
 
+int toku_initialize_empty_log(const char *name);
+
 static inline uint64_t roundup_to_multiple(uint64_t alignment, uint64_t v)
 // Effect: Return X, where X the smallest multiple of ALIGNMENT such that X>=V.
 // Requires: ALIGNMENT is a power of two
@@ -428,6 +419,13 @@ static inline uint64_t roundup_to_multiple(uint64_t alignment, uint64_t v)
     assert(result<v+alignment);            // The result is the smallest such multiple of alignment.
     return result;
 }
-    
+
+static inline bool ftfs_simplefs_dio() {
+#ifdef TOKU_LINUX_MODULE
+	return !ftfs_is_hdd();
+#else
+	return false;
+#endif
+}
 
 #endif /* TOKU_PORTABILITY_H */

@@ -10,8 +10,12 @@
 
 #include <linux/kernel.h>
 #include <linux/slab.h>
+#include <linux/bitmap.h>
+#include <linux/namei.h>
+#include <linux/dcache.h>
 
 #include "ftfs_northbound.h"
+#include "ftfs_indirect.h"
 
 size_t db_cachesize;
 
@@ -42,6 +46,90 @@ static DBT data_desc = {
 };
 #define IS_META_DESC(dbt) (((char *)dbt.data)[0] == 'm')  // to see if it matches meta_desc_buf[] = "meta"
 #define IS_DATA_DESC(dbt) (((char *)dbt.data)[0] == 'd')  // to see if it matches data_desc_buf[] = "data"
+
+#ifdef FTFS_XATTR
+#define START_XATTR_BUFFER_SIZE 256
+/* Extended Attribute Schema:
+ *  Extended attributes (xattrs) are stored in the meta index.
+ *  Xattr keys have a special delimiter NB_BSTORE_XATTR_DELIMITER
+ */
+
+int
+copy_xattr_dbt_from_meta_dbt(DBT *xattr_dbt, DBT *meta_dbt, const char *name, bool alloc)
+{
+	char *meta_key = meta_dbt->data;
+	char *xattr_key;
+	size_t size;
+
+	if ((nb_key_path(meta_key))[0] == '\0') {
+		size = meta_dbt->size + strlen(name) + 1;
+	} else {
+		size = meta_dbt->size + strlen(name) + 2;
+	}
+
+	if (alloc) {
+		xattr_key = kmalloc(size, GFP_KERNEL);
+		if (xattr_key == NULL) {
+			return -ENOMEM;
+		}
+	} else {
+		BUG_ON(size > xattr_dbt->ulen);
+		xattr_key = xattr_dbt->data;
+	}
+
+	if ((nb_key_path(meta_key))[0] == '\0') {
+		sprintf(nb_key_path(xattr_key), "%c%s", NB_BSTORE_XATTR_DELIMITER, name);
+	} else {
+		sprintf(nb_key_path(xattr_key), "%s%c%s", nb_key_path(meta_key),
+			NB_BSTORE_XATTR_DELIMITER, name);
+	}
+
+	if (alloc) {
+		dbt_setup(xattr_dbt, xattr_key, size);
+	} else {
+		xattr_dbt->size = size;
+	}
+
+	return 0;
+}
+
+/* This function adjusts an xattr key (dbt) after a rename.
+* XXX: It is identical to copy_dbt_move; do we actually need a separate
+* function?
+*/
+static void
+copy_xattr_dbt_movdir(const DBT *old_prefix_dbt, const DBT *new_prefix_dbt,
+                     const DBT *old_dbt, DBT *new_dbt)
+{
+	char *new_prefix_key = new_prefix_dbt->data;
+	char *old_key = old_dbt->data;
+	char *new_key = new_dbt->data;
+	size_t size;
+
+	size = old_dbt->size - old_prefix_dbt->size + new_prefix_dbt->size;
+	BUG_ON(size > new_dbt->ulen);
+	sprintf(nb_key_path(new_key), "%s%s", nb_key_path(new_prefix_key),
+	        old_key + old_prefix_dbt->size - 1);
+
+	new_dbt->size = size;
+}
+
+static int
+key_is_xattr_of_meta_key(char *xattr_key, char *parent_key)
+{
+	if (nb_key_path(parent_key)[0] == '\0') {
+		if (nb_key_path(xattr_key)[0] != NB_BSTORE_XATTR_DELIMITER)
+			return 0;
+	} else {
+		size_t parent_len = strlen(nb_key_path(parent_key));
+		if (memcmp(nb_key_path(xattr_key), nb_key_path(parent_key), parent_len))
+			return 0;
+		return nb_key_path(xattr_key)[parent_len] == NB_BSTORE_XATTR_DELIMITER;
+	}
+	return 1;
+}
+
+#endif /* End of XATTR */
 
 static void
 copy_child_meta_dbt_from_meta_dbt(DBT *dbt, DBT *parent_dbt, const char *name)
@@ -114,6 +202,7 @@ copy_subtree_max_data_dbt_from_meta_dbt(DBT *dbt, DBT *parent_dbt)
 	*((char *)(dbt->data + dbt->size - sizeof(uint64_t) - 2)) = '\xff';
 }
 
+/* This function adjusts a meta key (dbt) after a rename */
 static void
 copy_meta_dbt_movdir(const DBT *old_prefix_dbt, const DBT *new_prefix_dbt,
                      const DBT *old_dbt, DBT *new_dbt)
@@ -131,6 +220,7 @@ copy_meta_dbt_movdir(const DBT *old_prefix_dbt, const DBT *new_prefix_dbt,
 	new_dbt->size = size;
 }
 
+/* This function adjusts a data key (dbt) after a rename */
 static void
 copy_data_dbt_movdir(const DBT *old_prefix_dbt, const DBT *new_prefix_dbt,
                      const DBT *old_dbt, DBT *new_dbt)
@@ -149,6 +239,7 @@ copy_data_dbt_movdir(const DBT *old_prefix_dbt, const DBT *new_prefix_dbt,
 
 	new_dbt->size = size;
 }
+
 
 static int
 meta_key_is_child_of_meta_key(char *child_key, char *parent_key)
@@ -355,6 +446,8 @@ no_advice:
 }
 #endif /* FTFS_PFSPLIT */
 
+/* env_keyrename: This is the callback for a range rename.
+ */
 static int
 env_keyrename(DB *db, const DBT *old_prefix,
               const DBT *new_prefix, const DBT *old_dbt,
@@ -455,78 +548,98 @@ static void env_keyprint(const DBT *key, bool is_trace_printable)
 #endif
 }
 
+
+/*
+ * Function: env_keylift
+ * ----------------------------
+ *   Do the key lifting based on lpivot and rpivot
+ *
+ *   Caller function: toku_ft_lift()
+ *
+ *   db     : a FAKE_DB with cmp_descriptor copied, to check whether it is data db or meta db.
+ *   lpivot : the left pivot (childkey)
+ *   rpivot : the right pivot (childkey)
+ *   set_lift: the function for setting the lifting result, i.e setkey_func()
+ *   set_extra: the destination for set_key
+ *
+ *   return : always 0 successful
+ */
 static int
-env_keylift(const DBT *lpivot, const DBT *rpivot,
+env_keylift(DB *db, const DBT *lpivot, const DBT *rpivot,
             void (*set_lift)(const DBT *lift, void *set_extra), void *set_extra)
 {
-	uint32_t cmp_len, lift_len;
-	const uint64_t *lp64, *rp64;
-	const uint8_t *lp8, *rp8;
-	char *lift_key;
-	DBT lift_dbt;
+    uint32_t cmp_len, lift_len, i;
+    char *lift_key;
+    DBT lift_dbt;
 
-	cmp_len = (lpivot->size < rpivot->size) ? lpivot->size : rpivot->size;
-	lp64 = (uint64_t *)lpivot->data;
-	rp64 = (uint64_t *)rpivot->data;
-	while (cmp_len >= 8 && *lp64 == *rp64) {
-		cmp_len -= 8;
-		lp64 += 1;
-		rp64 += 1;
-	}
-	lp8 = (uint8_t *)lp64;
-	rp8 = (uint8_t *)rp64;
-	while (cmp_len > 0 && *lp8 == *rp8) {
-		cmp_len -= 1;
-		lp8 += 1;
-		rp8 += 1;
-	}
+    cmp_len = (lpivot->size < rpivot->size) ? lpivot->size : rpivot->size;
 
-	lift_len = lp8 - (uint8_t *)lpivot->data;
-	if (lift_len == 0) {
-		lift_key = NULL;
-	} else {
-		lift_key = sb_malloc(lift_len);
-		if (lift_key == NULL)
-			return -ENOMEM;
-		memcpy(lift_key, lpivot->data, lift_len);
-	}
-	dbt_setup(&lift_dbt, lift_key, lift_len);
-	set_lift(&lift_dbt, set_extra);
-	if (lift_len != 0)
-		sb_free(lift_key);
+    if (cmp_len == 0) {
+        lift_len = 0;
+        goto set_lift;
+    }
 
-	return 0;
+    if (IS_DATA_DESC(db->cmp_descriptor->dbt)) {
+        cmp_len -= 8;
+    } else {
+        BUG_ON(!IS_META_DESC(db->cmp_descriptor->dbt));
+    }
+
+    lift_len = 0;
+    for (i = 0; i < cmp_len; i++) {
+        if (((char *)lpivot->data)[i] != ((char *)rpivot->data)[i])
+            break;
+        if (((char *)lpivot->data)[i] == FTFS_SLASH_CHAR ||
+            ((char *)lpivot->data)[i] == FTFS_NULL_CHAR
+            ) {
+            lift_len = i + 1;
+        }
+    }
+
+set_lift:
+    lift_key = (lift_len == 0) ? NULL : lpivot->data;
+    dbt_setup(&lift_dbt, lift_key, lift_len);
+    set_lift(&lift_dbt, set_extra);
+
+    return 0;
 }
 
+
+/*
+ * Function: env_keyliftkey
+ * ----------------------------
+ *   Construct a new lifted key
+ *
+ *   Caller function: toku_ft_lift_key()
+ *
+ *   key    : the input key
+ *   lifted : the lifted part
+ *   set_key: the function for setting the result, i.e setkey_func()
+ *   set_extra: the destination for set_key
+ *
+ *   returns: 0 (sucessful) or -EINVAL
+ */
 static int
 env_keyliftkey(const DBT *key, const DBT *lifted,
                void (*set_key)(const DBT *new_key, void *set_extra),
                void *set_extra)
 {
-	uint32_t new_key_len;
-	char *new_key;
-	DBT new_key_dbt;
+    uint32_t new_key_len;
+    char *new_key;
+    DBT new_key_dbt;
 
-	// lifted not matching prefix, we cant lift
-	if (lifted->size >= key->size ||
-            memcmp(key->data, lifted->data, lifted->size) != 0) {
-		return -EINVAL;
-	}
-	new_key_len = key->size - lifted->size;
-	if (new_key_len == 0) {
-		new_key = NULL;
-	} else {
-		new_key = sb_malloc(new_key_len);
-		if (new_key == NULL)
-			return -ENOMEM;
-		memcpy(new_key, key->data + lifted->size, new_key_len);
-	}
-	dbt_setup(&new_key_dbt, new_key, new_key_len);
-	set_key(&new_key_dbt, set_extra);
-	if (new_key_len != 0)
-		sb_free(new_key);
+    if (lifted->size > key->size ||
+        memcmp(key->data, lifted->data, lifted->size) != 0
+        ) {
+        return -EINVAL;
+    }
 
-	return 0;
+    new_key_len = key->size - lifted->size;
+    new_key = (new_key_len == 0) ? NULL : key->data + lifted->size;
+    dbt_setup(&new_key_dbt, new_key, new_key_len);
+    set_key(&new_key_dbt, set_extra);
+
+    return 0;
 }
 
 static int
@@ -580,16 +693,104 @@ struct block_update_cb_info {
 	char buf[];
 };
 
+/*
+ * Merge an update insert with an indirect value from the basement
+ * node. `new_page` is the output page and return value is the new
+ * size of the new indirect value.
+ *
+ * `new_page` is a page which is not yet inserted into the page cache.
+ */
+static size_t update_indirect_old_val(const DBT *old_val,
+				   struct page **new_page,
+				   const struct block_update_cb_info *info)
+{
+	struct ftfs_indirect_val msg_val;
+	struct page *ft_page;
+	struct page *page;
+	unsigned long pfn;
+	char *src;
+	char *dest;
+	size_t newval_size;
+
+	/* Verify the size */
+	if (sizeof(struct ftfs_indirect_val) != old_val->size) {
+		printk("%s:old_val->size=%d\n", __func__, old_val->size);
+		toku_dump_hex("old_val:", old_val->data, old_val->size);
+		BUG();
+	}
+	/* Copy the value and get the pfn */
+	memcpy(&msg_val, old_val->data, sizeof(struct ftfs_indirect_val));
+	pfn = msg_val.pfn;
+	if (!pfn_valid(pfn)) {
+		printk("%s:flags=%d, pfn=%lu\n", __func__, old_val->flags, pfn);
+		BUG();
+	}
+	ft_page = pfn_to_page(pfn);
+	if (!PageUptodate(ft_page)) {
+		sb_wait_read_page(msg_val.pfn);
+	}
+	page = __ftfs_page_cache_alloc(FTFS_READ_PAGE_GFP);
+	/* copy data from ft page first */
+	preempt_disable();
+	src = kmap_atomic(ft_page);
+	dest = kmap_atomic(page);
+	memcpy(dest, src, msg_val.size);
+
+	/* Calculate the size of new message */
+	newval_size = info->offset + info->size;
+	if (msg_val.size > newval_size)
+		newval_size = msg_val.size;
+	/* zero out the bytes that not covered by update message */
+	if (info->offset > msg_val.size)
+		memset(dest + msg_val.size, 0,
+			info->offset - msg_val.size);
+	/* copy data from update message */
+	memcpy(dest + info->offset, info->buf, info->size);
+	/* unmap the pages */
+	kunmap_atomic(src);
+	kunmap_atomic(dest);
+	preempt_enable();
+	*new_page = page;
+	return newval_size;
+}
+
+/* `newval_size` is the size of data in the page.
+ * This function is to set up a new DBT for indirect value.
+ * DBT->data := new_msg_val and DBT->size := sizeof(*new_msg_val)
+ * Make sure DBT->type is DB_DBT_INDIRECT.
+ */
+void update_setup_new_val(DBT *val, struct page *new_page, size_t newval_size)
+{
+	struct ftfs_indirect_val *new_msg_val;
+	int new_size = newval_size;
+
+	BUG_ON(new_page == NULL);
+	new_msg_val = ftfs_alloc_msg_val();
+	BUG_ON(new_msg_val == NULL);
+	ftfs_inc_page_private_count(new_page);
+	ftfs_fill_msg_val(new_msg_val, page_to_pfn(new_page), new_size);
+	dbt_setup(val, new_msg_val, sizeof(*new_msg_val));
+	val->flags = DB_DBT_INDIRECT;
+}
+
+/*
+ * This is called to apply an upsert to a non-leaf node.
+ * key is the key, old_val is what is in the basement node
+ * extra is a DBT with the packed update message
+ *
+ * set_val is the function passed from ft code. It is used
+ * to insert the newly created value to the basement node.
+ */
 static int
 env_update_cb(DB *db, const DBT *key, const DBT *old_val, const DBT *extra,
               void (*set_val)(const DBT *newval, void *set_extra),
               void *set_extra)
 {
 	DBT val;
-	size_t newval_size;
-	void *newval;
+	size_t newval_size = 0;
+	void *newval = NULL;
 	const struct block_update_cb_info *info = extra->data;
-
+	struct page *page = NULL;
 	if (info->size == 0) {
 		// info->size == 0 means truncate
 		if (!old_val) {
@@ -610,29 +811,41 @@ env_update_cb(DB *db, const DBT *key, const DBT *old_val, const DBT *extra,
 			memcpy(newval, old_val->data, newval_size);
 		}
 	} else {
-		// update [info->offset, info->offset + info->size) to info->buf
-		newval_size = info->offset + info->size;
-		if (old_val && old_val->size > newval_size)
-			newval_size = old_val->size;
-		newval = sb_malloc(newval_size);
-		if (!newval)
-			return -ENOMEM;
-		if (old_val) {
-			// copy old val here
-			memcpy(newval, old_val->data, old_val->size);
-			// fill the place that is not covered by old_val
-			//  nor info->buff with 0
-			if (info->offset > old_val->size)
-				memset(newval + old_val->size, 0,
-				       info->offset - old_val->size);
+		if (old_val && old_val->flags == DB_DBT_INDIRECT) {
+			newval_size = update_indirect_old_val(old_val, &page, info);
 		} else {
-			if (info->offset > 0)
-				memset(newval, 0, info->offset);
+			// Normal handling path when old val is null or regular value
+			newval_size = info->offset + info->size;
+			if (old_val && old_val->size > newval_size)
+				newval_size = old_val->size;
+			newval = kmalloc(newval_size, GFP_KERNEL);
+			if (!newval)
+				return -ENOMEM;
+			if (old_val) {
+				// copy old val here
+				memcpy(newval, old_val->data, old_val->size);
+				// fill the place that is not covered by old_val
+				//  nor info->buff with 0
+				if (info->offset > old_val->size)
+					memset(newval + old_val->size, 0,
+					       info->offset - old_val->size);
+			} else {
+				if (info->offset > 0)
+					memset(newval, 0, info->offset);
+			}
+			memcpy(newval + info->offset, info->buf, info->size);
 		}
-		memcpy(newval + info->offset, info->buf, info->size);
 	}
 
-	dbt_setup(&val, newval, newval_size);
+	if (old_val && old_val->flags == DB_DBT_INDIRECT) {
+		/* newval_size is assigned to
+		 * the size field of ftfs_indirect_val
+		 */
+		update_setup_new_val(&val, page, newval_size);
+		BUG_ON(val.flags != DB_DBT_INDIRECT);
+	} else {
+		dbt_setup(&val, newval, newval_size);
+	}
 	set_val(&val, set_extra);
 	sb_free(newval);
 
@@ -705,6 +918,7 @@ int nb_bstore_env_open(struct ftfs_sb_info *sbi)
 		printk(KERN_ERR "nb_bstore_open: Failed to bstore txn begin %d\n", r);
 		goto err_close_env;
 	}
+
 	if (!sbi->is_rotational) {
 		r = sbi->data_db->set_compression_method(sbi->data_db, TOKU_NO_COMPRESSION);
 		if (r) {
@@ -713,6 +927,7 @@ int nb_bstore_env_open(struct ftfs_sb_info *sbi)
 			goto err_close_env;
 		}
 	}
+
 	r = sbi->data_db->open(sbi->data_db, txn, DATA_DB_NAME, NULL,
 	                       DB_BTREE, db_flags, 0644);
 	if (r) {
@@ -726,6 +941,7 @@ int nb_bstore_env_open(struct ftfs_sb_info *sbi)
 		nb_bstore_txn_abort(txn);
 		goto err_close_env;
 	}
+
 	if (!sbi->is_rotational) {
 		r = sbi->meta_db->set_compression_method(sbi->meta_db, TOKU_NO_COMPRESSION);
 		if (r) {
@@ -734,6 +950,7 @@ int nb_bstore_env_open(struct ftfs_sb_info *sbi)
 			goto err_close_env;
 		}
 	}
+
 	r = sbi->meta_db->open(sbi->meta_db, txn, META_DB_NAME, NULL,
 	                       DB_BTREE, db_flags, 0644);
 	if (r) {
@@ -741,6 +958,7 @@ int nb_bstore_env_open(struct ftfs_sb_info *sbi)
 		nb_bstore_txn_abort(txn);
 		goto err_close_env;
 	}
+
 	r = sbi->meta_db->change_descriptor(sbi->meta_db, txn, &meta_desc, DB_UPDATE_CMP_DESCRIPTOR);
 	if (r) {
 		printk(KERN_ERR "nb_bstore_open: Failed to change the meta db descriptor %d\n", r);
@@ -834,9 +1052,7 @@ int nb_bstore_meta_put(DB *meta_db, DBT *meta_dbt, DB_TXN *txn,
                          struct ftfs_metadata *metadata)
 {
 	DBT value;
-
 	dbt_setup(&value, metadata, sizeof(*metadata));
-
 	return meta_db->put(meta_db, txn, meta_dbt, &value, DB_PUT_FLAGS);
 }
 
@@ -854,12 +1070,19 @@ static unsigned char filetype_table[] = {
 
 #define nb_get_type(mode) filetype_table[(mode >> 12) & 15]
 
-int nb_bstore_meta_readdir(DB *meta_db, DBT *meta_dbt, DB_TXN *txn,
-                             struct dir_context *ctx)
+int nb_bstore_meta_readdir(struct super_block *sb, struct dentry *parent,
+			   DB *meta_db, DBT *meta_dbt,
+			   DB_TXN *txn, struct dir_context *ctx)
 {
 	int ret, r;
 	char *child_meta_key;
 	struct ftfs_metadata meta;
+#ifdef READ_DIR_OPT
+	struct dentry *child_dentry;
+	struct qstr this;
+	bool dentry_cached;
+	struct inode *inode;
+#endif
 	DBT child_meta_dbt, metadata_dbt;
 	DBC *cursor;
 	char *name;
@@ -881,24 +1104,83 @@ int nb_bstore_meta_readdir(DB *meta_db, DBT *meta_dbt, DB_TXN *txn,
 
 	dbt_setup(&metadata_dbt, &meta, sizeof(meta));
 	ret = meta_db->cursor(meta_db, txn, &cursor, DB_SEQ_READ);
+
 	if (ret)
 		goto out;
 
+	/* child_meta_dbt is the key; metadata_dbt is the value */
 	r = cursor->c_get(cursor, &child_meta_dbt, &metadata_dbt, DB_SET_RANGE);
+
 	while (!r) {
 		if (!meta_key_is_child_of_meta_key(child_meta_key, meta_dbt->data)) {
 			sb_free(child_meta_key);
 			ctx->pos = 3;
 			break;
 		}
+#ifdef FTFS_XATTR
+		if (strchr(nb_key_path(child_meta_key), NB_BSTORE_XATTR_DELIMITER) != NULL) {
+			r = cursor->c_get(cursor, &child_meta_dbt, &metadata_dbt, DB_NEXT);
+			continue;
+		}
+#endif /* End of FTFS_XATTR */
 		ino = meta.st.st_ino;
 		type = nb_get_type(meta.st.st_mode);
 		name = strrchr(nb_key_path(child_meta_key), '\x01') + 1;
+
+#ifdef READ_DIR_OPT
+		dentry_cached = true;
+		this.name = name;
+		this.len = strlen(name);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,19,99)
+		this.hash = full_name_hash(parent, name, this.len);
+#else
+		this.hash = full_name_hash(name, this.len);
+#endif
+		child_dentry = d_lookup(parent, &this);
+		if (!child_dentry) {
+			/* Alloc a new dentry */
+			child_dentry = d_alloc(parent, &this);
+			if (!child_dentry) {
+				printk("%s: d_alloc failed\n", __func__);
+				BUG();
+			}
+			dentry_cached = false;
+		}
+
+		if (!child_dentry->d_inode) {
+			/* Copy child's meta key */
+			DBT copy_meta_dbt;
+			r = dbt_alloc(&copy_meta_dbt, child_meta_dbt.size);
+			copy_meta_dbt.size = child_meta_dbt.size;
+			BUG_ON(r != 0);
+			memcpy(copy_meta_dbt.data, child_meta_dbt.data, child_meta_dbt.size);
+			/*
+			 * Setup inode for the child: either get it from inode cache
+			 * or allocate a new one
+			 */
+			inode = nb_setup_inode(sb, &copy_meta_dbt, &meta);
+			if (IS_ERR(inode)) {
+				printk("%s: nb_setup_inode failed\n", __func__);
+				BUG();
+			}
+			d_add(child_dentry, inode);
+			/* Make sure child_dentry is hashed */
+			BUG_ON(d_unhashed(child_dentry));
+			dput(child_dentry);
+		} else {
+			/* Do nothing */
+		}
+		/*
+		 * If the dentry was in dcache
+		 * do not change the refcount
+		 */
+		if (dentry_cached) {
+			dput(child_dentry);
+		}
+#endif
 		if (!dir_emit(ctx, name, strlen(name), ino, type))
 			break;
-
-		r = cursor->c_get(cursor, &child_meta_dbt, &metadata_dbt,
-		                  DB_NEXT);
+		r = cursor->c_get(cursor, &child_meta_dbt, &metadata_dbt, DB_NEXT);
 	}
 
 	if (r == DB_NOTFOUND) {
@@ -908,13 +1190,230 @@ int nb_bstore_meta_readdir(DB *meta_db, DBT *meta_dbt, DB_TXN *txn,
 	}
 
 	cursor->c_close(cursor);
-
 	if (r)
 		ret = r;
 
 out:
 	return ret;
 }
+
+#ifdef FTFS_XATTR
+ssize_t nb_bstore_xattr_get(DB *meta_db, DBT *meta_dbt, DB_TXN *txn,
+			    void *buf, size_t size) {
+	int r;
+	ssize_t ret;
+	DBT value;
+
+	dbt_setup(&value, buf, size);
+
+	r = meta_db->get(meta_db, txn, meta_dbt, &value, DB_GET_FLAGS);
+	ret = value.size;
+	if (!r && value.size < size)
+		memset(buf + value.size, 0, size - value.size);
+	if (r == DB_NOTFOUND)
+		ret = -ENODATA;
+
+	return ret;
+}
+
+int nb_bstore_xattr_put(DB *meta_db, DBT *meta_dbt, DB_TXN *txn,
+			const void *buf, size_t len) {
+	int ret;
+	DBT value;
+
+	dbt_setup(&value, buf, len);
+
+	ret = meta_db->put(meta_db, txn, meta_dbt, &value, DB_PUT_FLAGS);
+
+	return ret;
+}
+
+/*
+ * This function is used to convert the listxattr VFS function into KV ops,
+ * essentially placing the list of xattr keys in the buffer.
+ *
+ * It also does double-duty to query whether additional xattrs exist
+ *   (i.e., when buffer is null and size is zero).
+ *
+ * The behavior is to only fill up to buffer with data and return -ERANGE
+ * if the buffer cannot accept additional keys.
+ */
+int nb_bstore_xattr_list(DB *meta_db, DBT *meta_dbt, DB_TXN *txn,
+			 char *buffer, size_t size, ssize_t* offset)
+{
+	int r, name_len;
+	char *xattr_key;
+	DBT xattr_dbt, value_dbt;
+	DBC *cursor;
+	char *name;
+	// Buffer for the value
+	// XXX: This would be much simpler if c_get() accepted
+	//      a NULL value pointer.  Since we dont' expect xattrs
+	//      to be performance critical, let's just allocate a ginormous
+	//      scratch buffer for now, to keep things as simple as possible.
+	char *xattr_value = sb_malloc_sized(XATTR_SIZE_MAX, false);
+
+	// Temporary buffer for the key
+	xattr_key = sb_malloc(META_KEY_MAX_LEN);
+	if (xattr_key == NULL)
+		return -ENOMEM;
+	dbt_setup_buf(&xattr_dbt, xattr_key, META_KEY_MAX_LEN);
+	copy_xattr_dbt_from_meta_dbt(&xattr_dbt, meta_dbt, "", false);
+
+	dbt_setup(&value_dbt, xattr_value, XATTR_SIZE_MAX);
+	r = meta_db->cursor(meta_db, txn, &cursor, DB_CURSOR_FLAGS);
+	if (r) {
+		goto out;
+	}
+
+	// XXX: would be much cleaner if we can get a key without getting the value
+	for (r = cursor->c_get(cursor, &xattr_dbt, &value_dbt, DB_SET_RANGE);
+	     !r;
+	     r = cursor->c_get(cursor, &xattr_dbt, &value_dbt, DB_NEXT)) {
+
+		// If we hit a key that is not an extended attribute key for the same file,
+		//  we are on the next file
+		if (!key_is_xattr_of_meta_key(xattr_key, meta_dbt->data)) {
+			break;
+		}
+
+		name = strrchr(nb_key_path(xattr_key), NB_BSTORE_XATTR_DELIMITER) + 1;
+		name_len = strlen(name) + 1;
+		// We can have a case where buffer is NULL, and we just want to know roughly how many bytes of keys
+		//  we have
+		if (buffer) {
+			if (*offset + name_len < size) {
+				memcpy(buffer + *offset, name, name_len);
+			} else {
+				// No more space
+				r = -ERANGE;
+				break;
+			}
+		}
+		// Still update the offset even if buffer is NULL
+		(*offset) += name_len;
+	}
+
+	if (r == DB_NOTFOUND) {
+		r = 0;
+	}
+
+	cursor->c_close(cursor);
+out:
+	sb_free_sized(xattr_value, XATTR_SIZE_MAX);
+	sb_free(xattr_key);
+	return r;
+}
+
+int nb_bstore_xattr_move(DB *meta_db, DBT *old_meta_dbt,
+			 DBT *new_meta_dbt, DB_TXN *txn)
+{
+	int r, ret;
+	char *it_key, *new_key;
+	// Just start with the max size, for simplicity.
+	// We don't expect heavy or performance-critical use of xattrs in general
+	size_t xattr_buf_size = XATTR_SIZE_MAX;
+	char *xattr_buf = sb_malloc_sized(xattr_buf_size, false);
+	DBT val_dbt, key_dbt, new_key_dbt;
+	DBC *cursor;
+
+	if (!xattr_buf) return -ENOMEM;
+
+	// setup DBTs for move
+	ret = -ENOMEM;
+	it_key = new_key = NULL;
+	if ((it_key = sb_malloc(KEY_MAX_LEN)) == NULL)
+		goto out;
+	if ((new_key = sb_malloc(KEY_MAX_LEN)) == NULL)
+		goto free_out;
+
+	dbt_setup_buf(&key_dbt, it_key, KEY_MAX_LEN);
+	dbt_setup_buf(&new_key_dbt, new_key, KEY_MAX_LEN);
+	dbt_setup_buf(&val_dbt, xattr_buf, xattr_buf_size);
+
+	copy_xattr_dbt_from_meta_dbt(&key_dbt, old_meta_dbt, "", false);
+	ret = meta_db->cursor(meta_db, txn, &cursor, DB_CURSOR_FLAGS);
+	if (ret)
+		goto free_out;
+
+	r = cursor->c_get(cursor, &key_dbt, &val_dbt, DB_SET_RANGE);
+
+	while (!r) {
+		if (!key_is_xattr_of_meta_key(key_dbt.data, old_meta_dbt->data)) {
+			break;
+		}
+
+		copy_xattr_dbt_movdir(old_meta_dbt, new_meta_dbt,
+				     &key_dbt, &new_key_dbt);
+		ret = meta_db->put(meta_db, txn, &new_key_dbt, &val_dbt,
+				   DB_PUT_FLAGS);
+		if (ret)
+			goto freak_out;
+
+		/* XXX: Maybe use a range delete afterward instead
+		 *      of deleting one by one.
+		 */
+		ret = meta_db->del(meta_db, txn, &key_dbt,
+				   DB_DEL_FLAGS);
+		if (ret)
+			goto freak_out;
+
+		r = cursor->c_get(cursor, &key_dbt, &val_dbt,
+				  DB_NEXT);
+	}
+
+	if (r && r != DB_NOTFOUND) {
+		ret = r;
+		goto freak_out;
+	}
+
+freak_out:
+	cursor->c_close(cursor);
+
+free_out:
+	sb_free_sized(xattr_buf, xattr_buf_size);
+	if (new_key)
+		sb_free(new_key);
+	if (it_key)
+		sb_free(it_key);
+out:
+	return ret;
+}
+
+/* Deletes all extended attributes for given meta_dbt */
+int nb_bstore_xattr_del(DB *meta_db, DBT *meta_dbt, DB_TXN *txn)
+{
+	int ret;
+	char *min_key;
+	char *max_key;
+	DBT min_key_dbt, max_key_dbt;
+
+	min_key = sb_malloc(META_KEY_MAX_LEN);
+	if (min_key == NULL)
+		return -ENOMEM;
+	max_key = sb_malloc(META_KEY_MAX_LEN);
+	if (max_key == NULL) {
+		sb_free(min_key);
+		return -ENOMEM;
+	}
+
+	dbt_setup_buf(&min_key_dbt, min_key, META_KEY_MAX_LEN);
+	dbt_setup_buf(&max_key_dbt, max_key, META_KEY_MAX_LEN);
+
+	copy_xattr_dbt_from_meta_dbt(&min_key_dbt, meta_dbt, "", false);
+	copy_xattr_dbt_from_meta_dbt(&max_key_dbt, meta_dbt, "\xff", false);
+
+	ret = meta_db->del_multi(meta_db, txn,
+	                         &min_key_dbt,
+	                         &max_key_dbt,
+	                         0, 0);
+
+	// These calls will free min_key and max_key
+	dbt_destroy(&min_key_dbt);
+	dbt_destroy(&max_key_dbt);
+	return ret;
+}
+#endif /* End of FTFS_XATTR */
 
 int nb_bstore_get(DB *data_db, DBT *data_dbt, DB_TXN *txn, void *buf)
 {
@@ -932,6 +1431,23 @@ int nb_bstore_get(DB *data_db, DBT *data_dbt, DB_TXN *txn, void *buf)
 	return ret;
 }
 
+/**
+ * Called in ftfs_read_page(). The returned value is of type ftfs_indirect_val.
+ * The returned value is copied to buf.
+ */
+int ftfs_bstore_get_msg_val(DB *data_db, DBT *data_dbt, DB_TXN *txn, void *buf)
+{
+	int ret;
+	DBT value;
+
+	dbt_setup(&value, buf, FTFS_BSTORE_BLOCKSIZE);
+
+	ret = data_db->get(data_db, txn, data_dbt, &value, DB_GET_FLAGS);
+	if (ret == DB_NOTFOUND)
+		ret = -ENOENT;
+	return ret;
+}
+
 /* Use a point query for prefetch */
 static int nb_bstore_prefetch(DB *data_db, DBT *data_dbt, DB_TXN *txn, void *buf)
 {
@@ -943,12 +1459,8 @@ static int nb_bstore_prefetch(DB *data_db, DBT *data_dbt, DB_TXN *txn, void *buf
 	ret = data_db->get(data_db, txn, data_dbt, &value, DB_SEQ_READ);
 	if (!ret && value.size < FTFS_BSTORE_BLOCKSIZE)
 		memset(buf + value.size, 0, FTFS_BSTORE_BLOCKSIZE - value.size);
-	if (ret == DB_NOTFOUND)
-		ret = -ENOENT;
-
 	return ret;
 }
-
 
 // size of buf must be FTFS_BLOCK_SIZE
 int nb_bstore_put(DB *data_db, DBT *data_dbt, DB_TXN *txn,
@@ -965,6 +1477,271 @@ int nb_bstore_put(DB *data_db, DBT *data_dbt, DB_TXN *txn,
 
 	return ret;
 }
+
+/* For page sharing read path */
+struct ftfs_scan_msg_val_cb_info {
+	char *meta_key;
+	struct address_space *mapping;
+	pgoff_t *page_offsets;
+	unsigned long *pfn_arr;
+	unsigned long nr_to_read;
+	int index;
+	int do_continue;
+};
+
+/*
+ * This function is to insert a shared page into page cache.
+ * this is called by the range query callback, while a read is in progress,
+ * to add the pages to the page cache. The read may not be complete yet,
+ * and the page will remain locked (ftfs_lock_page) until the read
+ * finishes (and the page is marked up to date by SFS in the read callback.
+ *
+ * ftfs_lock_page is held while a page I/O is in progress, and will be
+ * checked by subsequent readers to avoid duplicate read requests.
+ *
+ * We insert the page denoted by the PFN in the indirect value.
+ * The content in the page is not necessarily valid.
+ * VFS needs to wait for the data to be up-to-date.
+ * Up-to-date flag will be turned on by SFS callback function.
+ * Here we just insert the page to page cache
+ */
+static inline void ftfs_insert_shared_page(struct address_space *mapping,
+		pgoff_t offset, struct page *page)
+{
+	struct ftfs_page_private *priv = FTFS_PAGE_PRIV(page);
+	int ret;
+	int g_count;
+	int i_count;
+	/* lock_page before we add it to page cache. page->index and
+	 * page->mapping, page->_count are changed when being added to
+	 * page cache. The lock is to protect them.
+	 * Also, page->priv, page->flag are changed in this function.
+	 * Use lock_page to protect them as well.
+	 */
+	lock_page(page);
+	/*
+	 * This function is used to add a page to the pagecache.
+	 * It must be locked.
+	 */
+	ret = add_to_page_cache_locked(page, mapping, offset, GFP_KERNEL);
+	BUG_ON(ret);
+
+	g_count = ftfs_read_page_count(page);
+	i_count = atomic_read(&priv->_count);
+	/*
+	 * Sanity Check: the page count should be 2: one from page cache
+	 * and one from the ft tree
+	 */
+	if (g_count != 2) {
+		printk("%s: page->_count=%d\n", __func__, g_count);
+		BUG();
+	}
+	/*
+	 * Sanity Check: the internal count should be 1 or 2 unless
+	 * something unexpected happend, which we need to understand.
+	 */
+	if (i_count != 2 && i_count != 1) {
+		printk("%s: priv->_count=%d\n", __func__, i_count);
+		BUG();
+	}
+	SetPagePrivate(page);
+	ftfs_set_page_private(page_to_pfn(page), FT_MSG_VAL_NB_READ);
+	unlock_page(page);
+}
+
+/*
+ * During a range query, this callback is called on
+ * every key/value pair, passed in as an argument
+ * along with an extra (pointer to a ftfs_cb_scan_info).
+ * This is used to either copy the values to a buffer,
+ * or insert them into the page cache.
+ *
+ * For indirect blocks, the read may not have finished and
+ * may be ongoing when this is called. The uptodate flag
+ * on the page is set when the read is finished.
+ * FTFS_READAHEAD_INDEX_SKIP is used to indicate that this page
+ * is not needed because it is already in cache.
+ */
+static int ftfs_scan_msg_val_cb(DBT const *key, DBT const *val, void *extra)
+{
+	char *data_key = key->data;
+	struct ftfs_scan_msg_val_cb_info *info = extra;
+	pgoff_t *page_offsets = info->page_offsets;
+	struct ftfs_indirect_val *msg_val = val->data;
+	int i = info->index;
+	struct page *page;
+	pgoff_t key_blk_num;
+	int ret;
+	/* Test data_key belongs to the file denoted by the meta_key.
+	 * Note that meta_key always ends with 0x00,
+	 * data_key = meta_key :: blk_id.
+	 * We can use strcmp to test whether a data_key belongs to
+	 * a file.
+	 * If the data_key does not belong to the file we are
+	 * accessing now, we set do_continue to false.
+	 */
+	if (!key_is_same_of_key(data_key, info->meta_key)) {
+		info->do_continue = 0;
+		return 0;
+	}
+
+	key_blk_num = nb_data_key_get_blocknum(data_key, key->size);
+	/* If the page read from ft layer has index smaller
+	 * than the one needed by page cache, we should
+	 * continue the cursor reading. Some pages in
+	 * the requested ranges may be already in page cache.
+	 * we should skip them.
+	 */
+	if (key_blk_num - 1 < page_offsets[i]) {
+		info->do_continue = i < info->nr_to_read;
+	} else if (i < info->nr_to_read && page_offsets[i] == key_blk_num - 1) {
+		if (val->flags != DB_DBT_INDIRECT) {
+			char *buf;
+			page = __ftfs_page_cache_alloc(FTFS_READ_PAGE_GFP);
+			preempt_disable();
+			buf = kmap_atomic(page);
+			memcpy(buf, val->data, val->size);
+			kunmap_atomic(buf);
+			preempt_enable();
+			/*
+			 * We copied the data to this newly-allocated page. The data
+			 * must be valid. We need to set it to up-to-date.
+			 * Also, we don't need to call lock_page because it is just
+			 * allocated here and no one is referencing it.
+			*/
+			SetPageUptodate(page);
+			/* Insert this newly allocated page to page cache */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,19,99)
+			__SetPageLocked(page);
+#else /* LINUX_VERSION_CODE */
+			__set_page_locked(page);
+#endif
+			ret = add_to_page_cache_locked(page, info->mapping, page_offsets[i], GFP_KERNEL);
+			BUG_ON(ret);
+			put_page(page);
+			unlock_page(page);
+		} else {
+			BUG_ON(!pfn_valid(msg_val->pfn));
+			page = pfn_to_page(msg_val->pfn);
+			ftfs_insert_shared_page(info->mapping, page_offsets[i], page);
+#ifdef FT_INDIRECT_DEBUG
+			{
+				char *buf = kmap(page);
+				pgoff_t stored_idx;
+				memcpy(&stored_idx, buf, sizeof(stored_idx));
+				if (stored_idx != page->index) {
+					printk("stored_idx=%lu, page->index=%lu\n",
+						stored_idx, page->index);
+					BUG();
+				}
+				kunmap(page);
+			}
+#endif
+		}
+		/*
+		 * This is returned to the caller of the range query with
+		 * all of the page frame number.
+		 */
+		info->pfn_arr[i] = page_to_pfn(page);
+		/* move forward the index of page offset */
+		i++;
+		/* If we are skipping a page in the file, we set
+		 * that entry in page_offsets to FTFS_READAHEAD_INDEX_SKIP (not zero).
+		 * info->index and info>do_continue indicate that
+		 * we have not finished the range. The range query
+		 * callback is responsible to indicate that it has
+		 * seen the last thing in the range.
+		 *
+		 * Make sure the ith is not zero.
+		*/
+		while (i < info->nr_to_read && info->page_offsets[i] == FTFS_READAHEAD_INDEX_SKIP)
+			i++;
+		info->index = i;
+		info->do_continue = i < info->nr_to_read;
+	}
+	return 0;
+}
+
+/* return the number of msg_val read from ft code.
+ * This is in support of read-ahead. A range query is issued here
+ * and this function fills individual pages from the range query
+ * results (calling next in this function)
+ *
+ * The page offsets are typically contiguous, but there can be
+ * individual pages already in cache that should be skipped.
+ */
+int ftfs_bstore_scan_msg_vals(DB *data_db, DBT *meta_dbt, DB_TXN *txn,
+		pgoff_t *page_offsets, unsigned long *pfn_arr,
+		unsigned long nr_to_read, struct address_space *mapping,
+		unsigned long last_offset)
+{
+	int ret, r;
+	struct ftfs_scan_msg_val_cb_info info;
+	DBT data_dbt;
+	DBC *cursor;
+	int i = 0;
+	unsigned long curr_offset;
+	unsigned int cursor_flags;
+
+	i = 0;
+	while (i < nr_to_read && page_offsets[i] == FTFS_READAHEAD_INDEX_SKIP)
+		i++;
+	if (i == nr_to_read) {
+		return 0;
+	}
+
+	// Step 1: Seq read detection
+	curr_offset = page_offsets[i];
+	if ((curr_offset == 0 && last_offset == ULONG_MAX) || curr_offset == last_offset + 1) {
+		cursor_flags = DB_SEQ_READ;
+	} else {
+		cursor_flags = DB_CURSOR_FLAGS;
+	}
+
+	ret = alloc_data_dbt_from_meta_dbt(&data_dbt, meta_dbt, page_offsets[i]+1);
+	if (ret)
+		return ret;
+
+	// Step 2: Issue a range query
+	ret = data_db->cursor(data_db, txn, &cursor, cursor_flags);
+	if (ret)
+		goto free_out;
+
+	info.mapping = mapping;
+	info.meta_key = meta_dbt->data;
+	info.page_offsets = page_offsets;
+	info.pfn_arr = pfn_arr;
+	info.nr_to_read = nr_to_read;
+	info.index = i;
+
+	r = cursor->c_getf_set_range(cursor, 0, &data_dbt, ftfs_scan_msg_val_cb, &info);
+	while (info.do_continue && !r) {
+		r = cursor->c_getf_next(cursor, 0, ftfs_scan_msg_val_cb, &info);
+	}
+	if (r && r != DB_NOTFOUND)
+		ret = r;
+
+	r = cursor->c_close(cursor);
+	BUG_ON(r);
+free_out:
+	dbt_destroy(&data_dbt);
+	return ret;
+}
+
+/* Use db->seq_put to insert indirect value to the tree */
+int nb_bstore_put_indirect_page(DB *data_db, DBT *data_dbt, DB_TXN *txn,
+                    struct ftfs_indirect_val *msg_val)
+{
+	int ret;
+	DBT value;
+
+	dbt_setup(&value, msg_val, sizeof(*msg_val));
+
+	ret = data_db->seq_put(data_db, txn, data_dbt, &value, DB_PUT_FLAGS);
+
+	return ret;
+}
+/* Page sharing code end */
 
 int nb_bstore_update(DB *data_db, DBT *data_dbt, DB_TXN *txn,
 		     const void *buf, size_t size, loff_t offset)
@@ -1117,9 +1894,11 @@ static int ftfs_scan_pages_cb(DBT const *key, DBT const *val, void *extra)
 		void *page_buf;
 
 		while (page_block_num < nb_data_key_get_blocknum(data_key, key->size)) {
-			page_buf = kmap(page);
+			preempt_disable();
+			page_buf = kmap_atomic(page);
 			memset(page_buf, 0, PAGE_SIZE);
-			kunmap(page);
+			kunmap_atomic(page_buf);
+			preempt_enable();
 
 			ftio_advance_page(ftio);
 			if (ftio_job_done(ftio))
@@ -1129,13 +1908,15 @@ static int ftfs_scan_pages_cb(DBT const *key, DBT const *val, void *extra)
 		}
 
 		if (page_block_num == nb_data_key_get_blocknum(data_key, key->size)) {
-			page_buf = kmap(page);
+			preempt_disable();
+			page_buf = kmap_atomic(page);
 			if (val->size)
 				memcpy(page_buf, val->data, val->size);
 			if (val->size < PAGE_SIZE)
 				memset(page_buf + val->size, 0,
 				       PAGE_SIZE - val->size);
-			kunmap(page);
+			kunmap_atomic(page_buf);
+			preempt_enable();
 			ftio_advance_page(ftio);
 		}
 
@@ -1153,9 +1934,11 @@ static inline void ftfs_bstore_fill_rest_page(struct ftio *ftio)
 
 	while (!ftio_job_done(ftio)) {
 		page = ftio_current_page(ftio);
-		page_buf = kmap(page);
+		preempt_disable();
+		page_buf = kmap_atomic(page);
 		memset(page_buf, 0, PAGE_SIZE);
-		kunmap(page);
+		kunmap_atomic(page_buf);
+		preempt_enable();
 		ftio_advance_page(ftio);
 	}
 }
@@ -1233,6 +2016,7 @@ struct betrfs_die_cb_info {
 	int *is_empty;
 };
 
+#ifdef FTFS_EMPTY_DIR_VERIFY
 static int nb_die_cb(DBT const *key, DBT const *val, void *extra)
 {
 	struct betrfs_die_cb_info *info = extra;
@@ -1242,7 +2026,6 @@ static int nb_die_cb(DBT const *key, DBT const *val, void *extra)
 	return 0;
 }
 
-#ifdef FTFS_EMPTY_DIR_VERIFY
 int nb_dir_is_empty(DB *meta_db, DBT *meta_dbt, DB_TXN *txn, int *is_empty)
 {
 	int ret, r;

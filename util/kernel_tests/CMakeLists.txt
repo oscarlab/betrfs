@@ -16,7 +16,6 @@ test_partitioned_counter
 )
 
 add_library(util_kernel_static STATIC ${util_kernel_srcs})
-maybe_add_gcov_to_libraries(util_static)
+maybe_add_gcov_to_libraries(util_kernel_static)
 set_target_properties(util_kernel_static PROPERTIES POSITION_INDEPENDENT_CODE ${STATIC_PIC})
 add_dependencies(util_kernel_static install_tdb_h)
-

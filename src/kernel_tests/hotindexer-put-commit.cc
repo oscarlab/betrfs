@@ -116,7 +116,7 @@ put_callback(DB *dest_db, DB *src_db, DBT_ARRAY *dest_keys, DBT_ARRAY *dest_vals
         memcpy(dest_val->data, src_val->data, src_val->size);
         dest_val->size = src_val->size;
     }
-    
+
     return 0;
 }
 
@@ -132,19 +132,19 @@ indexer_thread(void *arg) {
     struct indexer_arg *indexer_arg = (struct indexer_arg *) arg;
     DB_ENV *env = indexer_arg->env;
     int r;
-    
+
     DB_TXN *indexer_txn = NULL;
     r = env->txn_begin(env, NULL, &indexer_txn, 0); assert_zero(r);
-        
+
     DB_INDEXER *indexer = NULL;
     r = env->create_indexer(env, indexer_txn, &indexer, indexer_arg->src_db, indexer_arg->n_dest_db, indexer_arg->dest_db, NULL, 0); assert_zero(r);
-    
-    if (verbose) fprintf(stderr, "build start\n");
+
+    if (verbose) dprintf(STDERR, "build start\n");
     r = indexer->build(indexer); assert_zero(r);
-    if (verbose) fprintf(stderr, "build end\n");
-        
+    if (verbose) dprintf(STDERR, "build end\n");
+
     r = indexer->close(indexer); assert_zero(r);
-        
+
     r = indexer_txn->commit(indexer_txn, 0); assert_zero(r);
 
     return arg;
@@ -153,7 +153,7 @@ indexer_thread(void *arg) {
 static void
 verify_full(DB_ENV *env, DB *db, int n) {
     int r;
-    
+
     DB_TXN *txn = NULL;
     r = env->txn_begin(env, NULL, &txn, 0); assert_zero(r);
 
@@ -180,7 +180,7 @@ verify_full(DB_ENV *env, DB *db, int n) {
     assert(i == n);
     toku_free(key.data);
     toku_free(val.data);
-    
+
     r = cursor->c_close(cursor); assert_zero(r);
 
     r = txn->commit(txn, 0); assert_zero(r);
@@ -222,9 +222,9 @@ run_test(void) {
     toku_pthread_t pid;
     r = toku_pthread_create(&pid, NULL, indexer_thread, &indexer_arg); assert_zero(r);
 
-    if (verbose) fprintf(stderr, "commit start\n");
+    if (verbose) dprintf(STDERR, "commit start\n");
     r = txn->commit(txn, 0); assert_zero(r);
-    if (verbose) fprintf(stderr, "commit end\n");
+    if (verbose) dprintf(STDERR, "commit end\n");
 
     void *ret;
     r = toku_pthread_join(pid, &ret); assert_zero(r);
@@ -262,4 +262,3 @@ int test_hotindexer_put_commit(void) {
 
     return 0;
 }
-

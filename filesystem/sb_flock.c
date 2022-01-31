@@ -2,12 +2,7 @@
 // vim: set tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab:
 #include <linux/slab.h>
 #include <linux/version.h>
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
-#include <asm/uaccess.h>
-#else
 #include <linux/uaccess.h>
-#endif
 
 struct mutex lock_list;
 DEFINE_MUTEX(lock_list);

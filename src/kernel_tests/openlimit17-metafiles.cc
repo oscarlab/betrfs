@@ -97,6 +97,10 @@ PATENT RIGHTS GRANT:
 extern "C" int test_openlimit17_metafiles(void);
 int test_openlimit17_metafiles(void) {
     int r;
+
+    printf("%s: This unit test expects to trigger some warning messages."
+           "It limits the count of file descriptors and open() can fail"
+           "when the number of file descriptors exceed the limit\n", __func__);
     pre_setup();
     r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
     assert(r == 0);
@@ -117,7 +121,7 @@ int test_openlimit17_metafiles(void) {
     r = setrlimit(RLIMIT_NOFILE, &nofile_limit);
     assert(r == 0);
 
-    // compute the number of unused file descriptors    
+    // compute the number of unused file descriptors
     int fds[N];
     for (int i = 0; i < N; i++) {
         fds[i] = -1;
@@ -139,7 +143,7 @@ int test_openlimit17_metafiles(void) {
         nofile_limit.rlim_cur = n;
         r = setrlimit(RLIMIT_NOFILE, &nofile_limit);
         assert(r == 0);
-        
+
         r = db_env_create(&env, 0);
         assert(r == 0);
         r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL|DB_CREATE|DB_THREAD|DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_TXN|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO);

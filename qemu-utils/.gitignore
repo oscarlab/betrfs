@@ -1,13 +1,15 @@
-#don't include virtual disks
-linuxdisk.raw
+# virtual disks
+linuxdisk-*.raw
+linuxdisk-*.qcow2
 ftfs-southbound.raw
-rootfs.raw
-device.raw
 
-#qemu logs
+# qemu logs
 *.log
 *.log.last
 kvm.pid
 
-#temp files
+# temp files
 *~
+
+# ko files copied for debugging in VM
+*.ko

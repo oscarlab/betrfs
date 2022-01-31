@@ -1,12 +1,25 @@
 /* -*- mode: C++; c-basic-offset: 8; indent-tabs-mode: t -*- */
 // vim: set tabstop=8 softtabstop=8 shiftwidth=8 noexpandtab:
 //
+#ifdef __KERNEL__
 #include <linux/string.h>
 #include <linux/kernel.h>
 #include <linux/slab.h>
 #include "sb_pthread.h"
 
 extern int atoi(char *);
+#else
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <pthread.h>
+#include <errno.h>
+
+#define printk printf
+#define KERN_ALERT
+#define KERN_DEBUG
+
+#endif /* __KERNEL__ */
 
 /* unbound_insert tests */
 extern int test_ubi_root_chkpt(void);
@@ -15,10 +28,8 @@ extern int test_ubi_root_chkpt(void);
 extern int perf_test_sequential_reads(void);
 extern int perf_test_sequential_writes(void);
 extern int test_test_cachesize(void);
-extern int test_slab(void);
 extern int test_assert(void);
 extern int test_directio(void);
-extern int list_open_southbound_files(void);
 extern int test_ftfs_realloc(void);
 extern int test_remove(void);
 extern int test_preadwrite(void);
@@ -37,7 +48,6 @@ extern int test_statfs(void);
 extern int filesize_test(void);
 extern int test_fsync(void);
 extern int test_readlink(void);
-extern int test_f_all(void);
 extern int test_shortcut(void);
 extern int test_bug1381(void);
 extern int test_cursor_step_over_delete(void);
@@ -48,7 +58,6 @@ extern int test_redirect(void);
 //extern int test_create_datadir(void);
 extern int test_openclose_dir(void);
 extern int test_recursive_deletion(void);
-extern int test_fgetc(void);
 extern int test_cachetable_all_write(void);
 //extern int test_list_mounts(void);
 /* southbound test ends */
@@ -78,7 +87,6 @@ extern int test_fair_rwlock(void);
 extern int test_msnfilter(void);
 extern int test_cpu_freq(void);
 extern int test_cpu_freq_openlimit17(void); // just a placeholder
-extern int test_hugepage(void);
 extern int test_range_buffer(void);
 extern int test_toku_malloc(void);
 extern int test_snprintf(void);
@@ -295,7 +303,7 @@ extern int test_le_cursor_right(void);
 extern int test_cachetable_clone_partial_fetch_pinned_node(void);
 extern int test_quicklz(void);
 extern int test_pick_child_to_flush(void);
-//extern int test_ft_overflow(void);
+extern int test_ft_overflow(void);
 extern int test_cachetable_simple_unpin_remove_checkpoint(void);
 extern int test_ft_serialize(void);
 extern int test_orthopush_flush(void);
@@ -613,15 +621,11 @@ extern int test_circle_log_overflow(void);
 
 int list_tests(void);
 
-int test_fail(void) { return -ENOSYS; }
-
 struct {
 	char *name;
 	int (*fn)(void);
 	int timeout;
 } tests[] = {
-	//{ "fail", test_fail , 5},
-	//{"logger-lists", logger_test_tables, 5},
 	{ "sfs-dio", test_sfs_dio_read_write, 5},
 	{"ubi-root-chkpt", test_ubi_root_chkpt, 5},
 	{"orthopush-flush", test_orthopush_flush, 5},
@@ -650,8 +654,6 @@ struct {
 	{ "test_log10", test_test_log10 , 5},
 	{ "test-update", test_update , 5},
 	//{ "test-prepare", test_test_prepare , 5},
-	//{ "test-prepare2", test_test_prepare2 , 5},
-	//{ "test-prepare3", test_test_prepare3, 5},
 	//{ "test_restrict", test_test_restrict , 5},
 	{ "test_db_change_xxx", test_test_db_change_xxx , 5},
 	{ "test_db_txn_locks_nonheaviside", test_test_db_txn_locks_nonheaviside , 5},
@@ -746,7 +748,6 @@ struct {
 	{ "test-abort4", test_test_abort4, 5},
 	{ "test-abort5", test_test_abort5, 5},
 	{ "test-abort-delete-first", test_test_abort_delete_first, 5},
-	{ "list-files", list_open_southbound_files , 5},
 	{ "list-tests", list_tests , 5},
 	{ "mempool",    test_mempool , 5},
 	{ "marked-omt", test_marked_omt , 5},
@@ -771,13 +772,11 @@ struct {
 	{ "msnfilter", test_msnfilter, 5},
 	{ "cpu-frequency", test_cpu_freq , 5},
 	{ "cpu-frequency-openlimit", test_cpu_freq_openlimit17, 5},
-	{ "hugepage", test_hugepage, 5},
 	{ "fsync-directory", test_fsync_directory, 5},
 	// Don't need this test anymore.  flock is not required in BetrFS---
 	//   superceded by VFS-level locking.
 	//{ "flock", test_flock, 5}, /* FIXME 4 shuffle test */
 	{ "fsync-files", test_fsync_files, 5},
-	{ "fgetc", test_fgetc, 5},
 
 	/*the following two tests are to be dropped*/
 	//{ "pthread-rwlock-rwr", test_pthread_rwlock_rwr, 5},
@@ -817,7 +816,6 @@ struct {
 	{ "manager_lm", test_manager_lm, 5},
 	{ "manager-status", test_manager_status, 5},
 	{ "omt-test", test_omt, 5},
-	{ "slab", test_slab, 5},
 	{ "assert", test_assert, 5},
 	{ "realloc", test_ftfs_realloc, 5},
 	{ "verify-unsorted-leaf", test_verify_unsorted_leaf, 5},
@@ -828,9 +826,7 @@ struct {
 	{ "readwrite", test_readwrite, 5},
 	{ "pwrite", test_pwrite, 5},
 	{ "write", test_write, 5},
-	{ "f-all", test_f_all, 5},
 	{ "shortcut", test_shortcut, 5},
-	{ "bug1381", test_bug1381, 5},
 	{ "cursor-step-over-delete", test_cursor_step_over_delete, 5},
 	{ "x1764-test", test_x1764, 5},
 	{ "isolation-test", test_isolation, 5},
@@ -940,7 +936,7 @@ struct {
 	{"cachetable-eviction-getandpin", test_cachetable_eviction_getandpin, 5},
 	{"cachetable-eviction-getandpin2", test_cachetable_eviction_getandpin2, 5},
 	{"cachetable-cleanerthread_attrs_accumulate", test_cachetable_cleanerthread_attrs_accumulate, 5},
-	{"cachetable-simple-pin", test_cachetable_simplepin_depnodes, 5},
+	{"cachetable-simple-pin-depnodes", test_cachetable_simplepin_depnodes, 5},
 	{"cachetable-simple-put", test_cachetablesimple_put_depnodes, 5},
 	{"cachetable-prefetch-maybegetandpin", test_cachetable_prefetch_maybegetandpin, 5},
 	{"cachetable-prefetch-getandpin", test_cachetable_prefetch_getandpin, 5},
@@ -1032,7 +1028,7 @@ struct {
 	{"le-cursor-right", test_le_cursor_right, 5},
 	{"cachetable-clone-partial-fetch-pinned-node", test_cachetable_clone_partial_fetch_pinned_node, 5},
 	{"test-quicklz", test_quicklz, 5},
-	//{"ft-overflow",test_ft_overflow, 5},
+	{"ft-overflow",test_ft_overflow, 5},
 	{"big-nested-aa",test_big_nested_abort_abort, 5},
 	{"big-nested-ac",test_big_nested_abort_commit, 5},
 	{"big-nested-cc",test_big_nested_commit_commit, 5},
@@ -1232,7 +1228,11 @@ int run_test(char * _test_name){
 	char * test_name;
 	int nsucc = 0;
 	int test_all = 0;
+#ifdef __KERNEL__
 	char *_test_name_copy = kmalloc(1 + strlen (_test_name), GFP_USER);
+#else
+	char *_test_name_copy = (char*) malloc(1 + strlen (_test_name));
+#endif
 
 	for (i = 0; i < sizeof(tests)/sizeof(tests[0]); i++) {
 
@@ -1295,8 +1295,11 @@ int run_test(char * _test_name){
 		       "</test_completion>\n");
 		result = -22;
 	}
+#ifdef __KERNEL__
 	kfree(_test_name_copy);
-
+#else
+	free(_test_name_copy);
+#endif
 	return result;
 }
 
@@ -1329,3 +1332,17 @@ int thread_run_test(char * test_name)
 
 	return test.retval;
 }
+
+#ifndef __KERNEL__
+int main(int argc, char *argv[]) {
+	int ret;
+	char *test_name = argv[1];
+	if (argc != 2) {
+		printf("Error: only accept one argument[test name]\n");
+		return -EINVAL;
+	}
+
+	ret = thread_run_test(test_name);
+	return ret;
+}
+#endif

@@ -116,7 +116,7 @@ struct __toku_db_internal {
     DICTIONARY_ID dict_id;        // unique identifier used by locktree logic
     toku::locktree *lt;
     struct simple_dbt skey, sval; // static key and value
-    bool key_compare_was_set;     // true if a comparison function was provided before call to db->open()  (if false, use environment's comparison function).  
+    bool key_compare_was_set;     // true if a comparison function was provided before call to db->open()  (if false, use environment's comparison function).
     char *dname;                  // dname is constant for this handle (handle must be closed before file is renamed)
     DB_INDEXER *indexer;
 };
@@ -138,7 +138,7 @@ struct __toku_db_env_internal {
     uint32_t open_flags;
     int open_mode;
     toku_env_errcall_t errcall;
-    void *errfile;
+    int errfile;
     const char *errpfx;
     char *dir;                  /* A malloc'd copy of the directory. */
     char *tmp_dir;
@@ -218,26 +218,26 @@ static inline void toku_env_run_lock_escalation_for_test(DB_ENV *env) {
 
 int toku_ydb_check_avail_fs_space(DB_ENV *env);
 
-void toku_ydb_error_all_cases(const DB_ENV * env, 
-                              int error, 
-                              bool include_stderrstring, 
-                              bool use_stderr_if_nothing_else, 
+void toku_ydb_error_all_cases(const DB_ENV * env,
+                              int error,
+                              bool include_stderrstring,
+                              bool use_stderr_if_nothing_else,
                               const char *fmt, va_list ap)
     __attribute__((format (printf, 5, 0)))
-    __attribute__((__visibility__("default"))); // this is needed by the C++ interface. 
+    __attribute__((__visibility__("default"))); // this is needed by the C++ interface.
 
 int toku_ydb_do_error (const DB_ENV *dbenv, int error, const char *string, ...)
                        __attribute__((__format__(__printf__, 3, 4)));
 
 /* Environment related errors */
 int toku_env_is_panicked(DB_ENV *dbenv);
-void toku_env_err(const DB_ENV * env, int error, const char *fmt, ...) 
+void toku_env_err(const DB_ENV * env, int error, const char *fmt, ...)
                          __attribute__((__format__(__printf__, 3, 4)));
 
-typedef enum __toku_isolation_level { 
+typedef enum __toku_isolation_level {
     TOKU_ISO_SERIALIZABLE=0,
     TOKU_ISO_SNAPSHOT=1,
-    TOKU_ISO_READ_COMMITTED=2, 
+    TOKU_ISO_READ_COMMITTED=2,
     TOKU_ISO_READ_UNCOMMITTED=3
 } TOKU_ISOLATION;
 
@@ -289,10 +289,10 @@ struct __toku_dbc_external {
     struct __toku_dbc          external_part;
     struct __toku_dbc_internal internal_part;
 };
-	
+
 #define dbc_struct_i(x) (&((struct __toku_dbc_external *)x)->internal_part)
 
-static inline int 
+static inline int
 env_opened(DB_ENV *env) {
     return env->i->cachetable != 0;
 }

@@ -133,7 +133,7 @@ static void setup (void) {
     { int chk_r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
     { int chk_r = db_env_create(&env, 0); CKERR(chk_r); }
     db_env_set_checkpoint_callback(checkpoint_callback_1, NULL);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     { int chk_r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
 }
 
@@ -143,7 +143,7 @@ static void cleanup (void) {
 
 static void run_test(void) {
     DB* db = NULL;
-    
+
     DBT orig_desc;
     memset(&orig_desc, 0, sizeof(orig_desc));
     orig_desc.size = sizeof(four_byte_desc);
@@ -160,14 +160,14 @@ static void run_test(void) {
     { int chk_r = db->close(db,0); CKERR(chk_r); }
 
     { int chk_r = db_create(&db, env, 0); CKERR(chk_r); }
-    { int chk_r = db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, 0, 0666); CKERR(chk_r); }    
+    { int chk_r = db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, 0, 0666); CKERR(chk_r); }
     assert_desc_four(db);
     { int chk_r = db->close(db,0); CKERR(chk_r); }
 
     { int chk_r = env->txn_checkpoint(env, 0, 0, 0); CKERR(chk_r); }
 
     { int chk_r = db_create(&db, env, 0); CKERR(chk_r); }
-    { int chk_r = db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, 0, 0666); CKERR(chk_r); }    
+    { int chk_r = db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, 0, 0666); CKERR(chk_r); }
     assert_desc_four(db);
     { int chk_r = db->close(db,0); CKERR(chk_r); }
 

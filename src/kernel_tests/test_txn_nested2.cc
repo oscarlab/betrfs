@@ -113,7 +113,7 @@ fillrandom(uint8_t buf[MAX_SIZE], uint32_t length) {
     uint32_t i;
     for (i = 0; i < length; i++) {
         buf[i] = random() & 0xFF;
-    } 
+    }
 }
 
 static void
@@ -152,7 +152,7 @@ setup_db (void) {
     r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
     assert(r==0);
     r = db_env_create(&env, 0); CKERR(r);
-    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL | DB_INIT_LOG | DB_INIT_LOCK | DB_INIT_TXN | DB_PRIVATE | DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); 
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL | DB_INIT_LOG | DB_INIT_LOCK | DB_INIT_TXN | DB_PRIVATE | DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
 
     {
@@ -218,7 +218,7 @@ initialize_db(void) {
 static void
 test_txn_nested_shortcut (int abort_at_depth) {
     int r;
-    if (verbose) { fprintf(stderr, "%s (%s):%d [abortdepth = %d]\n", __FILE__, __FUNCTION__, __LINE__, abort_at_depth); fflush(stderr); }
+    if (verbose) { dprintf(STDERR, "%s (%s):%d [abortdepth = %d]\n", __FILE__, __FUNCTION__, __LINE__, abort_at_depth);}
 
     setup_db();
     initialize_db();
@@ -241,7 +241,7 @@ test_txn_nested_shortcut (int abort_at_depth) {
         DB_TXN *commit_txn = txns[1];
         r = commit_txn->commit(commit_txn, DB_TXN_NOSYNC);
             CKERR(r);
-        verify_val(); 
+        verify_val();
     }
     close_db();
 }
@@ -249,7 +249,7 @@ test_txn_nested_shortcut (int abort_at_depth) {
 static void
 test_txn_nested_slow (int abort_at_depth) {
     int r;
-    if (verbose) { fprintf(stderr, "%s (%s):%d [abortdepth = %d]\n", __FILE__, __FUNCTION__, __LINE__, abort_at_depth); fflush(stderr); }
+    if (verbose) { dprintf(STDERR, "%s (%s):%d [abortdepth = %d]\n", __FILE__, __FUNCTION__, __LINE__, abort_at_depth);}
 
     setup_db();
     initialize_db();
@@ -273,7 +273,7 @@ test_txn_nested_slow (int abort_at_depth) {
         DB_TXN *commit_txn = txns[nest];
         r = commit_txn->commit(commit_txn, DB_TXN_NOSYNC);
             CKERR(r);
-        verify_val(); 
+        verify_val();
     }
     close_db();
 }

@@ -103,7 +103,7 @@ toku_gettime (toku_timespec_t *a) {
     a->tv_sec  = tv.tv_sec;
     a->tv_nsec = tv.tv_usec * 1000LL;
 }
-    
+
 
 static int
 timespec_compare (toku_timespec_t *a, toku_timespec_t *b) {
@@ -132,7 +132,7 @@ minicron_do (void *pv)
         if (p->period_in_ms == 0) {
             // if we aren't supposed to do it then just do an untimed wait.
             toku_cond_wait(&p->condvar, &p->mutex);
-        } 
+        }
         else if (p->period_in_ms <= 1000) {
             toku_mutex_unlock(&p->mutex);
             usleep(p->period_in_ms * 1000);
@@ -152,7 +152,7 @@ minicron_do (void *pv)
                 int r = toku_cond_timedwait(&p->condvar, &p->mutex, &wakeup_at);
 
 
-                if (r!=0 && r!=ETIMEDOUT) fprintf(stderr, "%s:%d r=%d (%s)", __FILE__, __LINE__, r, strerror(r));
+                if (r!=0 && r!=ETIMEDOUT) dprintf(STDERR, "%s:%d r=%d (%s)", __FILE__, __LINE__, r, strerror(r));
                 assert(r==0 || r==ETIMEDOUT);
 
             }
@@ -175,7 +175,7 @@ minicron_do (void *pv)
                 int r = p->f(p->arg);
                 assert(r==0);
                 toku_mutex_lock(&p->mutex);
-                
+
             }
         }
         else if (p->period_in_ms != 0) {
@@ -194,7 +194,7 @@ toku_minicron_setup(struct minicron *p, uint32_t period_in_ms, int(*f)(void *), 
     p->arg = arg;
     toku_gettime(&p->time_of_last_call_to_f);
     //printf("now=%.6f", p->time_of_last_call_to_f.tv_sec + p->time_of_last_call_to_f.tv_nsec*1e-9);
-    p->period_in_ms = period_in_ms; 
+    p->period_in_ms = period_in_ms;
     p->do_shutdown = false;
     toku_mutex_init(&p->mutex, 0);
     toku_cond_init (&p->condvar, 0);
@@ -207,13 +207,13 @@ toku_minicron_setup_debug(struct minicron *p, uint32_t period_in_ms, int(*f)(voi
     p->arg = arg;
     toku_gettime(&p->time_of_last_call_to_f);
     //printf("now=%.6f", p->time_of_last_call_to_f.tv_sec + p->time_of_last_call_to_f.tv_nsec*1e-9);
-    p->period_in_ms = period_in_ms; 
+    p->period_in_ms = period_in_ms;
     p->do_shutdown = false;
     toku_mutex_init(&p->mutex, 0);
     toku_cond_init (&p->condvar, 0);
     return toku_pthread_create_debug(&p->thread, 0, minicron_do, p, minicron_debug_str);
 }
-    
+
 void
 toku_minicron_change_period(struct minicron *p, uint32_t new_period)
 {
@@ -250,7 +250,7 @@ toku_minicron_shutdown(struct minicron *p) {
     void *returned_value;
     //printf("%s:%d joining\n", __FILE__, __LINE__);
     int r = toku_pthread_join(p->thread, &returned_value);
-    if (r!=0) fprintf(stderr, "%s:%d r=%d (%s)\n", __FILE__, __LINE__, r, strerror(r));
+    if (r!=0) dprintf(STDERR, "%s:%d r=%d (%s)\n", __FILE__, __LINE__, r, strerror(r));
     assert(r==0);  assert(returned_value==0);
     toku_cond_destroy(&p->condvar);
     toku_mutex_destroy(&p->mutex);

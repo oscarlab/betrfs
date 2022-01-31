@@ -94,8 +94,9 @@ PATENT RIGHTS GRANT:
 #include <toku_stdint.h>
 #include <toku_os.h>
 
+extern "C" int test_cpu_freq_openlimit17(void);
 // verify that we can compute processor frequency even when out of file descriptors.
-#if 0
+#ifndef TOKU_LINUX_MODULE
 int verbose = 0;
 
 static void run_test(void) {
@@ -108,7 +109,7 @@ static void run_test(void) {
     assert(cpuhz>100000000);
 }
 
-int main(void) {
+int test_cpu_freq_openlimit17(){
     run_test();
     while (1) {
         int fd = open("/dev/null", O_RDONLY);
@@ -118,12 +119,9 @@ int main(void) {
     run_test();
     return 0;
 }
-#endif
-
-extern "C" int test_cpu_freq_openlimit17(void);
-
+#else
 int test_cpu_freq_openlimit17(){
-
     printf("The test, cpu_freq_openlimit17, is not appropriate for kernel because kernel version of toku_get_os_frequency is no longer based on file descriptors.\n");
     return 0;
 }
+#endif

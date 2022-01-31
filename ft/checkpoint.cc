@@ -90,18 +90,18 @@ PATENT RIGHTS GRANT:
 #ident "$Id$"
 
 /***********
- * The purpose of this file is to implement the high-level logic for 
+ * The purpose of this file is to implement the high-level logic for
  * taking a checkpoint.
  *
  * There are three locks used for taking a checkpoint.  They are listed below.
  *
- * NOTE: The reader-writer locks may be held by either multiple clients 
+ * NOTE: The reader-writer locks may be held by either multiple clients
  *       or the checkpoint function.  (The checkpoint function has the role
  *       of the writer, the clients have the reader roles.)
  *
  *  - multi_operation_lock
  *    This is a new reader-writer lock.
- *    This lock is held by the checkpoint function only for as long as is required to 
+ *    This lock is held by the checkpoint function only for as long as is required to
  *    to set all the "pending" bits and to create the checkpoint-in-progress versions
  *    of the header and translation table (btt).
  *    The following operations must take the multi_operation_lock:
@@ -112,7 +112,7 @@ PATENT RIGHTS GRANT:
  *    This lock is held for the entire duration of the checkpoint.
  *    It is used to prevent more than one checkpoint from happening at a time
  *    (the checkpoint function is non-re-entrant), and to prevent certain operations
- *    that should not happen during a checkpoint.  
+ *    that should not happen during a checkpoint.
  *    The following operations must take the checkpoint_safe lock:
  *       - delete a dictionary
  *       - rename a dictionary
@@ -125,12 +125,6 @@ PATENT RIGHTS GRANT:
  *
  *
  *****/
-
-// To use KERN_INFO
-#define KERN_SON  "\001"      
-#define KERN_ALERT KERN_SON "1"
-
-
 
 #include <toku_portability.h>
 #include <time.h>
@@ -155,38 +149,38 @@ static CHECKPOINT_STATUS_S cp_status;
 static bool (*checkpoint_filter) (PAIR);
 #define STATUS_INIT(k,c,t,l,inc) TOKUDB_STATUS_INIT(cp_status, k, c, t, "checkpoint: " l, inc)
 bool is_checkpoint_goingon(void) {
-	bool ret;
-	toku_mutex_lock(&checkpoint_on_lock);    
- 	ret = checkpoint_on;
-	toku_mutex_unlock(&checkpoint_on_lock);
-	return ret;
+    bool ret;
+    toku_mutex_lock(&checkpoint_on_lock);
+    ret = checkpoint_on;
+    toku_mutex_unlock(&checkpoint_on_lock);
+    return ret;
 }
 
 static void checkpoint_on_lock_init(void) {
-	toku_mutex_init(&checkpoint_on_lock, NULL);
+    toku_mutex_init(&checkpoint_on_lock, NULL);
 }
 
 static void checkpoint_on_lock_destroy() {
-	toku_mutex_destroy(&checkpoint_on_lock);
+    toku_mutex_destroy(&checkpoint_on_lock);
 }
 void set_checkpoint_filter(bool (*filter) (PAIR p)) {
-	checkpoint_filter = filter;
+    checkpoint_filter = filter;
 }
 
 static bool default_checkpoint_filter(PAIR UU(p)) {
-	return true;
+    return true;
 }
 
 void reset_checkpoint_filter() {
-	checkpoint_filter = default_checkpoint_filter;
-	return ;
+    checkpoint_filter = default_checkpoint_filter;
+    return ;
 }
 bool is_current_checkpoint_real_chkpt(void) {
-	return checkpoint_filter == default_checkpoint_filter?true:false;
+    return checkpoint_filter == default_checkpoint_filter?true:false;
 }
 
 bool pass_checkpoint_filter(PAIR p) {
-	return checkpoint_filter(p);
+    return checkpoint_filter(p);
 }
 static void
 status_init(void) {
@@ -267,18 +261,18 @@ multi_operation_lock_destroy(void) {
     toku_pthread_rwlock_destroy(&low_priority_multi_operation_lock);
 }
 
-static void 
+static void
 multi_operation_checkpoint_lock(void) {
     toku_pthread_rwlock_wrlock(&low_priority_multi_operation_lock);
-    toku_pthread_rwlock_wrlock(&multi_operation_lock);   
+    toku_pthread_rwlock_wrlock(&multi_operation_lock);
     locked_mo = true;
 }
 
-static void 
+static void
 multi_operation_checkpoint_unlock(void) {
     locked_mo = false;
     toku_pthread_rwlock_wrunlock(&multi_operation_lock);
-    toku_pthread_rwlock_wrunlock(&low_priority_multi_operation_lock);    
+    toku_pthread_rwlock_wrunlock(&low_priority_multi_operation_lock);
 }
 
 static void
@@ -294,7 +288,7 @@ checkpoint_safe_lock_destroy(void) {
     toku_mutex_destroy(&checkpoint_safe_mutex);
 }
 
-static void 
+static void
 checkpoint_safe_checkpoint_lock(void) {
     toku_mutex_lock(&checkpoint_safe_mutex);
     checkpoint_safe_lock.write_lock(false);
@@ -302,7 +296,7 @@ checkpoint_safe_checkpoint_lock(void) {
     locked_cs = true;
 }
 
-static void 
+static void
 checkpoint_safe_checkpoint_unlock(void) {
     locked_cs = false;
     toku_mutex_lock(&checkpoint_safe_mutex);
@@ -322,7 +316,7 @@ checkpoint_safe_partial_lock_destroy(void) {
     toku_mutex_destroy(&checkpoint_safe_partial_mutex);
 }
 
-void 
+void
 checkpoint_safe_partial_checkpoint_lock(void) {
     toku_mutex_lock(&checkpoint_safe_partial_mutex);
     checkpoint_safe_partial_lock.write_lock(false);
@@ -331,7 +325,7 @@ checkpoint_safe_partial_checkpoint_lock(void) {
 
 }
 
-void 
+void
 checkpoint_safe_partial_checkpoint_unlock(void) {
     toku_mutex_lock(&checkpoint_safe_partial_mutex);
     locked_cs_safe = false;
@@ -340,26 +334,26 @@ checkpoint_safe_partial_checkpoint_unlock(void) {
 }
 
 void toku_checkpoint_safe_partial_checkpoint_client_lock(void) {
-	if(locked_cs_safe == false)
-		checkpoint_safe_partial_checkpoint_lock();
+    if(locked_cs_safe == false)
+        checkpoint_safe_partial_checkpoint_lock();
 }
 void toku_checkpoint_safe_partial_checkpoint_client_unlock(void) {
-	if(locked_cs_safe == true)
-		checkpoint_safe_partial_checkpoint_unlock();
+    if(locked_cs_safe == true)
+        checkpoint_safe_partial_checkpoint_unlock();
 }
 // toku_xxx_client_(un)lock() functions are only called from client code,
 // never from checkpoint code, and use the "reader" interface to the lock functions.
 
-void 
+void
 toku_multi_operation_client_lock(void) {
     if (locked_mo)
         (void) toku_sync_fetch_and_add(&STATUS_VALUE(CP_CLIENT_WAIT_ON_MO), 1);
-    toku_pthread_rwlock_rdlock(&multi_operation_lock);   
+    toku_pthread_rwlock_rdlock(&multi_operation_lock);
 }
 
-void 
+void
 toku_multi_operation_client_unlock(void) {
-    toku_pthread_rwlock_rdunlock(&multi_operation_lock); 
+    toku_pthread_rwlock_rdunlock(&multi_operation_lock);
 }
 
 void toku_low_priority_multi_operation_client_lock(void) {
@@ -370,7 +364,7 @@ void toku_low_priority_multi_operation_client_unlock(void) {
     toku_pthread_rwlock_rdunlock(&low_priority_multi_operation_lock);
 }
 
-void 
+void
 toku_checkpoint_safe_client_lock(void) {
     if (locked_cs)
         (void) toku_sync_fetch_and_add(&STATUS_VALUE(CP_CLIENT_WAIT_ON_CS), 1);
@@ -380,7 +374,7 @@ toku_checkpoint_safe_client_lock(void) {
     toku_multi_operation_client_lock();
 }
 
-void 
+void
 toku_checkpoint_safe_client_unlock(void) {
     toku_mutex_lock(&checkpoint_safe_mutex);
     checkpoint_safe_lock.read_unlock();
@@ -412,107 +406,106 @@ toku_checkpoint_destroy(void) {
 
 
 // Take a checkpoint of all currently open dictionaries
-int 
+int
 toku_checkpoint(CHECKPOINTER cp, TOKULOGGER logger,
                 void (*callback_f)(void*),  void * extra,
                 void (*callback2_f)(void*), void * extra2,
                 checkpoint_caller_t caller_id,
-		bool is_partial) {
-    if(!is_partial) {
-    	int footprint_offset = (int) caller_id * 1000;
-	
-    	assert(initialized);
+                bool is_partial)
+{
+    if(!is_partial) { // for full checkpoint
+        int footprint_offset = (int) caller_id * 1000;
+        assert(initialized);
+        (void) toku_sync_fetch_and_add(&STATUS_VALUE(CP_WAITERS_NOW), 1);
+        checkpoint_safe_checkpoint_lock();
+        (void) toku_sync_fetch_and_sub(&STATUS_VALUE(CP_WAITERS_NOW), 1);
 
-    	(void) toku_sync_fetch_and_add(&STATUS_VALUE(CP_WAITERS_NOW), 1);
-    	checkpoint_safe_checkpoint_lock();
-    	(void) toku_sync_fetch_and_sub(&STATUS_VALUE(CP_WAITERS_NOW), 1);
+        if (STATUS_VALUE(CP_WAITERS_NOW) > STATUS_VALUE(CP_WAITERS_MAX))
+            STATUS_VALUE(CP_WAITERS_MAX) = STATUS_VALUE(CP_WAITERS_NOW);  // threadsafe, within checkpoint_safe lock
 
-    	if (STATUS_VALUE(CP_WAITERS_NOW) > STATUS_VALUE(CP_WAITERS_MAX))
-        	STATUS_VALUE(CP_WAITERS_MAX) = STATUS_VALUE(CP_WAITERS_NOW);  // threadsafe, within checkpoint_safe lock
-
-
-    	SET_CHECKPOINT_FOOTPRINT(10);
-    	multi_operation_checkpoint_lock();
-    	SET_CHECKPOINT_FOOTPRINT(20);
-	toku_mutex_lock(&checkpoint_on_lock);
-    	toku_ft_open_close_lock();
-    	checkpoint_on = true;
+        SET_CHECKPOINT_FOOTPRINT(10);
+        multi_operation_checkpoint_lock();
+        SET_CHECKPOINT_FOOTPRINT(20);
+        toku_mutex_lock(&checkpoint_on_lock);
+        toku_ft_open_close_lock();
+        checkpoint_on = true;
         toku_mutex_unlock(&checkpoint_on_lock);
 
-	checkpoint_safe_partial_checkpoint_lock();
-    	SET_CHECKPOINT_FOOTPRINT(30);
-    	STATUS_VALUE(CP_TIME_LAST_CHECKPOINT_BEGIN) = time(NULL);
-    	uint64_t t_checkpoint_begin_start = toku_current_time_microsec();
-    	
+        checkpoint_safe_partial_checkpoint_lock();
+        SET_CHECKPOINT_FOOTPRINT(30);
+        STATUS_VALUE(CP_TIME_LAST_CHECKPOINT_BEGIN) = time(NULL);
+        uint64_t t_checkpoint_begin_start = toku_current_time_microsec();
+
         toku_cachetable_begin_checkpoint(cp, logger, is_partial);
-    	uint64_t t_checkpoint_begin_end = toku_current_time_microsec();
+        uint64_t t_checkpoint_begin_end = toku_current_time_microsec();
 
-	toku_mutex_lock(&checkpoint_on_lock);
-    	toku_ft_open_close_unlock();
-    	multi_operation_checkpoint_unlock();
-	checkpoint_on = false;     
-	toku_mutex_unlock(&checkpoint_on_lock);
-    	
-	SET_CHECKPOINT_FOOTPRINT(40);
-    	if (callback_f) {
-        	callback_f(extra);      // callback is called with checkpoint_safe_lock still held
-   	 }
-    	toku_cachetable_end_checkpoint(cp, logger, callback2_f, extra2, is_partial);
-       
-    	SET_CHECKPOINT_FOOTPRINT(50);
-    	if (logger) {
-        	last_completed_checkpoint_lsn = logger->last_completed_checkpoint_lsn;
-        	toku_logger_maybe_trim_log(logger, last_completed_checkpoint_lsn);
-        	STATUS_VALUE(CP_LAST_LSN) = last_completed_checkpoint_lsn.lsn;
-    	}
+        toku_mutex_lock(&checkpoint_on_lock);
+        toku_ft_open_close_unlock();
+        multi_operation_checkpoint_unlock();
+        checkpoint_on = false;
+        toku_mutex_unlock(&checkpoint_on_lock);
 
-   	SET_CHECKPOINT_FOOTPRINT(60);
-    	STATUS_VALUE(CP_TIME_LAST_CHECKPOINT_END) = time(NULL);
-    	STATUS_VALUE(CP_TIME_LAST_CHECKPOINT_BEGIN_COMPLETE) = STATUS_VALUE(CP_TIME_LAST_CHECKPOINT_BEGIN);
-    	STATUS_VALUE(CP_CHECKPOINT_COUNT)++;
-    	uint64_t duration = t_checkpoint_begin_end - t_checkpoint_begin_start;
-    	STATUS_VALUE(CP_BEGIN_TIME) += duration;
-    	if (duration >= toku_checkpoint_long_threshold) {
-        	STATUS_VALUE(CP_LONG_BEGIN_TIME) += duration;
-        	STATUS_VALUE(CP_LONG_BEGIN_COUNT) += 1;
-    	}
-    	STATUS_VALUE(CP_FOOTPRINT) = 0;
+        SET_CHECKPOINT_FOOTPRINT(40);
+        if (callback_f) {
+            callback_f(extra);      // callback is called with checkpoint_safe_lock still held
+        }
+        toku_cachetable_end_checkpoint(cp, logger, callback2_f, extra2, is_partial);
 
-    	checkpoint_safe_checkpoint_unlock();
-  	
-} else {
-// we will add the partial checkpoint status value, separate from cp status value. -JUN
-    	assert(initialized);
-        //multi_operation_checkpoint_lock();	
+        SET_CHECKPOINT_FOOTPRINT(50);
+        if (logger) {
+            last_completed_checkpoint_lsn = logger->last_completed_checkpoint_lsn;
+            toku_logger_maybe_trim_log(logger, last_completed_checkpoint_lsn);
+            STATUS_VALUE(CP_LAST_LSN) = last_completed_checkpoint_lsn.lsn;
+        }
+
+        SET_CHECKPOINT_FOOTPRINT(60);
+        STATUS_VALUE(CP_TIME_LAST_CHECKPOINT_END) = time(NULL);
+        STATUS_VALUE(CP_TIME_LAST_CHECKPOINT_BEGIN_COMPLETE) = STATUS_VALUE(CP_TIME_LAST_CHECKPOINT_BEGIN);
+        STATUS_VALUE(CP_CHECKPOINT_COUNT)++;
+        uint64_t duration = t_checkpoint_begin_end - t_checkpoint_begin_start;
+        STATUS_VALUE(CP_BEGIN_TIME) += duration;
+        if (duration >= toku_checkpoint_long_threshold) {
+            STATUS_VALUE(CP_LONG_BEGIN_TIME) += duration;
+            STATUS_VALUE(CP_LONG_BEGIN_COUNT) += 1;
+        }
+        STATUS_VALUE(CP_FOOTPRINT) = 0;
+
+        checkpoint_safe_checkpoint_unlock();
+
+    } else {
+        // we will add the partial checkpoint status value, separate from cp status value. -JUN
+        assert(initialized);
+        //multi_operation_checkpoint_lock();
         toku_ft_open_close_lock();
-    	checkpoint_safe_partial_checkpoint_lock();
-	toku_cachetable_begin_checkpoint(cp, logger, is_partial);
-    	toku_ft_open_close_unlock();
-    	//multi_operation_checkpoint_unlock();
+        checkpoint_safe_partial_checkpoint_lock();
+        toku_cachetable_begin_checkpoint(cp, logger, is_partial);
+        toku_ft_open_close_unlock();
+        //multi_operation_checkpoint_unlock();
 
-    	if (callback_f) {
-        	callback_f(extra);      // callback is called with checkpoint_safe_lock still held
-   	 }
-    	toku_cachetable_end_checkpoint(cp, logger, callback2_f, extra2, is_partial);
-    	checkpoint_safe_partial_checkpoint_unlock();
-	}
+        if (callback_f) {
+            callback_f(extra);      // callback is called with checkpoint_safe_lock still held
+        }
+        toku_cachetable_end_checkpoint(cp, logger, callback2_f, extra2, is_partial);
+        checkpoint_safe_partial_checkpoint_unlock();
+    }
     return 0;
 }
 
 //this is only called inside a checkpoint
-int 
+int
 toku_partial_checkpoint_locked(CHECKPOINTER cp, TOKULOGGER logger,
                 void (*callback_f)(void*),  void * extra,
                 void (*callback2_f)(void*), void * extra2,
-                checkpoint_caller_t UU(caller_id)) {
-    	checkpoint_safe_partial_checkpoint_lock();
-    	toku_cachetable_begin_checkpoint(cp, logger, true);
-    	if (callback_f) {
-        	callback_f(extra);      // callback is called with checkpoint_safe_lock still held
-   	 }
-    	toku_cachetable_end_checkpoint(cp, logger, callback2_f, extra2, true);
-    	checkpoint_safe_partial_checkpoint_unlock();
-        return 0;
+                checkpoint_caller_t UU(caller_id))
+{
+    checkpoint_safe_partial_checkpoint_lock();
+    toku_cachetable_begin_checkpoint(cp, logger, true);
+    if (callback_f) {
+        callback_f(extra);      // callback is called with checkpoint_safe_lock still held
+    }
+    toku_cachetable_end_checkpoint(cp, logger, callback2_f, extra2, true);
+    checkpoint_safe_partial_checkpoint_unlock();
+    return 0;
 }
 
 #include <toku_race_tools.h>

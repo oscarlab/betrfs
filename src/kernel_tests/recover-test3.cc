@@ -112,16 +112,16 @@ static void gracefully_shutdown(DB_TXN * oldest) {
     env->close(env, 0);
     printf("shutdown\n");
     //toku_hard_crash_on_purpose();
-} 
+}
 
 static void
 do_x1_shutdown (void) {
-    DB_TXN *oldest;   
+    DB_TXN *oldest;
     int r;
     r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);                                                     assert(r==0);
     assert(r==0);
     r=db_env_create(&env, 0);                                                  assert(r==0);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r=env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE|DB_THREAD, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
    {
 
@@ -152,7 +152,7 @@ static void
 do_x1_recover (bool UU(did_commit)) {
     int r;
     r=db_env_create(&env, 0);                                                  assert(r==0);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r=env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE|DB_THREAD|DB_RECOVER, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r=env->txn_begin(env, 0, &tid, 0);                                         assert(r==0);
     r=db_create(&db, env, 0);                                                  CKERR(r);
@@ -178,10 +178,10 @@ do_x1_recover (bool UU(did_commit)) {
 static void internal_recover_test3(bool do_commit, bool do_recover_committed) {
     srandom(0xDEADBEEF);
     for (i=0; i<N; i++) {
-	//char ks[100];  
+	//char ks[100];
         char * ks = (char *) toku_xmalloc(sizeof(char) * 100);
         snprintf(ks, 100, "k%09ld.%d", random(), i);
-	//char vs[1000]; 
+	//char vs[1000];
         char * vs = (char *) toku_xmalloc(sizeof(char) * 1000);
         snprintf(vs, 1000, "v%d.%0*d", i, (int)(1000-100), i);
 	keys[i]=toku_strdup(ks);
@@ -193,7 +193,7 @@ static void internal_recover_test3(bool do_commit, bool do_recover_committed) {
 	do_x1_shutdown();
     } else if (do_recover_committed) {
 	do_x1_recover(true);
-    } 
+    }
     for (i=0; i<N; i++) {
         toku_free(keys[i]);
         toku_free(vals[i]);

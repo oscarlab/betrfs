@@ -10,27 +10,42 @@
 #include <linux/sched.h>
 #include <linux/printk.h>
 #include "sb_files.h"
+#include "sb_malloc.h"
 
-static FILE fstderr = {
-	.fd = 2,
-};
-FILE *const stderr = &fstderr;
-static FILE fstdout = {
-	.fd = 1,
-};
-FILE *const stdout = &fstdout;
-
-int fprintf(FILE *stream, const char *format, ...)
+/* We only expect toku code to use dprintf for error logs, etc.  Not
+ * for any correctness or performance-critical writes (i.e., writes to
+ * sfs or the journal should use write or pwrite).
+ */
+int dprintf(int fd, const char *format, ...)
 {
   va_list args;
   int r;
 
-  if (stream != stderr)
-    return -EINVAL;
-
-  va_start(args, format);
-  r = vprintk(format, args);
-  va_end(args);
+  if (fd == 0) {
+	  /* Bug if we try to dprintf to std in */
+	  BUG();
+	  return -EINVAL;
+  } else if (fd > 2) {
+	  /* "Normal" file; only expected for debugging, like
+	   * toku_dump_ftnode.  It is sloooow.
+	   */
+	  int max_buf = 512;
+	  int len;
+	  char *buf = (char *)sb_malloc(max_buf);
+	  va_start(args, format);
+	  len = vsnprintf(buf, max_buf, format, args);
+	  va_end(args);
+	  // If snprintf truncated the buffer, truncate the write,
+	  // on the assumption this is only debug output
+	  if (len >= max_buf) len = max_buf;
+	  r = write(fd, buf, len);
+	  sb_free(buf);
+  } else {
+	  /* Standard out/error */
+	  va_start(args, format);
+	  r = vprintk(format, args);
+	  va_end(args);
+  }
 
   return r;
 }
@@ -47,30 +62,16 @@ int printf(const char *format, ...)
   return r;
 }
 
-int fputc(int c, FILE *stream)
+int putchar (int c)
 {
-  if (stream != stderr)
-    return -EINVAL;
-  printf("%c", c);
-  return c;
-}
-
-static int fputs(const char *s, FILE *stream)
-{
-  if (stream != stderr)
-    return -EINVAL;
-  printf("%s", s);
-  return 0;
-}
-
-int putchar(int c)
-{
-	return fputc(c, stderr);
+	printf("%c", (char) c);
+	return c;
 }
 
 int puts(const char *s)
 {
-  return fputs(s, stderr);
+	printf("%s", s);
+	return 0;
 }
 
 int atoi(const char * s) {
@@ -82,36 +83,4 @@ int atoi(const char * s) {
 int sched_yield(void){
    schedule();
    return 0;
-}
-
-/* DP: I am fairly cerain all uses of fflush are for error logging purposes.
-   Bug if not stderr or stdout */
-int fflush(FILE *f) {
-  if (f == stderr || f == stdout)
-    return 0;
-  else
-    BUG();
-  return -ENOSYS;
-}
-
-/*
- * YJIAO: Borrow from musl
- * buffer is allocated in fopen no bother to change it.
- * fprintf uses printk, so _IONBF will not used.
- * the only meaningful thing _IONBF which disables
- * buffer for fread and fwrite
-*/
-int setvbuf(FILE *f, char *buf, int type, size_t size)
-{
-
-	f->lbf = EOF;
-
-	if (type == _IONBF)
-		f->bufsize = 0;
-	else if (type == _IOLBF)
-		f->lbf = '\n';
-
-	f->flags |= F_SVB;
-
-	return 0;
 }

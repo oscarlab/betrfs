@@ -126,9 +126,7 @@ static ssize_t (*t_full_pwrite)(int, const void *, size_t, off_t, bool);
 #ifndef TOKU_LINUX_MODULE
 static FILE *  (*t_fdopen)(int, const char *);
 #endif
-static FILE *  (*t_fopen)(const char *, const char *);
 static int     (*t_open)(const char *, int, int);
-static int     (*t_fclose)(FILE *);
 static ssize_t (*t_read)(int, void *, size_t);
 static ssize_t (*t_pread)(int, void *, size_t, off_t);
 
@@ -154,16 +152,8 @@ void toku_set_func_fdopen(FILE * (*fdopen_fun)(int, const char *)) {
 }
 #endif
 
-void toku_set_func_fopen(FILE * (*fopen_fun)(const char *, const char *)) {
-    t_fopen = fopen_fun;
-}
-
 void toku_set_func_open(int (*open_fun)(const char *, int, int)) {
     t_open = open_fun;
-}
-
-void toku_set_func_fclose(int (*fclose_fun)(FILE*)) {
-    t_fclose = fclose_fun;
 }
 
 void toku_set_func_read (ssize_t (*read_fun)(int, void *, size_t)) {
@@ -208,11 +198,7 @@ toku_os_write (int fd, const void *buf, size_t len) {
             r = write(fd, bp, len);
         }
         if (r < 0) {
-#ifdef TOKU_LINUX_MODULE
             result = get_error_errno(r);
-#else
-            result = errno;
-#endif
             break;
         }
         len           -= r;
@@ -227,7 +213,7 @@ toku_os_full_pwrite (int fd, const void *buf, size_t len, toku_off_t off, bool i
     assert((len%512 == 0) && (off%512)==0); // to make pwrite work.
     ssize_t r;
 
-    if (ftfs_is_hdd()) {
+    if (!ftfs_simplefs_dio()) {
         const char *bp = (const char *) buf;
         assert(is_blocking == true);
         while (len > 0) {
@@ -250,7 +236,7 @@ toku_os_full_pwrite (int fd, const void *buf, size_t len, toku_off_t off, bool i
     } else {
         void (* free_cb)(void *) = (is_blocking) ? nullptr : toku_free;
         r = sb_sfs_dio_write(fd, buf, len, off, free_cb);
-        assert(r == len);
+        assert(r == (ssize_t)len);
     }
 }
 
@@ -269,11 +255,7 @@ toku_os_pwrite (int fd, const void *buf, size_t len, toku_off_t off) {
             r = pwrite(fd, bp, len, off);
         }
         if (r < 0) {
-#ifdef TOKU_LINUX_MODULE
             result = get_error_errno(r);
-#else
-            result = errno;
-#endif
             break;
         }
         len           -= r;
@@ -284,29 +266,19 @@ toku_os_pwrite (int fd, const void *buf, size_t len, toku_off_t off) {
 }
 
 #ifndef TOKU_LINUX_MODULE
-FILE * 
+FILE *
 toku_os_fdopen(int fildes, const char *mode) {
     FILE * rval;
     if (t_fdopen)
 	rval = t_fdopen(fildes, mode);
-    else 
+    else
 	rval = fdopen(fildes, mode);
     return rval;
 }
 #endif
-    
 
-FILE *
-toku_os_fopen(const char *filename, const char *mode){
-    FILE * rval;
-    if (t_fopen)
-	rval = t_fopen(filename, mode);
-    else
-	rval = fopen(filename, mode);
-    return rval;
-}
 
-int 
+int
 toku_os_open(const char *path, int oflag, int mode) {
     int rval;
     if (t_open)
@@ -347,36 +319,12 @@ toku_os_open_direct(const char *path, int oflag, int mode) {
 }
 
 int
-toku_os_fclose(FILE * stream) {  
-    int rval = -1;
-    if (t_fclose)
-	rval = t_fclose(stream);
-    else {                      // if EINTR, retry until success
-	while (rval != 0) {
-	    rval = fclose(stream);
-#ifdef TOKU_LINUX_MODULE
-	    if (rval && get_error_errno(rval) != EINTR)
-		break;
-#else
-	    if (rval && (errno != EINTR))
-		break;
-#endif
-	}
-    }
-    return rval;
-}
-
-int 
 toku_os_close(int fd) {  // if EINTR, retry until success
     int r = -1;
     while (r != 0) {
 	r = close(fd);
 	if (r) {
-#ifdef TOKU_LINUX_MODULE
 	    int rr = get_error_errno(r);
-#else
-	    int rr = errno;
-#endif
 	    if (rr!=EINTR) printf("rr=%d (%s)\n", rr, strerror(rr));
 	    assert(rr==EINTR);
 	}
@@ -384,7 +332,7 @@ toku_os_close(int fd) {  // if EINTR, retry until success
     return r;
 }
 
-ssize_t 
+ssize_t
 toku_os_read(int fd, void *buf, size_t count) {
     ssize_t r;
     if (t_read)
@@ -395,20 +343,26 @@ toku_os_read(int fd, void *buf, size_t count) {
 }
 
 ssize_t
-toku_os_pread (int fd, void *buf, size_t count, off_t offset) { 
+toku_os_pread (int fd, void *buf, size_t count, off_t offset) {
     assert(0==((long long)buf)%512);
     assert(0==count%512);
     assert(0==offset%512);
     ssize_t r;
-    if (ftfs_is_hdd()) {
+
+    if (!ftfs_simplefs_dio()) {
         if (t_pread) {
-	    r = t_pread(fd, buf, count, offset);
+            r = t_pread(fd, buf, count, offset);
         } else {
-	    r = pread(fd, buf, count, offset);
+            r = pread(fd, buf, count, offset);
         }
     } else {
+#ifdef TOKU_LINUX_MODULE
         r = sb_sfs_dio_read(fd, buf, count, offset, nullptr);
-        assert(r == count);
+        assert(r == (ssize_t)count);
+#else /* TOKU_LINUX_MODULE */
+        // this should never be taken since ftfs_simplefs_dio() returns false for userspace.
+        assert(false);
+#endif /* TOKU_LINUX_MODULE */
     }
     return r;
 }
@@ -436,11 +390,7 @@ void toku_logger_maybe_sync_internal_no_flags_no_callbacks (int fd) {
 	r = fdatasync(fd);
 
 	if (r) {
-#ifndef TOKU_KERNEL_MODULE
             assert(get_error_errno(r) == EINTR);
-#else
-            assert(get_error_errno() == EINTR);
-#endif
             eintr_count++;
 	}
     }
@@ -466,11 +416,7 @@ static void file_fsync_internal (int fd) {
 	    r = fdatasync(fd);
         //}
 	if (r) {
-#ifndef TOKU_KERNEL_MODULE
             assert(get_error_errno(r) == EINTR);
-#else
-            assert(get_error_errno() == EINTR);
-#endif
             eintr_count++;
 	}
     }
@@ -488,21 +434,12 @@ void toku_file_fsync_without_accounting(int fd) {
     file_fsync_internal(fd);
 }
 
-void toku_fsync_dirfd_without_accounting(DIR *dir) {
-    int fd = dirfd(dir);
-    toku_file_fsync_without_accounting(fd);
-}
-
 int toku_fsync_dir_by_name_without_accounting(const char *dir_name) {
     int fd, r;
 
     fd = open(dir_name, O_DIRECTORY);
     if (fd < 0) {
-#ifdef TOKU_LINUX_MODULE
         r = get_error_errno(fd);
-#else
-        r = get_error_errno();
-#endif
     } else {
         toku_file_fsync_without_accounting(fd);
         r = close(fd);
@@ -527,7 +464,7 @@ void toku_get_fsync_times(uint64_t *fsync_count, uint64_t *fsync_time, uint64_t 
 
 int toku_fsync_directory(const char *fname) {
     int result = 0;
-    
+
     // extract dirname from fname
     const char *sp = strrchr(fname, '/');
     size_t len;
@@ -537,11 +474,7 @@ int toku_fsync_directory(const char *fname) {
         len = sp - fname + 1;
         MALLOC_N(len+1, dirname);
         if (dirname == NULL) {
-#ifdef TOKU_LINUX_MODULE
-            result = ENOMEM;
-#else
-            result = get_error_errno();
-#endif
+            result = get_error_errno(ENOMEM);
         } else {
             strncpy(dirname, fname, len);
             dirname[len] = 0;
@@ -549,11 +482,7 @@ int toku_fsync_directory(const char *fname) {
     } else {
         dirname = toku_strdup(".");
         if (dirname == NULL) {
-#ifdef TOKU_LINUX_MODULE
-            result = ENOMEM;
-#else
-            result = get_error_errno();
-#endif
+            result = get_error_errno(ENOMEM);
         }
     }
 
@@ -564,3 +493,6 @@ int toku_fsync_directory(const char *fname) {
     return result;
 }
 
+int toku_initialize_empty_log(const char *name) {
+   return open(name, O_CREAT|O_WRONLY|O_BINARY, S_IRWXU);
+}

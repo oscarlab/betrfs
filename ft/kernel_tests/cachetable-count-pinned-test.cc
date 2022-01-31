@@ -141,8 +141,10 @@ cachetable_count_pinned_test (int n) {
 extern "C" int test_cachetable_count_pinned(void);
 
 int test_cachetable_count_pinned() {
-
+    int rinit = toku_ft_layer_init();
+    CKERR(rinit);
     initialize_dummymsn();
     cachetable_count_pinned_test(8);
+    toku_ft_layer_destroy();
     return 0;
 }

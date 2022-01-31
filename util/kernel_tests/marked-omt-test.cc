@@ -349,7 +349,7 @@ public:
 #if _STRESS_TEST
 static void simulate_reader_marks_on_array(struct reader_extra *const reader, const struct stress_shared &shared, bool *const should_be_marked) {
    // if (verbose) {
-        fprintf(stderr, "thread %d ran %" PRIu64 " iterations\n", reader->tid, reader->iterations - reader->last_iteration);
+        dprintf(STDERR, "thread %d ran %" PRIu64 " iterations\n", reader->tid, reader->iterations - reader->last_iteration);
     //}
     for (; reader->last_iteration < reader->iterations; ++reader->last_iteration) {
         uint32_t begin;
@@ -389,7 +389,7 @@ static void stress_deleter(struct reader_extra *const readers, int num_marker_th
     size_t bytes = omt->size() * sizeof(*should_be_marked);
     should_be_marked = (bool *) sb_malloc_sized(bytes, true);
     if (!should_be_marked) {
-        fprintf(stderr, "ERROR! xmalloc failed\n");
+        dprintf(STDERR, "ERROR! xmalloc failed\n");
         return;
     }
     memset(should_be_marked, 0, omt->size() * sizeof(*should_be_marked));
@@ -401,7 +401,7 @@ static void stress_deleter(struct reader_extra *const readers, int num_marker_th
     bool *is_marked_according_to_iterate;
     is_marked_according_to_iterate = (bool *) sb_malloc_sized(bytes, true);
     if (!is_marked_according_to_iterate) {
-        fprintf(stderr, "ERROR! xmalloc failed\n");
+        dprintf(STDERR, "ERROR! xmalloc failed\n");
         sb_free_sized(should_be_marked, bytes);
         return;
     }
@@ -418,7 +418,7 @@ static void stress_deleter(struct reader_extra *const readers, int num_marker_th
         double frac_marked = count_true(should_be_marked, omt->size());
         frac_marked /= omt->size();
 
-        fprintf(stderr, "Marked: %0.4f\n", frac_marked);
+        dprintf(STDERR, "Marked: %0.4f\n", frac_marked);
         omt->verify_marks_consistent();
    // }
 
@@ -485,7 +485,7 @@ static void stress_test(int nelts) {
         (reader_extra *) toku_xmalloc(num_marker_threads *
                                       sizeof(struct reader_extra));
     if (!readers) {
-        fprintf(stderr, "ERROR! readers xmalloc failed\n");
+        dprintf(STDERR, "ERROR! readers xmalloc failed\n");
         omt.destroy();
         return;
     }
@@ -496,7 +496,7 @@ static void stress_test(int nelts) {
         (toku_pthread_t *) toku_xmalloc(num_marker_threads *
                                         sizeof(toku_pthread_t));
     if (!marker_threads) {
-        fprintf(stderr, "ERROR! marker_threads xmalloc failed\n");
+        dprintf(STDERR, "ERROR! marker_threads xmalloc failed\n");
         toku_free(readers);
         omt.destroy();
         return;
@@ -551,7 +551,7 @@ int test_marked_omt(void) {
 #if _STRESS_TEST
     toku::test::stress_test(1000 * 100);
 #else
-    fprintf(stderr, "\"stress_tests\" skipped, please revisit this test.\n");
+    dprintf(STDERR, "\"stress_tests\" skipped, please revisit this test.\n");
 #endif
     return 0;
 }

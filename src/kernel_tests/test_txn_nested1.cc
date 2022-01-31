@@ -103,7 +103,7 @@ PATENT RIGHTS GRANT:
  *
  * Purpose of this test is to exercise nested transactions in a basic way:
  * Create MAX nested transactions, inserting a value at each level, verify:
- * 
+ *
  * for i = 1 to MAX
  *  - txnid = begin()
  *  - txns[i] = txnid
@@ -132,7 +132,7 @@ setup_db (void) {
     r = env->set_key_ops(env, &key_ops);
     CKERR(r);
 #endif
-    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL | DB_INIT_LOG | DB_INIT_LOCK | DB_INIT_TXN | DB_PRIVATE | DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); 
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL | DB_INIT_LOG | DB_INIT_LOCK | DB_INIT_TXN | DB_PRIVATE | DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
 
     {
@@ -159,7 +159,7 @@ close_db (void) {
 static void
 test_txn_nesting (int depth) {
     int r;
-    if (verbose) { fprintf(stderr, "%s (%s):%d [depth = %d]\n", __FILE__, __FUNCTION__, __LINE__, depth); fflush(stderr); }
+    if (verbose) { dprintf(STDERR, "%s (%s):%d [depth = %d]\n", __FILE__, __FUNCTION__, __LINE__, depth); }
 
     DBT key, val, observed_val;
     dbt_init(&observed_val, NULL, 0);
@@ -172,7 +172,7 @@ test_txn_nesting (int depth) {
 
     int mykey = 42;
     dbt_init(&key, &mykey, sizeof mykey);
-    
+
 
     for (i = 0; i < depth; i++){
 	DB_TXN * this_txn;
@@ -227,7 +227,7 @@ test_txn_nesting (int depth) {
 #if 0
 static void
 test_txn_abort (int insert, int secondnum) {
-    if (verbose) { fprintf(stderr, "%s (%s):%d [%d,%d]\n", __FILE__, __FUNCTION__, __LINE__, insert, secondnum); fflush(stderr); }
+    if (verbose) { dprintf(STDERR, "%s (%s):%d [%d,%d]\n", __FILE__, __FUNCTION__, __LINE__, insert, secondnum); }
     setup_db();
 
     DBT key, val;
@@ -242,9 +242,9 @@ test_txn_abort (int insert, int secondnum) {
     //Insert something as a child
     r = env->txn_begin(env, parent, &child, 0); CKERR(r);
     i = 1;
-    r = db->put(db, child, dbt_init(&key, &i, sizeof i), dbt_init(&val, &i, sizeof i), 0); 
+    r = db->put(db, child, dbt_init(&key, &i, sizeof i), dbt_init(&val, &i, sizeof i), 0);
     CKERR(r);
-    r = child->commit(child,DB_TXN_NOSYNC); 
+    r = child->commit(child,DB_TXN_NOSYNC);
     child = NULL;
 
 
@@ -252,18 +252,18 @@ test_txn_abort (int insert, int secondnum) {
     r = env->txn_begin(env, parent, &child, 0); CKERR(r);
     i = secondnum;
     if (insert) {
-        r = db->put(db, child, dbt_init(&key, &i, sizeof i), dbt_init(&val, &i, sizeof i), 0); 
+        r = db->put(db, child, dbt_init(&key, &i, sizeof i), dbt_init(&val, &i, sizeof i), 0);
         CKERR(r);
     }
     else { // delete
-        r = db->del(db, child, dbt_init(&key, &i, sizeof i), DB_DELETE_ANY); 
+        r = db->del(db, child, dbt_init(&key, &i, sizeof i), DB_DELETE_ANY);
 	if (IS_TDB) {
 	    CKERR(r);
 	} else {
 	    CKERR2(r, (secondnum==1 ? 0 : DB_NOTFOUND));
 	}
     }
-    r = child->commit(child,DB_TXN_NOSYNC); 
+    r = child->commit(child,DB_TXN_NOSYNC);
     child = NULL;
 
     r = parent->abort(parent);
@@ -279,7 +279,7 @@ test_txn_abort (int insert, int secondnum) {
         r = db->cursor(db, txn, &cursor, 0); CKERR(r);
         memset(&key, 0, sizeof key);
         memset(&val, 0, sizeof val);
-        r = cursor->c_get(cursor, &key, &val, DB_FIRST); 
+        r = cursor->c_get(cursor, &key, &val, DB_FIRST);
         CKERR2(r, DB_NOTFOUND);
         r = cursor->c_close(cursor); CKERR(r);
         r = txn->commit(txn, 0);

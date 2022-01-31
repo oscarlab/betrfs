@@ -135,18 +135,18 @@ setup (uint32_t flags, bool clean, bool too_old, char * src_db_dir) {
 
     r = snprintf(syscmd, len, "rm -rf %s", env_dir);
     assert(r<len);
-    r = system(syscmd);                                                                                  
-    CKERR(r);
-    
-    r = snprintf(syscmd, len, "cp -r %s %s", src_db_dir, env_dir);
-    assert(r<len);
-    r = system(syscmd);                                                                                 
+    r = system(syscmd);
     CKERR(r);
 
-    r=db_env_create(&env, 0); 
+    r = snprintf(syscmd, len, "cp -r %s %s", src_db_dir, env_dir);
+    assert(r<len);
+    r = system(syscmd);
     CKERR(r);
-    env->set_errfile(env, stderr);
-    r=env->open(env, TOKU_TEST_FILENAME, flags, mode); 
+
+    r=db_env_create(&env, 0);
+    CKERR(r);
+    env->set_errfile(env, STDERR);
+    r=env->open(env, TOKU_TEST_FILENAME, flags, mode);
     if (clean)
 	CKERR(r);
     else {
@@ -170,7 +170,7 @@ test_shutdown(void) {
 static void
 test_env_startup(void) {
     uint32_t flags;
-    
+
     flags = FLAGS_LOG;
 
     setup(flags, true, false, dir_v42_clean);

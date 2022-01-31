@@ -102,14 +102,14 @@ static uint64_t eight_byte_desc = 0x12345678ffffffff;
 
 
 static int generate_row_for_put(
-    DB *UU(dest_db), 
-    DB *UU(src_db), 
-    DBT_ARRAY *dest_key_arrays, 
-    DBT_ARRAY *dest_val_arrays, 
-    const DBT *src_key, 
+    DB *UU(dest_db),
+    DB *UU(src_db),
+    DBT_ARRAY *dest_key_arrays,
+    DBT_ARRAY *dest_val_arrays,
+    const DBT *src_key,
     const DBT *src_val
-    ) 
-{    
+    )
+{
     toku_dbt_array_resize(dest_key_arrays, 1);
     toku_dbt_array_resize(dest_val_arrays, 1);
     DBT *dest_key = &dest_key_arrays->dbts[0];
@@ -165,7 +165,7 @@ desc_int64_dbt_cmp (DB *db, const DBT *a, const DBT *b) {
 
 static void open_env(void) {
     { int chk_r = db_env_create(&env, 0); CKERR(chk_r); }
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     struct toku_db_key_operations key_ops;
     memset(&key_ops, 0, sizeof(key_ops));
     key_ops.keycmp = desc_int64_dbt_cmp;
@@ -208,7 +208,7 @@ static void do_inserts_and_queries(DB* db) {
         DBC* cursor = NULL;
         r = db->cursor(db, read_txn, &cursor, 0);
         CKERR(r);
-        if (i == 0) { 
+        if (i == 0) {
             r = cursor->c_set_bounds(
                 cursor,
                 db->dbt_neg_infty(),
@@ -247,7 +247,7 @@ static void run_test(void) {
     other_desc.size = sizeof(eight_byte_desc);
     other_desc.data = &eight_byte_desc;
 
-    //DB_LOADER *loader = NULL;    
+    //DB_LOADER *loader = NULL;
     DBT key, val;
     uint64_t k = 0;
     uint64_t v = 0;
@@ -264,18 +264,18 @@ static void run_test(void) {
             { int chk_r = db->change_descriptor(db, txn_create, &orig_desc, DB_UPDATE_CMP_DESCRIPTOR); CKERR(chk_r); }
             assert_desc_four(db);
             assert_cmp_desc_valid(db);
-      //      r = env->create_loader(env, txn_create, &loader, db, 1, &db, NULL, NULL, 0); 
+      //      r = env->create_loader(env, txn_create, &loader, db, 1, &db, NULL, NULL, 0);
             CKERR(r);
             dbt_init(&key, &k, sizeof k);
             dbt_init(&val, &v, sizeof v);
             db->put(db,txn_create, &key, &val, DB_PRELOCKED_WRITE);
-        //    r = loader->put(loader, &key, &val); 
+        //    r = loader->put(loader, &key, &val);
             CKERR(r);
           //  r = loader->close(loader);
             CKERR(r);
-            assert_cmp_desc_valid(db);    
+            assert_cmp_desc_valid(db);
         });
-    assert_cmp_desc_valid(db);    
+    assert_cmp_desc_valid(db);
     CKERR(r);
     do_inserts_and_queries(db);
     IN_TXN_COMMIT(env, NULL, txn_1, 0, {
@@ -295,9 +295,9 @@ static void run_test(void) {
     assert_desc_eight(db);
     assert_cmp_desc_valid(db);
     do_inserts_and_queries(db);
-    
-    { 
-        int chk_r = db->close(db, 0); CKERR(chk_r); 
+
+    {
+        int chk_r = db->close(db, 0); CKERR(chk_r);
         cleanup();
         open_env();
     }
@@ -324,7 +324,7 @@ static void run_test(void) {
     assert_cmp_desc_valid(db);
     do_inserts_and_queries(db);
     { int chk_r = db->close(db, 0); CKERR(chk_r); }
-    
+
 }
 extern "C" int test_test_cmp_descriptor(void);
 int test_test_cmp_descriptor(void) {

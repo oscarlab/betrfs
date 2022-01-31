@@ -171,7 +171,7 @@ static void startB (void) {
 	    argv++;
 	} else if (strcmp(argv[1], "-h")==0) {
 	do_usage:
-	    fprintf(stderr, "Usage:\n%s [-v|-q] [-h] [--envdir <envdir>]\n", argv0);
+	    dprintf(STDERR, "Usage:\n%s [-v|-q] [-h] [--envdir <envdir>]\n", argv0);
 	    exit(resultcode);
 	} else {
 	    resultcode=1;
@@ -201,7 +201,7 @@ int test_test_4015(void) {
     {
 /*
 	const int size = 10+strlen(env_dir);
-	char cmd[size];	
+	char cmd[size];
         snprintf(cmd, size, "rm -rf %s", env_dir);
 
 	int r = system(cmd);

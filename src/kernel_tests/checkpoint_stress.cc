@@ -97,10 +97,10 @@ PATENT RIGHTS GRANT:
 /***
 
 
-Purpose of this test is to stress the checkpoint logic.  
+Purpose of this test is to stress the checkpoint logic.
 
 Multiple dictionaries are used.  Data is inserted, checkpoints are taken,
-and this test verifies that all checkpoints are valid.  
+and this test verifies that all checkpoints are valid.
 
 
 Parameters:
@@ -145,7 +145,7 @@ scribble(DB* db, int iter) {
 	    numkeys = oper_per_iter * 2;
 	}
     }
-    
+
     // now insert new rows for this iteration
     firstkey = iter * oper_per_iter;
     numkeys = oper_per_iter;
@@ -170,7 +170,7 @@ thin_out(DB* db, int iter) {
 	    numkeys = oper_per_iter * 2;
 	}
     }
-    
+
     int r;
     DBT keydbt;
     int64_t key;
@@ -181,18 +181,18 @@ thin_out(DB* db, int iter) {
     CKERR(r);
     r = db->pre_acquire_table_lock(db, txn);
     CKERR(r);
-	
+
     // now delete three of four rows
     firstkey = iter * oper_per_iter;
     numkeys = oper_per_iter;
-    
+
     for (key = firstkey; key < (firstkey + numkeys); key++) {
 	if (key & 0x03) {   // leave every fourth key alone
 	    r = db->del(db, txn, &keydbt, DB_DELETE_ANY);
 	    CKERR(r);
 	}
     }
-    
+
     if ( !do_log_recover )
         r = txn->commit(txn, 0);
     CKERR(r);
@@ -205,15 +205,12 @@ static void
 drop_dead(void) {
     // deliberate zerodivide or sigsegv
     printf("HAPPY CRASH\n");
-    //fflush(stdout);
-    //fflush(stderr);
 //    toku_hard_crash_on_purpose();
     printf("\nhard_carsh in kernel is on-held for implementation\n");
  //   printf("This line should never be printed\n");
-    //fflush(stdout);
 }
 
- 
+
 static void
 verify_and_insert (DB* db, int iter) {
 
@@ -231,7 +228,7 @@ verify_and_insert (DB* db, int iter) {
 	}
 	verify_sequential_rows(db, firstkey, numkeys);
     }
-    
+
     // now insert new rows for this iteration
     firstkey = iter * oper_per_iter;
     numkeys = oper_per_iter;
@@ -244,8 +241,8 @@ verify_and_insert (DB* db, int iter) {
 }
 
 
-//  Purpose of this function is to perform a variety of random acts.  
-//  This will simulate normal database operations.  The idea is for the 
+//  Purpose of this function is to perform a variety of random acts.
+//  This will simulate normal database operations.  The idea is for the
 //  the crash to occur sometimes during an insert, sometimes during a query, etc.
 static void *
 random_acts(void * d) {
@@ -253,7 +250,6 @@ random_acts(void * d) {
     DICTIONARY dictionaries = (DICTIONARY) d;
     if (verbose)
 	printf("perform random acts, %s\n", dictionaries[0].filename);
-    fflush(stdout);
     int i = 0;
     int64_t k = 0;
 
@@ -334,7 +330,7 @@ run_test (int iter, int die) {
 	verify_and_insert(db, iter);
     }
     // take checkpoint (all dictionaries)
-    snapshot(NULL, 1);    
+    snapshot(NULL, 1);
 
     if (die) {
 	// separate thread will perform random acts on other dictionaries (not 0)
@@ -377,7 +373,7 @@ int test_checkpoint_stress(void) {
         run_test(iter, crash);
     //crash = 1;
     //run_test(iter,crash);
-    
+
     post_teardown();
     return 0;
 

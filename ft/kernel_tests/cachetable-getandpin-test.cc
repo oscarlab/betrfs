@@ -103,24 +103,24 @@ static void flush (CACHEFILE cf     __attribute__((__unused__)),
 		bool keep_me     __attribute__((__unused__)),
 		bool for_checkpoint    __attribute__((__unused__)),
 		bool UU(is_clone)
-		) 
+		)
 {
 	assert((long) key.b == size.size);
 	if (!keep_me) toku_free(v);
 }
 
 	static int fetch (
-			CACHEFILE UU(cf), 
+			CACHEFILE UU(cf),
 			PAIR UU(p),
-			int UU(fd), 
-			CACHEKEY key, 
-			uint32_t UU(hash), 
-			void **vptr, 
+			int UU(fd),
+			CACHEKEY key,
+			uint32_t UU(hash),
+			void **vptr,
 			void** UU(dd),
-			PAIR_ATTR *sizep, 
-			int *dirtyp, 
+			PAIR_ATTR *sizep,
+			int *dirtyp,
 			void *UU(extra)
-			) 
+			)
 {
 	*sizep = make_pair_attr((long) key.b);
 	*vptr = toku_malloc(sizep->size);
@@ -128,7 +128,7 @@ static void flush (CACHEFILE cf     __attribute__((__unused__)),
 	return 0;
 }
 
-static void cachetable_getandpin_test (int n) 
+static void cachetable_getandpin_test (int n)
 {
 	const int test_limit = 1024*1024;
 	int r;
@@ -164,11 +164,11 @@ static void cachetable_getandpin_test (int n)
 
 
 extern "C" int test_cachetable_getandpin(void);
-int test_cachetable_getandpin(void) 
+int test_cachetable_getandpin(void)
 {
 	initialize_dummymsn();
 	int rinit = toku_ft_layer_init();
-	CKERR(rinit);	
+	CKERR(rinit);
 	cachetable_getandpin_test(8);
 	toku_ft_layer_destroy();
 	return 0;

@@ -168,9 +168,11 @@ int test_test_txn_abort5a(void) {
     int i;
     verbose=1;
     pre_setup();
-    if (verbose>0) printf("%s", __FILE__); if (verbose>1) printf("\n");
-    for (i=1; i<100; i++) 
+    if (verbose>0) printf("%s", __FILE__);
+    if (verbose>1) printf("\n");
+    for (i=1; i<100; i++) {
         test_txn_abort(i);
+    }
     if (verbose>1) printf("%s OK\n", __FILE__);
     if (verbose>0) printf(" OK\n");
     post_teardown();

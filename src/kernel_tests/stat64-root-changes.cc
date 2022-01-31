@@ -100,7 +100,7 @@ PATENT RIGHTS GRANT:
 #include <unistd.h>
 #include <sys/stat.h>
 
-static int 
+static int
 my_update_callback(DB *db UU(), const DBT *key UU(), const DBT *old_val, const DBT *extra, void (*set_val)(const DBT *new_val, void *set_extra), void *set_extra) {
     if (old_val != NULL && old_val->size == 42) // special code for delete
         set_val(NULL, set_extra);
@@ -109,7 +109,7 @@ my_update_callback(DB *db UU(), const DBT *key UU(), const DBT *old_val, const D
     return 0;
 }
 
-static void 
+static void
 run_test (void) {
     int r;
 
@@ -117,7 +117,7 @@ run_test (void) {
 
     DB_ENV *env = NULL;
     r = db_env_create(&env, 0); CKERR(r);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r = env->set_redzone(env, 0); CKERR(r);
     env->set_update(env, my_update_callback);
     r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
@@ -195,7 +195,7 @@ run_test (void) {
         r = txn->commit(txn, 0);    CKERR(r);
 
         r = db->stat64(db, NULL, &s); CKERR(r);
-        // garbage collection has happened in db->close, so 
+        // garbage collection has happened in db->close, so
         // the number of keys should be 0
         assert(s.bt_nkeys == 0 && s.bt_dsize == 0);
     }

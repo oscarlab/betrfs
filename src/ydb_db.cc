@@ -877,7 +877,7 @@ autotxn_db_change_descriptor(DB *db, DB_TXN *txn, const DBT *descriptor, uint32_
 }
 
 static void
-toku_db_set_errfile (DB *db, FILE *errfile) {
+toku_db_set_errfile (DB *db, int errfile) {
     db->dbenv->set_errfile(db->dbenv, errfile);
 }
 

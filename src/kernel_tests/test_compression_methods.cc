@@ -197,7 +197,7 @@ int test_test_compression_methods(void) {
     pre_setup();
     run_test(TOKU_NO_COMPRESSION);
     run_test(TOKU_ZLIB_METHOD);
-    run_test(TOKU_ZLIB_WITHOUT_CHECKSUM_METHOD);
+    //run_test(TOKU_ZLIB_WITHOUT_CHECKSUM_METHOD);
     run_test(TOKU_QUICKLZ_METHOD);
     //run_test(TOKU_LZMA_METHOD);
     post_teardown();

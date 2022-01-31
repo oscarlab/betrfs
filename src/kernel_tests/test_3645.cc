@@ -157,7 +157,7 @@ static void *scan_db(void *arg) {
             }
             assert(r==0 || r==DB_NOTFOUND);
         }
-        
+
         { int chk_r = cursor->c_close(cursor); CKERR(chk_r); }
         { int chk_r = txn->commit(txn,0); CKERR(chk_r); }
     }
@@ -172,7 +172,7 @@ static void *ptquery_db(void *arg) {
     int n = myarg->n;
     while(run_test) {
         int r = env->txn_begin(env, 0, &txn, DB_TXN_SNAPSHOT); CKERR(r);
-        int rand_key = random() % n;        
+        int rand_key = random() % n;
         DBT key;
         DBT val;
         memset(&val, 0, sizeof(val));
@@ -198,10 +198,10 @@ static void *update_db(void *arg) {
             int rand_val = random();
             DBT key, val;
             r = db->put(
-                db, 
-                txn, 
-                dbt_init(&key, &rand_key, sizeof(rand_key)), 
-                dbt_init(&val, &rand_val, sizeof(rand_val)), 
+                db,
+                txn,
+                dbt_init(&key, &rand_key, sizeof(rand_key)),
+                dbt_init(&val, &rand_val, sizeof(rand_val)),
                 0
                 );
             CKERR(r);
@@ -241,9 +241,9 @@ test_evictions (void) {
     key_ops.keycmp = int_dbt_cmp;
     r = env->set_key_ops(env, &key_ops); CKERR(r);
     // set the cache size to 10MB
-    r = env->set_cachesize(env, 0, 100000, 1); CKERR(r);
+    r = env->set_cachesize(env, 0, 1000000, 1); CKERR(r);
     r=env->open(env, file, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
-    r = env->checkpointing_set_period(env, 10); 
+    r = env->checkpointing_set_period(env, 10);
     CKERR(r);
 
 
@@ -268,13 +268,13 @@ test_evictions (void) {
     for (int i=0; i<n; i++) {
         keys[i] = i;
     }
-    
+
     if (verbose) printf("starting insertion of elements to setup test\n");
     for (int i=0; i<n; i++) {
         DBT key, val;
         r = db->put(db, null_txn, dbt_init(&key, &keys[i], sizeof keys[i]), dbt_init(&val, &i, sizeof i), 0);
         assert(r == 0);
-    } 
+    }
 
     //
     // the threads that we want:
@@ -323,7 +323,7 @@ test_evictions (void) {
 
     // make the guy that sleeps
     { int chk_r = toku_pthread_create(&mytids[6], NULL, test_time, NULL); CKERR(chk_r); }
-    
+
     for (uint32_t i = 0; i < sizeof(myargs)/sizeof(myargs[0]); i++) {
         void *ret;
         r = toku_pthread_join(mytids[i], &ret); assert_zero(r);
@@ -343,15 +343,15 @@ static inline void parse_3645_args (int argc, char *const argv[]) {
         int resultcode=0;
         if (strcmp(argv[1], "-v")==0) {
             verbose++;
-        } 
+        }
         else if (strcmp(argv[1], "-q")==0) {
             verbose=0;
-        } 
+        }
         else if (strcmp(argv[1], "-h")==0) {
         do_usage:
-            fprintf(stderr, "Usage:\n%s [-v|-h-q|--num_elements number | --num_seconds number]\n", argv0);
+            dprintf(STDERR, "Usage:\n%s [-v|-h-q|--num_elements number | --num_seconds number]\n", argv0);
             exit(resultcode);
-        } 
+        }
         else if (strcmp(argv[1], "--num_elements") == 0) {
             argc--;
             argv++;

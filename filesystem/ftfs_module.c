@@ -59,7 +59,7 @@ static void __exit ftfs_module_exit(void)
 {
 	exit_ftfs_fs();
 
-	if (sb_private_umount())
+	if (ftfs_vfs && sb_private_umount())
 		ftfs_error(__func__, "unable to umount ftfs southbound");
 }
 
@@ -67,7 +67,15 @@ static int resolve_ftfs_symbols(void)
 {
 	if (resolve_ftfs_southbound_symbols() ||
 	    resolve_sb_files_symbols() ||
+#ifdef FT_INDIRECT
+	    resolve_sb_pfn_symbols() ||
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
+	    resolve_nb_readahead_symbols() ||
+#endif /* LINUX_VERSION_CODE */
+
+#endif
 	    resolve_sb_malloc_symbols() ||
+	    resolve_nb_super_symbols() ||
 	    resolve_toku_misc_symbols()) {
 		return -EINVAL;
 	}
@@ -80,7 +88,6 @@ static int __init ftfs_module_init(void)
 
 	// Try manually init-ing this field
 	ftfs_vfs = NULL;
-
 	ret = resolve_ftfs_symbols();
 	if (ret) {
 		ftfs_error(__func__, "could not resolve all symbols!");

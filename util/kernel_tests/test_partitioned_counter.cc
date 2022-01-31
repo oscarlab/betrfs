@@ -259,10 +259,15 @@ static void do_testit2 (void)
 
 extern "C" int test_partitioned_counter(void);
 int test_partitioned_counter() {
+    partitioned_counters_init();
+
     int ret = do_testit();
-    if(ret != 0) return -1;
+    if(ret != 0) ret = -1;
     else {
         do_testit2();
-        return 0;
+        ret = 0;
     }
+
+    partitioned_counters_destroy();
+    return ret;
 }

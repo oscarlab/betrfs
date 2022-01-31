@@ -175,7 +175,7 @@ stress_table(DB_ENV *env, DB **dbp, struct cli_args *cli_args) {
         myargs[i].operation = ptquery_op;
     }
 
-    run_workers(myargs, num_threads, cli_args->num_seconds, false, cli_args);
+    run_workers(myargs, num_threads, cli_args->num_seconds, cli_args);
 
     toku_free(update_history_buffer);
 }

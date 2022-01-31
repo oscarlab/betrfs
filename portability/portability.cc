@@ -138,11 +138,9 @@ PATENT RIGHTS GRANT:
 
 #include <sys/stat.h>
 
-#ifdef TOKU_LINUX_MODULE
 #include <ft/leafentry.h>
 #include <ft/xids.h>
 #include <ft/ule-internal.h>
-
 extern "C" int
 init_ule_cache(size_t size, unsigned long flags, void (*ctor)(void *));
 extern "C" int init_ftfs_kernel_caches(void);
@@ -156,11 +154,10 @@ extern "C" void destroy_ftfs_kernel_caches(void) {
     destroy_ule_cache();
 }
 
+#ifdef TOKU_LINUX_MODULE
 extern "C" int ftfs_toku_lock_file(const char *, size_t);
 extern "C" int ftfs_toku_unlock_file(const char *, size_t);
-
 #endif
-
 
 int
 toku_portability_init(void) {
@@ -313,6 +310,7 @@ toku_os_unlock_file(int fildes, const char *name) {
 #ifdef TOKU_LINUX_MODULE
     int r = ftfs_toku_unlock_file(name, strlen(name));
 #else
+    (void)name;
     int r = flock(fildes, LOCK_UN);
 #endif
     if (r==0) r = close(fildes);
@@ -326,15 +324,16 @@ static int set_file_header_to_zero(const char *name, bool is_log)
 {
     int fd = open(name, O_RDWR, S_IRUSR | S_IWUSR);
     if (fd < 0) {
-        printf("%s: open failed ret=%d\n", __func__, fd);
+        printf("%s: open failed ret=%d, name=%s\n", __func__, fd, name);
         return get_error_errno(fd);
     }
+
     char *XMALLOC_N_ALIGNED(4096, HEADER_RESET_LENGTH, buf);
     assert(buf != NULL);
     memset(buf, 0, HEADER_RESET_LENGTH);
 
     ssize_t ret;
-    if (ftfs_is_hdd() || is_log) {
+    if (!ftfs_simplefs_dio() || is_log) {
         ret = toku_os_pwrite(fd, buf, HEADER_RESET_LENGTH, 0);
         if (ret != 0) {
             printf("%s: toku_os_pwrite failed, ret=%ld\n", __func__, ret);
@@ -342,6 +341,18 @@ static int set_file_header_to_zero(const char *name, bool is_log)
         }
         fsync(fd);
     } else {
+#ifdef TOKU_LINUX_MODULE
+        /*
+         * YZJ: The inode of the file may still have pages in the
+         * page cache which is left by the previous unit test.
+         * Let us clean it up here, the following test will not
+         * be impacted by what is left in the previous test.
+         */
+        sb_sfs_truncate_page_cache(fd);
+#else
+        /* Do not call use sfs_dio for user space code */
+        assert(false);
+#endif
         ret = sb_sfs_dio_write(fd, buf, HEADER_RESET_LENGTH, 0, nullptr);
         if (ret != HEADER_RESET_LENGTH) {
             printf("%s: sb_sfs_dio_write failed, ret=%ld\n", __func__, ret);
@@ -463,8 +474,11 @@ toku_os_get_max_process_data_size(uint64_t *maxdata) {
 #ifndef TOKU_LINUX_MODULE
 int
 toku_stat(const char *name, toku_struct_stat *buf) {
+    int r = 0;
     memset(buf, 0, sizeof(toku_struct_stat));
-    return  stat64(name, buf);
+    r = stat(name, buf);
+    if (r != 0) return -errno;
+    else return r;
 }
 #else
 //extern "C" int stat(const char *name, struct stat *buf);
@@ -505,38 +519,6 @@ toku_get_processor_frequency_sys(uint64_t *hzret) {
 
 #ifndef TOKU_LINUX_MODULE
 static int
-toku_get_processor_frequency_cpuinfo(uint64_t *hzret) {
-    int r;
-    FILE *fp = fopen("/proc/cpuinfo", "r");
-    if (!fp) {
-        // Can't cast fp to an int :(
-        r = ENOSYS;
-    } else {
-        uint64_t maxhz = 0;
-        char *buf = NULL;
-        size_t n = 0;
-        while (getline(&buf, &n, fp) >= 0) {
-            unsigned int cpu;
-            sscanf(buf, "processor : %u", &cpu);
-            unsigned int ma, mb;
-            if (sscanf(buf, "cpu MHz : %u.%u", &ma, &mb) == 2) {
-                uint64_t hz = ma * 1000000ULL + mb * 1000ULL;
-                if (hz > maxhz)
-                    maxhz = hz;
-            }
-        }
-        if (buf)
-            free(buf);
-        fclose(fp);
-        *hzret = maxhz;
-        r = maxhz == 0 ? ENOENT : 0;;
-    }
-    return r;
-}
-#endif
-
-#ifndef TOKU_LINUX_MODULE
-static int
 toku_get_processor_frequency_sysctl(const char * const cmd, uint64_t *hzret) {
     int r = 0;
     FILE *fp = popen(cmd, "r");
@@ -546,7 +528,7 @@ toku_get_processor_frequency_sysctl(const char * const cmd, uint64_t *hzret) {
     } else {
         r = fscanf(fp, "%" SCNu64, hzret);
         if (r != 1) {
-            r = get_maybe_error_errno();
+            r = get_error_errno(r);
         } else {
             r = 0;
         }
@@ -567,7 +549,7 @@ toku_os_get_processor_frequency(uint64_t *hzret) {
     } else {
         r = toku_get_processor_frequency_sys(hzret);
         if (r != 0)
-            r = toku_get_processor_frequency_cpuinfo(hzret);
+            r = toku_get_processor_frequency_sysctl("grep 'cpu MHz' /proc/cpuinfo | head -1 | cut -d ':' -f2 | echo $(cat -)*1000*1000 | bc -l | cut -d '.' -f1", hzret);
         if (r != 0)
             r = toku_get_processor_frequency_sysctl("sysctl -n hw.cpufrequency", hzret);
         if (r != 0)
@@ -596,11 +578,7 @@ toku_get_filesystem_sizes(const char *path, uint64_t *avail_size, uint64_t *free
 #endif
 
     if (r < 0){
-#ifdef TOKU_LINUX_MODULE
         r = get_error_errno(r);
-#else
-        r = get_error_errno();
-#endif
     } else {
 
         // get the block size in bytes

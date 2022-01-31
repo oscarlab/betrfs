@@ -114,7 +114,7 @@ PATENT RIGHTS GRANT:
 //  Both actions must acquire a cachetable lock during that time, so definitely saves time to do it that way.
 
 
-//#include <stdlib.h>
+#include <stdlib.h>
 //#include <errno.h>
 #include <string.h>
 //#include <sys/time.h>
@@ -178,7 +178,7 @@ static void time_nop (void) {
 	gettimeofday(&end,   NULL);
 	long long diff = factor*toku_tdiff(&end, &start)/N;
 	if (verbose>1)
-	    fprintf(stderr, "nop               = %lldns/(lock+unlock)\n", diff);
+	    dprintf(STDERR, "nop               = %lldns/(lock+unlock)\n", diff);
 	best_nop_time=mind(best_nop_time,diff);
     }
 }
@@ -200,7 +200,7 @@ static void time_fcall (void) {
 	gettimeofday(&end,   NULL);
 	long long diff = factor*toku_tdiff(&end, &start)/N;
 	if (verbose>1)
-	    fprintf(stderr, "fcall             = %lldns/(lock+unlock)\n", diff);
+	    dprintf(STDERR, "fcall             = %lldns/(lock+unlock)\n", diff);
 	best_fcall_time=mind(best_fcall_time,diff);
     }
 }
@@ -218,7 +218,7 @@ static void time_cas (void) {
 	gettimeofday(&end,   NULL);
 	long long diff = factor*toku_tdiff(&end, &start)/N;
 	if (verbose>1)
-	    fprintf(stderr, "cas           = %lldns/(lock+unlock)\n", diff);
+	    dprintf(STDERR, "cas           = %lldns/(lock+unlock)\n", diff);
 	best_cas_time=mind(best_cas_time,diff);
     }
 }
@@ -242,7 +242,7 @@ static void time_pthread_mutex (void) {
 	gettimeofday(&end,   NULL);
 	long long diff = factor*toku_tdiff(&end, &start)/N;
 	if (verbose>1)
-	    fprintf(stderr, "pthread_mutex     = %lldns/(lock+unlock)\n", diff);
+	    dprintf(STDERR, "pthread_mutex     = %lldns/(lock+unlock)\n", diff);
 	best_mutex_time=mind(best_mutex_time,diff);
     }
     { int r = pthread_mutex_destroy(&mutex);    assert(r==0); }
@@ -265,7 +265,7 @@ static void time_pthread_rwlock (void) {
 	gettimeofday(&end,   NULL);
 	long long diff = factor*toku_tdiff(&end, &start)/N;
 	if (verbose>1)
-	    fprintf(stderr, "pthread_rwlock(r) = %lldns/(lock+unlock)\n", diff);
+	    dprintf(STDERR, "pthread_rwlock(r) = %lldns/(lock+unlock)\n", diff);
 	best_rwlock_time=mind(best_rwlock_time,diff);
     }
     toku_pthread_rwlock_destroy(&mutex);
@@ -306,7 +306,7 @@ void time_ft_rwlock (void) {
 	gettimeofday(&end,   NULL);
 	double diff = 1e9*toku_tdiff(&end, &start)/N;
 	if (verbose>1)
-	    fprintf(stderr, "ft_rwlock(r) = %.6fns/(lock+unlock)\n", diff);
+	    dprintf(STDERR, "ft_rwlock(r) = %.6fns/(lock+unlock)\n", diff);
 	best_ft_time=mind(best_ft_time,diff);
     }
     rwlock_destroy(&rwlock);
@@ -336,7 +336,7 @@ void time_ft_prelocked_rwlock (void) {
 	gettimeofday(&end,   NULL);
 	double diff = 1e9*toku_tdiff(&end, &start)/N;
 	if (verbose>1)
-	    fprintf(stderr, "ft_rwlock(r) = %.6fns/(lock+unlock)\n", diff);
+	    dprintf(STDERR, "ft_rwlock(r) = %.6fns/(lock+unlock)\n", diff);
 	best_prelocked_time=mind(best_prelocked_time,diff);
     }
     rwlock_destroy(&rwlock);
@@ -363,7 +363,7 @@ void time_toku_fair_rwlock (void) {
 	gettimeofday(&end,   NULL);
 	long long diff = factor*toku_tdiff(&end, &start)/N;
 	if (verbose>1)
-	    fprintf(stderr, "pthread_fair(r)   = %lldns/(lock+unlock)\n", diff);
+	    dprintf(STDERR, "pthread_fair(r)   = %lldns/(lock+unlock)\n", diff);
 	best_fair_rwlock_time=mind(best_fair_rwlock_time,diff);
     }
     toku_fair_rwlock_destroy(&mutex);
@@ -386,7 +386,7 @@ void time_toku_cv_fair_rwlock(void) {
 	gettimeofday(&end,   NULL);
 	long long diff = factor*toku_tdiff(&end, &start)/N;
 	if (verbose>1)
-	    fprintf(stderr, "pthread_cvfair(r) = %lldns/(lock+unlock)\n", diff);
+	    dprintf(STDERR, "pthread_cvfair(r) = %lldns/(lock+unlock)\n", diff);
 	best_cv_fair_rwlock_time=mind(best_cv_fair_rwlock_time,diff);
     }
     toku_cv_fair_rwlock_destroy(&mutex);
@@ -627,4 +627,3 @@ int test_fair_rwlock () {
     }
     return 0;
 }
-

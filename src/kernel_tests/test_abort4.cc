@@ -89,7 +89,7 @@ PATENT RIGHTS GRANT:
 #ident "Copyright (c) 2007-2013 Tokutek Inc.  All rights reserved."
 #include "test.h"
 
-//Verify aborting transactions works properly when transaction 
+//Verify aborting transactions works properly when transaction
 //starts with an empty db and a table lock.
 
 #include <errno.h>
@@ -154,7 +154,7 @@ put(uint32_t k, uint32_t v) {
 static void
 test_insert_and_abort(uint32_t num_to_insert) {
     find_num = 0;
-    
+
     uint32_t k;
     uint32_t v;
 
@@ -169,7 +169,7 @@ test_insert_and_abort(uint32_t num_to_insert) {
 
 static void
 test_insert_and_abort_and_insert(uint32_t num_to_insert) {
-    test_insert_and_abort(num_to_insert); 
+    test_insert_and_abort(num_to_insert);
     find_num = num_to_insert / 2;
     uint32_t k, v;
     uint32_t i;
@@ -254,7 +254,6 @@ runtests(void) {
             if (verbose) {
                 printf("\t%s:%d-%s() close_first=%d n=%06x\n",
                        __FILE__, __LINE__, __FUNCTION__, close_first, n);
-                fflush(stdout);
             }
             init();
             test_insert_and_abort(n);
@@ -287,4 +286,3 @@ int test_test_abort4(void) {
     post_teardown();
     return 0;
 }
-

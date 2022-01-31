@@ -98,7 +98,7 @@ static const char *fname;
 static TOKUTXN const null_txn = 0;
 
 static int
-save_data (ITEMLEN UU(keylen), bytevec UU(key), ITEMLEN vallen, bytevec val, void *v, bool lock_only) {
+save_data (ITEMLEN UU(keylen), bytevec UU(key), ITEMLEN vallen, bytevec val, void *v, bool lock_only, bool UU(is_indirect)) {
     if (lock_only) return 0;
     assert(key!=NULL);
     void **CAST_FROM_VOIDP(vp, v);

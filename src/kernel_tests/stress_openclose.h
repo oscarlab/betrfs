@@ -93,11 +93,6 @@ PATENT RIGHTS GRANT:
 #include "threaded_stress_test_helpers.h"
 #include <portability/toku_atomic.h>
 
-// set this to true for the recovery version of this stress test
-// the way this works is to include this header and set 
-// crash_at_end = true;
-static bool stress_openclose_crash_at_end;
-
 //
 // Stress test ft reference counting
 //
@@ -121,7 +116,7 @@ static bool stress_openclose_crash_at_end;
 // they were closed and possibly closing afterwards.
 // - this should stress both open db handles and various txns
 // references dbs simultaneously.
-// 
+//
 // and all while this is happening, throw in scanners, updaters,
 // and query threads that all assert the contents of these dbs
 // is correct, even after recovery.
@@ -130,7 +125,6 @@ static bool stress_openclose_crash_at_end;
     do {                            \
         if (verbose) {              \
             printf(__VA_ARGS__);    \
-            fflush(stdout);         \
         }                           \
     } while (0)
 
@@ -224,7 +218,7 @@ scan_some_dbs(DB_TXN *txn, ARG arg, void* operation_extra, void *UU(stats_extra)
 }
 
 // update a couple of dbs in some buckets with a txn
-static int 
+static int
 update_some_dbs(DB_TXN *txn, ARG arg, void *op_extra, void *stats_extra) {
     int r = 0;
     verbose_printf("updating some dbs\n");
@@ -240,7 +234,7 @@ update_some_dbs(DB_TXN *txn, ARG arg, void *op_extra, void *stats_extra) {
 }
 
 // point query a couple of dbs in some buckets with a txn
-static int 
+static int
 ptquery_some_dbs(DB_TXN *txn, ARG arg, void *UU(op_extra), void *UU(stats_extra)) {
     int r = 0;
     verbose_printf("querying some dbs\n");
@@ -291,13 +285,13 @@ stress_table(DB_ENV *env, DB **dbp, struct cli_args *cli_args) {
 
     num_buckets = cli_args->num_DBs;
     open_buckets = num_buckets;
-    // each thread gets access to this array of db buckets, from 
+    // each thread gets access to this array of db buckets, from
     // which they can choose a random db to either touch or query
     XMALLOC_N(num_buckets, buckets);
     for (int i = 0; i < num_buckets; i++) {
         struct db_bucket bucket = {
             .env = env,
-            .db = dbp[i], 
+            .db = dbp[i],
             .is_open = true
         };
         buckets[i] = bucket;
@@ -311,11 +305,8 @@ stress_table(DB_ENV *env, DB **dbp, struct cli_args *cli_args) {
     //        num_buckets, update_threads, query_threads);
     verbose_printf("stressing %d tables using %d update threads\n",
             num_buckets, update_threads);
-    // stress_openclose_crash_at_end should be changed to true or false, 
-    // depending if this test is for recovery or not.
-    const bool crash_at_end = stress_openclose_crash_at_end;
-    run_workers(myargs, total_threads, cli_args->num_seconds, crash_at_end, cli_args);
-    
+    run_workers(myargs, total_threads, cli_args->num_seconds, cli_args);
+
     // the stress test is now complete. get ready for shutdown/close.
     //
     // make sure that every db in the original array is opened
@@ -323,7 +314,7 @@ stress_table(DB_ENV *env, DB **dbp, struct cli_args *cli_args) {
     for (int i = 0; i < num_buckets; i++) {
         // close whatever is open
         if (buckets[i].is_open) {
-            DB *db = buckets[i].db; 
+            DB *db = buckets[i].db;
             int r = db->close(db, 0);
             CKERR(r);
         }

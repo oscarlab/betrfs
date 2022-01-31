@@ -100,8 +100,7 @@ PATENT RIGHTS GRANT:
 #include <toku_assert.h>
 #include <portability/toku_atomic.h>
 
-void
-toku_reset_root_xid_that_created(FT ft, TXNID new_root_xid_that_created) {
+void toku_reset_root_xid_that_created(FT ft, TXNID new_root_xid_that_created) {
     // Reset the root_xid_that_created field to the given value.
     // This redefines which xid created the dictionary.
 
@@ -485,7 +484,7 @@ int toku_read_ft_and_store_in_cachefile (FT_HANDLE brt, CACHEFILE cf, LSN max_ac
         int fd = toku_cachefile_get_fd(cf);
         r = toku_deserialize_ft_from(fd, max_acceptable_lsn, &h);
         if (r == TOKUDB_BAD_CHECKSUM) {
-            fprintf(stderr, "Checksum failure while reading header in file %s.\n", toku_cachefile_fname_in_env(cf));
+            dprintf(STDERR, "Checksum failure while reading header in file %s.\n", toku_cachefile_fname_in_env(cf));
             assert(false);  // make absolutely sure we crash before doing anything else
         }
     }
@@ -1157,12 +1156,8 @@ toku_single_process_lock(const char *lock_dir, const char *which, int *lockfd) {
     assert(l+1 == (signed)(sizeof(lockfname)));
     *lockfd = toku_os_lock_file(lockfname);
     if (*lockfd < 0) {
-#ifdef TOKU_LINUX_MODULE
         int e = get_error_errno(*lockfd);
-#else
-        int e = get_error_errno();
-#endif
-        fprintf(stderr, "Couldn't start tokudb because some other tokudb process is using the same directory [%s] for [%s]\n", lock_dir, which);
+        dprintf(STDERR, "Couldn't start tokudb because some other tokudb process is using the same directory [%s] for [%s]\n", lock_dir, which);
         return e;
     }
     return 0;

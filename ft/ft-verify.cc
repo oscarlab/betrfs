@@ -101,14 +101,14 @@ PATENT RIGHTS GRANT:
 #include "ft-internal.h"
 #include "ft.h"
 
-static int 
+static int
 compare_pairs (FT_HANDLE brt, const DBT *a, const DBT *b) {
     FAKE_DB(db, &brt->ft->cmp_descriptor);
     int cmp = brt->ft->key_ops.keycmp(&db, a, b);
     return cmp;
 }
 
-static int 
+static int
 compare_pair_to_key (FT_HANDLE brt, const DBT *a, bytevec key, ITEMLEN keylen) {
     DBT y;
     FAKE_DB(db, &brt->ft->cmp_descriptor);
@@ -160,7 +160,7 @@ get_ith_key_dbt (BASEMENTNODE bn, int i) {
 #define VERIFY_ASSERTION(predicate, i, string) ({                                                                              \
     if(!(predicate)) {                                                                                                         \
         if (verbose) {                                                                                                         \
-            fprintf(stderr, "%s:%d: Looking at child %d of block %" PRId64 ": %s\n", __FILE__, __LINE__, i, blocknum.b, string); \
+            dprintf(STDERR, "%s:%d: Looking at child %d of block %" PRId64 ": %s\n", __FILE__, __LINE__, i, blocknum.b, string); \
         }                                                                                                                      \
         result = TOKUDB_NEEDS_REPAIR;                                                                                          \
         if (!keep_going_on_failure) goto done;                                                                                 \
@@ -169,7 +169,7 @@ get_ith_key_dbt (BASEMENTNODE bn, int i) {
 #define VERIFY_ASSERTION2(predicate, i, string) ({                                                                              \
     if(!(predicate)) {                                                                                                         \
         if (verbose) {                                                                                                         \
-            fprintf(stderr, "%s:%d: Looking at child %d of block %" PRId64 ": %s\n", __FILE__, __LINE__, i, p_blocknum->b, string); \
+            dprintf(STDERR, "%s:%d: Looking at child %d of block %" PRId64 ": %s\n", __FILE__, __LINE__, i, p_blocknum->b, string); \
         }                                                                                                                      \
         *p_result = TOKUDB_NEEDS_REPAIR;                                                                                          \
         if (!keep_going_on_failure) return -1;                                                                                 \
@@ -335,7 +335,7 @@ struct verify_sub_args {
 
 //this is so shameful...
 static int verify_sub(FT_MSG msg, bool is_fresh, void *args) {
-                       
+
             enum ft_msg_type type = (enum ft_msg_type) ft_msg_get_type(msg);
             void * key = ft_msg_get_key(msg);
             uint32_t keylen = ft_msg_get_keylen(msg);
@@ -343,13 +343,13 @@ static int verify_sub(FT_MSG msg, bool is_fresh, void *args) {
             uint32_t datalen = ft_msg_get_vallen(msg);
             MSN msn  = ft_msg_get_msn(msg);
             XIDS xid = ft_msg_get_xids(msg);
-            
+
             struct verify_sub_args * vs_args = (struct verify_sub_args *) args;
             int i = vs_args -> i;
             FT_HANDLE brt = vs_args->brt;
             const DBT * curr_less_pivot = vs_args->curr_less_pivot;
             const DBT * curr_geq_pivot = vs_args->curr_geq_pivot;
-            MSN * p_last_msn = vs_args->p_last_msn; 
+            MSN * p_last_msn = vs_args->p_last_msn;
             MSN * p_this_msn = vs_args ->p_this_msn;
             NONLEAF_CHILDINFO bnc = vs_args->bnc;
             BLOCKNUM * p_blocknum = vs_args->p_blocknum;
@@ -446,10 +446,10 @@ toku_verify_ftnode_internal(FT_HANDLE brt,
             VERIFY_ASSERTION(verify_sorted_by_key_msn(brt, bnc->buffer, bnc->fresh_message_tree) == 0, i, "fresh_message_tree");
             VERIFY_ASSERTION(verify_sorted_by_key_msn(brt, bnc->buffer, bnc->stale_message_tree) == 0, i, "stale_message_tree");
            // FIFO_ITERATE(bnc->buffer, key, keylen, data, datalen, itype, msn, xid, is_fresh,
-            
-           struct verify_sub_args args = {i, brt, curr_less_pivot, curr_geq_pivot, &last_msn, &this_msn, bnc, &blocknum, &result, verbose,  keep_going_on_failure}; 
+
+           struct verify_sub_args args = {i, brt, curr_less_pivot, curr_geq_pivot, &last_msn, &this_msn, bnc, &blocknum, &result, verbose,  keep_going_on_failure};
             int r = toku_fifo_iterate(bnc->buffer, verify_sub, &args);
-           if(r) goto done; 
+           if(r) goto done;
             struct verify_message_tree_extra extra = { .fifo = bnc->buffer, .broadcast = false, .is_fresh = true, .i = i, .verbose = verbose, .blocknum = node->thisnodename, .keep_going_on_failure = keep_going_on_failure, .messages_have_been_moved = messages_have_been_moved };
             r = bnc->fresh_message_tree.iterate<struct verify_message_tree_extra, verify_message_tree>(&extra);
             if (r != 0) { result = r; goto done; }
@@ -535,7 +535,7 @@ toku_verify_ftnode (FT_HANDLE brt,
         result = result2;
         if (result != 0 && (!keep_going_on_failure || result != TOKUDB_NEEDS_REPAIR)) goto done;
     }
-    
+
     // Verify that the subtrees have the right properties.
     if (recurse && node->height > 0) {
         for (int i = 0; i < node->n_children; i++) {
@@ -555,14 +555,14 @@ toku_verify_ftnode (FT_HANDLE brt,
     }
 done:
     toku_unpin_ftnode(brt->ft, node);
-    
-    if (result == 0 && progress_callback) 
+
+    if (result == 0 && progress_callback)
     result = progress_callback(progress_extra, 0.0);
-    
+
     return result;
 }
 
-int 
+int
 toku_verify_ft_with_progress (FT_HANDLE brt, int (*progress_callback)(void *extra, float progress), void *progress_extra, int verbose, int keep_on_going) {
     assert(brt->ft);
     FTNODE root_node = NULL;
@@ -582,7 +582,7 @@ toku_verify_ft_with_progress (FT_HANDLE brt, int (*progress_callback)(void *extr
     return r;
 }
 
-int 
+int
 toku_verify_ft (FT_HANDLE brt) {
     return toku_verify_ft_with_progress(brt, NULL, NULL, 0, 0);
 }

@@ -125,21 +125,21 @@ test_loader_abort (bool do_compress, bool abort_loader, bool abort_txn) {
 
     DB_LOADER *loader;
     uint32_t db_flags = 0;
-    uint32_t dbt_flags = 0;    
+    uint32_t dbt_flags = 0;
     uint32_t loader_flags = do_compress ? LOADER_COMPRESS_INTERMEDIATES : 0;
     DBC* cursor = NULL;
 
     /* create the dup database file */
     r = db_env_create(&env, 0);        assert(r == 0);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r = env->set_generate_row_callback_for_put(env, put_multiple_generate);
     CKERR(r);
     r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL|DB_CREATE|DB_THREAD |DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_TXN|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r = db_create(&db, env, 0); assert(r == 0);
-    db->set_errfile(db,stderr); // Turn off those annoying errors
+    db->set_errfile(db, STDERR); // Turn off those annoying errors
     r = db->open(db, null_txn, fname, NULL, DB_BTREE, DB_CREATE, 0666); assert(r == 0);
 
-    r = env->txn_begin(env, NULL, &txn, 0);                                                               
+    r = env->txn_begin(env, NULL, &txn, 0);
     CKERR(r);
 
     r = env->create_loader(env, txn, &loader, db, 1, &db, &db_flags, &dbt_flags, loader_flags);
@@ -153,11 +153,11 @@ test_loader_abort (bool do_compress, bool abort_loader, bool abort_txn) {
         k = i;
         v = i;
         r = loader->put(
-            loader, 
-            dbt_init(&key, &k, sizeof k), 
+            loader,
+            dbt_init(&key, &k, sizeof k),
             dbt_init(&val, &v, sizeof v)
             );
-        assert(r == 0); 
+        assert(r == 0);
     }
     if (abort_loader) {
         loader->abort(loader);
@@ -177,8 +177,8 @@ test_loader_abort (bool do_compress, bool abort_loader, bool abort_txn) {
         r = txn->commit(txn, 0);
         CKERR(r);
     }
-    
-    r = env->txn_begin(env, NULL, &txn, 0);                                                               
+
+    r = env->txn_begin(env, NULL, &txn, 0);
     CKERR(r);
     r = db->cursor(db, txn, &cursor, 0); assert(r == 0);
     DBT k1; memset(&k1, 0, sizeof k1);

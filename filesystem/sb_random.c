@@ -8,12 +8,7 @@
 
 #include <linux/slab.h>
 #include <linux/version.h>
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
-#include <asm/uaccess.h>
-#else
 #include <linux/uaccess.h>
-#endif
 
 #include <linux/random.h>
 #include "sb_random.h"

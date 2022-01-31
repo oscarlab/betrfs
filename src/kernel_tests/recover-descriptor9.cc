@@ -126,7 +126,7 @@ static void run_test(void)
     DBT desc;
 
     do_crash = false;
-    
+
     memset(&desc, 0, sizeof(desc));
     desc.size = sizeof(four_byte_desc);
     desc.data = &four_byte_desc;
@@ -140,7 +140,7 @@ static void run_test(void)
     { int chk_r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
     { int chk_r = db_env_create(&env, 0); CKERR(chk_r); }
     db_env_set_checkpoint_callback2(checkpoint_callback_1, NULL);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     { int chk_r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
 
     IN_TXN_COMMIT(env, NULL, txn_1, 0, {
@@ -159,7 +159,7 @@ static void run_test(void)
             { int chk_r = db3->change_descriptor(db3, txn_3, &other_desc, 0); CKERR(chk_r); }
             assert_desc_eight(db3);
         });
-    
+
     { int chk_r = env->txn_begin(env, NULL, &txn, 0); CKERR(chk_r); }
     { int chk_r = db->change_descriptor(db, txn, &desc, 0); CKERR(chk_r); }
     { int chk_r = txn->commit(txn,0); CKERR(chk_r); }

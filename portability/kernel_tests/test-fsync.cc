@@ -138,7 +138,6 @@ static void
 time_many_fsyncs_one_file(int N, int bytes, int fds[/*N*/]) {
     if (verbose>1) {
         printf("Starting %s\n", __FUNCTION__);
-        fflush(stdout);
     }
     struct timeval begin;
     struct timeval after_first;
@@ -146,7 +145,6 @@ time_many_fsyncs_one_file(int N, int bytes, int fds[/*N*/]) {
     write_to_files(1, bytes, fds);
     if (verbose>1) {
         printf("Done writing to os buffers\n");
-        fflush(stdout);
     }
     int i;
     int r;
@@ -171,10 +169,9 @@ time_many_fsyncs_one_file(int N, int bytes, int fds[/*N*/]) {
                "\tTotal time [%" PRIu64 "] seconds\n",
                N + 1,
                toku_tdiff(&after_first, &begin),
-               N, 
+               N,
                toku_tdiff(&end, &after_first),
                toku_tdiff(&end, &begin));
-        fflush(stdout);
     }
 }
 
@@ -182,12 +179,10 @@ static void
 time_fsyncs_many_files(int N, int bytes, int fds[/*N*/]) {
     if (verbose>1) {
         printf("Starting %s\n", __FUNCTION__);
-        fflush(stdout);
     }
     write_to_files(N, bytes, fds);
     if (verbose>1) {
         printf("Done writing to os buffers\n");
-        fflush(stdout);
     }
     struct timeval begin;
     struct timeval after_first;
@@ -206,7 +201,6 @@ time_fsyncs_many_files(int N, int bytes, int fds[/*N*/]) {
         }
         if (verbose>2) {
             printf("Done fsyncing %d\n", i);
-            fflush(stdout);
         }
     }
     r = gettimeofday(&end, NULL);
@@ -221,7 +215,6 @@ time_fsyncs_many_files(int N, int bytes, int fds[/*N*/]) {
                N-1,
                toku_tdiff(&end, &after_first),
                toku_tdiff(&end, &begin));
-        fflush(stdout);
     }
 }
 
@@ -231,13 +224,11 @@ static void
 time_sync_fsyncs_many_files(int N, int bytes, int fds[/*N*/]) {
     if (verbose>1) {
         printf("Starting %s\n", __FUNCTION__);
-        fflush(stdout);
     }
     //TODO: timing
     write_to_files(N, bytes, fds);
     if (verbose>1) {
         printf("Done writing to os buffers\n");
-        fflush(stdout);
     }
     int i;
     int r;
@@ -254,7 +245,6 @@ time_sync_fsyncs_many_files(int N, int bytes, int fds[/*N*/]) {
     CKERR(r);
     if (verbose>1) {
         printf("Done with sync()\n");
-        fflush(stdout);
     }
 
     for (i = 0; i < N; i++) {
@@ -262,7 +252,6 @@ time_sync_fsyncs_many_files(int N, int bytes, int fds[/*N*/]) {
         CKERR(r);
         if (verbose>2) {
             printf("Done fsyncing %d\n", i);
-            fflush(stdout);
         }
     }
     r = gettimeofday(&end, NULL);
@@ -278,7 +267,6 @@ time_sync_fsyncs_many_files(int N, int bytes, int fds[/*N*/]) {
                N,
                toku_tdiff(&end, &after_sync),
                toku_tdiff(&end, &begin));
-        fflush(stdout);
     }
 }
 #endif
@@ -290,7 +278,7 @@ int test_fsync_options(int N, int bytes) {
     int r;
     //N = 1000;
     //bytes = 4096;
-   
+
     r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
 
@@ -306,8 +294,8 @@ int test_fsync_options(int N, int bytes) {
     for (int i=0; i<N; i++) {
 	if(fds[i]>=0)
 		close(fds[i]);
-    } 	
-	
+    }
+
 
     return 0;
 }

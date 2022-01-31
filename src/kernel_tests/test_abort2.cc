@@ -120,7 +120,7 @@ do_test_abort2 (void) {
     r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);       assert(r==0);
 
     r=db_env_create(&env, 0); assert(r==0);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r=env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r=db_create(&db, env, 0); CKERR(r);
     r=db->set_pagesize(db, 4096); // Use a small page
@@ -143,7 +143,7 @@ do_test_abort2 (void) {
 
     // Now do a few inserts that abort.
     r=db_env_create(&env, 0); assert(r==0);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r=env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r=db_create(&db, env, 0); CKERR(r);
     r=env->txn_begin(env, 0, &txn, 0); CKERR(r);
@@ -190,7 +190,7 @@ do_test_abort2 (void) {
 	assert(((char*)data.data)[0]=='0');
     }
     r=txn->abort(txn); CKERR(r);
-    
+
     r=db->close(db, 0); CKERR(r);
     r=env->close(env, 0); CKERR(r);
 

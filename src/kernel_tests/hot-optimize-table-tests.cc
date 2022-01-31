@@ -151,7 +151,7 @@ hot_test_setup(void)
     // Set up a new TokuDB.
     { int chk_r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
     { int chk_r = db_env_create(&env, 0); CKERR(chk_r); }
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r = env->set_default_bt_compare(env, uint_dbt_cmp);CKERR(r);
     env->set_update(env, update_func);
     { int chk_r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }

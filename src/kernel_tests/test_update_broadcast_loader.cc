@@ -109,10 +109,10 @@ static int update_fun(DB *UU(db),
 
 
 static int generate_row_for_del(
-    DB *UU(dest_db), 
+    DB *UU(dest_db),
     DB *UU(src_db),
     DBT_ARRAY *dest_key_arrays,
-    const DBT *UU(src_key), 
+    const DBT *UU(src_key),
     const DBT *UU(src_val)
     )
 {
@@ -124,13 +124,13 @@ static int generate_row_for_del(
 }
 
 static int generate_row_for_put(
-    DB *UU(dest_db), 
+    DB *UU(dest_db),
     DB *UU(src_db),
-    DBT_ARRAY *dest_key_arrays, 
+    DBT_ARRAY *dest_key_arrays,
     DBT_ARRAY *dest_val_arrays,
-    const DBT *UU(src_key), 
+    const DBT *UU(src_key),
     const DBT *UU(src_val)
-    ) 
+    )
 {
     toku_dbt_array_resize(dest_key_arrays, 1);
     toku_dbt_array_resize(dest_val_arrays, 1);
@@ -152,7 +152,7 @@ static void setup (void) {
     toku_os_recursive_delete(TOKU_TEST_FILENAME);
     { int chk_r = toku_os_mkdir(TOKU_TEST_FILENAME, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
     { int chk_r = db_env_create(&env, 0); CKERR(chk_r); }
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     { int chk_r = env->set_generate_row_callback_for_put(env,generate_row_for_put); CKERR(chk_r); }
     { int chk_r = env->set_generate_row_callback_for_del(env,generate_row_for_del); CKERR(chk_r); }
     env->set_update(env, update_fun);
@@ -171,7 +171,7 @@ static void run_test(void) {
     uint32_t mult_dbt_flags = DB_DBT_REALLOC;
     uint8_t key_data = 0;
     uint8_t val_data = 0;
-    
+
 
     IN_TXN_COMMIT(env, NULL, txn_create, 0, {
             { int chk_r = db_create(&db, env, 0); CKERR(chk_r); }

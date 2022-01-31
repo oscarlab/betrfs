@@ -218,13 +218,13 @@ check_results_after_row_n(DB_ENV *env, DB **dbs, const int num_dbs, const int nu
             dbt_init(&key, NULL, sizeof(unsigned int));
             dbt_init(&val, NULL, sizeof(unsigned int));
         }
-        if ( verbose ) {printf("."); fflush(stdout);}
+        if ( verbose ) {printf("."); }
         r = cursor->c_close(cursor);
         CKERR(r);
         r = txn->commit(txn, 0);
         CKERR(r);
     }
-    if ( verbose ) {printf("ok");fflush(stdout);}
+    if ( verbose ) {printf("ok");}
 }
 
 static void UU()

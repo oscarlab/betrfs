@@ -99,6 +99,14 @@ PATENT RIGHTS GRANT:
 enum {MAX_SIZE = 256};
 static XIDS nested_xids[MAX_TRANSACTION_RECORDS];
 
+static ULE ule_alloc_init(void) {
+    ULE XMALLOC(ule);
+#ifdef FT_INDIRECT
+    ule->num_indirect_inserts = 0;
+#endif
+    return ule;
+}
+
 static void
 verify_ule_equal(ULE a, ULE b) {
     assert(a->num_cuxrs > 0);
@@ -125,7 +133,13 @@ verify_le_equal(LEAFENTRY a, LEAFENTRY b) {
         size_t size = leafentry_memsize(a);
         assert(size==leafentry_memsize(b));
 
-        assert(memcmp(a, b, size) == 0);
+        if (memcmp(a, b, size) != 0) {
+#ifdef FT_INDIRECT
+            toku_dump_hex("a:", a, size);
+            toku_dump_hex("b:", b, size);
+#endif
+            assert(false);
+        }
 
         ULE XMALLOC(ule_a);
         ULE XMALLOC(ule_b);
@@ -159,11 +173,19 @@ test_le_offset_is(LEAFENTRY le, void *field, size_t expected_offset) {
     assert(actual_offset == expected_offset);
 }
 
+#ifdef FT_INDIRECT
+//Fixed offsets in a packed leafentry.
+enum {
+    LE_OFFSET_NUM      = 9,
+    LE_OFFSET_VARIABLE = 1+LE_OFFSET_NUM
+};
+#else
 //Fixed offsets in a packed leafentry.
 enum {
     LE_OFFSET_NUM      = 0,
     LE_OFFSET_VARIABLE = 1+LE_OFFSET_NUM
 };
+#endif
 
 static void
 test_le_fixed_offsets (void) {
@@ -226,7 +248,7 @@ test_ule_packs_to_nothing (ULE ule) {
 //Verify that 'le_pack' of any set of all deletes ends up not creating a leafentry.
 static void
 test_le_empty_packs_to_nothing (void) {
-    ULE XMALLOC(ule);
+    ULE ule = ule_alloc_init();
     ule->uxrs = ule->uxrs_static;
 
     //Set up defaults.
@@ -286,7 +308,8 @@ found_insert:;
     assert(memsize  == leafentry_memsize(le));
     {
         uint32_t test_vallen;
-        void*     test_valp = le_latest_val_and_len(le, &test_vallen);
+        bool indirect = false;
+        void*     test_valp = le_latest_val_and_len(le, &test_vallen, &indirect);
         if (latest_val != NULL) assert(test_valp != latest_val);
         assert(test_vallen == latest_vallen);
         assert(memcmp(test_valp, latest_val, test_vallen) == 0);
@@ -305,7 +328,7 @@ found_insert:;
 
 static void
 test_le_pack_committed (void) {
-    ULE XMALLOC(ule);
+    ULE ule = ule_alloc_init();
     ule->uxrs = ule->uxrs_static;
 
     uint8_t val[MAX_SIZE];
@@ -349,7 +372,7 @@ test_le_pack_committed (void) {
 
 static void
 test_le_pack_uncommitted (uint8_t committed_type, uint8_t prov_type, int num_placeholders) {
-    ULE XMALLOC(ule);
+    ULE ule = ule_alloc_init();
     ule->uxrs = ule->uxrs_static;
     assert(num_placeholders >= 0);
 
@@ -467,7 +490,7 @@ test_le_apply(ULE ule_initial, FT_MSG msg, ULE ule_expected) {
                       TXNID_NONE,
                       make_gc_info(true),
                       &le_result,
-                      &ignoreme);
+                      &ignoreme, NULL);
     if (le_result) {
         result_memsize = leafentry_memsize(le_result);
         le_verify_accessors(le_result, ule_expected, result_memsize);
@@ -493,6 +516,9 @@ test_le_apply(ULE ule_initial, FT_MSG msg, ULE ule_expected) {
 static const ULE_S ule_committed_delete = {
     .num_puxrs = 0,
     .num_cuxrs = 1,
+#ifdef FT_INDIRECT
+    .num_indirect_inserts = 0,
+#endif
     .uxrs_static = {{
         .type   = XR_DELETE,
         .vallen = 0,
@@ -698,8 +724,9 @@ generate_both_for(ULE ule, DBT *oldval, FT_MSG msg) {
 //committed leafentry (logical equivalent of a committed insert).
 static void
 test_le_committed_apply(void) {
-    ULE XMALLOC(ule_initial);
+    ULE ule_initial = ule_alloc_init();
     ule_initial->uxrs = ule_initial->uxrs_static;
+
     FT_MSG_S msg;
 
     DBT key;
@@ -802,7 +829,7 @@ static void test_le_garbage_collection_birdie(void) {
     uint8_t *valbuf = (uint8_t *)toku_xmalloc(MAX_SIZE * sizeof(uint8_t));
     uint32_t valsize=8;
     bool do_garbage_collect;
-    ULE XMALLOC(ule);
+    ULE ule = ule_alloc_init();
 
     memset(&key, 0, sizeof(key));
     memset(&val, 0, sizeof(val));
@@ -897,8 +924,9 @@ static void test_le_optimize(void) {
     FT_MSG_S msg;
     DBT key;
     DBT val;
-    ULE XMALLOC(ule_initial);
-    ULE XMALLOC(ule_expected);
+    ULE ule_initial = ule_alloc_init();
+    ULE ule_expected = ule_alloc_init();
+
     //uint8_t keybuf[MAX_SIZE];
     uint8_t *keybuf = (uint8_t *)toku_xmalloc(MAX_SIZE * sizeof(uint8_t));
     uint32_t keysize=8;
@@ -1087,7 +1115,7 @@ int
 test_leafentry_nested (void) {
     srandom(7); //Arbitrary seed.
     initialize_dummymsn();
- 
+
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
 

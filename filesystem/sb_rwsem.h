@@ -16,9 +16,9 @@
 #include <linux/rwsem.h>
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
 #include <linux/sched.h>
-#else
+#else /* LINUX_VERSION_CODE */
 #include <linux/sched/debug.h>
-#endif
+#endif /* LINUX_VERSION_CODE */
 #include "sb_pthread.h"
 /*
  * lock for reading
@@ -49,16 +49,14 @@ static inline int __sb_down_read_trylock(struct rw_semaphore *sem)
                     return 1;
 		}
 	}
-#else
+#else /* LINUX_VERSION_CODE */
 	while ((tmp = atomic_long_read(&sem->count)) >= 0) {
 		if (tmp == atomic_long_cmpxchg_acquire(&sem->count, tmp,
 				   tmp + FTFS_RWSEM_ACTIVE_READ_BIAS)) {
 			return 1;
 		}
 	}
-
-
-#endif
+#endif /* LINUX_VERSION_CODE */
 	return 0;
 
 }
@@ -94,14 +92,13 @@ static inline int __sb_down_write_trylock(struct rw_semaphore *sem)
 	if (ret == FTFS_RWSEM_UNLOCKED_VALUE)
 		return 1;
 	return 0;
-#else
+#else /* LINUX_VERSION_CODE */
 	long tmp;
 
 	tmp = atomic_long_cmpxchg_acquire(&sem->count, FTFS_RWSEM_UNLOCKED_VALUE,
 		      FTFS_RWSEM_ACTIVE_WRITE_BIAS);
 	return (tmp == FTFS_RWSEM_UNLOCKED_VALUE) ? 1 : 0;
-
-#endif
+#endif /* LINUX_VERSION_CODE */
 }
 
 /*
@@ -138,9 +135,6 @@ static inline void sb_rwsem_atomic_add(long delta, struct rw_semaphore *sem)
 
 /*
  * implement exchange and add functionality
- *
- * FIXME: rwsem_atomic_update no long exist after 4.8.0
- * Is it still safe to use this API?
  */
 static inline long sb_rwsem_atomic_update(long delta, struct rw_semaphore *sem)
 {

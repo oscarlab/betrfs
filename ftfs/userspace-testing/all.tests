@@ -114,7 +114,6 @@ test-abort3
 test-abort4
 test-abort5
 test-abort-delete-first
-list-files
 list-tests
 mempool
 marked-omt
@@ -139,10 +138,8 @@ fair-rwlock
 msnfilter
 cpu-frequency
 cpu-frequency-openlimit
-hugepage
 fsync-directory
 fsync-files
-fgetc
 toku-malloc
 range-buffer
 wfg
@@ -174,7 +171,6 @@ manager-status
 omt-test
 #mkdir
 #remove
-slab
 assert
 #dio
 realloc
@@ -193,8 +189,6 @@ readwrite
 pwrite
 write
 #readlink
-f-all
-bug1381
 cursor-step-over-delete
 x1764-test
 isolation-test
@@ -307,7 +301,7 @@ cachetable-eviction-close2
 cachetable-eviction-getandpin
 cachetable-eviction-getandpin2
 cachetable-cleanerthread_attrs_accumulate
-cachetable-simple-pin
+cachetable-simple-pin-depnodes
 cachetable-simple-put
 cachetable-prefetch-maybegetandpin
 cachetable-prefetch-getandpin

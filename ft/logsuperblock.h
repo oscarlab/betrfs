@@ -4,6 +4,7 @@
 #define FTFS_LOG_SIZE 2147483648
 #define TOKU_LOG_END_OFFSET sizeof(struct log_super_block) - 4
 #define TOKU_LOG_START_OFFSET sizeof(struct log_super_block) - 8
+#define UBI_INVALID_PFN (0xdeafbeef)
 
 /* log super block definition */
 struct log_super_block {

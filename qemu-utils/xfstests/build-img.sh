@@ -6,7 +6,7 @@ source common
 
 # This script builds an image for xfstests, based on the variables set in config
 # The output file is named <xfstests-commit>-<xfstest-bld-commit>.img
-# This is primarily tested on Ubuntu 14.04, but, in principle, should work on newer versions
+# This is primarily tested on Ubuntu 18.04, but, in principle, should work on newer versions
 
 # Only build if the image does not already exist
 if [[ -f $FSTESTS_DIR/kvm-xfstests/test-appliance/$IMG_NAME ]]; then

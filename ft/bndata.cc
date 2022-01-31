@@ -90,13 +90,20 @@ PATENT RIGHTS GRANT:
 #ident "The technology is licensed by the Massachusetts Institute of Technology, Rutgers State University of New Jersey, and the Research Foundation of State University of New York at Stony Brook under United States of America Serial No. 11/760379 and to the patents and/or patent applications resulting from it."
 
 #include <bndata.h>
+#include "ule-internal.h"
 
 static uint32_t klpair_size(KLPAIR klpair){
     return sizeof(*klpair) + klpair->keylen + leafentry_memsize(get_le_from_klpair(klpair));
 }
 
 static uint32_t klpair_disksize(KLPAIR klpair){
-    return sizeof(*klpair) + klpair->keylen + leafentry_disksize(get_le_from_klpair(klpair));
+    LEAFENTRY le = get_le_from_klpair(klpair);
+    uint32_t retval = sizeof(*klpair) + klpair->keylen + leafentry_disksize(le);
+#ifdef FT_INDIRECT
+    retval += le_get_ind_size(le);
+    retval -= sizeof(unsigned int*);
+#endif
+    return retval;
 }
 
 void bn_data::init_zero() {
@@ -108,7 +115,50 @@ void bn_data::initialize_empty() {
     m_buffer.create();
 }
 
-void bn_data::initialize_from_data(uint32_t num_entries, unsigned char *buf, uint32_t data_size) {
+#ifdef FT_INDIRECT
+/**
+ * When we read k-v pairs from disk. The PFNs are not valid anymore.
+ * We need to change the pfns in the values according to the pages we
+ * just allocated to store the data just read in to memory
+ *
+ * full_pfns is the pfn array of the pages which store the page data of
+ * the basement node. le_start is the address of the leaf entry.
+ * The function updates the pfns in leafentry values with the pfns in pfn_arr.
+ */
+static void fixup_read_val(unsigned int *offset, uint8_t *le_start, uint8_t ubi_cnt,
+                           unsigned long *pfns, uint32_t *pfns_index,
+                           uint32_t *odd_data_size_so_far,
+                           uint32_t *odd_page_cnt_so_far)
+{
+    LEAFENTRY le = (LEAFENTRY) le_start;
+    struct ftfs_indirect_val *ptr;
+    for (int i = 0 ; ubi_cnt > 0 && i < LE_NUM_VALS(le); i++) {
+        if (offset[i] != 0) {
+            ptr = IND_VAL_FROM_PTR(le_start + offset[i]);
+            uint32_t size = ptr->size;
+            assert(size <= FTFS_PAGE_SIZE);
+            if (size < FTFS_PAGE_SIZE) {
+                *odd_data_size_so_far += size;
+                *odd_page_cnt_so_far += 1;
+            }
+            /* copy the pfn to the leaf entry */
+            ptr->pfn = pfns[*pfns_index];
+            ftfs_bn_get_page_list(&ptr->pfn, 1);
+            *pfns_index += 1;
+            ubi_cnt -= 1;
+        }
+    }
+}
+#endif
+
+void bn_data::initialize_from_data(uint32_t num_entries,
+                                   unsigned char *buf,
+                                   uint32_t data_size,
+                                   unsigned long *UU(pfns),
+                                   uint32_t UU(num_pages),
+                                   uint32_t *UU(odd_data_size),
+                                   uint32_t *UU(odd_page_cnt))
+{
     if (data_size == 0) {
         invariant_zero(num_entries);
         // I believe we can assume the m_buffer is already created here
@@ -117,16 +167,36 @@ void bn_data::initialize_from_data(uint32_t num_entries, unsigned char *buf, uin
     KLPAIR *XMALLOC_N(num_entries, array); // create array of pointers to leafentries
     unsigned char *newmem = NULL;
     // add same wiggle room that toku_mempool_construct would, 25% extra
+#ifdef FT_INDIRECT
+    int size_tmp = sizeof(unsigned int*); // space for indirect_insert_offsets pointer
+    data_size += size_tmp * num_entries;
+#endif
     uint32_t allocated_bytes = data_size + data_size/4;
     CAST_FROM_VOIDP(newmem, sb_malloc_sized(allocated_bytes, true));
     unsigned char* curr_src_pos = buf;
     unsigned char* curr_dest_pos = newmem;
+#ifdef FT_INDIRECT
+    uint32_t pfns_index = 0;
+    uint32_t odd_data_size_so_far = 0;
+    uint32_t odd_page_cnt_so_far = 0;
+    uint32_t cnt_ind_inserts = 0;
+#endif
+
     for (uint32_t i = 0; i < num_entries; i++) {
         KLPAIR curr_kl = (KLPAIR)curr_dest_pos;
         array[i] = curr_kl;
 
+#ifdef FT_INDIRECT
+        // Store the start address of a leaf entry
+        uint8_t* src_le_start = curr_src_pos;
+#endif
+
         uint8_t curr_type = curr_src_pos[0];
         curr_src_pos++;
+#ifdef FT_INDIRECT
+        uint8_t le_count_ubi_vals = curr_src_pos[0];
+        curr_src_pos++;
+#endif
         // first thing we do is lay out the key,
         // to do so, we must extract it from the leafentry
         // and write it in
@@ -158,13 +228,40 @@ void bn_data::initialize_from_data(uint32_t num_entries, unsigned char *buf, uin
         curr_dest_pos += sizeof(keylen);
         memcpy(curr_dest_pos, keyp, keylen);
         curr_dest_pos += keylen;
+
+#ifdef FT_INDIRECT
+	// Zero out ubi_val_offsets
+        uint8_t *dest_le_start = curr_dest_pos;
+        unsigned int **ubi_val_offsets = (unsigned int**)curr_dest_pos;
+        *ubi_val_offsets = NULL;
+        curr_dest_pos += size_tmp;
         // now curr_dest_pos is pointing to where the leafentry should be packed
+        cnt_ind_inserts += le_count_ubi_vals;
+        curr_dest_pos[0] = le_count_ubi_vals;
+        curr_dest_pos++;
+#endif
         curr_dest_pos[0] = curr_type;
         curr_dest_pos++;
         if (curr_type == LE_CLEAN) {
              *(uint32_t *)curr_dest_pos = toku_htod32(clean_vallen);
              curr_dest_pos += sizeof(clean_vallen);
              memcpy(curr_dest_pos, curr_src_pos, clean_vallen); // copy the val
+#ifdef FT_INDIRECT
+             if (le_count_ubi_vals) {
+                 XCALLOC_N(1, *ubi_val_offsets);
+                 (*ubi_val_offsets)[0] = (curr_dest_pos - dest_le_start);
+                 struct ftfs_indirect_val *val = (struct ftfs_indirect_val *)(curr_dest_pos);
+                 val->pfn = pfns[pfns_index];
+                 ftfs_bn_get_page_list(&pfns[pfns_index], 1);
+                 if (val->size < FTFS_PAGE_SIZE) {
+                     odd_data_size_so_far += val->size;
+                     odd_page_cnt_so_far++;
+                 } else {
+                     assert(val->size == FTFS_PAGE_SIZE);
+                 }
+                 pfns_index++;
+             }
+#endif
              curr_dest_pos += clean_vallen;
              curr_src_pos += clean_vallen;
         }
@@ -175,16 +272,57 @@ void bn_data::initialize_from_data(uint32_t num_entries, unsigned char *buf, uin
             *(uint8_t *)curr_dest_pos = num_pxrs;
             curr_dest_pos += sizeof(num_pxrs);
             // now we need to pack the rest of the data
+#ifdef FT_INDIRECT
+            if (le_count_ubi_vals) {
+                if (le_count_ubi_vals > num_cxrs + num_pxrs) {
+                    printf("le_count_ubi_vals=%d, num_cxrs=%d, num_pxrs=%d\n", le_count_ubi_vals, num_cxrs, num_pxrs);
+                    assert(false);
+                }
+                XCALLOC_N(num_cxrs + num_pxrs, *ubi_val_offsets);
+            }
+            uint32_t num_rest_bytes = leafentry_rest_memsize_fixup(num_pxrs,
+                                                                   num_cxrs,
+                                                                   curr_src_pos,
+                                                                   *ubi_val_offsets,
+                                                                   src_le_start,
+                                                                   size_tmp - (keylen) - sizeof(keylen));
+            assert(num_rest_bytes < data_size);
+            memcpy(curr_dest_pos, curr_src_pos, num_rest_bytes);
+            if (le_count_ubi_vals) {
+                fixup_read_val(*ubi_val_offsets, dest_le_start, le_count_ubi_vals,
+                                pfns, &pfns_index, &odd_data_size_so_far, &odd_page_cnt_so_far);
+
+            }
+#else
             uint32_t num_rest_bytes = leafentry_rest_memsize(num_pxrs, num_cxrs, curr_src_pos);
             memcpy(curr_dest_pos, curr_src_pos, num_rest_bytes);
+#endif
             curr_dest_pos += num_rest_bytes;
             curr_src_pos += num_rest_bytes;
         }
     }
+
+#ifdef FT_INDIRECT
+    if (pfns_index != num_pages) {
+        printf("%s: pfns_index=%d, num_pages=%d\n", __func__, pfns_index, num_pages);
+        assert(false);
+    }
+    if (odd_data_size) {
+        *odd_data_size = odd_data_size_so_far;
+    }
+    if (odd_page_cnt) {
+        *odd_page_cnt = odd_page_cnt_so_far;
+    }
+#endif
+
     uint32_t num_bytes_read UU() = (uint32_t)(curr_src_pos - buf);
+#ifdef FT_INDIRECT
+    paranoid_invariant(num_bytes_read + size_tmp * num_entries == data_size);
+#else
     paranoid_invariant( num_bytes_read == data_size);
+#endif
     uint32_t num_bytes_written = curr_dest_pos - newmem;
-    paranoid_invariant( num_bytes_written == data_size);
+    paranoid_invariant(num_bytes_written == data_size);
     toku_mempool_init(&m_buffer_mempool, newmem, (size_t)(num_bytes_written), allocated_bytes);
 
     // destroy old omt that was created by toku_create_empty_bn(), so we can create a new one
@@ -192,6 +330,12 @@ void bn_data::initialize_from_data(uint32_t num_entries, unsigned char *buf, uin
     m_buffer.create_steal_sorted_array(&array, num_entries, num_entries);
 }
 
+#ifdef FT_INDIRECT
+bool bn_data::is_data_db(int fd) {
+     return sb_is_data_db(fd);
+}
+
+#endif
 uint64_t bn_data::get_memory_size() {
     uint64_t retval = 0;
     // include fragmentation overhead but do not include space in the
@@ -209,6 +353,14 @@ void bn_data::delete_leafentry (
     uint32_t old_le_size
     )
 {
+#ifdef FT_INDIRECT
+    KLPAIR curr_kl = nullptr;
+    m_buffer.fetch(idx, &curr_kl);
+    LEAFENTRY old_le = get_le_from_klpair(curr_kl);
+    if (old_le->indirect_insert_offsets) {
+        toku_free(old_le->indirect_insert_offsets);
+    }
+#endif
     m_buffer.delete_at(idx);
     toku_mempool_mfree(&m_buffer_mempool, 0, old_le_size + keylen + sizeof(keylen)); // Must pass 0, since le is no good any more.
 }
@@ -289,6 +441,14 @@ void bn_data::get_space_for_overwrite(
         &maybe_free
         );
     uint32_t size_freed = old_le_size + keylen + sizeof(keylen);
+#ifdef FT_INDIRECT
+    KLPAIR curr_kl;
+    m_buffer.fetch(idx, &curr_kl);
+    LEAFENTRY old_le = get_le_from_klpair(curr_kl);
+    if (old_le->num_indirect_inserts > 0) {
+        toku_free(old_le->indirect_insert_offsets);
+    }
+#endif
     toku_mempool_mfree(&m_buffer_mempool, nullptr, size_freed);  // Must pass nullptr, since le is no good any more.
     new_kl->keylen = keylen;
     memcpy(new_kl->key_le, keyp, keylen);
@@ -334,18 +494,26 @@ void bn_data::get_space_for_insert(
 void bn_data::relift_leafentries(BN_DATA dst_bd, FT ft,
                                  DBT *old_lifted, DBT *new_lifted)
 {
-    uint32_t size = omt_size();
+    int32_t size = omt_size();
     KLPAIR *newklpointers = NULL;
     if (size) {
         newklpointers = (KLPAIR *) sb_malloc_sized(size * sizeof(KLPAIR), true);
     }
+
+    // The whole process is to unlift the key with
+    // old_lifted and then lift it again with new_lifted
+    int per_item_increase = old_lifted->size - new_lifted->size;
+    // If the increase is negative, then we just set it to zero
+    if (per_item_increase < 0) per_item_increase = 0;
+
     size_t mpsize = toku_mempool_get_used_space(&m_buffer_mempool);
     struct mempool *dst_mp = &dst_bd->m_buffer_mempool;
     struct mempool *src_mp = &m_buffer_mempool;
-    toku_mempool_construct(dst_mp, mpsize);
-
+    // make the new mempool 25% larger than the old one.
+    // I find that the assertion at line 539 can be triggered occasionally.
+    toku_mempool_construct(dst_mp, mpsize + (mpsize >> 2) + per_item_increase * size);
     for (int i = 0; i < size; i++) {
-        KLPAIR curr_kl;
+        KLPAIR curr_kl = nullptr;
         m_buffer.fetch(i, &curr_kl);
 
         int old_keylen = curr_kl->keylen;
@@ -375,10 +543,15 @@ void bn_data::relift_leafentries(BN_DATA dst_bd, FT ft,
         size_t new_kl_size = new_key.size + sizeof(*curr_kl) + old_le_size;
         KLPAIR new_kl = NULL;
         CAST_FROM_VOIDP(new_kl, toku_mempool_malloc(dst_mp, new_kl_size, 1));
+        if (!new_kl) {
+            printf("%s: old_lifted=%s\n", __func__, (char*)old_lifted->data);
+            printf("%s: new_lifted=%s\n", __func__, (char*)new_lifted->data);
+            assert(false);
+        }
         new_kl->keylen = new_key.size;
+        assert(new_key.data);
         memcpy(new_kl->key_le, new_key.data, new_key.size);
         memcpy((char *)new_kl->key_le + new_key.size, old_le, old_le_size);
-
         newklpointers[i] = new_kl;
         toku_mempool_mfree(src_mp, curr_kl, old_kl_size);
         toku_destroy_dbt(&old_key);
@@ -391,12 +564,22 @@ void bn_data::relift_leafentries(BN_DATA dst_bd, FT ft,
     }
 }
 
+// YZJ: count indirect insert when moving leafentry.
+// Iterate through all the leafentry in the range [lbi, ube)
+// and check the count and size of indirect insert in each leaf entry
+// aggregate the count and size in these 4 num_indirect_xxx
+// arguments as the output of this function. For non-page-sharing code
+// these arguments are not used at all.
+//Effect: move leafentries in the range [lbi, ube) from this to src_omt to newly created dest_omt
 void bn_data::move_leafentries_to(
      BN_DATA dest_bd,
+     uint32_t *UU(num_indirect_full_count),
+     uint32_t *UU(num_indirect_full_size),
+     uint32_t *UU(num_indirect_odd_count),
+     uint32_t *UU(num_indirect_odd_size),
      uint32_t lbi, //lower bound inclusive
      uint32_t ube //upper bound exclusive
      )
-//Effect: move leafentries in the range [lbi, ube) from this to src_omt to newly created dest_omt
 {
     paranoid_invariant(lbi < ube);
     paranoid_invariant(ube <= omt_size());
@@ -418,6 +601,30 @@ void bn_data::move_leafentries_to(
         CAST_FROM_VOIDP(new_kl, toku_mempool_malloc(dest_mp, kl_size, 1));
         memcpy(new_kl, curr_kl, kl_size);
         newklpointers[i-lbi] = new_kl;
+
+#ifdef FT_INDIRECT
+	// Copy ubi_val_offsets and count pages
+	LEAFENTRY le = get_le_from_klpair(curr_kl);
+        LEAFENTRY new_le = get_le_from_klpair((KLPAIR)new_kl);
+	int num_ubi = le->num_indirect_inserts;
+        for (int ii = 0 ; num_ubi > 0 && ii < LE_NUM_VALS(le); ii++) {
+            if (le->indirect_insert_offsets[ii] > 0) {
+                uint32_t size;
+                memcpy(&size, (uint8_t*)le + le->indirect_insert_offsets[ii]+8, 4);
+                if (size == FTFS_PAGE_SIZE) {
+                    (*num_indirect_full_count)++;
+                    (*num_indirect_full_size) += size;
+                } else {
+                    (*num_indirect_odd_count)++;
+                    (*num_indirect_odd_size) += size;
+                }
+                num_ubi--;
+            }
+        }
+        if (le->indirect_insert_offsets) {
+            new_le->indirect_insert_offsets = le->indirect_insert_offsets;
+        }
+#endif
         toku_mempool_mfree(src_mp, curr_kl, kl_size);
     }
 
@@ -453,9 +660,18 @@ void bn_data::replace_contents_with_clone_of_sorted_array(
     uint32_t* old_keylens,
     LEAFENTRY* old_les,
     size_t *le_sizes,
-    size_t mempool_size
+    size_t mempool_size,
+    int UU(fd)
     )
 {
+#ifdef FT_INDIRECT
+    // YZJ: Reset the variable to 0
+    m_rebalance_indirect_full_size = 0;
+    m_rebalance_indirect_odd_size = 0;
+    m_rebalance_indirect_full_cnt = 0;
+    m_rebalance_indirect_odd_cnt = 0;
+#endif
+
     if (num_les) {
         toku_mempool_construct(&m_buffer_mempool, mempool_size);
         KLPAIR *XMALLOC_N(num_les, le_array);
@@ -468,6 +684,12 @@ void bn_data::replace_contents_with_clone_of_sorted_array(
             memcpy(new_kl->key_le, old_key_ptrs[idx], new_kl->keylen);
             memcpy(get_le_from_klpair(new_kl), old_les[idx], le_sizes[idx]);
             CAST_FROM_VOIDP(le_array[idx], new_kl);
+            // If it is data db. This betrfs specific node.
+            // For non-page-sharing code, it is no-ops.
+            // for non-data-db, it is no-ops with extra check
+            if (fd >= 0) {
+                update_indirect_cnt(old_les[idx], fd);
+            }
         }
         //TODO: Splitting key/val requires changing this; keys are stored in old omt.. cannot delete it yet?
         m_buffer.destroy();
@@ -477,6 +699,39 @@ void bn_data::replace_contents_with_clone_of_sorted_array(
     }
 }
 
+#ifdef FT_INDIRECT
+uint32_t bn_data::update_indirect_cnt(LEAFENTRY le, int fd)
+{
+    int num_ubi = le->num_indirect_inserts;
+
+    if (!is_data_db(fd) && num_ubi > 0) { // should not happen
+        printf("Only datadb can have indirect values, fd=%d\n", fd);
+        assert(false);
+    }
+
+    for (int i = 0 ; num_ubi > 0 && i < LE_NUM_VALS(le); i++) {
+        unsigned long curr_offset = le->indirect_insert_offsets[i];
+        uint8_t *val_ptr = (uint8_t*)le + curr_offset;
+        if (curr_offset > 0) {
+            unsigned int size;
+            memcpy(&size, val_ptr+8, sizeof(size));
+            if (size < FTFS_PAGE_SIZE) {
+                m_rebalance_indirect_odd_size += size;
+                m_rebalance_indirect_odd_cnt += 1;
+            } else {
+                m_rebalance_indirect_full_size += size;
+                m_rebalance_indirect_full_cnt += 1;
+            }
+            num_ubi--;
+        }
+    }
+    return 0;
+}
+#else
+inline uint32_t bn_data::update_indirect_cnt(LEAFENTRY UU(le), int UU(fd)) {
+    return 0;
+}
+#endif
 
 // get info about a single leafentry by index
 int bn_data::fetch_le(uint32_t idx, LEAFENTRY *le) {
@@ -525,10 +780,38 @@ struct mp_pair {
     klpair_omt_t* omt;
 };
 
-static int fix_mp_offset(const KLPAIR &klpair, const uint32_t idx,  struct mp_pair * const p) {
+// Cloning a bn is to get snapshot of current state of a bn.
+// We need to clone the indirect_insert_offsets as well.
+// FIXME: allocate space from mempool instead of OS for all
+// indirect_insert_offsets. This can reduce locking contention.
+static int fix_mp_offset_and_page_ref(const KLPAIR &klpair, const uint32_t idx, struct mp_pair * const p) {
     char* old_value = (char *) klpair;
     char *new_value = old_value - (char *)p->orig_base + (char *)p->new_base;
     p->omt->set_at((KLPAIR)new_value, idx);
+#ifdef FT_INDIRECT
+    {
+        LEAFENTRY le = get_le_from_klpair(klpair);
+        LEAFENTRY new_le = get_le_from_klpair((KLPAIR)new_value);
+
+        int num_ubi = le->num_indirect_inserts;
+        assert(num_ubi == new_le->num_indirect_inserts);
+        unsigned int *old_offsets = le->indirect_insert_offsets;
+        if (num_ubi > 0) {
+            XMALLOC_N(LE_NUM_VALS(le), new_le->indirect_insert_offsets);
+            memcpy(new_le->indirect_insert_offsets, old_offsets, sizeof(unsigned int)*LE_NUM_VALS(le));
+        }
+        for (int i = 0 ; num_ubi > 0 && i < LE_NUM_VALS(le); i++) {
+            if (new_le->indirect_insert_offsets[i] > 0) {
+                struct ftfs_indirect_val *val = (struct ftfs_indirect_val *) ((uint8_t*)le + new_le->indirect_insert_offsets[i]);
+                unsigned long pfn = val->pfn;
+                ftfs_lock_page_list_for_clone(&pfn, 1);
+                ftfs_set_page_list_private(&pfn, 1, FT_MSG_VAL_FOR_CLONE);
+                ftfs_bn_get_page_list(&pfn, 1);
+                num_ubi--;
+            }
+        }
+    }
+#endif
     return 0;
 }
 
@@ -539,7 +822,24 @@ void bn_data::clone(bn_data* orig_bn_data) {
     p.orig_base = toku_mempool_get_base(&orig_bn_data->m_buffer_mempool);
     p.new_base = toku_mempool_get_base(&m_buffer_mempool);
     p.omt = &m_buffer;
+    int r = m_buffer.iterate_on_range<decltype(p), fix_mp_offset_and_page_ref>(0, omt_size(), &p);
+    invariant_zero(r);
+}
 
+static int fix_mp_offset(const KLPAIR &klpair, const uint32_t idx,  struct mp_pair * const p) {
+    char* old_value = (char *) klpair;
+    char *new_value = old_value - (char *)p->orig_base + (char *)p->new_base;
+    p->omt->set_at((KLPAIR)new_value, idx);
+    return 0;
+}
+
+void bn_data::clone_for_lift(bn_data* orig_bn_data) {
+    toku_mempool_clone(&orig_bn_data->m_buffer_mempool, &m_buffer_mempool);
+    m_buffer.clone(orig_bn_data->m_buffer);
+    struct mp_pair p;
+    p.orig_base = toku_mempool_get_base(&orig_bn_data->m_buffer_mempool);
+    p.new_base = toku_mempool_get_base(&m_buffer_mempool);
+    p.omt = &m_buffer;
     int r = m_buffer.iterate_on_range<decltype(p), fix_mp_offset>(0, omt_size(), &p);
     invariant_zero(r);
 }

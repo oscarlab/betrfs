@@ -106,8 +106,8 @@ test_txn_close_before_commit (void) {
     assert(r == 0);
     DB_ENV *env;
     r = db_env_create(&env, 0); assert(r == 0);
-    env->set_errfile(env, stdout);
-    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL + DB_INIT_LOG + DB_INIT_LOCK + DB_INIT_TXN + DB_PRIVATE + DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); 
+    env->set_errfile(env, STDOUT);
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL + DB_INIT_LOG + DB_INIT_LOCK + DB_INIT_TXN + DB_PRIVATE + DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO);
     if (r != 0) printf("%s:%d:%d:%s\n", __FILE__, __LINE__, r, db_strerror(r));
     assert(r == 0);
 

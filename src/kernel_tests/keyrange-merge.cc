@@ -108,12 +108,12 @@ static uint32_t db_basement_size = 4096;
 static const char *envdir = TOKU_TEST_FILENAME;
 static uint64_t nrows = 0;
 
-static uint64_t 
+static uint64_t
 max64(uint64_t a, uint64_t b) {
     return a < b ? b : a;
 }
 
-static void 
+static void
 run_test(void) {
     if (verbose)
         printf("%s %" PRIu64 "\n", __FUNCTION__, nrows);
@@ -129,7 +129,7 @@ run_test(void) {
 
     int r;
     r = db_env_create(&env, 0); CKERR(r);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r = env->set_redzone(env, 0); CKERR(r);
     r = env->open(env, envdir, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
 
@@ -156,7 +156,7 @@ run_test(void) {
 
     DB_BTREE_STAT64 s64;
     r = db->stat64(db, txn, &s64); CKERR(r);
-    if (verbose) 
+    if (verbose)
         printf("stats %" PRId64 " %" PRId64 "\n", s64.bt_nkeys, s64.bt_dsize);
     assert(0 < s64.bt_nkeys && s64.bt_nkeys <= nrows);
     assert(0 < s64.bt_dsize && s64.bt_dsize <= nrows * (key_size + val_size));
@@ -230,7 +230,7 @@ run_test(void) {
 	uint64_t less,equal,greater;
 	int is_exact;
 	r = db->key_range64(db, txn, dbt_init(&k, key, 1+strlen(key)), &less, &equal, &greater, &is_exact); CKERR(r);
-	if (verbose) 
+	if (verbose)
             printf("key %llu/%llu %llu %llu %llu %llu\n", (unsigned long long)2*i, (unsigned long long)2*nrows, (unsigned long long)less, (unsigned long long)equal, (unsigned long long)greater,
                    (unsigned long long)(less+equal+greater));
         assert(is_exact == 0);
@@ -248,13 +248,13 @@ run_test(void) {
     toku_free(key);
 }
 /*
-static int 
+static int
 usage(void) {
-    fprintf(stderr, "-v (verbose)\n");
-    fprintf(stderr, "-q (quiet)\n");
-    fprintf(stderr, "--envdir %s\n", envdir);
-    fprintf(stderr, "--nrows %" PRIu64 " (number of rows)\n", nrows);
-    fprintf(stderr, "--nrows %" PRIu64 " (number of rows)\n", nrows);
+    dprintf(STDERR, "-v (verbose)\n");
+    dprintf(STDERR, "-q (quiet)\n");
+    dprintf(STDERR, "--envdir %s\n", envdir);
+    dprintf(STDERR, "--nrows %" PRIu64 " (number of rows)\n", nrows);
+    dprintf(STDERR, "--nrows %" PRIu64 " (number of rows)\n", nrows);
     return 1;
 }
 */

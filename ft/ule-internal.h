@@ -97,6 +97,7 @@ PATENT RIGHTS GRANT:
 #ident "Copyright (c) 2007-2013 Tokutek Inc.  All rights reserved."
 #ident "The technology is licensed by the Massachusetts Institute of Technology, Rutgers State University of New Jersey, and the Research Foundation of State University of New York at Stony Brook under United States of America Serial No. 11/760379 and to the patents and/or patent applications resulting from it."
 
+#include "tokuconst.h"
 
 //1 does much slower debugging
 #define ULE_DEBUG 0
@@ -131,12 +132,13 @@ typedef struct uxr {     // unpacked transaction record
 typedef struct ule {     // unpacked leaf entry
     uint32_t  num_puxrs;   // how many of uxrs[] are provisional
     uint32_t  num_cuxrs;   // how many of uxrs[] are committed
+#ifdef FT_INDIRECT
+    uint8_t   num_indirect_inserts; // for verification
+#endif
     UXR_S     uxrs_static[MAX_TRANSACTION_RECORDS*2];    // uxrs[0] is oldest committed (txn commit time, not txn start time), uxrs[num_cuxrs] is outermost provisional value (if any exist/num_puxrs > 0)
     UXR       uxrs;                                      //If num_cuxrs < MAX_TRANSACTION_RECORDS then &uxrs_static[0].
                                                          //Otherwise we use a dynamically allocated array of size num_cuxrs + 1 + MAX_TRANSATION_RECORD.
 } ULE_S, *ULE;
-
-
 
 void test_msg_modify_ule(ULE ule, FT_MSG msg);
 
@@ -157,7 +159,5 @@ le_pack(ULE ule, // data to be packed into new leafentry
 
 size_t le_memsize_from_ule (ULE ule);
 void ule_cleanup(ULE ule);
-
-
 #endif  // TOKU_ULE_H
 

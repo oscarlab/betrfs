@@ -382,7 +382,11 @@ static int doit (void) {
         PAIR_ATTR attr;
         toku_ftnode_pe_callback(node, make_pair_attr(0xffffffff), &attr, t->ft);
     }
-    assert(BP_STATE(node,0) == PT_COMPRESSED);
+    if (!ftfs_is_hdd()) {
+        assert(BP_STATE(node,0) == PT_AVAIL);
+    } else {
+        assert(BP_STATE(node,0) == PT_COMPRESSED);
+    }
     toku_unpin_ftnode(t->ft, node);
 
     //now let's do the same test as above

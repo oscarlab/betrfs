@@ -94,28 +94,21 @@ PATENT RIGHTS GRANT:
 #include <unistd.h>
 #include <toku_time.h>
 
-// To use KERN_INFO
-#define KERN_SON  "\001"      
-#define KERN_INFO KERN_SON "6"
-
-
-
-
 extern "C" int test_gettime(void);
 
 int test_gettime(void) {
   
-    printf(KERN_INFO "I am entering into test_gettime\n");
+    printf("%s:I am entering into test_gettime\n", __func__);
     int r = 0;
     struct timespec ts;
 
-    printf(KERN_INFO "Inside test_gettime\n");
+    printf("%s:Inside test_gettime\n", __func__);
     r = toku_clock_gettime(CLOCK_REALTIME, &ts);
     assert(r == 0);
     sleep(10);
     r = toku_clock_gettime(CLOCK_REALTIME, &ts);
     assert(r == 0);
  
-    printf(KERN_INFO "I am leaving test_gettime\n");
+    printf("%s:I am leaving test_gettime\n", __func__);
     return r;
 }

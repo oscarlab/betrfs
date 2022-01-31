@@ -113,12 +113,12 @@ static void test_indexer(DB *src, DB **dbs)
     uint32_t db_flags[NUM_DBS];
 
     if ( verbose ) printf("test_indexer\n");
-    for(int i=0;i<NUM_DBS;i++) { 
-        db_flags[i] = DB_NOOVERWRITE; 
+    for(int i=0;i<NUM_DBS;i++) {
+        db_flags[i] = DB_NOOVERWRITE;
     }
 
     // create and initialize loader
-    r = env->txn_begin(env, NULL, &txn, 0);                                                               
+    r = env->txn_begin(env, NULL, &txn, 0);
     CKERR(r);
 
     if ( verbose ) printf("test_indexer create_indexer\n");
@@ -138,14 +138,14 @@ static void test_indexer(DB *src, DB **dbs)
     CKERR(r);
     r = txn->commit(txn, DB_TXN_SYNC);
     CKERR(r);
-    
+
     if ( verbose ) printf("PASS\n");
     if ( verbose ) printf("test_indexer done\n");
 }
 
 const char *src_name="src.db";
 
-static void run_test(void) 
+static void run_test(void)
 {
     int r;
     toku_os_recursive_delete(TOKU_TEST_FILENAME);
@@ -159,7 +159,7 @@ static void run_test(void)
     r = env->set_generate_row_callback_for_put(env, put_multiple_generate_switch);      CKERR(r);
     int envflags = DB_INIT_LOCK | DB_INIT_LOG | DB_INIT_MPOOL | DB_INIT_TXN | DB_CREATE | DB_PRIVATE | DB_INIT_LOG;
     r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);               CKERR(r);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     //Disable auto-checkpointing
     r = env->checkpointing_set_period(env, 0);                                   CKERR(r);
 
@@ -177,11 +177,11 @@ static void run_test(void)
     r = txn->commit(txn, DB_TXN_SYNC);                                           CKERR(r);
 
     r = src_db->optimize(src_db);                                                CKERR(r);
-    
+
     DB *dbs[NUM_DBS];
     for (int i = 0; i < NUM_DBS; i++) {
         r = db_create(&dbs[i], env, 0); CKERR(r);
-        char key_name[32]; 
+        char key_name[32];
         sprintf(key_name, "key%d", i);
         r = dbs[i]->open(dbs[i], NULL, key_name, NULL, DB_BTREE, DB_AUTO_COMMIT|DB_CREATE, 0666);   CKERR(r);
         dbs[i]->app_private = (void *) (intptr_t) i;
@@ -222,10 +222,10 @@ static void do_args(int argc, char * const argv[]) {
         } else if (strcmp(argv[0], "-h")==0) {
 	    resultcode=0;
 	do_usage:
-	    fprintf(stderr, "Usage:\n%s\n", cmd);
+	    dprintf(STDERR, "Usage:\n%s\n", cmd);
 	    exit(resultcode);
 	} else {
-	    fprintf(stderr, "Unknown arg: %s\n", argv[0]);
+	    dprintf(STDERR, "Unknown arg: %s\n", argv[0]);
 	    resultcode=1;
 	    goto do_usage;
 	}

@@ -50,7 +50,7 @@ static inline struct fd sb_fdget(unsigned int fd)
 #define sb_fdput_pos(fd) sb_fdput(fd)
 #define sb_fdget_pos(fd) sb_fdget(fd)
 
-#endif
+#endif /* LINUX_VERSION_CODE */
 
 void sb_put_unused_fd(unsigned int fd);
 int sb_get_unused_fd_flags(unsigned flags);
@@ -93,57 +93,11 @@ int fcopy_dio(const char *, const char *, int64_t);
 #define _IOLBF 1
 #define _IONBF 2
 
-
-
-/*
- * Mimic the user space FILE stream struct. Please modify it on
- * demand.
- * An audit of the ft-index code showed that only __fileno was used. A
- * lot of other fields in glibc FILE struct, such as read ahead and
- * buffer writes in user level, may not be necessary
- */
-typedef struct FILE {
-	unsigned flags;
-	int fd; // file descriptor;
-	unsigned char *rpos, *rend;
-	unsigned char *wpos, *wend;
-	unsigned char *wbase;
-	ssize_t (*write)(struct FILE *stream, const unsigned char *buf,
-			 size_t len);
-	ssize_t (*read)(struct FILE *stream, unsigned char *buf, size_t len);
-	//size_t (*seek)(FILE *stream, off_t);
-	unsigned char *buf;
-	size_t bufsize;
-	struct mutex lock;
-	signed char lbf;
-} FILE;
-
-extern FILE *const stderr;
-extern FILE *const stdout;
-extern int fprintf(FILE *, const char *, ...);
-
-#ifndef EOF
-#define EOF (-1)
-#endif
-#define FSTREAM_BUFSZ 1024
 /* file position funcs */
-int fseek(FILE *stream, long offset, int whence);
-long ftell(FILE * stream);
-
 loff_t lseek64(int fd, loff_t offset, int whence);
 
 typedef long long off64_t;
 typedef uint64_t ino64_t;
-off64_t ftello64(FILE * stream);
-off_t ftello(FILE * stream);
-/* FILE stream based funcs */
-FILE * fopen(const char * path, const char * mode);
-int fclose(FILE * stream);
-FILE * fopen64(const char *, const char *);
-int fgetc(FILE *f);
-size_t fread(void *dst, size_t size, size_t nmemb, FILE *f);
-size_t fwrite(const void *src, size_t size, size_t nmemb, FILE *f);
-ssize_t getline(char **s, size_t *n, FILE *f);
 
 /* DIO interface */
 ssize_t sb_sfs_dio_read_write(int fd, uint8_t *raw_block,
@@ -166,28 +120,4 @@ struct dirent64 {
 	unsigned char  d_type;      /*  type of file; not supported by all file system types: DT_UNKNOWN for linux*/
 	char           d_name[256]; /*  filename */
 };
-
-/*
- * Mimic the user space DIR stream struct. Please modify it on
- * demand.
- * An audiot of the ft-index code only showed that only fd was
- * accessed, and only does so through calls to dirfd(). A lot of other fields in glibc DIR, __libc_lock in user level, may not be
- * necessary
-*/
-
-#define BUF_SIZE 1024
-typedef struct DIR {
-	int fd;
-	char buf[BUF_SIZE];
-        int buf_pos;
-	int buf_end;	
-} DIR;
-/* new kernel no long uses fillonedir :( there is no way but using a buffer and pos,since more than one dirs are going to be filled. */
-
-/* DIR stream based funcs  */
-DIR *opendir(const char *name);
-int closedir(DIR *dirp);
-
-struct dirent64 * readdir64(DIR *dirp);
-int dirfd(DIR* dirp);
 #endif /* _FTFS_FILES_H */

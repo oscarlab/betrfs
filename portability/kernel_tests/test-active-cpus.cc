@@ -98,10 +98,10 @@ PATENT RIGHTS GRANT:
 extern "C" {
 extern int toku_ncpus;
 
-    int test_active_cpus(void);
-
+int test_active_cpus(void);
 
 int test_active_cpus(void) {
+#ifdef TOKU_LINUX_MODULE
     int old_toku_ncpus;
     int ncpus;
     int maxcpus;
@@ -110,7 +110,7 @@ int test_active_cpus(void) {
     toku_ncpus = (1<<30);
     maxcpus = toku_os_get_number_active_processors();
 
-    fprintf(stderr, 
+    dprintf(STDERR,
             "toku_os_get_number_active_processors(): %d\n",
             maxcpus);
 
@@ -122,10 +122,9 @@ int test_active_cpus(void) {
     toku_ncpus = old_toku_ncpus;
 
     return 0;
-
-#if 0
+#else
     int r;
-    r = unsetenv("TOKU_NCPUS"); 
+    r = unsetenv("TOKU_NCPUS");
     assert(r == 0);
 
     int max_cpus = sysconf(_SC_NPROCESSORS_ONLN);

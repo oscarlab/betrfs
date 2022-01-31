@@ -230,9 +230,6 @@ list(APPEND CTEST_CUSTOM_COVERAGE_EXCLUDE "log_print.cc")
 list(APPEND CTEST_CUSTOM_WARNING_EXCEPTION
   # don't complain about clang missing warnings from xz code
   "clang: warning: unknown warning option"
-  # don't complain about warnings in jemalloc source
-  "jemalloc/src"
-  "jemalloc/internal"
   # don't complain about valgrind headers leaving things unused
   "valgrind/valgrind.h"
   "valgrind/memcheck.h"

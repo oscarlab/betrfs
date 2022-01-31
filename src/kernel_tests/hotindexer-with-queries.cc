@@ -121,9 +121,9 @@ static void * client(void *arg)
 
     dbt_init(&key, &k, sizeof(unsigned int));
     dbt_init(&val, &v, sizeof(unsigned int));
-    
+
     r = env->txn_begin(env, NULL, &txn, 0); CKERR(r);
-    
+
     DBC *cursor;
     r = src->cursor(src, txn, &cursor, 0);  CKERR(r);
 
@@ -149,29 +149,29 @@ static void * client(void *arg)
 }
 
 toku_pthread_t *client_thread;
-static void client_init(void) 
+static void client_init(void)
 {
     client_thread = (toku_pthread_t *)toku_malloc(sizeof(toku_pthread_t));
 }
 
-static void client_cleanup(void) 
+static void client_cleanup(void)
 {
     toku_free(client_thread);   client_thread = NULL;
 }
 
-static void query_only(DB *src) 
+static void query_only(DB *src)
 {
     int r;
     void *t0;
     client_init();
 
     // start thread doing query
-    r = toku_pthread_create(client_thread, 0, client, (void *)src);  
+    r = toku_pthread_create(client_thread, 0, client, (void *)src);
     CKERR(r);
 
-    r = toku_pthread_join(*client_thread, &t0);     
+    r = toku_pthread_join(*client_thread, &t0);
     CKERR(r);
-    
+
     client_cleanup();
 }
 
@@ -183,14 +183,14 @@ static void test_indexer(DB *src, DB **dbs)
     uint32_t db_flags[NUM_DBS];
 
     if ( verbose ) printf("test_indexer\n");
-    for(int i=0;i<NUM_DBS;i++) { 
-        db_flags[i] = 0; 
+    for(int i=0;i<NUM_DBS;i++) {
+        db_flags[i] = 0;
     }
 
     client_init();
 
     // create and initialize indexer
-    r = env->txn_begin(env, NULL, &txn, 0);                                                               
+    r = env->txn_begin(env, NULL, &txn, 0);
     CKERR(r);
 
     if ( verbose ) printf("test_indexer create_indexer\n");
@@ -231,7 +231,7 @@ static void test_indexer(DB *src, DB **dbs)
 }
 
 
-static void run_test(void) 
+static void run_test(void)
 {
     int r;
     toku_os_recursive_delete(TOKU_TEST_FILENAME);
@@ -247,7 +247,7 @@ static void run_test(void)
     r = env->set_generate_row_callback_for_put(env, put_multiple_generate);      CKERR(r);
     int envflags = DB_INIT_LOCK | DB_INIT_LOG | DB_INIT_MPOOL | DB_INIT_TXN | DB_CREATE | DB_PRIVATE | DB_INIT_LOG;
     r = env->open(env, TOKU_TEST_FILENAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO);               CKERR(r);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r = env->checkpointing_set_period(env, 0);                                   CKERR(r);
 
     DBT desc;
@@ -258,7 +258,7 @@ static void run_test(void)
         ids[i] = i;
         r = db_create(&dbs[i], env, 0); CKERR(r);
         dbs[i]->app_private = &ids[i];
-        char key_name[32]; 
+        char key_name[32];
         sprintf(key_name, "key%d", i);
         r = dbs[i]->open(dbs[i], NULL, key_name, NULL, DB_BTREE, DB_AUTO_COMMIT|DB_CREATE, 0666);   CKERR(r);
         IN_TXN_COMMIT(env, NULL, txn_desc, 0, {
@@ -312,7 +312,7 @@ do_args (int argc, char * const argv[]) {
             argc--; argv++;
             num_rows = atoi(argv[0]);
 	} else {
-	    fprintf(stderr, "Usage:\n %s [-v] [-q] [-r rows]\n", progname);
+	    dprintf(STDERR, "Usage:\n %s [-v] [-q] [-r rows]\n", progname);
 	    exit(1);
 	}
 	argc--; argv++;

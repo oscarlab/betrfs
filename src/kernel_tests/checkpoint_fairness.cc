@@ -91,7 +91,7 @@ PATENT RIGHTS GRANT:
 // This test fails if the multi_operation_lock prefers readers.  (See #4347).
 // But works well if the multi_operation_lock prefers writers (which, since there is typically only one writer, makes it fair).
 // What this test does:
-//  Starts a bunch of threads (100 seems to work):  Each executes many transactions (and thus obtains the multi_operation_lock during the txn->commit, and until #4346 is changed, holds it through the fsync.  If we fix #4346 then 
+//  Starts a bunch of threads (100 seems to work):  Each executes many transactions (and thus obtains the multi_operation_lock during the txn->commit, and until #4346 is changed, holds it through the fsync.  If we fix #4346 then
 //   this test may not be sensitive to the bug.)
 //  Meanwhile another thread tries to do W checkpoints.  (W=10 seems to work).
 //  The checkpoint thread waits until all the transaction threads have gotten going (waits until each transaction thread has done 10 transactions).
@@ -125,12 +125,17 @@ static void *start_txns (void *e) {
 	{ int chk_r = db->put(db, txn, &k, &k, 0); CKERR(chk_r); }
 	{ int chk_r = txn->commit(txn, 0); CKERR(chk_r); }
 	if (j==10) (void)toku_sync_fetch_and_add(&reader_start_count, 1);
-	if (j%1000==999) { printf("."); fflush(stdout); }
-	assert(j<1000); // Get upset if we manage to run this many transactions without the checkpoint thread 
+	if (j%1000==999) { printf("."); }
+        // Get upset if we manage to run this many transactions without the checkpoint thread
+	if (j >= 1500) {
+            printf("%s: j=%d, writer_done_count=%d\n", __func__, j, writer_done_count);
+            assert(false);
+        }
     }
     if (verbose) printf("rdone j=%d\n", j);
     return NULL;
 }
+
 static void start_checkpoints (void) {
     while (reader_start_count < n_threads) { sched_yield(); }
     for (int i=0; i<W; i++) {
@@ -147,7 +152,6 @@ int test_checkpoint_fairness(void) {
     reader_start_count = 0;
     writer_done_count = 0;
     env_dir = TOKU_TEST_ENV_DIR_NAME;
-   
 // try to starve the checkpoint
     { int chk_r = db_env_create(&env, 0); CKERR(chk_r); }
 #ifdef USE_TDB

@@ -108,7 +108,7 @@ long n_preads = 0;
 static ssize_t my_pread (int fd, void *buf, size_t count, off_t offset) {
     long n_read_so_far = toku_sync_fetch_and_add(&n_preads, 1);
     if (n_read_so_far > n_preads_limit) {
-	if (verbose) fprintf(stderr, "Apparent infinite loop detected\n");
+	if (verbose) dprintf(STDERR, "Apparent infinite loop detected\n");
 	abort();
     }
     return pread(fd, buf, count, offset);
@@ -231,5 +231,3 @@ int test_test3522(void) {
     printf("n_preads=%ld\n", n_preads);
     return 0;
 }
-
-

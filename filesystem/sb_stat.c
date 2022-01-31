@@ -52,9 +52,9 @@ int stat(const char *filename, struct stat *statbuf)
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
 	error = vfs_getattr(&path, &stat); // NB context fine
-#else
+#else /* LINUX_VERSION_CODE */
 	error = vfs_getattr(&path, &stat,  STATX_ALL, AT_STATX_SYNC_AS_STAT); // NB context fine
-#endif
+#endif /* LINUX_VERSION_CODE */
 	path_put(&path);
 	if (error) {
 		ftfs_error(__func__, "vfs_getattr failed:%d, pathname:%s",
@@ -66,20 +66,14 @@ int stat(const char *filename, struct stat *statbuf)
 	statbuf->st_ino = stat.ino;
 	statbuf->st_nlink = stat.nlink;
 	statbuf->st_mode = stat.mode;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
 
-#ifdef CONFIG_UIDGID_STRICT_TYPE_CHECKS
+#if defined(CONFIG_UIDGID_STRICT_TYPE_CHECKS) || LINUX_VERSION_CODE >= KERNEL_VERSION(4,19,99)
 	statbuf->st_uid = stat.uid.val;
 	statbuf->st_gid = stat.gid.val;
-#else
+#else /* CONFIG_UIDGID_STRICT_TYPE_CHECKS || LINUX_VERSION_CODE >= 4.19.99 */
 	statbuf->st_uid = stat.uid;
 	statbuf->st_gid = stat.gid;
-#endif
-#else
-	statbuf->st_uid = stat.uid.val;
-	statbuf->st_gid = stat.gid.val;
-#endif
-
+#endif /* CONFIG_UIDGID_STRICT_TYPE_CHECKS || LINUX_VERSION_CODE >= 4.19.99 */
 	statbuf->st_rdev = stat.rdev;
 	statbuf->st_size = stat.size;
 	statbuf->st_blksize = stat.blksize;
@@ -110,9 +104,9 @@ int fstat(int fd, struct stat *statbuf)
 	if (f.file) {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
 		error = vfs_getattr(&f.file->f_path, &stat);
-#else
+#else /* LINUX_VERSION_CODE */
 		error = vfs_getattr(&f.file->f_path, &stat,  STATX_ALL, AT_STATX_SYNC_AS_STAT); // NB context fine
-#endif
+#endif /* LINUX_VERSION_CODE */
 		sb_fdput(f);
 	}
 
@@ -125,20 +119,13 @@ int fstat(int fd, struct stat *statbuf)
 	statbuf->st_ino = stat.ino;
 	statbuf->st_nlink = stat.nlink;
 	statbuf->st_mode = stat.mode;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
-
-#ifdef CONFIG_UIDGID_STRICT_TYPE_CHECKS
+#if defined(CONFIG_UIDGID_STRICT_TYPE_CHECKS) || LINUX_VERSION_CODE >= KERNEL_VERSION(4,19,99)
 	statbuf->st_uid = stat.uid.val;
 	statbuf->st_gid = stat.gid.val;
-#else
+#else /* CONFIG_UIDGID_STRICT_TYPE_CHECKS || LINUX_VERSION_CODE >= 4.19.99 */
 	statbuf->st_uid = stat.uid;
 	statbuf->st_gid = stat.gid;
-#endif
-#else
-	statbuf->st_uid = stat.uid.val;
-	statbuf->st_gid = stat.gid.val;
-#endif
-
+#endif /* CONFIG_UIDGID_STRICT_TYPE_CHECKS || LINUX_VERSION_CODE >= 4.19.99 */
 	statbuf->st_rdev = stat.rdev;
 	statbuf->st_size = stat.size;
 	statbuf->st_blksize = stat.blksize;

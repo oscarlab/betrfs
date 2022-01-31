@@ -108,7 +108,7 @@ test_cursor_flags (int cursor_flags, int expectr) {
     int r;
 
     r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
-    assert(r==0);    
+    assert(r==0);
 
     DB_ENV *env;
     r = db_env_create(&env, 0); assert(r == 0);
@@ -117,7 +117,7 @@ test_cursor_flags (int cursor_flags, int expectr) {
 
     DB *db;
     r = db_create(&db, env, 0); assert(r == 0);
-    db->set_errfile(db,0); // Turn off those annoying errors
+    db->set_errfile(db, 0); // Turn off those annoying errors
     r = db->open(db, null_txn, fname, NULL, DB_BTREE, DB_CREATE, 0666); assert(r == 0);
 
     DBC *cursor;
@@ -138,7 +138,7 @@ test_cursor_flags (int cursor_flags, int expectr) {
 extern "C" int test_test_cursor_flags(void);
 int test_test_cursor_flags(void) {
 
-    pre_setup();  
+    pre_setup();
     test_cursor_flags(0, 0);
     test_cursor_flags(~0, EINVAL);
     post_teardown();

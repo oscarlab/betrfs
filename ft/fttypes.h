@@ -98,6 +98,7 @@ PATENT RIGHTS GRANT:
 #endif
 #define _FILE_OFFSET_BITS 64
 
+#include "ftfs_indirect_val.h"
 #include "toku_assert.h"
 #include <db.h>
 #include <inttypes.h>
@@ -278,6 +279,10 @@ enum ft_msg_type {
     FT_ABORT_MULTICAST_TXN = 19, // multicast that aborts
     FT_UNBOUND_INSERT = 20, //large sequentail IO (part of a stream of consecutive keys)
 };
+
+#ifdef FT_INDIRECT
+typedef struct ftnode_page_data *FTNODE_PAGE_DATA;
+#endif
 
 static inline ft_msg_type
 cast_to_msg_type(int i)
@@ -476,15 +481,6 @@ struct ft_msg {
     union {
           struct range_delete_extra rd_extra; //for now just extra for range delete.
     } u;
-#if 0
-      union {
-        /* insert or delete */
-        struct ft_cmd_insert_delete {
-            const DBT *key;   // for insert, delete, upsertdel
-            const DBT *val;   // for insert, delete, (and it is the "extra" for upsertdel, upsertdel_broadcast_all)
-        } id;
-    } u;
-    #endif
 };
 // Message sent into brt to implement command (insert, delete, etc.)
 // This structure supports nested transactions, and obsoletes ft_msg.
@@ -551,5 +547,15 @@ enum split_mode {
     SPLIT_LEFT_HEAVY,
     SPLIT_RIGHT_HEAVY
 };
+
+// To keep the pfn of each partition
+// as well as the count and data size
+struct bp_indirect_data {
+    unsigned long *pfns;
+    unsigned int pfn_cnt;
+    unsigned int num_items;
+};
+typedef struct bp_indirect_data *BP_IND_DATA;
+
 #include "ft/ft_msg.h"
 #endif

@@ -107,7 +107,7 @@ put_callback(DB *dest_db, DB *src_db, DBT_ARRAY *dest_keys, DBT_ARRAY *dest_vals
     dest_key->data = toku_xmemdup(src_val->data, src_val->size);
     dest_key->size = src_val->size;
     dest_val->size = 0;
-    
+
     return 0;
 }
 
@@ -138,7 +138,7 @@ run_test(void) {
 
     DBT key,data;
     r = src_db->put(
-        src_db, 
+        src_db,
         put_txn,
         dbt_init(&key,  "hello", 6),
         dbt_init(&data, "there", 6),
@@ -147,7 +147,7 @@ run_test(void) {
 
     DB_INDEXER *indexer = NULL;
     r = env->create_indexer(env, index_txn, &indexer, src_db, 1, &dest_db, NULL, 0); assert_zero(r);
-    r = indexer->build(indexer); assert_zero(r);        
+    r = indexer->build(indexer); assert_zero(r);
     r = indexer->close(indexer); assert_zero(r);
     r = index_txn->abort(index_txn); assert_zero(r);
 
@@ -161,7 +161,7 @@ static void
 run_recover(void) {
     DB_ENV *env;
     { int chk_r = db_env_create(&env, 0); CKERR(chk_r); }
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     { int chk_r = env->open(env, TOKU_TEST_FILENAME, envflags|DB_RECOVER, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
     { int chk_r = env->close(env, 0); CKERR(chk_r); }
 }
@@ -195,4 +195,3 @@ int test_recover_hotindexer_simple_abort_put(void) {
 
     return 0;
 }
-

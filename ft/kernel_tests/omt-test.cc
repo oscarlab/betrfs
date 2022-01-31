@@ -94,28 +94,6 @@ under this License.
 #include <util/omt.h>
 
 typedef OMTVALUE TESTVALUE;
-/*
-   static void
-   parse_args (int argc, const char *argv[]) {
-   const char *argv0=argv[0];
-   while (argc>1) {
-   int resultcode=0;
-   if (strcmp(argv[1], "-v")==0) {
-   verbose++;
-   } else if (strcmp(argv[1], "-q")==0) {
-   verbose = 0;
-   } else if (strcmp(argv[1], "-h")==0) {
-do_usage:
-fprintf(stderr, "Usage:\n%s [-v|-h]\n", argv0);
-exit(resultcode);
-} else {
-resultcode=1;
-goto do_usage;
-}
-argc--;
-argv++;
-}
-}*/
 /* End ".h like" stuff. */
 
 struct value {
@@ -337,7 +315,7 @@ test_create_from_sorted_array_size (enum create_type create_choice, enum close_w
 	test_create_from_sorted_array(create_choice, KEEP_WHEN_DONE);
 	assert(toku_omt_size(global_omt)==length);
 	test_close(do_close);
-}    
+}
 
 static void
 test_fetch_verify (OMT omtree, TESTVALUE* val, uint32_t len ) {
@@ -454,15 +432,15 @@ test_create_set_at (enum create_type create_choice, enum close_when_done do_clos
 	//
 	for (i = 0; i < length; i++) {
 		old_nums[i] = nums[i];
-		old_values[i] = &old_nums[i];        
+		old_values[i] = &old_nums[i];
 		values[i] = &old_nums[i];
 	}
 	test_create_from_sorted_array(create_choice, KEEP_WHEN_DONE);
 	int r;
 	r = toku_omt_set_at (global_omt, values[0], length);
-	CKERR2(r,EINVAL);    
+	CKERR2(r,EINVAL);
 	r = toku_omt_set_at (global_omt, values[0], length+1);
-	CKERR2(r,EINVAL);    
+	CKERR2(r,EINVAL);
 	for (i = 0; i < length; i++) {
 		uint32_t choice = perm[i];
 		values[choice] = &nums[choice];
@@ -473,9 +451,9 @@ test_create_set_at (enum create_type create_choice, enum close_when_done do_clos
 		test_fetch_verify(global_omt, values, length);
 	}
 	r = toku_omt_set_at (global_omt, values[0], length);
-	CKERR2(r,EINVAL);    
+	CKERR2(r,EINVAL);
 	r = toku_omt_set_at (global_omt, values[0], length+1);
-	CKERR2(r,EINVAL);    
+	CKERR2(r,EINVAL);
 
 	toku_free(perm);
 	toku_free(old_values);
@@ -836,7 +814,7 @@ test_find (enum create_type create_choice, enum close_when_done do_close) {
 	/*
 	   -...-0...0+...+
 	   AC    B
-	 */    
+	 */
 	heavy_extra(&extra, length/3, 2*length/3);
 	test_find_dir(-1, &extra, test_heaviside, 0, true,   length/3-1,   length/3-1, true);
 	test_find_dir(+1, &extra, test_heaviside, 0, true, 2*length/3,   2*length/3,   true);
@@ -887,7 +865,7 @@ test_clone(uint32_t nelts)
 }
 
 extern "C" int test_omt(void);
-int test_omt(void) 
+int test_omt(void)
 {
 	initialize_dummymsn();
 	int rinit = toku_ft_layer_init();
@@ -907,4 +885,3 @@ int test_omt(void)
 	toku_ft_layer_destroy();
 	return 0;
 }
-

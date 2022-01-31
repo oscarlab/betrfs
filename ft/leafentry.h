@@ -102,6 +102,10 @@ PATENT RIGHTS GRANT:
 #include "x1764.h"
 #include "omt.h"
 
+#ifdef FT_INDIRECT
+#include "tokuconst.h"
+#endif
+
 /*
     Memory format of packed leaf entry
     CONSTANTS:
@@ -174,20 +178,26 @@ struct leafentry {
     static_assert(5 == sizeof(leafentry::leafentry_mvcc), "leafentry_mvcc size is wrong");
     static_assert(5 == __builtin_offsetof(leafentry::leafentry_mvcc, xrs), "xrs is in the wrong place");
 
+#ifdef FT_INDIRECT
+    uint32_t *indirect_insert_offsets; // le_pack should allocate space and assign values to it
+    uint8_t num_indirect_inserts; // how many ubi in this leaf entry
+#endif
     uint8_t  type;    // type is LE_CLEAN or LE_MVCC
-    //uint32_t keylen;
+
     union __attribute__ ((__packed__)) {
         struct leafentry_clean clean;
         struct leafentry_mvcc mvcc;
     } u;
 };
+
+#ifndef FT_INDIRECT
 static_assert(6 == sizeof(leafentry), "leafentry size is wrong");
 static_assert(1 == __builtin_offsetof(leafentry, u), "union is in the wrong place");
 
-#define LE_CLEAN_MEMSIZE(_vallen)                       \
-    (sizeof(((LEAFENTRY)NULL)->type)            /* type */       \
-    +sizeof(((LEAFENTRY)NULL)->u.clean.vallen)  /* vallen */     \
-    +(_vallen))                                   /* actual val */
+#define LE_CLEAN_MEMSIZE(_vallen)				\
+    (sizeof(((LEAFENTRY)NULL)->type)            /* type */	\
+    +sizeof(((LEAFENTRY)NULL)->u.clean.vallen)  /* vallen */	\
+    +(_vallen))                                 /* actual val */
 
 #define LE_MVCC_COMMITTED_HEADER_MEMSIZE                          \
     (sizeof(((LEAFENTRY)NULL)->type)            /* type */        \
@@ -197,13 +207,40 @@ static_assert(1 == __builtin_offsetof(leafentry, u), "union is in the wrong plac
     +sizeof(uint32_t)                           /* length+bit */  \
     +sizeof(uint32_t))                          /* length+bit */ 
 
-#define LE_MVCC_COMMITTED_MEMSIZE(_vallen)    \
-    (LE_MVCC_COMMITTED_HEADER_MEMSIZE                \
-    +(_vallen))                       /* actual val */
+#else
+static_assert(16 == sizeof(leafentry), "leafentry size is wrong");
+static_assert(10 == __builtin_offsetof(leafentry, u), "union is in the wrong place");
 
+#define LE_CLEAN_MEMSIZE(_vallen)                                        		\
+    (sizeof(((LEAFENTRY)NULL)->indirect_insert_offsets) /* indirect insert offsets */	\
+    +sizeof(((LEAFENTRY)NULL)->num_indirect_inserts)    /* num_indirect_insert */	\
+    +sizeof(((LEAFENTRY)NULL)->type)            /* type */               		\
+    +sizeof(((LEAFENTRY)NULL)->u.clean.vallen)  /* vallen */             		\
+    +(_vallen))                                 /* actual val */
+
+#define LE_MVCC_COMMITTED_HEADER_MEMSIZE                                 		\
+    (sizeof(((LEAFENTRY)NULL)->indirect_insert_offsets) /* indirect insert offsets */	\
+    +sizeof(((LEAFENTRY)NULL)->num_indirect_inserts)    /* num_indirect_insert */	\
+    +sizeof(((LEAFENTRY)NULL)->type)            /* type */               		\
+    +sizeof(((LEAFENTRY)NULL)->u.mvcc.num_cxrs) /* committed */         		\
+    +sizeof(((LEAFENTRY)NULL)->u.mvcc.num_pxrs) /* provisional */        		\
+    +sizeof(TXNID)                              /* transaction */        		\
+    +sizeof(uint32_t))                          /* length+bit */
+
+
+#endif
+
+#define LE_MVCC_COMMITTED_MEMSIZE(_vallen)	\
+    (LE_MVCC_COMMITTED_HEADER_MEMSIZE		\
+    +(_vallen))                       /* actual val */
 
 typedef struct leafentry *LEAFENTRY;
 typedef struct leafentry_13 *LEAFENTRY_13;
+
+#ifdef FT_INDIRECT
+uint32_t LE_NUM_VALS(LEAFENTRY le);
+int le_get_ind_size(LEAFENTRY le);
+#endif
 
 //
 // TODO: consistency among names is very poor.
@@ -211,6 +248,14 @@ typedef struct leafentry_13 *LEAFENTRY_13;
 
 // TODO: rename this helper function for deserialization
 size_t leafentry_rest_memsize(uint32_t num_puxrs, uint32_t num_cuxrs, uint8_t* start);
+#ifdef FT_INDIRECT
+size_t leafentry_rest_memsize_fixup(uint32_t num_puxrs,
+                                    uint32_t num_cuxrs,
+                                    uint8_t* start,
+                                    unsigned int *ubi_val_offsets,
+                                    uint8_t *le_start,
+                                    int tmp_size);
+#endif
 size_t leafentry_memsize (LEAFENTRY le); // the size of a leafentry in memory.
 size_t leafentry_disksize (LEAFENTRY le); // this is the same as logsizeof_LEAFENTRY.  The size of a leafentry on disk.
 void wbuf_nocrc_LEAFENTRY(struct wbuf *w, LEAFENTRY le);
@@ -221,7 +266,7 @@ bool le_is_clean(LEAFENTRY le); //Return how many xids exist (0 does not count)
 bool le_has_xids(LEAFENTRY le, XIDS xids); // Return true transaction represented by xids is still provisional in this leafentry (le's xid stack is a superset or equal to xids)
 void*     le_latest_val (LEAFENTRY le); // Return the latest val (return NULL for provisional deletes)
 uint32_t le_latest_vallen (LEAFENTRY le); // Return the latest vallen.  Returns 0 for provisional deletes.
-void* le_latest_val_and_len (LEAFENTRY le, uint32_t *len);
+void* le_latest_val_and_len (LEAFENTRY le, uint32_t *len, bool *is_indirect);
 
 uint64_t le_outermost_uncommitted_xid (LEAFENTRY le);
 
@@ -235,8 +280,8 @@ typedef int(*LE_ITERATE_CALLBACK)(TXNID id, TOKUTXN context);
 
 int le_iterate_is_del(LEAFENTRY le, LE_ITERATE_CALLBACK f, bool *is_empty, TOKUTXN context);
 
-int le_iterate_val(LEAFENTRY le, LE_ITERATE_CALLBACK f, void** valpp, uint32_t *vallenp, TOKUTXN context);
-
+int le_iterate_val(LEAFENTRY le, LE_ITERATE_CALLBACK f, void** valpp, uint32_t *vallenp, bool *is_indirect, TOKUTXN context);
+void debug_le_val(LEAFENTRY le);
 size_t
 leafentry_disksize_13(LEAFENTRY_13 le);
 
@@ -255,7 +300,8 @@ toku_le_apply_msg(FT_MSG   msg,
                   TXNID oldest_referenced_xid,
                   GC_INFO gc_info,
                   LEAFENTRY *new_leafentry_p,
-                  int64_t * numbytes_delta_p);
+                  int64_t * numbytes_delta_p,
+                  struct ind_size_count *ind_size_count_p);
 
 bool toku_le_worth_running_garbage_collection(LEAFENTRY le, TXNID oldest_referenced_xid_known);
 bool toku_le_innermost_is_delete(LEAFENTRY le, TXNID oldest_referenced_xid_known);
@@ -275,7 +321,9 @@ toku_le_garbage_collect(LEAFENTRY old_leaf_entry,
                         const rx_omt_t &referenced_xids,
                         const xid_omt_t &live_root_txns,
                         TXNID oldest_referenced_xid_known,
-                        int64_t * numbytes_delta_p);
+                        bool is_cloned,
+                        int64_t * numbytes_delta_p,
+                        struct ind_size_count *delta_size_count);
 
 #endif /* TOKU_LEAFENTRY_H */
 

@@ -122,7 +122,7 @@ struct dbufio_file {
 
 /* A dbufio_fileset  */
 struct dbufio_fileset {
-    // The mutex/condition variables protect 
+    // The mutex/condition variables protect
     //   the singly-linked list of files that need I/O (head/tail in the fileset, and next in each file)
     //   in each file:
     //     the second_buf_ready boolean (which says the second buffer is full of data).
@@ -190,7 +190,7 @@ static ssize_t dbf_read_some_compressed(struct dbufio_file *dbf, char *buf, size
 #ifdef TOKU_LINUX_MODULE
         ret = -TOKUDB_NO_DATA;
 #else
-        set_errno( TOKUDB_NO_DATA); 
+        set_errno( TOKUDB_NO_DATA);
         // XXX: why no -TOKUDB_NO_DATA?
         ret = -1;
 #endif
@@ -205,7 +205,7 @@ static ssize_t dbf_read_some_compressed(struct dbufio_file *dbf, char *buf, size
 #ifdef TOKU_LINUX_MODULE
         ret = -toku_db_badformat();
 #else
-        set_errno( toku_db_badformat()); 
+        set_errno( toku_db_badformat());
         ret = -1;
 #endif
         goto exit;
@@ -249,7 +249,7 @@ static ssize_t dbf_read_some_compressed(struct dbufio_file *dbf, char *buf, size
 #ifdef TOKU_LINUX_MODULE
         ret = -toku_db_badformat();
 #else
-        set_errno(toku_db_badformat()); 
+        set_errno(toku_db_badformat());
         ret = -1;
 #endif
         goto exit;
@@ -267,22 +267,22 @@ static ssize_t dbf_read_some_compressed(struct dbufio_file *dbf, char *buf, size
     total_compressed_size = 0;
     for (int i = 0; i < n_sub_blocks; i++) {
         uint32_t compressed_size = sub_block[i].compressed_size;
-        if (compressed_size<=0   || compressed_size>(1<<30)) { 
+        if (compressed_size<=0   || compressed_size>(1<<30)) {
 #ifdef TOKU_LINUX_MODULE
             ret = -toku_db_badformat();
 #else
-            set_errno(toku_db_badformat()); 
+            set_errno(toku_db_badformat());
             ret = -1;
 #endif
             goto exit;
         }
 
         uint32_t uncompressed_size = sub_block[i].uncompressed_size;
-        if (uncompressed_size<=0 || uncompressed_size>(1<<30)) { 
+        if (uncompressed_size<=0 || uncompressed_size>(1<<30)) {
 #ifdef TOKU_LINUX_MODULE
             ret = -toku_db_badformat();
 #else
-            set_errno(toku_db_badformat()); 
+            set_errno(toku_db_badformat());
             ret = -1;
 #endif
             goto exit;
@@ -293,7 +293,7 @@ static ssize_t dbf_read_some_compressed(struct dbufio_file *dbf, char *buf, size
 #ifdef TOKU_LINUX_MODULE
         ret = -toku_db_badformat();
 #else
-        set_errno(toku_db_badformat()); 
+        set_errno(toku_db_badformat());
         ret = -1;
 #endif
         goto exit;
@@ -306,7 +306,7 @@ static ssize_t dbf_read_some_compressed(struct dbufio_file *dbf, char *buf, size
 #ifdef TOKU_LINUX_MODULE
         ret = -toku_db_badformat();
 #else
-        set_errno(toku_db_badformat()); 
+        set_errno(toku_db_badformat());
         ret = -1;
 #endif
         goto exit;
@@ -324,7 +324,7 @@ static ssize_t dbf_read_some_compressed(struct dbufio_file *dbf, char *buf, size
         int r;
         r = decompress_all_sub_blocks(n_sub_blocks, sub_block, compressed_data, uncompressed_data, get_num_cores(), get_ft_pool());
         if (r != 0) {
-            fprintf(stderr, "%s:%d loader failed %d at %p size %" PRIu32"\n", __FUNCTION__, __LINE__, r, raw_block, total_size);
+            dprintf(STDERR, "%s:%d loader failed %d at %p size %" PRIu32"\n", __FUNCTION__, __LINE__, r, raw_block, total_size);
             dump_bad_block(raw_block, total_size);
 #ifdef TOKU_LINUX_MODULE
             ret = r;
@@ -382,7 +382,7 @@ static void* io_thread (void *v)
 
 	struct dbufio_file *dbf = bfs->head;
 	if (dbf==NULL) {
-	    // No I/O needs to be done yet. 
+	    // No I/O needs to be done yet.
 	    // Wait until something happens that will wake us up.
 	    toku_cond_wait(&bfs->cond, &bfs->mutex);
 	    if (paniced(bfs)) {
@@ -413,12 +413,8 @@ static void* io_thread (void *v)
 		//printf("%s:%d readcode=%ld\n", __FILE__, __LINE__, readcode);
 		if (readcode < 0) {
 		    // a real error.  Save the real error.
-#ifdef TOKU_LINUX_MODULE
                     int the_errno = get_error_errno(readcode);
-#else
-                    int the_errno = get_error_errno();
-#endif
-                    fprintf(stderr, "%s:%d dbf=%p fd=%d errno=%d\n", __FILE__, __LINE__, dbf, dbf->fd, the_errno);
+                    dprintf(STDERR, "%s:%d dbf=%p fd=%d errno=%d\n", __FILE__, __LINE__, dbf, dbf->fd, the_errno);
 		    dbf->error_code[1] = the_errno;
 		    dbf->n_in_buf[1] = 0;
 		} else if (readcode==0) {
@@ -426,7 +422,7 @@ static void* io_thread (void *v)
 		    dbf->error_code[1] = EOF;
 		    dbf->n_in_buf[1] = 0;
 		    dbf->io_done = true;
-		    
+
 		} else {
 		    dbf->error_code[1] = 0;
 		    dbf->n_in_buf[1] = readcode;
@@ -455,7 +451,6 @@ static void* io_thread (void *v)
 }
 
 int create_dbufio_fileset (DBUFIO_FILESET *bfsp, int N, int fds[/*N*/], size_t bufsize, bool compressed) {
-    //printf("%s:%d here\n", __FILE__, __LINE__);
     int result = 0;
     DBUFIO_FILESET CALLOC(bfs);
     if (bfs==0) { result = ENOMEM; }
@@ -472,7 +467,6 @@ int create_dbufio_fileset (DBUFIO_FILESET *bfsp, int N, int fds[/*N*/], size_t b
 	    }
 	}
     }
-    //printf("%s:%d here\n", __FILE__, __LINE__);
     if (result==0) {
 	toku_mutex_init(&bfs->mutex, NULL);
 	mutex_inited = true;
@@ -508,11 +502,7 @@ int create_dbufio_fileset (DBUFIO_FILESET *bfsp, int N, int fds[/*N*/], size_t b
             }
             {
 		if (r<0) {
-#ifdef TOKU_LINUX_MODULE
                     result = get_error_errno(r);
-#else
-		    result=get_error_errno();
-#endif
 		    break;
                 } else if (r==0) {
 		    // it's EOF
@@ -521,7 +511,6 @@ int create_dbufio_fileset (DBUFIO_FILESET *bfsp, int N, int fds[/*N*/], size_t b
 		    bfs->files[i].error_code[0] = EOF;
 		} else {
 		    bfs->files[i].n_in_buf[0] = r;
-		    //printf("%s:%d enq [%d]\n", __FILE__, __LINE__, i);
 		    enq(bfs, &bfs->files[i]);
 		}
 	    }
@@ -608,7 +597,7 @@ int dbufio_fileset_read (DBUFIO_FILESET bfs, int filenum, void *buf_v, size_t co
 	*n_read = count;
 	return 0;
     } else if (dbf->n_in_buf[0] > dbf->offset_in_buf) {
-	// There is something in buf[0] 
+	// There is something in buf[0]
 	size_t this_count = dbf->n_in_buf[0]-dbf->offset_in_buf;
 	assert(dbf->offset_in_buf + this_count <= bfs->bufsize);
 	memcpy(buf, dbf->buf[0]+dbf->offset_in_buf, this_count);
@@ -662,15 +651,15 @@ int dbufio_fileset_read (DBUFIO_FILESET bfs, int filenum, void *buf_v, size_t co
 
 void
 dbufio_print(DBUFIO_FILESET bfs) {
-    fprintf(stderr, "%s:%d bfs=%p", __FILE__, __LINE__, bfs);
+    dprintf(STDERR, "%s:%d bfs=%p", __FILE__, __LINE__, bfs);
     if (bfs->panic)
-        fprintf(stderr, " panic=%d", bfs->panic_errno);
-    fprintf(stderr, " N=%d %d %" PRIuMAX, bfs->N, bfs->n_not_done, bfs->bufsize);
+        dprintf(STDERR, " panic=%d", bfs->panic_errno);
+    dprintf(STDERR, " N=%d %d %" PRIuMAX, bfs->N, bfs->n_not_done, bfs->bufsize);
     for (int i = 0; i < bfs->N; i++) {
         struct dbufio_file *dbf = &bfs->files[i];
         if (dbf->error_code[0] || dbf->error_code[1])
-            fprintf(stderr, " %d=[%d,%d]", i, dbf->error_code[0], dbf->error_code[1]);
+            dprintf(STDERR, " %d=[%d,%d]", i, dbf->error_code[0], dbf->error_code[1]);
     }
-    fprintf(stderr, "\n");
-                
+    dprintf(STDERR, "\n");
+
 }

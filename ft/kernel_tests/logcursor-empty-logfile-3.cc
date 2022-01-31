@@ -119,7 +119,7 @@ test_logcursor_empty_logfile_3 (void) {
 
         r = toku_logger_close(&logger);
         assert(r == 0);
-    }    
+    }
 
     // create N empty log files
     for (int i=0; i<N; i++) {
@@ -140,7 +140,7 @@ test_logcursor_empty_logfile_3 (void) {
 
         char * mt_fname = (char*) toku_xmalloc(sizeof(char)*(TOKU_PATH_MAX+1));
         snprintf(mt_fname, TOKU_PATH_MAX, "%s/log%012lld.tokulog%d", TOKU_TEST_ENV_DIR_NAME, nexti, TOKU_LOG_VERSION);
-        int mt_fd = open(mt_fname, O_CREAT+O_WRONLY+O_TRUNC+O_EXCL+O_BINARY, S_IRWXU);
+        int mt_fd = toku_initialize_empty_log(mt_fname);
         assert(mt_fd != -1);
         r = close(mt_fd);
         toku_free(mt_fname);
@@ -170,7 +170,7 @@ test_logcursor_empty_logfile_3 (void) {
 
         char * mt_fname = (char*) toku_xmalloc(sizeof(char)*(TOKU_PATH_MAX+1));
         snprintf(mt_fname, TOKU_PATH_MAX, "%s/log%012lld.tokulog%d", TOKU_TEST_ENV_DIR_NAME, nexti, TOKU_LOG_VERSION);
-        int mt_fd = open(mt_fname, O_CREAT+O_WRONLY+O_TRUNC+O_EXCL+O_BINARY, S_IRWXU);
+        int mt_fd = toku_initialize_empty_log(mt_fname);
         assert(mt_fd != -1);
         r = close(mt_fd);
         toku_free(mt_fname);

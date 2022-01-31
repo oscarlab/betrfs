@@ -163,22 +163,22 @@ static void cachetable_prefetch_full_test (bool partial_fetch) {
         void* value;
         long size;
         r = toku_cachetable_get_and_pin(
-            f1, 
-            key, 
-            fullhash, 
-            &value, 
-            &size, 
-            wc, 
+            f1,
+            key,
+            fullhash,
+            &value,
+            &size,
+            wc,
             fetch,
             def_pf_req_callback,
             def_pf_callback,
-            true, 
+            true,
             0
             );
         assert(r==0);
         r = toku_test_cachetable_unpin(f1, key, fullhash, CACHETABLE_CLEAN, make_pair_attr(1));
     }
-    
+
     r = toku_cachefile_prefetch(f1, key, fullhash, wc, fetch, def_pf_req_callback, def_pf_callback, 0, NULL);
     toku_cachetable_verify(ct);
 
@@ -191,7 +191,10 @@ static void cachetable_prefetch_full_test (bool partial_fetch) {
 extern "C" int test_cachetable_prefetch_close(void);
 
 int test_cachetable_prefetch_close(void) {
+    int rinit = toku_ft_layer_init();
+    CKERR(rinit);
     cachetable_prefetch_full_test(true);
     cachetable_prefetch_full_test(false);
+    toku_ft_layer_destroy();
     return 0;
 }

@@ -141,7 +141,7 @@ populate(DB_ENV *env, DB_TXN *txn, DB *db, uint64_t nrows) {
     struct timeval tlast = tstart;
 
     for (uint64_t rowi = 0; rowi < nrows; rowi++) {
-        insert_row(env, txn, db, rowi); 
+        insert_row(env, txn, db, rowi);
         // maybe report performance
         uint64_t rows_per_report = 100000;
         if (((rowi + 1) % rows_per_report) == 0) {
@@ -150,8 +150,8 @@ populate(DB_ENV *env, DB_TXN *txn, DB *db, uint64_t nrows) {
             //float last_time = tdiff(&tnow, &tlast);
             //float total_time = tdiff(&tnow, &tstart);
             if (verbose) {
-                fprintf(stderr, "DO NOT PRINT FLOATS IN KERNEL. CHECK THIS CODE");
-                //fprintf(stderr, "%" PRIu64 " %.3f %.0f/s %.0f/s\n", rowi + 1, last_time, rows_per_report/last_time, rowi/total_time); fflush(stderr);
+                dprintf(STDERR, "DO NOT PRINT FLOATS IN KERNEL. CHECK THIS CODE");
+                //dprintf(STDERR, "%" PRIu64 " %.3f %.0f/s %.0f/s\n", rowi + 1, last_time, rows_per_report/last_time, rowi/total_time);
             }
             tlast = tnow;
         }
@@ -167,7 +167,7 @@ run_test(DB_ENV *env, int ndbs, int do_txn, uint32_t pagesize, uint64_t nrows) {
     for (int i = 0; i < ndbs; i++) {
         DB *db = NULL;
         if (verbose) {
-            time_t now = time(0); fprintf(stderr, "%.24s creating %d\n", ctime(&now), i);
+            time_t now = time(0); dprintf(STDERR, "%.24s creating %d\n", ctime(&now), i);
         }
         r = db_create(&db, env, 0); assert_zero(r);
         if (pagesize) {
@@ -186,7 +186,7 @@ run_test(DB_ENV *env, int ndbs, int do_txn, uint32_t pagesize, uint64_t nrows) {
     }
 
         if (verbose) {
-            time_t now = time(0); fprintf(stderr, "%.24s populating\n", ctime(&now));
+            time_t now = time(0); dprintf(STDERR, "%.24s populating\n", ctime(&now));
         }
 
     DB_TXN *txn0 = NULL;
@@ -198,7 +198,7 @@ run_test(DB_ENV *env, int ndbs, int do_txn, uint32_t pagesize, uint64_t nrows) {
 
     if (do_txn) {
         if (verbose) {
-            time_t now = time(0); fprintf(stderr, "%.24s commit txn0\n", ctime(&now));
+            time_t now = time(0); dprintf(STDERR, "%.24s commit txn0\n", ctime(&now));
         }
         r = txn0->commit(txn0, 0); assert_zero(r);
     }
@@ -206,17 +206,17 @@ run_test(DB_ENV *env, int ndbs, int do_txn, uint32_t pagesize, uint64_t nrows) {
     for (int i = 0; i < ndbs; i++) {
         DB *db = dbs[i];
         if (verbose) {
-            time_t now = time(0); fprintf(stderr, "%.24s closing %d\n", ctime(&now), i);
+            time_t now = time(0); dprintf(STDERR, "%.24s closing %d\n", ctime(&now), i);
         }
         r = db->close(db, 0); assert_zero(r);
     }
 
-    
+
     if (verbose) {
-        time_t now = time(0); fprintf(stderr, "%.24s done\n", ctime(&now));
+        time_t now = time(0); dprintf(STDERR, "%.24s done\n", ctime(&now));
     }
-    toku_free(dbs); 
-    
+    toku_free(dbs);
+
 }
 
 extern "C" int test_shutdown_3344(void);
@@ -247,7 +247,7 @@ int test_shutdown_3344(void) {
 
     run_test(env, ndbs, do_txn, pagesize, nrows);
 
-    if (verbose) fprintf(stderr, "closing env\n");
+    if (verbose) dprintf(STDERR, "closing env\n");
     r = env->close(env, 0); assert_zero(r);
     post_teardown();
     return 0;

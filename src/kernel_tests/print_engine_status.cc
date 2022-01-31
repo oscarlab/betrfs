@@ -121,10 +121,10 @@ setup (uint32_t flags) {
         test_shutdown();
     r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
     CKERR(r);
-    r=db_env_create(&env, 0); 
+    r=db_env_create(&env, 0);
     CKERR(r);
-    env->set_errfile(env, stderr);
-    r=env->open(env, TOKU_TEST_ENV_DIR_NAME, flags, mode); 
+    env->set_errfile(env, STDERR);
+    r=env->open(env, TOKU_TEST_ENV_DIR_NAME, flags, mode);
     CKERR(r);
 }
 
@@ -135,7 +135,7 @@ print_raw(TOKU_ENGINE_STATUS_ROW row) {
            row->keyname,
            row->type,
            row->legend);
-}    
+}
 
 static void
 status_format_time(const time_t *timer, char *buf) {
@@ -159,7 +159,7 @@ extern "C" int test_print_engine_status(void);
 int test_print_engine_status(void) {
 
     pre_setup();
-    
+
     uint64_t nrows;
     uint64_t max_rows;
     fs_redzone_state redzone_state;
@@ -174,7 +174,7 @@ int test_print_engine_status(void) {
     env->get_engine_status_num_rows(env, &max_rows);
    // TOKU_ENGINE_STATUS_ROW_S mystat[max_rows];
     TOKU_ENGINE_STATUS_ROW_S *mystat = (TOKU_ENGINE_STATUS_ROW_S *)
-            toku_xmalloc(max_rows * sizeof(TOKU_ENGINE_STATUS_ROW_S)); 
+            toku_xmalloc(max_rows * sizeof(TOKU_ENGINE_STATUS_ROW_S));
 
 
     int r = env->get_engine_status (env, mystat, max_rows, &nrows, &redzone_state, &panic, panic_string, panic_string_len, TOKU_ENGINE_STATUS);
@@ -220,7 +220,7 @@ int test_print_engine_status(void) {
         printf("\n\n\n\n\nNow as reported by get_engine_status_text():\n\n");
 
         int bufsiz = nrows * 128;   // assume 128 characters per row
-        //char buff[bufsiz];  
+        //char buff[bufsiz];
 
         char *buff = (char *) toku_xmalloc(bufsiz * sizeof(char));
         r = env->get_engine_status_text(env, buff, bufsiz);

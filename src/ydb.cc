@@ -263,14 +263,14 @@ static void
 env_fs_report_in_yellow(DB_ENV *UU(env)) {
     char tbuf[26];
     time_t tnow = time(NULL);
-    fprintf(stderr, "%.24s Tokudb file system space is low\n", ctime_r(&tnow, tbuf)); fflush(stderr);
+    dprintf(STDERR, "%.24s Tokudb file system space is low\n", ctime_r(&tnow, tbuf));
 }
 
 static void
 env_fs_report_in_red(DB_ENV *UU(env)) {
     char tbuf[26];
     time_t tnow = time(NULL);
-    fprintf(stderr, "%.24s Tokudb file system space is really low and access is restricted\n", ctime_r(&tnow, tbuf)); fflush(stderr);
+    dprintf(STDERR, "%.24s Tokudb file system space is really low and access is restricted\n", ctime_r(&tnow, tbuf));
 }
 
 static inline uint64_t
@@ -731,11 +731,7 @@ validate_env(DB_ENV * env, bool * valid_newenv, bool need_rollback_cachefile) {
         expect_newenv = false;  // persistent info exists
     }
     else {
-#ifdef TOKU_LINUX_MODULE
         int stat_errno = get_error_errno(r);
-#else
-        int stat_errno = get_error_errno();
-#endif
         if (stat_errno == ENOENT) {
             expect_newenv = true;
             r = 0;
@@ -757,11 +753,7 @@ validate_env(DB_ENV * env, bool * valid_newenv, bool need_rollback_cachefile) {
                 r = toku_ydb_do_error(env, ENOENT, "Persistent environment is missing\n");
         }
         else {
-#ifdef TOKU_LINUX_MODULE
             int stat_errno = get_error_errno(r);
-#else
-            int stat_errno = get_error_errno();
-#endif
             if (stat_errno == ENOENT) {
                 if (!expect_newenv)  // rollback cachefile is missing but persistent env exists
                     r = toku_ydb_do_error(env, ENOENT, "rollback cachefile directory is missing\n");
@@ -786,11 +778,7 @@ validate_env(DB_ENV * env, bool * valid_newenv, bool need_rollback_cachefile) {
                 r = toku_ydb_do_error(env, ENOENT, "Persistent environment is missing\n");
         }
         else {
-#ifdef TOKU_LINUX_MODULE
             int stat_errno = get_error_errno(r);
-#else
-            int stat_errno = get_error_errno();
-#endif
             if (stat_errno == ENOENT) {
                 if (!expect_newenv)  // fileops directory is missing but persistent env exists
                     r = toku_ydb_do_error(env, ENOENT, "Fileops directory is missing\n");
@@ -899,11 +887,7 @@ env_open(DB_ENV * env, const char *home, uint32_t flags, int mode) {
     toku_struct_stat buf;
     r = toku_stat(home, &buf);
     if (r != 0) {
-#ifdef TOKU_LINUX_MODULE
         int e = get_error_errno(r);
-#else
-        int e = get_error_errno();
-#endif
         r = toku_ydb_do_error(env, e, "Error from toku_stat(\"%s\",...)\n", home);
         goto cleanup;
     }
@@ -955,11 +939,7 @@ env_open(DB_ENV * env, const char *home, uint32_t flags, int mode) {
         // YZJ: upgrade should never happen
         assert(false);
         if (r != 0) {
-#ifdef TOKU_LINUX_MODULE
             assert(get_error_errno(r) == ENOENT);
-#else
-            assert(get_error_errno() == ENOENT);
-#endif
         }
         toku_free(rollback_filename);
         need_rollback_cachefile = false;  // we're not expecting it to exist now
@@ -1264,13 +1244,10 @@ env_log_flush(DB_ENV * env, const DB_LSN * lsn __attribute__((__unused__))) {
     return 0;
 }
 
-#define KERN_SOH  "\001"
-#define KERN_ALERT KERN_SOH "1"
-extern "C" int printk(const char *fmt, ...);
 static int
 env_set_cachesize(DB_ENV * env, uint32_t gbytes, uint32_t bytes, int ncache) {
     HANDLE_PANICKED_ENV(env);
-    printk(KERN_ALERT "setting cachesize. gbytes: %lu, bytes: %lu\n",
+    printf("setting cachesize. gbytes: %lu, bytes: %lu\n",
            (unsigned long)gbytes, (unsigned long)bytes);
     if (ncache != 1) {
         return EINVAL;
@@ -1374,11 +1351,8 @@ env_set_data_dir(DB_ENV * env, const char *dir) {
     else {
         env->i->data_dir = toku_strdup(dir);
         if (env->i->data_dir==NULL) {
-#ifdef TOKU_LINUX_MODULE
-            /* wkj: passing -1 gets us the errno... otherwise returns 0 */
-#else
-            assert(get_error_errno() == ENOMEM);
-#endif
+            // this assertion is a no-op in the kernel build
+            assert(get_error_errno(ENOMEM) == ENOMEM);
             r = toku_ydb_do_error(env, ENOMEM, "Out of memory\n");
         }
         else r = 0;
@@ -1392,7 +1366,7 @@ env_set_errcall(DB_ENV * env, toku_env_errcall_t errcall) {
 }
 
 static void
-env_set_errfile(DB_ENV*env, FILE*errfile) {
+env_set_errfile(DB_ENV*env, int errfile) {
     env->i->errfile = errfile;
 }
 
@@ -2242,9 +2216,11 @@ env_get_engine_status_text(DB_ENV * env, char * buff, int bufsiz) {
                 break;
             case TOKUTIME:
                 {
-                    uint64_t t = tokutime_to_microseconds(mystat[row].value.num)
-                        * 1000000;
-                    n += snprintf(buff + n, bufsiz - n, "%" PRIu64 "\n", t);
+                    uint64_t t = tokutime_to_microseconds(mystat[row].value.num);
+                    uint64_t t_sec_part = t / 1000000;
+                    uint64_t t_usec_part = t % 1000000;
+                    n += snprintf(buff + n, bufsiz - n, "%" PRIu64 ".%.6" PRIu64 "\n", t_sec_part, t_usec_part);
+                    printf("%" PRIu64 ".%.6" PRIu64 "\n", t_sec_part, t_usec_part);
                 }
                 break;
             case PARCOUNT:
@@ -2619,7 +2595,6 @@ toku_env_create(DB_ENV ** envp, uint32_t flags) {
     r = toku_omt_create(&result->i->open_dbs_by_dict_id);
     assert_zero(r);
     toku_pthread_rwlock_init(&result->i->open_dbs_rwlock, NULL);
-
     *envp = result;
     r = 0;
     toku_sync_fetch_and_add(&tokudb_num_envs, 1);

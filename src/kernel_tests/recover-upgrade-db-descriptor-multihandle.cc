@@ -119,7 +119,7 @@ static int my_compare(DB *UU(db), const DBT *a, const DBT *b) {
     assert(a->size == b->size);
     verified = 1;
     return memcmp(a->data, b->data, a->size);
-}   
+}
 
 #endif
 
@@ -173,7 +173,7 @@ do_x1_shutdown (bool do_commit, bool do_abort) {
 	r = txn->commit(txn, 0);                                                        CKERR(r);
     } else if (do_abort) {
         r = txn->abort(txn);                                                            CKERR(r);
-        
+
         // force an fsync of the log
         r = env->txn_begin(env, NULL, &txn, 0);                                         CKERR(r);
         r = txn->commit(txn, 0);                                                        CKERR(r);
@@ -279,7 +279,7 @@ do_test_internal (bool commit)
 	assert(WIFSIGNALED(status) && WTERMSIG(status)==SIGABRT);
     }
     // Now find out what happend
-    
+
     if (0 == (pid = fork())) {
 	int r=execl(cmd, verbose ? "-v" : "-q", commit ? "--recover-committed" : "--recover-aborted", NULL);
 	assert(r==-1);
@@ -333,10 +333,10 @@ static void
 	} else if (strcmp(argv[0], "-h")==0) {
 	    resultcode=0;
 	do_usage:
-	    fprintf(stderr, "Usage:\n%s [-v|-q]* [-h] {--commit | --abort | --explicit-abort | --recover-committed | --recover-aborted } \n", cmd);
+	    dprintf(STDERR, "Usage:\n%s [-v|-q]* [-h] {--commit | --abort | --explicit-abort | --recover-committed | --recover-aborted } \n", cmd);
 	    exit(resultcode);
 	} else {
-	    fprintf(stderr, "Unknown arg: %s\n", argv[0]);
+	    dprintf(STDERR, "Unknown arg: %s\n", argv[0]);
 	    resultcode=1;
 	    goto do_usage;
 	}
@@ -377,7 +377,7 @@ int test_recover_upgrade_db_descriptor_multihandle(void) {
         do_x1_recover_only();
     } else if (do_no_recover) {
         do_x1_no_recover();
-    } 
+    }
 #if 0
     else {
 	do_test();

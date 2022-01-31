@@ -109,12 +109,12 @@ int test_queries_with_deletes(void) {
 
   DB_ENV *env;
   r = db_env_create(&env, 0);                                                         CKERR(r);
-  env->set_errfile(env, stderr);
+  env->set_errfile(env, STDERR);
   // set a cachetable size of 10K
   uint32_t cachesize = 100*1024;
   // as part of #4503, arbitrarily increasing sizze of cachetable
-  // the idea is to make it small enough such that all data 
-  // cannot fit in the cachetable, but big enough such that 
+  // the idea is to make it small enough such that all data
+  // cannot fit in the cachetable, but big enough such that
   // we don't have cachet pressure
   r = env->set_cachesize(env, 0, 4*cachesize, 1); CKERR(r);
   r = env->set_lg_bsize(env, 4096);                                                   CKERR(r);
@@ -123,7 +123,7 @@ int test_queries_with_deletes(void) {
     key_ops.keycmp = int64_dbt_cmp;
     r = env->set_key_ops(env, &key_ops), CKERR(r);
   r = env->open(env, testfile, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                      CKERR(r);
-    
+
   DB *db;
   {
     DB_TXN *txna;
@@ -155,7 +155,7 @@ int test_queries_with_deletes(void) {
           dbt_init(&key, &key_data, sizeof(key_data)),
           dbt_init(&val, &val_data, sizeof(val_data)),
           0
-          );       
+          );
       CKERR(r);
   }
   r = txn->commit(txn, 0);
@@ -184,7 +184,7 @@ int test_queries_with_deletes(void) {
           &key,
           &val,
           0
-          );       
+          );
       CKERR(r);
 
       key_data = 2*i;
@@ -193,17 +193,17 @@ int test_queries_with_deletes(void) {
   }
   r = txn->commit(txn, 0);
   CKERR(r);
-  
+
   // this transaction will read all odd keys inserted in the second round
   DB_TXN* txn_second = NULL;
   r = env->txn_begin(env, NULL, &txn_second, DB_TXN_SNAPSHOT);
   CKERR(r);
 
   DBC* cursor_first = NULL;
-  DBC* cursor_second = NULL;  
-  r = db->cursor(db, txn_first, &cursor_first, 0); 
+  DBC* cursor_second = NULL;
+  r = db->cursor(db, txn_first, &cursor_first, 0);
   CKERR(r);
-  r = db->cursor(db, txn_second, &cursor_second, 0); 
+  r = db->cursor(db, txn_second, &cursor_second, 0);
   CKERR(r);
 
   DBT key, val;
@@ -221,7 +221,7 @@ int test_queries_with_deletes(void) {
   }
   r = cursor_first->c_get(cursor_first, &key, &val, DB_NEXT);
   CKERR2(r, DB_NOTFOUND);
-  
+
   if (verbose) printf("starting cursor second query\n");
   // now let's do the cursor reads and verify that all the data is read properly
   for (uint32_t i = 0; i < cachesize; i++) {
@@ -233,7 +233,7 @@ int test_queries_with_deletes(void) {
       assert(*(uint64_t *)val.data == 4*i+2);
   }
   r = cursor_second->c_get(cursor_second, &key, &val, DB_NEXT);
-  CKERR2(r, DB_NOTFOUND);  
+  CKERR2(r, DB_NOTFOUND);
 
   if (verbose) printf("cleaning up\n");
 
@@ -251,7 +251,7 @@ int test_queries_with_deletes(void) {
   CKERR(r);
   r = env->close(env, 0);
   CKERR(r);
-    
+
   post_teardown();
   return 0;
 }

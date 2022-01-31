@@ -2,10 +2,6 @@ function(add_c_defines)
   set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS ${ARGN})
 endfunction(add_c_defines)
 
-if (APPLE)
-  add_c_defines(DARWIN=1 _DARWIN_C_SOURCE)
-endif ()
-
 ## preprocessor definitions we want everywhere
 add_c_defines(
   _FILE_OFFSET_BITS=64
@@ -23,7 +19,7 @@ if (NOT CMAKE_SYSTEM_NAME STREQUAL FreeBSD)
 endif ()
 
 ## add TOKU_PTHREAD_DEBUG for debug builds
-set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS_DEBUG TOKU_PTHREAD_DEBUG=0)
+set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS $<$<CONFIG:Debug>:TOKU_PTHREAD_DEBUG=0>)
 set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS_DRD TOKU_PTHREAD_DEBUG=0)
 
 #DP: ftfs.ko needs fortify to be off
@@ -130,6 +126,7 @@ set(CMAKE_C_FLAGS_DRD "-g3 -O1 ${CMAKE_C_FLAGS_DRD}")
 set(CMAKE_CXX_FLAGS_DRD "-g3 -O1 ${CMAKE_CXX_FLAGS_DRD}")
 
 option(BUILD_FOR_LINUX_KERNEL_MODULE "Generate code that can be linked into the Linux kernel." OFF)
+option(PAGE_SHARING "Enable Page Sharing." ON)
 option(DEBUG_EVICTOR "Generate print statements on key evictor functions." OFF)
 option(DEBUG_CHECKPOINTER "Generate print statements on key checkpointer functions." OFF)
 
@@ -185,15 +182,6 @@ set_cflags_if_supported(
 if (NOT CMAKE_CXX_COMPILER_ID STREQUAL Clang)
   # Disabling -Wcast-align with clang.  TODO: fix casting and re-enable it, someday.
   set_cflags_if_supported(-Wcast-align)
-endif ()
-
-## need to set -stdlib=libc++ to get real c++11 support on darwin
-if (APPLE)
-  if (CMAKE_GENERATOR STREQUAL Xcode)
-    set(CMAKE_XCODE_ATTRIBUTE_CLANG_CXX_LIBRARY "libc++")
-  else ()
-    add_definitions(-stdlib=libc++)
-  endif ()
 endif ()
 
 # pick language dialect
@@ -258,9 +246,6 @@ if (BUILD_FOR_LINUX_KERNEL_MODULE)
     -Wdeclaration-after-statement
     -Wno-pointer-sign
     -Wno-sign-compare
-    -Wno-format-truncation
-    -Wno-implicit-fallthrough
-    -Wno-misleading-indentation
 
     -fno-strict-aliasing
     -fno-common
@@ -296,9 +281,26 @@ if (BUILD_FOR_LINUX_KERNEL_MODULE)
     -DTOKU_LINUX_MODULE=1
     )
 
+  if (PAGE_SHARING)
+      set_cflags_if_supported(
+        -DFT_INDIRECT=1
+        -DMARTIN_LAYOUT=1 # check ft/ft-indirect.cc for explanation
+	)
+      set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DPAGE_SHARING_DEBUG=1")
+  endif (PAGE_SHARING)
+
   include_directories( ${CMAKE_SOURCE_DIR}/kinclude )
 endif (BUILD_FOR_LINUX_KERNEL_MODULE)
 
+# dep 4/27/21: Toku code deprecates writes to avoid using them
+# for data (durability concerns).  For just writing to the error log,
+# it is fine and lets us drop fwrite support.  Keep the support to
+# poison the symbol; might be worth revisiting
+set_cflags_if_supported(
+  -DDONT_DEPRECATE_WRITES
+  )
+
+
 ## always want these
-set(CMAKE_C_FLAGS "-Wall -Werror ${CMAKE_C_FLAGS}")
-set(CMAKE_CXX_FLAGS "-Wall -Werror ${CMAKE_CXX_FLAGS}")
+set(CMAKE_C_FLAGS "-Wall -Wno-format-truncation -Werror ${CMAKE_C_FLAGS}")
+set(CMAKE_CXX_FLAGS "-Wall -Wno-format-truncation -Werror ${CMAKE_CXX_FLAGS}")

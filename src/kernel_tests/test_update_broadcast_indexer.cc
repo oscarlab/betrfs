@@ -109,10 +109,10 @@ static int update_fun(DB *UU(db),
 
 
 static int generate_row_for_del(
-    DB *UU(dest_db), 
+    DB *UU(dest_db),
     DB *UU(src_db),
     DBT_ARRAY *dest_key_arrays,
-    const DBT *UU(src_key), 
+    const DBT *UU(src_key),
     const DBT *UU(src_val)
     )
 {
@@ -123,13 +123,13 @@ static int generate_row_for_del(
 }
 
 static int generate_row_for_put(
-    DB *UU(dest_db), 
+    DB *UU(dest_db),
     DB *UU(src_db),
-    DBT_ARRAY *dest_key_arrays, 
+    DBT_ARRAY *dest_key_arrays,
     DBT_ARRAY *dest_val_arrays,
-    const DBT *UU(src_key), 
+    const DBT *UU(src_key),
     const DBT *UU(src_val)
-    ) 
+    )
 {
     toku_dbt_array_resize(dest_key_arrays, 1);
     toku_dbt_array_resize(dest_val_arrays, 1);
@@ -150,7 +150,7 @@ static int generate_row_for_put(
 static void setup (void) {
     { int chk_r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
     { int chk_r = db_env_create(&env, 0); CKERR(chk_r); }
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     { int chk_r = env->set_generate_row_callback_for_put(env,generate_row_for_put); CKERR(chk_r); }
     { int chk_r = env->set_generate_row_callback_for_del(env,generate_row_for_del); CKERR(chk_r); }
     env->set_update(env, update_fun);
@@ -172,7 +172,7 @@ static void run_test(void) {
     DB_TXN* txn_read1 = NULL;
     DB_TXN* txn_read2 = NULL;
     DB_TXN* txn_read3 = NULL;
-    
+
 
     IN_TXN_COMMIT(env, NULL, txn_create, 0, {
             { int chk_r = db_create(&db, env, 0); CKERR(chk_r); }
@@ -203,7 +203,7 @@ static void run_test(void) {
 
     //
     // at this point, we should have a leafentry with 3 committed values.
-    // 
+    //
 
 
     //
@@ -244,7 +244,7 @@ static void run_test(void) {
             { int chk_r = db->cursor(db, txn_read_succ, &cursor, 0); CKERR(chk_r); }
             { int chk_r = cursor->c_close(cursor); CKERR(chk_r); }
         cursor = NULL;
-      });    
+      });
     { int chk_r = db->close(db, 0); CKERR(chk_r); }
     { int chk_r = db_create(&db, env, 0); CKERR(chk_r); }
     { int chk_r = db->open(db, NULL, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, 0, 0666); CKERR(chk_r); }
@@ -255,12 +255,12 @@ static void run_test(void) {
             { int chk_r = db->cursor(db, txn_read_succ, &cursor, 0); CKERR(chk_r); }
             { int chk_r = cursor->c_close(cursor); CKERR(chk_r); }
         cursor = NULL;
-      });    
+      });
 
     // commit the read transactions
-    { int chk_r = txn_read1->commit(txn_read1, 0); CKERR(chk_r); } 
-    { int chk_r = txn_read2->commit(txn_read2, 0); CKERR(chk_r); } 
-    { int chk_r = txn_read3->commit(txn_read3, 0); CKERR(chk_r); } 
+    { int chk_r = txn_read1->commit(txn_read1, 0); CKERR(chk_r); }
+    { int chk_r = txn_read2->commit(txn_read2, 0); CKERR(chk_r); }
+    { int chk_r = txn_read3->commit(txn_read3, 0); CKERR(chk_r); }
 
     { int chk_r = db->close(db, 0); CKERR(chk_r); }
     { int chk_r = hot_index_db->close(hot_index_db, 0); CKERR(chk_r); }

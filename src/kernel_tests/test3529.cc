@@ -122,7 +122,7 @@ static ssize_t my_pread (int fd, void *buf, size_t count, off_t offset) {
 	insert(0, XX);
     }
     if (n_read_so_far > n_preads_limit) {
-	if (verbose) fprintf(stderr, "Apparent infinite loop detected\n");
+	if (verbose) dprintf(STDERR, "Apparent infinite loop detected\n");
 	abort();
     }
     return pread(fd, buf, count, offset);
@@ -271,5 +271,3 @@ int test_test3529(void) {
     post_teardown();
     return 0;
 }
-
-

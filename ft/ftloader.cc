@@ -306,11 +306,7 @@ int ft_loader_fi_close (struct file_infos *fi, FIDX idx, bool require_open)
         fi->file_infos[idx.idx].is_open = false;
         int r = toku_os_fclose(fi->file_infos[idx.idx].file);
         if (r)
-#ifdef TOKU_LINUX_MODULE
             result = get_error_errno(r);
-#else
-            result = get_error_errno();
-#endif
         cleanup_big_buffer(&fi->file_infos[idx.idx]);
     } else if (require_open)
         result = EINVAL;
@@ -331,11 +327,7 @@ int ft_loader_fi_unlink (struct file_infos *fi, FIDX idx) {
         int r = 0;
         assert(false);
         if (r != 0)
-#ifdef TOKU_LINUX_MODULE
             result = get_error_errno(r);
-#else
-            result = get_error_errno();
-#endif
         toku_free(fi->file_infos[id].fname);
         fi->file_infos[id].fname = NULL;
     } else
@@ -570,7 +562,7 @@ int toku_ft_loader_internal_init (/* out */ FTLOADER *blp,
     }
     bl->compress_intermediates = compress_intermediates;
     if (0) { // debug
-        fprintf(stderr, "%s Reserved memory=%ld\n", __FUNCTION__, bl->reserved_memory);
+        dprintf(STDERR, "%s Reserved memory=%ld\n", __FUNCTION__, bl->reserved_memory);
     }
 
     bl->src_db = src_db;
@@ -1322,13 +1314,13 @@ static int process_primary_rows_internal (FTLOADER bl, struct rowset *primary_ro
                 DBT *dest_val = &val_array.dbts[row];
                 if (dest_key->size > klimit) {
                     error_codes[i] = EINVAL;
-                    fprintf(stderr, "Key too big (keysize=%d bytes, limit=%d bytes)\n", dest_key->size, klimit);
+                    dprintf(STDERR, "Key too big (keysize=%d bytes, limit=%d bytes)\n", dest_key->size, klimit);
                     inc_error_count();
                     break;
                 }
                 if (dest_val->size > vlimit) {
                     error_codes[i] = EINVAL;
-                    fprintf(stderr, "Row too big (rowsize=%d bytes, limit=%d bytes)\n", dest_val->size, vlimit);
+                    dprintf(STDERR, "Row too big (rowsize=%d bytes, limit=%d bytes)\n", dest_val->size, vlimit);
                     inc_error_count();
                     break;
                 }
@@ -2660,11 +2652,7 @@ static int toku_loader_write_ft_from_q (FTLOADER bl,
 
     r = fsync(out.fd);
     if (r) {
-#ifdef TOKU_LINUX_MODULE
         result = get_error_errno(r); goto error;
-#else
-        result = get_error_errno(); goto error;
-#endif
     }
 
     // Do we need to pay attention to user_said_stop?  Or should the guy at the other end of the queue pay attention and send in an EOF.
@@ -2673,11 +2661,7 @@ static int toku_loader_write_ft_from_q (FTLOADER bl,
     {
         int rr = toku_os_close(fd);
         if (rr)
-#ifdef TOKU_LINUX_MODULE
             result = get_error_errno(rr);
-#else
-            result = get_error_errno();
-#endif
     }
     out.fd = -1;
 
@@ -3179,7 +3163,7 @@ static void write_nonleaf_node (FTLOADER bl, struct dbout *out, int64_t blocknum
             dbout_lock(out);
             out->translation[blocknum_of_new_node].off = out->current_off;
             out->translation[blocknum_of_new_node].size = n_bytes;
-            //fprintf(stderr, "Wrote internal node at %ld (%ld bytes)\n", out->current_off, n_bytes);
+            //dprintf(STDERR, "Wrote internal node at %ld (%ld bytes)\n", out->current_off, n_bytes);
             //for (uint32_t i=0; i<n_bytes; i++) { unsigned char b = bytes[i]; printf("%d:%02x (%d) ('%c')\n", i, b, b, (b>=' ' && b<128) ? b : '*'); }
             r = write_literal(out, bytes, n_bytes);
             if (r)
@@ -3226,11 +3210,7 @@ static int write_nonleaves (FTLOADER bl, FIDX pivots_fidx, struct dbout *out, st
         //  3) We put the 16th pivot into the next pivots file.
         {
             int r = fseek(toku_bl_fidx2file(bl, pivots_fidx), 0, SEEK_SET);
-#ifdef TOKU_LINUX_MODULE
             if (r!=0) { return get_error_errno(r); }
-#else
-            if (r!=0) { return get_error_errno(); }
-#endif
         }
 
         FIDX next_pivots_file;

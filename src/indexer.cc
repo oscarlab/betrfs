@@ -547,7 +547,7 @@ struct le_cursor_extra {
 // cachetable pair locks. because no txn can commit on this db, read
 // the provisional info for the newly read ule.
 static int
-le_cursor_callback(ITEMLEN keylen, bytevec key, ITEMLEN UU(vallen), bytevec val, void *extra, bool lock_only) {
+le_cursor_callback(ITEMLEN keylen, bytevec key, ITEMLEN UU(vallen), bytevec val, void *extra, bool lock_only, bool UU(is_indirect)) {
     if (lock_only || val == NULL) {
         ; // do nothing if only locking. do nothing if val==NULL, means DB_NOTFOUND
     } else {

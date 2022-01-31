@@ -236,12 +236,11 @@ int toku_testsetup_insert_to_leaf (FT_HANDLE brt, BLOCKNUM blocknum, const char 
                      toku_fill_dbt(&keydbt, key, keylen),
                     toku_fill_dbt(&valdbt, val, vallen) );
 
-    struct unbound_insert_entry * entry = NULL;
-    if(FT_UNBOUND_INSERT == type) {
-	entry = toku_alloc_unbound_insert_entry(UBI_UNBOUND, next_dummylsn(),//ft_h,
-                                                    cmd.msn, &keydbt);
-    	toku_logger_append_unbound_insert_entry(test_logger,entry); 
- }
+    struct ubi_entry *entry = NULL;
+    if (FT_UNBOUND_INSERT == type) {
+        entry = toku_alloc_ubi_entry(UBI_UNBOUND, next_dummylsn(), cmd.msn, &keydbt);
+        toku_logger_append_ubi_entry(test_logger, entry);
+    }
     toku_ft_node_put_cmd (
         brt->ft,
         &brt->ft->cmp_descriptor,
@@ -376,14 +375,13 @@ int toku_testsetup_insert_to_nonleaf (FT_HANDLE brt, BLOCKNUM blocknum, enum ft_
     FT_MSG_S msg;
     DBT kdbt, vdbt;
     toku_fill_dbt(&kdbt, key, keylen);
-    toku_fill_dbt(&vdbt, val, vallen); 
+    toku_fill_dbt(&vdbt, val, vallen);
     ft_msg_init(&msg, cmdtype, msn, xids_0, &kdbt, &vdbt);
-    struct unbound_insert_entry * entry = NULL;
-    if(FT_UNBOUND_INSERT == cmdtype) {
-	entry = toku_alloc_unbound_insert_entry(UBI_UNBOUND, next_dummylsn(),//ft_h,
-                                                    msg.msn, &kdbt);
-    	toku_logger_append_unbound_insert_entry(test_logger,entry); 
- }
+    struct ubi_entry *entry = NULL;
+    if (FT_UNBOUND_INSERT == cmdtype) {
+        entry = toku_alloc_ubi_entry(UBI_UNBOUND, next_dummylsn(), msg.msn, &kdbt);
+        toku_logger_append_ubi_entry(test_logger, entry);
+    }
     toku_bnc_insert_msg(BNC(node, childnum), entry, &msg, true, NULL, testhelper_string_key_cmp);
     // Hack to get the test working. The problem is that this test
     // is directly queueing something in a FIFO instead of 

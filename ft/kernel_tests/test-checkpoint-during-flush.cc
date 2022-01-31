@@ -279,7 +279,7 @@ doit (bool after_child_pin) {
     //
     int64_t bt_size = toku_get_largest_used_size(t->ft->blocktable);
     int64_t aligned_size = roundup_to_multiple(BLOCK_ALIGNMENT, bt_size);
-    if (ftfs_is_hdd()) {
+    if (!ftfs_simplefs_dio()) {
         r = fcopy(TOKU_TEST_FILENAME_META, TOKU_TEST_FILENAME_DATA, aligned_size);
     } else {
         r = fcopy_dio(TOKU_TEST_FILENAME_META, TOKU_TEST_FILENAME_DATA, aligned_size);

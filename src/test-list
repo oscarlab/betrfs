@@ -358,8 +358,6 @@ test_multiple_checkpoints_block_commit.cc
 test_nested.cc
 test-nested-xopen-eclose.cc
 test_nodup_set.cc
-test-prepare2.cc
-test-prepare3.cc
 test-prepare.cc
 test_query.cc
 test_rand_insert.cc

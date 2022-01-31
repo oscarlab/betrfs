@@ -94,13 +94,11 @@ extern "C" int test_log(void);
 
 int test_log(void) {
 	int r;
-	long long lognum;
 	initialize_dummymsn();
 	int rinit = toku_ft_layer_init();
 	CKERR(rinit);
 	r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);    assert(r==0);
         // With SFS, we only have one log.  So just hard-code this number.
-        lognum = 1LL;
 	r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU);    assert(r==0);
 	toku_ft_layer_destroy();
 	return 0;

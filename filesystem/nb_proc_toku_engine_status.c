@@ -45,9 +45,12 @@ static ssize_t nb_proc_toku_write_engine(struct file *file,
 
 	buf[count] = '\0';
 
-	if (0 == strcmp(buf, "print"))
+	if (0 == strcmp(buf, "print")) {
 		nb_print_engine_status();
-
+#ifdef FT_INDIRECT
+		ftfs_print_free_page_counter();
+#endif
+	}
 	ret = count;
 
 out:

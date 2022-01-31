@@ -28,9 +28,11 @@
 #include <linux/mm.h>
 #include <linux/falloc.h>
 #include <linux/version.h>
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,19,99)
 #include <linux/sched/xacct.h>
-#endif
+#endif /* LINUX_VERSION_CODE */
+
 #include "sb_files.h"
 #include "ftfs_southbound.h"
 #include "ftfs.h"
@@ -50,12 +52,9 @@ typedef long (* sys_close_t)(unsigned int fd);
 typedef int (* sys_symlink_t)(const char*, const char *);
 typedef long (*sys_sync_t) (void);
 typedef long (*sys_link_t) (const char*, const char*);
-#else
+#else /* LINUX_VERSION_CODE */
 typedef long (*ksys_sync_t) (void);
-typedef ssize_t (*vfs_write_t) (struct file *, const char *, size_t, loff_t *);
-typedef ssize_t (*vfs_readv_t)(struct file *, const struct iovec *, unsigned long, loff_t *, rwf_t);
-typedef ssize_t (*vfs_read_t)(struct file *, char __user *, size_t, loff_t *);
-#endif
+#endif /* LINUX_VERSION_CODE */
 
 DECLARE_SYMBOL_FTFS(do_truncate);
 DECLARE_SYMBOL_FTFS(__close_fd);
@@ -83,10 +82,7 @@ DECLARE_SYMBOL_FTFS(sys_ftruncate);
 
 #else /* LINUX_VERSION_CODE */
 DECLARE_SYMBOL_FTFS(ksys_sync);
-DECLARE_SYMBOL_FTFS(vfs_write);
-DECLARE_SYMBOL_FTFS(vfs_readv);
-DECLARE_SYMBOL_FTFS(vfs_read);
-#endif
+#endif /* LINUX_VERSION_CODE */
 
 int resolve_sb_files_symbols(void)
 {
@@ -113,10 +109,7 @@ int resolve_sb_files_symbols(void)
 
 #else /* LINUX_VERSION_CODE */
 	LOOKUP_SYMBOL_FTFS(ksys_sync);
-	LOOKUP_SYMBOL_FTFS(vfs_write);
-	LOOKUP_SYMBOL_FTFS(vfs_readv);
-	LOOKUP_SYMBOL_FTFS(vfs_read);
-#endif
+#endif /* LINUX_VERSION_CODE */
 	return 0;
 }
 
@@ -153,8 +146,13 @@ struct file *sb_fget_light(unsigned int fd, int *fput_needed)
 
 	return file;
 }
-#else
-/* copied from __fdget() in fs/file.c */
+#else /* LINUX_VERSION_CODE */
+/* copied from __fdget() in fs/file.c
+ *
+ * We can not use kernel's function directly because we have our own file lists.
+ * Kernel: https://elixir.bootlin.com/linux/v4.19.99/source/fs/file.c#L733
+ * Us: struct files_struct *files = ftfs_files;
+ */
 unsigned long __sb_fdget(unsigned int fd)
 {
 	struct files_struct *files = ftfs_files;
@@ -194,7 +192,7 @@ unsigned long __sb_fdget_pos(unsigned int fd)
 	}
 	return v;
 }
-#endif
+#endif /* LINUX_VERSION_CODE */
 
 int sb_get_unused_fd_flags(unsigned flags)
 {
@@ -212,7 +210,7 @@ void sb_put_unused_fd(unsigned int fd)
 	__clear_bit(fd, fdt->open_fds);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,19,99)
 	__clear_bit(fd / BITS_PER_LONG, fdt->full_fds_bits);
-#endif
+#endif /* LINUX_VERSION_CODE */
 	if (fd < files->next_fd)
 		files->next_fd = fd;
 	spin_unlock(&files->file_lock);
@@ -223,19 +221,6 @@ void sb_fd_install(unsigned int fd, struct file *file)
 	ftfs___fd_install(ftfs_files, fd, file);
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
-/*
- * wkj: so that anyone who hasn't yet switched to the new kernel can
- * still compile and run. It just might not work correctly for files
- * opened with O_DIRECT 
-*/
-#ifndef __O_KERNFS
-#warning "you should compile and run the modified ftfs kernel"
-#define __O_KERNFS 0
-#endif
-
-#endif /* LINUX_CODE_VERSION */
-
 /*
 similar to do_sys_open but with southbound context switch
  */
@@ -245,9 +230,6 @@ int open(const char *pathname, int flags, umode_t mode)
 	struct file *f;
 	SOUTHBOUND_VARS;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
-	flags |= __O_KERNFS;
-#endif
 	fd = sb_get_unused_fd_flags(flags);
 	if(fd < 0)
 		return fd;
@@ -295,12 +277,12 @@ int close(int fd)
 static ssize_t ftfs_write(struct file *file, const char *buf, size_t count,
 			  loff_t *pos)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
 	ssize_t ret;
 
 	mm_segment_t saved = get_fs();
 	set_fs(get_ds());
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
 	if (!(file->f_mode & FMODE_WRITE)) {
 		set_fs(saved);
 		return -EBADF;
@@ -326,12 +308,11 @@ static ssize_t ftfs_write(struct file *file, const char *buf, size_t count,
 		inc_syscw(current);
 		file_end_write(file);
 	}
-#else
-	ret = ftfs_vfs_write(file, buf, count, pos);
-#endif
-
 	set_fs(saved);
 	return ret;
+#else /* LINUX_VERSION_CODE */
+	return kernel_write(file, buf, count, pos);
+#endif /* LINUX_VERSION_CODE */
 }
 
 /* similar to write syscall in read_write.c */
@@ -340,13 +321,24 @@ ssize_t write(int fd, const void *buf, size_t count)
 	struct fd f;
 	ssize_t ret = -EBADF;
 
-	f = sb_fdget_pos(fd);
-	if (f.file) {
-		loff_t pos = f.file->f_pos;
-		ret = ftfs_write(f.file, buf, count, &pos);
-		if (ret > 0)
-			f.file->f_pos = pos;
-		sb_fdput_pos(f);
+	// Should never write to standard in
+	BUG_ON(fd == 0);
+
+	/* Special-case a write to stderr or stdout */
+	if (fd == 1 || fd == 2) {
+		// We are trusting the caller not to pass a bad count or string
+		printk(KERN_ERR "%s\n", (const char *) buf);
+		ret = count;
+	} else {
+
+		f = sb_fdget_pos(fd);
+		if (f.file) {
+			loff_t pos = f.file->f_pos;
+			ret = ftfs_write(f.file, buf, count, &pos);
+			if (ret > 0)
+				f.file->f_pos = pos;
+			sb_fdput_pos(f);
+		}
 	}
 
 	return ret;
@@ -382,20 +374,16 @@ ssize_t pwrite64(int fd, const void *buf, size_t count, loff_t pos)
 /* (p)read(64) need this to be changed if we want to avoid the user copy */
 static ssize_t ftfs_read(struct file *f, char *buf, size_t count, loff_t *pos)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
 	ssize_t ret;
 	mm_segment_t saved = get_fs();
-
 	set_fs(get_ds());
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
 	ret = vfs_read(f, buf, count, pos);
-#else
-	ret = ftfs_vfs_read(f, buf, count, pos);
-#endif
-
 	set_fs(saved);
-
 	return ret;
+#else /* LINUX_VERSION_CODE */
+	return kernel_read(f, buf, count, pos);
+#endif /* LINUX_VERSION_CODE */
 }
 
 /* pread64 syscall from read_write.c */
@@ -475,22 +463,6 @@ int fdatasync(int fd)
   	return sync_helper(fd, 1);
 }
 
-static inline void stream_lock_init(FILE *stream)
-{
-	mutex_init(&stream->lock);
-}
-
-static inline void stream_lock(FILE *stream)
-{
-	mutex_lock(&stream->lock);
-}
-
-static inline void stream_unlock(FILE *stream)
-{
-	mutex_unlock(&stream->lock);
-}
-
-
 loff_t lseek64(int fd, loff_t offset, int whence) {
 	loff_t retval;
 	struct fd f;
@@ -508,552 +480,14 @@ loff_t lseek64(int fd, loff_t offset, int whence) {
 	return retval;
 }
 
-static off_t lseek(int fd, off_t offset, int whence) {
-	off_t retval;
-	struct fd f;
-
-	f = sb_fdget_pos(fd);
-	if (!f.file)
-		return -EBADF;
-	retval = -EINVAL;
-
-	if (whence <= SEEK_MAX) {
-		loff_t res = vfs_llseek(f.file, offset, whence);
-		retval = res;
-		if (res != (loff_t)retval)
-			retval = -EOVERFLOW;
-	}
-	sb_fdput_pos(f);
-
-	return retval;
-}
-
-int __fseek(FILE *fp, long offset, int whence) {
-	int fd;
-	int ret = 0;
-	off_t lseek_ret;
-
-	/* Adjust relative offset for unread data in buffer, if any.*/
-	if (whence == SEEK_CUR) offset -= fp->rend - fp->rpos;
-	/* Flush write buffer, and report error on failure. */
-	if (fp->wpos > fp->wbase) {
-		ret = fp->write(fp, 0, 0);
-		if (!fp->wpos) {
-			stream_unlock(fp);
-			return ret;
-		}
-	}
-	/*  Leave writing mode */
-	fp->wpos = fp->wbase = fp->wend = 0;
-	fd = fp->fd;
-	lseek_ret = lseek(fd, offset, whence);
-	if(lseek_ret < 0) {
-		stream_unlock(fp);
-		ftfs_error(__func__,"fseek failed: %d", lseek_ret);
-		return (int) lseek_ret;
-	}
-	/* If seek succeed, file is seekable and we discard read buffer */
-	fp->rpos = fp->rend = 0;
-	fp->flags &= ~F_EOF;
-	return 0;
-}
-
-int fseek(FILE *fp, long offset, int whence)
-{
-	int ret;
-
-	stream_lock(fp);
-	ret = __fseek(fp, offset, whence);
-	stream_unlock(fp);
-
-	return ret;
-}
-
-long ftell(FILE * fp) {
-	int fd;
-	int ret = 0;
-	stream_lock(fp);
-
-	fd = fp->fd;
-	ret = lseek(fd, 0, SEEK_CUR);
-	if(ret < 0) {
-		stream_unlock(fp);
-		ftfs_log(__func__, "ftell failed: %d",ret);
-		return ret;
-	}
-
-	/*  Adjust for data in buffer. */
-	ret = ret - (fp->rend - fp->rpos) + (fp->wpos - fp->wbase);
-	stream_unlock(fp);
-	return ret;
-}
-
-off64_t ftello64(FILE * fp) {
-	int fd;
-	int ret = 0;
-	stream_lock(fp);
-
-	fd = fp->fd;
-	ret = lseek64(fd, 0, SEEK_CUR);
-	if(ret < 0) {
-		stream_unlock(fp);
-		ftfs_log(__func__, "ftello64 failed: %d", ret);
-		return ret;
-	}
-	ret -= (fp->rend - fp->rpos) + (fp->wpos - fp->wbase);
-	stream_unlock(fp);
-	return ret;
-}
-
-off_t ftello(FILE * fp) {
-	int fd;
-	int ret = 0;
-	stream_lock(fp);
-	fd = fp->fd;
-	ret = lseek(fd, 0, SEEK_CUR);
-	if(ret < 0) {
-		stream_unlock(fp);
-		ftfs_log(__func__,"ftello failed :%d", ret);
-		return ret;
-	}
-	ret -= (fp->rend - fp->rpos) + (fp->wpos - fp->wbase);
-	stream_unlock(fp);
-	return ret;
-}
-
-static ssize_t __ftfs_stream_writebuf(FILE *f, const unsigned char *buf,
-				     size_t len)
-{
-	int rem = len + f->wpos - f->wbase;
-	ssize_t count;
-
-	/* phase 1: writeout our buffer */
-	count = write(f->fd, f->wbase, f->wpos - f->wbase);
-	if (count == (f->wpos - f->wbase)) {
-		f->wend = f->buf + f->bufsize;
-		f->wpos = f->wbase = f->buf;
-	}
-	if (count < 0) {
-		f->wpos = f->wbase = f->wend = 0;
-		f->flags |= F_ERR;
-		return len - rem;
-	}
-	rem -= count;
-
-	if (!rem)
-		return len;
-
-	/* phase two: writeout the passed in buffer */
-	for (;;) {
-		count = write(f->fd, buf, rem);
-		if (count == rem)
-			return len;
-
-		if (count < 0) {
-			f->flags |= F_ERR;
-			return len - rem;
-		}
-		rem -= count;
-		buf += count;
-	}
-}
-
-static ssize_t
-ftfs_readv(struct file *file, const struct iovec *vec,
-           unsigned long vlen, loff_t *pos)
-{
-	int ret;
-	mm_segment_t saved = get_fs();
-	set_fs(get_ds());
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
-	ret = vfs_readv(file, vec, vlen, pos);
-#else
-	ret = ftfs_vfs_readv(file, vec, vlen, pos, 0);
-#endif
-	set_fs(saved);
-	return ret;
-}
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
-static inline loff_t file_pos_read(struct file *file)
-{
-	return file->f_pos;
-}
-
-static inline void file_pos_write(struct file *file, loff_t pos)
-{
-	file->f_pos = pos;
-}
-#else
-static inline loff_t file_pos_read(struct file *file)
-{
-	return file->f_mode & FMODE_STREAM ? 0 : file->f_pos;
-}
-
-static inline void file_pos_write(struct file *file, loff_t pos)
-{
-	if ((file->f_mode & FMODE_STREAM) == 0)
-		file->f_pos = pos;
-}
-#endif
-
-/* readv syscall from do_readv in read_write.c with flags being 0 */
-ssize_t readv(int fd, const struct iovec *vec, unsigned int vlen)
-{
-	struct fd f = sb_fdget_pos(fd);
-	ssize_t ret = -EBADF;
-
-	if (f.file) {
-		loff_t pos = file_pos_read(f.file);
-		ret = ftfs_readv(f.file, vec, vlen, &pos);
-		if (ret >= 0)
-			file_pos_write(f.file, pos);
-		sb_fdput_pos(f);
-	}
-	if (ret > 0)
-		add_rchar(current, ret);
-	inc_syscr(current);
-	return ret;
-}
-
-/* __stdio_read from musl/tree/src/stdio/__stdio_read.c */
-static ssize_t __ftfs_stream_readbuf(FILE *f, unsigned char *buf, size_t len)
-{
-	struct iovec iov[2] = {
-		{ .iov_base = buf, .iov_len = len - !!f->bufsize },
-		{ .iov_base = f->buf, .iov_len = f->bufsize }
-	};
-	ssize_t cnt;
-
-	cnt = readv(f->fd, iov, 2);
-	if (cnt <= 0) {
-		f->flags |= F_EOF ^ ((F_ERR^F_EOF) & cnt);
-		f->rpos = f->rend = 0;
-		return cnt;
-	}
-
-	if (cnt <= iov[0].iov_len)
-		return cnt;
-
-	cnt -= iov[0].iov_len;
-	f->rpos = f->buf;
-	f->rend = f->buf + cnt; //-1 or remove = from <= in frpos < frend in _ftfs_getc
-	if (f->bufsize)
-		buf[len-1] = *f->rpos++;
-	return len;
-}
-
-int fileno(FILE *stream)
-{
-	return stream->fd;
-}
-
-/**
- * wkj: would all of the FILE * operations be faster if we stored a
- * struct file * instead of an fd?
- */
-FILE *ftfs_fdopen(int fd)
-{
-	FILE *file = (FILE *)kzalloc(sizeof(FILE) + FSTREAM_BUFSZ, GFP_KERNEL);
-	if (!file) {
-		ftfs_error(__func__, "kzalloc failed to allocate a FILE");
-		return NULL;
-	}
-
-	file->fd = fd;
-	stream_lock_init(file);
-	file->buf = (unsigned char *)file + sizeof *file;
-	file->bufsize = FSTREAM_BUFSZ;
-	file->read = __ftfs_stream_readbuf;
-	file->write = __ftfs_stream_writebuf;
-	return file;
-}
-
-FILE *fopen64(const char * path, const char * mode)
-{
-	int fd;
-	FILE *file;
-
-	//ft-index only uses "wb", "rb", "r", "r+b" flags
-	if(!strcmp(mode,"wb") || !strcmp(mode,"w"))
-		fd = open64(path, O_WRONLY, DEFAULT_PERMS);
-	else if(!strcmp(mode,"rb")||!strcmp(mode,"r"))
-		fd = open64(path, O_RDONLY, DEFAULT_PERMS);
-	else if (!strcmp(mode, "r+b"))
-		fd = open64(path, O_RDWR, DEFAULT_PERMS);
-	else {
-		ftfs_error(__func__, "fopen is called with wrong flags!!");
-		BUG();
-	}
-
-	if (fd < 0)
-		return NULL;
-
-	/* internally sets errno if necessary */
-	file = ftfs_fdopen(fd);
-	if (!file)
-		close(fd);
-	return file;
-}
-
-int fclose(FILE * stream) {
-	int ret = 0;
-	int fd;
-
-	stream_lock(stream);
-
-	/*  If writing, flush output */
-	if (stream->wpos > stream->wbase) {
-		stream->write(stream, 0, 0);
-		if (!stream->wpos) {
-			stream_unlock(stream);
-			return EOF;
-		}
-	}
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,19,99)
-	/*  If reading, sync position, per POSIX */
-	if (stream->rpos < stream->rend) {
-		printk("Something strange just happend\n");
-		__fseek(stream, stream->rpos-stream->rend, SEEK_CUR);
-	}
-#endif
-
-	/*  Clear read and write modes */
-	stream->wpos = stream->wbase = stream->wend = 0;
-	stream->rpos = stream->rend = 0;
-
-	fd = stream->fd;
-	stream->fd = -1;
-	ret = close(fd);
-
-	stream_unlock(stream);
-
-	kfree(stream);
-
-	return ret;
-}
-
-/* mostly copied from musl */
-int __toread(FILE *f)
-{
-	/* wkj: writeback your buffer updates, if any */
-	if (f->wpos > f->buf)
-		f->write(f, 0, 0);
-
-	f->wpos = f->wbase = f->wend = 0;
-	if (f->flags & (F_EOF|F_NORD)) {
-		if (f->flags & F_NORD)
-			f->flags |= F_ERR;
-		return EOF;
-	}
-
-	f->rpos = f->rend = f->buf;
-	return 0;
-}
-
-int __towrite(FILE *f)
-{
-	if (f->flags & (F_NOWR)) {
-		f->flags |= F_ERR;
-		return EOF;
-	}
-
-	/* Clear read buffer (easier than summoning nasal demons) */
-	f->rpos = f->rend = 0;
-
-	/* Activate write through the buffer. */
-	f->wpos = f->wbase = f->buf;
-	f->wend = f->buf + f->bufsize;
-
-	return 0;
-}
-
-int __uflow(FILE *f)
-{
-	unsigned char c;
-	if ((f->rend || !__toread(f)) && f->read(f, &c, 1)==1) return c;
-	return EOF;
-}
-
-
-/* @pre: f is locked */
-static int __ftfs_getc(FILE *f)
-{
-	/* NULL ptr deref */
-	if (f->rpos && (f->rpos < f->rend))
-		return (int)*f->rpos++;
-	else
-		return __uflow (f);
-}
-
-int fgetc(FILE *f)
-{
-	int c;
-	stream_lock(f);
-	c = __ftfs_getc(f);
-	stream_unlock(f);
-	return c;
-}
-
-
-int feof(FILE *f)
-{
-	int ret;
-	stream_lock(f);
-	ret = !!(f->flags & F_EOF);
-	stream_unlock(f);
-	return ret;
-}
-
-extern void* realloc(void *ptr, size_t size);
-ssize_t getdelim(char **s, size_t *n, int delim, FILE *f)
-{
-	char *tmp;
-	unsigned char *z;
-	size_t k;
-	size_t i=0;
-	int c;
-
-	if (!n || !s)
-		return -EINVAL;
-
-	if (!*s)
-		*n=0;
-
-	stream_lock(f);
-
-	for (;;) {
-		z = memchr(f->rpos, delim, f->rend - f->rpos);
-		k = z ? z - f->rpos + 1 : f->rend - f->rpos;
-		if (i+k >= *n) {
-			if (k >= SIZE_MAX/2-i)
-				goto oom;
-			*n = i+k+2;
-			if (*n < SIZE_MAX/4)
-				*n *= 2;
-			tmp = realloc(*s, *n);
-			if (!tmp) {
-				*n = i+k+2;
-				tmp = realloc(*s, *n);
-				if (!tmp)
-					goto oom;
-			}
-			*s = tmp;
-		}
-		memcpy(*s+i, f->rpos, k);
-		f->rpos += k;
-		i += k;
-		if (z)
-			break;
-		if ((c = __ftfs_getc(f)) == EOF) {
-			if (!i || !feof(f)) {
-				stream_unlock(f);
-				return EOF;
-			}
-			break;
-		}
-		if (((*s)[i++] = c) == delim)
-			break;
-	}
-	(*s)[i] = 0;
-
-	stream_unlock(f);
-
-	return i;
-oom:
-	stream_unlock(f);
-	return -ENOMEM;
-}
-
-size_t fread(void *destv, size_t size, size_t nmemb, FILE *f)
-{
-	unsigned char *dest = destv;
-	size_t len = size*nmemb;
-	size_t l = len;
-	size_t k;
-
-	/* Never touch the file if length is zero.. */
-	if (!l)
-		return 0;
-
-	stream_lock(f);
-
-	if (f->rend - f->rpos > 0) {
-		/* First exhaust the buffer. */
-		k = min((size_t)(f->rend - f->rpos), l);
-		memcpy(dest, f->rpos, k);
-		f->rpos += k;
-		dest += k;
-		l -= k;
-	}
-
-	/* Read the remainder directly */
-	for (; l; l-=k, dest+=k) {
-		k = __toread(f) ? 0 : f->read(f, dest, l);
-		if (k+1<=1) {
-			stream_unlock(f);
-			return (len-l)/size;
-		}
-	}
-
-	stream_unlock(f);
-	return nmemb;
-}
-
-size_t __fwritex(const unsigned char *s, size_t l, FILE *f)
-{
-	size_t i=0;
-
-	if (!f->wend && __towrite(f))
-		return 0;
-
-	if (l > f->wend - f->wpos)
-		return f->write(f, s, l);
-
-	if (f->lbf >= 0) {
-		/* Match /^(.*\n|)/ */
-		for (i=l; i && s[i-1] != '\n'; i--);
-		if (i) {
-			if (f->write(f, s, i) < i)
-				return i;
-			s += i;
-			l -= i;
-		}
-	}
-
-	memcpy(f->wpos, s, l);
-	f->wpos += l;
-	return l+i;
-}
-
-size_t fwrite(const void *src, size_t size, size_t nmemb, FILE *f)
-{
-	size_t k, l = size*nmemb;
-	//work around
-	if(f->fd == 1) {
-		fprintf(stdout, (char *)src);
-		return l;
-	} else if(f->fd == 2) {
-		fprintf(stderr, (char *)src);
-		return l;
-	}
-
-	if (!l) return l;
-	stream_lock(f);
-	k = __fwritex(src, l, f);
-	stream_unlock(f);
-	return k==l ? nmemb : k/size;
-}
-
 //purely for testing
 long sync(void)
 {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
 	return ftfs_sys_sync();
-#else
+#else /* LINUX_VERSION_CODE */
 	return ftfs_ksys_sync();
-#endif
+#endif /* LINUX_VERSION_CODE */
 }
 
 int fcopy_dio(const char * src, const char * dest, int64_t size) {

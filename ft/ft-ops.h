@@ -114,15 +114,15 @@ PATENT RIGHTS GRANT:
 // -infinity depending on direction)
 // When lock_only is false, the callback does optional lock tree locking and then processes the key and val.
 // When lock_only is true, the callback only does optional lock tree locking.
-typedef int(*FT_GET_CALLBACK_FUNCTION)(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool lock_only);
+typedef int(*FT_GET_CALLBACK_FUNCTION)(ITEMLEN keylen, bytevec key, ITEMLEN vallen, bytevec val, void *extra, bool lock_only, bool is_indirect);
 
 int toku_open_ft_handle (const char *fname, int is_create, FT_HANDLE *, int nodesize, int basementnodesize, enum toku_compression_method compression_method, CACHETABLE, TOKUTXN, int(*)(DB *,const DBT*,const DBT*)) __attribute__ ((warn_unused_result));
 
 // effect: changes the descriptor for the ft of the given handle.
-// requires: 
-// - cannot change descriptor for same ft in two threads in parallel. 
-// - can only update cmp descriptor immidiately after opening the FIRST ft handle for this ft and before 
-//   ANY operations. to update the cmp descriptor after any operations have already happened, all handles 
+// requires:
+// - cannot change descriptor for same ft in two threads in parallel.
+// - can only update cmp descriptor immidiately after opening the FIRST ft handle for this ft and before
+//   ANY operations. to update the cmp descriptor after any operations have already happened, all handles
 //   and transactions must close and reopen before the change, then you can update the cmp descriptor
 void toku_ft_change_descriptor(FT_HANDLE t, const DBT* old_descriptor, const DBT* new_descriptor, bool do_log, TOKUTXN txn, bool update_cmp_descriptor);
 uint32_t toku_serialize_descriptor_size(const DESCRIPTOR desc);
@@ -183,7 +183,7 @@ void toku_ft_set_update(FT_HANDLE brt, ft_update_func update_fun);
 
 int toku_ft_handle_open(FT_HANDLE, const char *fname_in_env,
 		  int is_create, int only_create, CACHETABLE ct, TOKUTXN txn)  __attribute__ ((warn_unused_result));
-int toku_ft_handle_open_recovery(FT_HANDLE, const char *fname_in_env, int is_create, int only_create, CACHETABLE ct, TOKUTXN txn, 
+int toku_ft_handle_open_recovery(FT_HANDLE, const char *fname_in_env, int is_create, int only_create, CACHETABLE ct, TOKUTXN txn,
 			   FILENUM use_filenum, LSN max_acceptable_lsn)  __attribute__ ((warn_unused_result));
 
 // clone an ft handle. the cloned handle has a new dict_id but refers to the same fractal tree
@@ -197,12 +197,12 @@ void toku_ft_handle_close_recovery(FT_HANDLE ft_handle, LSN oplsn);
 
 int
 toku_ft_handle_open_with_dict_id(
-    FT_HANDLE t, 
-    const char *fname_in_env, 
-    int is_create, 
-    int only_create, 
-    CACHETABLE cachetable, 
-    TOKUTXN txn, 
+    FT_HANDLE t,
+    const char *fname_in_env,
+    int is_create,
+    int only_create,
+    CACHETABLE cachetable,
+    TOKUTXN txn,
     DICTIONARY_ID use_dictionary_id
     )  __attribute__ ((warn_unused_result));
 
@@ -287,13 +287,13 @@ void toku_ft_maybe_clone(
     TOKUTXN txn,
     bool do_logging);
 
-void toku_ft_send_insert(FT_HANDLE brt, DBT *key, DBT *val, XIDS xids, enum ft_msg_type type, struct unbound_insert_entry *entry, TXNID oldest_referenced_xid, GC_INFO gc_info);
+void toku_ft_send_insert(FT_HANDLE brt, DBT *key, DBT *val, XIDS xids, enum ft_msg_type type, struct ubi_entry *entry, TXNID oldest_referenced_xid, GC_INFO gc_info);
 void toku_ft_send_delete(FT_HANDLE brt, DBT *key, XIDS xids, TXNID oldest_referenced_xid, GC_INFO gc_info);
 void toku_ft_send_commit_any(FT_HANDLE brt, DBT *key, XIDS xids, TXNID oldest_referenced_xids, GC_INFO gc_info);
 
 int toku_close_ft_handle_nolsn (FT_HANDLE, char **error_string)  __attribute__ ((warn_unused_result));
 
-int toku_dump_ft (FILE *,FT_HANDLE brt)  __attribute__ ((warn_unused_result));
+int toku_dump_ft (int, FT_HANDLE brt)  __attribute__ ((warn_unused_result));
 
 extern int toku_ft_debug_mode;
 int toku_verify_ft (FT_HANDLE brt)  __attribute__ ((warn_unused_result));
@@ -351,7 +351,7 @@ struct ftstat64_s {
     uint64_t fsize;  /* the size of the underlying file                                                */
     uint64_t ffree; /* Number of free bytes in the underlying file                                    */
     uint64_t create_time_sec; /* creation time in seconds. */
-    uint64_t modify_time_sec; /* time of last serialization, in seconds. */ 
+    uint64_t modify_time_sec; /* time of last serialization, in seconds. */
     uint64_t verify_time_sec; /* time of last verification, in seconds */
 };
 

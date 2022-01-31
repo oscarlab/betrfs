@@ -108,7 +108,7 @@ test_txn_abort (int n, int which_guys_to_abort) {
     assert(r == 0);
     DB_ENV *env;
     r = db_env_create(&env, 0); assert(r == 0);
-    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL + DB_INIT_LOG + DB_INIT_LOCK + DB_INIT_TXN + DB_PRIVATE + DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); 
+    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL + DB_INIT_LOG + DB_INIT_LOCK + DB_INIT_TXN + DB_PRIVATE + DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO);
     if (r != 0) printf("%s:%d:%d:%s\n", __FILE__, __LINE__, r, db_strerror(r));
     assert(r == 0);
 
@@ -116,7 +116,7 @@ test_txn_abort (int n, int which_guys_to_abort) {
     {
 	DB_TXN *txn;
 	r = env->txn_begin(env, 0, &txn, 0); assert(r == 0);
-	
+
 	r = db_create(&db, env, 0); assert(r == 0);
 	r = db->open(db, txn, TOKU_TEST_DATA_DB_NAME, 0, DB_BTREE, DB_CREATE, S_IRWXU+S_IRWXG+S_IRWXO); assert(r == 0);
 	r = txn->commit(txn, 0); assert(r == 0);
@@ -129,7 +129,7 @@ test_txn_abort (int n, int which_guys_to_abort) {
 		r = env->txn_begin(env, 0, &txns[j], 0); assert(r == 0);
 	    }
 	}
-	
+
 	{
 	    int i;
 	    for (i=0; i<n; i++) {
@@ -137,13 +137,13 @@ test_txn_abort (int n, int which_guys_to_abort) {
 		for (j=N_TXNS; j>0; j--) {
 		    if (i%j==0) { // This is guaranteed to be true when j==1, so someone will do it.
 			DBT key, val;
-			r = db->put(db, txns[j-1], dbt_init(&key, &i, sizeof i), dbt_init(&val, &i, sizeof i), 0); 
+			r = db->put(db, txns[j-1], dbt_init(&key, &i, sizeof i), dbt_init(&val, &i, sizeof i), 0);
 			if (r != 0) printf("%s:%d:%d:%s\n", __FILE__, __LINE__, r, db_strerror(r));
 			assert(r == 0);
 			goto didit;
 		    }
 		}
-	        toku_hard_crash_on_purpose();
+                abort();
 	    didit: ;
 	    }
 	}
@@ -200,7 +200,7 @@ int test_test_txn_abort6(void) {
     if (verbose>0) printf("%s:", __FILE__);
     if (verbose==1) printf("\n");
     for (j=0; j<(1<<N_TXNS); j++)
-	for (i=1; i<100; i*=2) 
+	for (i=1; i<100; i*=2)
 	    test_txn_abort(i, j);
     if (verbose>0) printf("OK\n");
     post_teardown();

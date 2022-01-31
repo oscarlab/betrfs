@@ -94,12 +94,12 @@ PATENT RIGHTS GRANT:
 
 static int verbose = 1;
 
-static void 
+static void
 pe_est_callback(
-    void* UU(ftnode_pv), 
+    void* UU(ftnode_pv),
     void* UU(dd),
-    long* bytes_freed_estimate, 
-    enum partial_eviction_cost *cost, 
+    long* bytes_freed_estimate,
+    enum partial_eviction_cost *cost,
     void* UU(write_extraargs)
     )
 {
@@ -107,13 +107,13 @@ pe_est_callback(
     *cost = PE_EXPENSIVE;
 }
 
-static int 
+static int
 pe_callback (
-    void *ftnode_pv __attribute__((__unused__)), 
-    PAIR_ATTR bytes_to_free __attribute__((__unused__)), 
-    PAIR_ATTR* bytes_freed, 
+    void *ftnode_pv __attribute__((__unused__)),
+    PAIR_ATTR bytes_to_free __attribute__((__unused__)),
+    PAIR_ATTR* bytes_freed,
     void* extraargs __attribute__((__unused__))
-    ) 
+    )
 {
     sleep(3);
     *bytes_freed = make_pair_attr(bytes_to_free.size-7);
@@ -148,22 +148,22 @@ static void cachetable_prefetch_maybegetandpin_test (void) {
         void* value;
         long size;
         r = toku_cachetable_get_and_pin(
-            f1, 
-            key, 
-            fullhash, 
-            &value, 
-            &size, 
-            wc, 
+            f1,
+            key,
+            fullhash,
+            &value,
+            &size,
+            wc,
             def_fetch,
             def_pf_req_callback,
             def_pf_callback,
-            true, 
+            true,
             0
             );
         assert(r==0);
         r = toku_test_cachetable_unpin(f1, key, fullhash, CACHETABLE_DIRTY, make_pair_attr(8));
     }
-    
+
     struct timeval tstart;
     gettimeofday(&tstart, NULL);
 
@@ -176,58 +176,58 @@ static void cachetable_prefetch_maybegetandpin_test (void) {
         1,
         &value2,
         &size2,
-        wc, 
+        wc,
         def_fetch,
         def_pf_req_callback,
         def_pf_callback,
-        true, 
+        true,
         0
         );
     assert(r==0);
     ct->ev.signal_eviction_thread();
-    usleep(1*1024*1024);        
+    usleep(1*1024*1024);
     r = toku_test_cachetable_unpin(f1, make_blocknum(1), 1, CACHETABLE_CLEAN, make_pair_attr(8));
 
-        
+
     toku_cachetable_verify(ct);
 
     void *v = 0;
     long size = 0;
     // now verify that the block we are trying to evict may be pinned
     r = toku_cachetable_get_and_pin_nonblocking(
-        f1, 
-        key, 
-        fullhash, 
-        &v, 
-        &size, 
-        wc, 
-        def_fetch, 
-        def_pf_req_callback, 
-        def_pf_callback, 
+        f1,
+        key,
+        fullhash,
+        &v,
+        &size,
+        wc,
+        def_fetch,
+        def_pf_req_callback,
+        def_pf_callback,
         PL_WRITE_EXPENSIVE,
-        NULL, 
+        NULL,
         NULL
         );
     assert(r==TOKUDB_TRY_AGAIN);
     r = toku_cachetable_get_and_pin(
-        f1, 
-        key, 
-        fullhash, 
-        &v, 
-        &size, 
-        wc, 
-        def_fetch, 
-        def_pf_req_callback, 
-        def_pf_callback, 
-        true, 
+        f1,
+        key,
+        fullhash,
+        &v,
+        &size,
+        wc,
+        def_fetch,
+        def_pf_req_callback,
+        def_pf_callback,
+        true,
         NULL
         );
     assert(r == 0 && v == 0 && size == 1);
 
-    struct timeval tend; 
+    struct timeval tend;
     gettimeofday(&tend, NULL);
 
-    assert(tdelta_usec(&tend, &tstart) >= 2000000); 
+    assert(tdelta_usec(&tend, &tstart) >= 2000000);
     if (verbose) printf("time %" PRIu64 " \n", tdelta_usec(&tend, &tstart));
     toku_cachetable_verify(ct);
 
@@ -242,7 +242,12 @@ static void cachetable_prefetch_maybegetandpin_test (void) {
 extern "C" int test_cachetable_eviction_getandpin2(void);
 
 int test_cachetable_eviction_getandpin2() {
+    int rinit = toku_ft_layer_init();
+    CKERR(rinit);
+
     initialize_dummymsn();
     cachetable_prefetch_maybegetandpin_test();
+
+    toku_ft_layer_destroy();
     return 0;
 }

@@ -134,7 +134,7 @@ static void preload_dbs(DB **dbs)
     dbt_init_realloc(&key);
     dbt_init_realloc(&val);
     unsigned int k, v;
-    if ( verbose ) { printf("loading");fflush(stdout); }
+    if ( verbose ) { printf("loading"); }
     int outer_loop_num = ( NUM_ROWS <= ROWS_PER_TRANSACTION ) ? 1 : (NUM_ROWS / ROWS_PER_TRANSACTION);
     for(int x=0;x<outer_loop_num;x++) {
         r = env->txn_begin(env, NULL, &txn, 0);                                                              CKERR(r);
@@ -157,33 +157,33 @@ static void preload_dbs(DB **dbs)
             }
         }
         r = txn->commit(txn, 0);                                                                             CKERR(r);
-        if ( verbose ) {printf(".");fflush(stdout);}
+        if ( verbose ) {printf(".");}
     }
     if ( key.flags ) { toku_free(key.data); key.data = NULL; }
     if ( val.flags ) { toku_free(val.data); key.data = NULL; }
 
     if (optimize) {
-        if (verbose) { printf("\noptimizing");fflush(stdout);}
+        if (verbose) { printf("\noptimizing");}
         do_hot_optimize_on_dbs(env, dbs, NUM_DBS);
     }
 
     if ( CHECK_RESULTS) {
-        if ( verbose ) {printf("\nchecking");fflush(stdout);}
+        if ( verbose ) {printf("\nchecking");}
         check_results(env, dbs, NUM_DBS, NUM_ROWS);
     }
-    if ( verbose) {printf("\ndone\n");fflush(stdout);}
+    if ( verbose) {printf("\ndone\n");}
 }
 
 
 char *free_me = NULL;
 
-static void run_test(void) 
+static void run_test(void)
 {
     int r;
     const char *env_dir = TOKU_TEST_ENV_DIR_NAME; // the default env_dir.
 
     pre_setup();
-    r = toku_fs_reset(env_dir, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH); 
+    r = toku_fs_reset(env_dir, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
     assert(r == 0);
 
     r = db_env_create(&env, 0);                                                                               CKERR(r);
@@ -194,7 +194,7 @@ static void run_test(void)
 //    CKERR(r);
     int envflags = DB_INIT_LOCK | DB_INIT_LOG | DB_INIT_MPOOL | DB_INIT_TXN | DB_CREATE | DB_PRIVATE;
     r = env->open(env, env_dir, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                                            CKERR(r);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r = env->checkpointing_set_period(env, 0);                                                                CKERR(r);
 
     DBT desc;
@@ -209,7 +209,7 @@ static void run_test(void)
         r = db_create(&dbs[i], env, 0);                                                                       CKERR(r);
 	if (littlenode) {
 	    r=dbs[i]->set_pagesize(dbs[i], 4096);
-	    CKERR(0);	    
+	    CKERR(0);
 	}
         dbs[i]->app_private = &idx[i];
         r = dbs[i]->open(dbs[i], NULL, dbname[i], NULL, DB_BTREE, DB_CREATE, 0666);                                CKERR(r);
@@ -233,7 +233,7 @@ static void run_test(void)
 	print_engine_status(env);
     r = env->close(env, 0);                                                                                   CKERR(r);
 
- 
+
   post_teardown();
 
    toku_free(dbs);
@@ -257,7 +257,7 @@ static void do_args(int argc, char * const argv[]) {
     int resultcode;
     char *cmd = argv[0];
     argc--; argv++;
-    
+
     while (argc>0) {
 	if (strcmp(argv[0], "-v")==0) {
 	    verbose++;
@@ -267,13 +267,13 @@ static void do_args(int argc, char * const argv[]) {
         } else if (strcmp(argv[0], "-h")==0) {
 	    resultcode=0;
 	do_usage:
-	    fprintf(stderr, "Usage: -h -c -n -d <num_dbs> -r <num_rows> %s\n", cmd);
+	    dprintf(STDERR, "Usage: -h -c -n -d <num_dbs> -r <num_rows> %s\n", cmd);
 	    exit(resultcode);
         } else if (strcmp(argv[0], "-d")==0) {
             argc--; argv++;
             NUM_DBS = atoi(argv[0]);
             if ( NUM_DBS > MAX_DBS ) {
-                fprintf(stderr, "max value for -d field is %d\n", MAX_DBS);
+                dprintf(STDERR, "max value for -d field is %d\n", MAX_DBS);
                 resultcode=1;
                 goto do_usage;
             }
@@ -287,7 +287,7 @@ static void do_args(int argc, char * const argv[]) {
         } else if (strcmp(argv[0], "-o")==0) {
             optimize = 1;
 	} else {
-	    fprintf(stderr, "Unknown arg: %s\n", argv[0]);
+	    dprintf(STDERR, "Unknown arg: %s\n", argv[0]);
 	    resultcode=1;
 	    goto do_usage;
 	}

@@ -138,12 +138,12 @@ fetch (CACHEFILE f        __attribute__((__unused__)),
     return 0;
 }
 
-static void 
+static void
 pe_est_callback(
     void* UU(ftnode_pv),
-    void* UU(dd), 
-    long* bytes_freed_estimate, 
-    enum partial_eviction_cost *cost, 
+    void* UU(dd),
+    long* bytes_freed_estimate,
+    enum partial_eviction_cost *cost,
     void* UU(write_extraargs)
     )
 {
@@ -178,16 +178,16 @@ static void cachetable_eviction_full_test (void) {
     wc.pe_est_callback = pe_est_callback;
     for (int i = 0; i < 20; i++) {
         r = toku_cachetable_get_and_pin(
-            f1, 
-            key, 
-            fullhash, 
-            &value1, 
-            &size1, 
-            wc, 
+            f1,
+            key,
+            fullhash,
+            &value1,
+            &size1,
+            wc,
             fetch,
             def_pf_req_callback,
             def_pf_callback,
-            true, 
+            true,
             0
             );
         assert(r==0);
@@ -199,16 +199,16 @@ static void cachetable_eviction_full_test (void) {
     wc.flush_callback = def_flush;
     wc.pe_est_callback = pe_est_callback;
     r = toku_cachetable_get_and_pin(
-        f1, 
-        make_blocknum(1), 
-        1, 
-        &value2, 
-        &size2, 
-        wc, 
+        f1,
+        make_blocknum(1),
+        1,
+        &value2,
+        &size2,
+        wc,
         fetch,
         def_pf_req_callback,
         def_pf_callback,
-        true, 
+        true,
         0
         );
     assert(r==0);
@@ -224,7 +224,12 @@ static void cachetable_eviction_full_test (void) {
 extern "C" int test_cachetable_eviction_close(void);
 
 int test_cachetable_eviction_close() {
+    int rinit = toku_ft_layer_init();
+    CKERR(rinit);
+
     initialize_dummymsn();
     cachetable_eviction_full_test();
+
+    toku_ft_layer_destroy();
     return 0;
 }

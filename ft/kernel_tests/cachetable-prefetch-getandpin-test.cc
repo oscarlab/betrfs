@@ -180,16 +180,16 @@ static void cachetable_prefetch_maybegetandpin_test (bool do_partial_fetch) {
         void* value;
         long size;
         r = toku_cachetable_get_and_pin(
-            f1, 
-            key, 
-            fullhash, 
-            &value, 
-            &size, 
-            wc, 
+            f1,
+            key,
+            fullhash,
+            &value,
+            &size,
+            wc,
             fetch,
             pf_req_callback,
             pf_callback,
-            true, 
+            true,
             0
             );
         assert(r==0);
@@ -231,9 +231,11 @@ extern "C" int test_cachetable_prefetch_getandpin(void);
 
 int
 test_cachetable_prefetch_getandpin() {
-
+    int rinit = toku_ft_layer_init();
+    CKERR(rinit);
     initialize_dummymsn();
     cachetable_prefetch_maybegetandpin_test(true);
     cachetable_prefetch_maybegetandpin_test(false);
+    toku_ft_layer_destroy();
     return 0;
 }

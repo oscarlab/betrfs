@@ -20,10 +20,11 @@
 
 #include "ftfs.h"
 #include "ftfs_southbound.h"
+#include "sb_files.h"
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,19,99)
 #include <linux/sched/task.h>
-#endif
+#endif /* LINUX_VERSION_CODE */
 
 static DEFINE_MUTEX(ftfs_southbound_lock);
 
@@ -80,13 +81,13 @@ static struct files_struct ftfs_files_init = {
 		.close_on_exec  = ftfs_files_init.close_on_exec_init,
 		.open_fds       = ftfs_files_init.open_fds_init,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,19,99)
-		.full_fds_bits	= ftfs_files_init.full_fds_bits_init,
-#endif
+		.full_fds_bits  = ftfs_files_init.full_fds_bits_init,
+#endif /* LINUX_VERSION_CODE */
 	},
 	.file_lock      = __SPIN_LOCK_UNLOCKED(ftfs_files_init.file_lock),
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,19,99)
-	.resize_wait	= __WAIT_QUEUE_HEAD_INITIALIZER(ftfs_files_init.resize_wait),
-#endif
+	.resize_wait    = __WAIT_QUEUE_HEAD_INITIALIZER(ftfs_files_init.resize_wait),
+#endif /* LINUX_VERSION_CODE */
 };
 /* to get struct mount *: return container_of(mnt, struct mount, mnt); */
 
@@ -95,10 +96,15 @@ struct fs_struct *ftfs_fs = NULL;
 struct files_struct *ftfs_files = NULL;
 struct cred *ftfs_cred = NULL;
 
+/* Dummy file structs for stdin, stdout, stderr */
+struct file dummy_stdin;
+struct file dummy_stdout;
+struct file dummy_stderr;
+
 /* must hold ftfs_southbound_lock */
 int __init_ftfs_southbound_files(void)
 {
-	int err;
+	int err, fd;
 	struct files_struct *files;
 
 	BUG_ON(ftfs_files);
@@ -111,6 +117,23 @@ int __init_ftfs_southbound_files(void)
 	}
 
 	ftfs_files = files;
+
+	// DEP 10/1/21: Reserve standard descriptors (0, 1, 2)
+	// The ft code, and especially tests, expect these
+	// descriptors to be standard in, out, and error, following
+	// standard unix conventions.  So grab them at init time in
+	// the klibc "fake" file handle table, so that we don't end up
+	// with, say, the log file on handle 2 and getting corrupted
+	// with standard error.
+	fd = sb_get_unused_fd_flags(O_RDONLY);
+	BUG_ON(fd != 0);
+	fd = sb_get_unused_fd_flags(O_WRONLY);
+	BUG_ON(fd != 1);
+	fd = sb_get_unused_fd_flags(O_WRONLY);
+	BUG_ON(fd != 2);
+	sb_fd_install(0, &dummy_stdin);
+	sb_fd_install(1, &dummy_stdout);
+	sb_fd_install(2, &dummy_stderr);
 
 	return 0;
 }
@@ -393,10 +416,6 @@ err_out:
 	return err;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
-int __list_open_southbound_files(struct super_block *sb);
-#endif
-
 /* must hold ftfs_southbound lock */
 int __ftfs_private_umount(void)
 {
@@ -405,14 +424,7 @@ int __ftfs_private_umount(void)
 		ftfs_vfs = NULL;
 		return 0;
 	} else {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
-		int cnt;
-		BUG_ON(!ftfs_vfs);
-		cnt = __list_open_southbound_files(ftfs_vfs->mnt_sb);
-		ftfs_error(__func__, "%d files are open\n", cnt);
-#else
 		ftfs_error(__func__, "There may be still opened files\n");
-#endif
 		return -EBUSY;
 	}
 }
@@ -453,76 +465,6 @@ void put_ftfs_southbound(void)
 
 	mutex_unlock(&ftfs_southbound_lock);
 }
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
-/* FROM fs/file_table.c.
- *
- * These will not be safe, but they are really just for debugging
- */
-/*
- *
- * These macros iterate all files on all CPUs for a given superblock.
- * files_lglock must be held globally.
- */
-#ifdef CONFIG_SMP
-
-/*
- * These macros iterate all files on all CPUs for a given superblock.
- * files_lglock must be held globally.
- */
-#define do_file_list_for_each_entry(__sb, __file)		\
-{								\
-	int i;							\
-	for_each_possible_cpu(i) {				\
-		struct list_head *list;				\
-		list = per_cpu_ptr((__sb)->s_files, i);		\
-		list_for_each_entry((__file), list, f_u.fu_list)
-
-#define while_file_list_for_each_entry				\
-	}							\
-}
-
-#else
-
-#define do_file_list_for_each_entry(__sb, __file)		\
-{								\
-	struct list_head *list;					\
-	list = &(sb)->s_files;					\
-	list_for_each_entry((__file), list, f_u.fu_list)
-
-#define while_file_list_for_each_entry				\
-}
-#endif // CONFIG_SMP
-
-int __list_open_southbound_files(struct super_block *sb)
-{
-	int count = 0;
-	struct file *f;
-
-	do_file_list_for_each_entry(sb, f) {
-		count++;
-		ftfs_error(__func__, "%s is still open",
-			 f->f_path.dentry->d_name.name);
-	} while_file_list_for_each_entry;
-
-	return count;
-}
-
-int list_open_southbound_files(void)
-{
-	int err;
-
-	BUG_ON(!ftfs_vfs);
-
-	mutex_lock(&ftfs_southbound_lock);
-	err = __list_open_southbound_files(ftfs_vfs->mnt_sb);
-	mutex_unlock(&ftfs_southbound_lock);
-
-	return err;
-}
-#else
-int list_open_southbound_files(void) {return 0;}
-#endif
 
 unsigned int southbound_mnt_count(void)
 {

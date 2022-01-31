@@ -95,11 +95,17 @@ PATENT RIGHTS GRANT:
 #include <memory.h>
 #include <toku_assert.h>
 
+#include "leafentry.h"
+
 struct fifo {
     int n_items_in_fifo;
     char *memory;       // An array of bytes into which fifo_entries are embedded.
     int   memory_size;  // How big is fifo_memory
     int   memory_used;  // How many bytes are in use?
+#ifdef FT_INDIRECT
+    int   num_pages;    // Number of pages
+    int   num_indirect_inserts; // Number of ubi inserts
+#endif
 };
 
 const int fifo_initial_size = 4096;
@@ -108,6 +114,10 @@ static void fifo_init(struct fifo *fifo) {
     fifo->memory       = 0;
     fifo->memory_size  = 0;
     fifo->memory_used  = 0;
+#ifdef FT_INDIRECT
+    fifo->num_pages  = 0;
+    fifo->num_indirect_inserts  = 0;
+#endif
 }
 
 __attribute__((const,nonnull))
@@ -148,6 +158,12 @@ void toku_fifo_free(FIFO *ptr) {
 int toku_fifo_n_entries(FIFO fifo) {
     return fifo->n_items_in_fifo;
 }
+
+#ifdef FT_INDIRECT
+int toku_fifo_n_pages(FIFO fifo) {
+    return fifo->num_pages;
+}
+#endif
 
 static int next_power_of_two (int n) {
     int r = 4096;
@@ -225,9 +241,26 @@ int toku_fifo_enq(FIFO fifo, FT_MSG msg, bool is_fresh, int32_t *dest) {
 		enum pacman_status pm_status = ft_msg_multicast_pm_status(msg);
 		memcpy(pos, &pm_status, sizeof(pm_status));
 		pos += sizeof(pm_status);
-		}
+            }
+#ifdef FT_INDIRECT
+    } else if (FT_UNBOUND_INSERT == (enum ft_msg_type)(char) entry->type) {
+        struct ftfs_indirect_val *ptr = (struct ftfs_indirect_val *) (data);
+        unsigned long pfn = ptr->pfn;
+        fifo->num_pages += 1;
+        fifo->num_indirect_inserts += 1;
+        if (sb_is_wb_page(&pfn, 1)) {
+            // We only handle pages inserted from northbound.
+            // For pages flushed from the parent, we ignore them
+            // because they are not locked or marked as writeback
+            // Pre-condition: a page inserted from the northbound
+            // into the root is locked with writeback flag set.
+            // Once it is in the kv store, we can unlock and remove the wb flag
+            // instead using the shared flag to ensure cow semantics.
+	    sb_wb_page_list_unlock(&pfn, 1, false);
+        }
+#endif
     }
-
+    
     if (dest) {
         *dest = fifo->memory_used;
     }
@@ -337,20 +370,35 @@ int toku_fifo_iterate(FIFO fifo,
     return r;
 }
 
-void toku_fifo_iterate_flip_msg_type (FIFO fifo, enum ft_msg_type from_type, enum ft_msg_type to_type) {
+// It calls ftfs_set_page_list_private to set the `bound` flag of
+// page->private->private so that we know the value has been bound.
+// This is called as part of writing back a dirty, nonleaf node.
+// It retains the in-memory indirection, but marks the messages as bound on disk.
+// This is a more generic function, and can change other flags.
+void toku_fifo_iterate_flip_msg_type (FIFO fifo, enum ft_msg_type chosen_type, int bit_or_to_type) {
     int fifo_iterate_off;
+    FT_MSG_S msg;
     for (fifo_iterate_off = toku_fifo_iterate_internal_start(fifo);
-       toku_fifo_iterate_internal_has_more(fifo, fifo_iterate_off);
-       ) {
+        toku_fifo_iterate_internal_has_more(fifo, fifo_iterate_off);
+        fifo_iterate_off = toku_fifo_iterate_internal_next(&msg, fifo_iterate_off)) {
+
         struct fifo_entry *e = toku_fifo_iterate_internal_get_entry(fifo, fifo_iterate_off);
-        DBT key,  val,  max_key;
-        FT_MSG_S msg;
+        DBT key, val, max_key;
         fifo_entry_get_msg(&msg, e, &key, &val, &max_key);
-	if(from_type == e->type)
-		e->type = to_type;
-        fifo_iterate_off = toku_fifo_iterate_internal_next(&msg, fifo_iterate_off);
+#ifdef FT_INDIRECT
+        int bit = bit_or_to_type;
+        if (chosen_type == e->type) {
+            struct ftfs_indirect_val *ptr = (struct ftfs_indirect_val *)ft_msg_get_val(&msg);
+            unsigned long pfn = ptr->pfn;
+            ftfs_set_page_list_private(&pfn, 1, bit);
+        }
+#else
+        enum ft_msg_type to_type = (enum ft_msg_type) bit_or_to_type;
+        if(chosen_type == e->type) e->type = to_type;
+#endif
     }
 }
+
 unsigned int toku_fifo_buffer_size_in_use (FIFO fifo) {
     return fifo->memory_used;
 }

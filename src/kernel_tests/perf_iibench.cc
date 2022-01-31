@@ -416,21 +416,12 @@ static int iibench_rangequery_op(DB_TXN *txn, ARG arg, void *operation_extra, vo
 }
 
 static int iibench_fill_tables(DB_ENV *env, DB **dbs, struct cli_args *cli_args, bool UU(fill_with_zeroes)) {
-    const int num_dbs = cli_args->num_DBs;
     int r = 0;
 
     DB_TXN *txn;
     r = env->txn_begin(env, 0, &txn, 0); CKERR(r);
 
-    //DB_LOADER *loader;
-    uint32_t db_flags[num_dbs];
-    uint32_t dbt_flags[num_dbs];
-    for (int i = 0; i < num_dbs; i++) {
-        db_flags[i] = DB_PRELOCKED_WRITE;
-        dbt_flags[i] = DB_DBT_REALLOC;
-    }
     DB * db = dbs[0];
-    //r = env->create_loader(env, txn, &loader, dbs[0], num_dbs, dbs, db_flags, dbt_flags, 0); CKERR(r);
     for (int i = 0; i < cli_args->num_elements; i++) {
         DBT key, val;
         uint64_t pk = i;
@@ -440,14 +431,11 @@ static int iibench_fill_tables(DB_ENV *env, DB **dbs, struct cli_args *cli_args,
         iibench_fill_val_buf(pk, valbuf);
         dbt_init(&key, keybuf, sizeof keybuf);
         dbt_init(&val, valbuf, sizeof valbuf);
-      //  r = loader->put(loader, &key, &val); CKERR(r);
         db->put(db, txn, &key, &val, DB_PRELOCKED_WRITE);
         if (verbose && i > 0 && i % 10000 == 0) {
             report_overall_fill_table_progress(cli_args, 10000);
         }
     }
-    //r = loader->close(loader); CKERR(r);
-
     r = txn->commit(txn, 0); CKERR(r);
     return 0;
 }
@@ -476,8 +464,7 @@ stress_table(DB_ENV* env, DB **dbs, struct cli_args *cli_args) {
             myargs[i].sleep_ms = 1000; // 1 second between range queries
         }
     }
-    const bool crash_at_end = false;
-    run_workers(myargs, num_threads, cli_args->num_seconds, crash_at_end, cli_args);
+    run_workers(myargs, num_threads, cli_args->num_seconds, cli_args);
 }
 extern "C" int test_perf_iibench(void);
 int test_perf_iibench(void) {

@@ -103,7 +103,7 @@ PATENT RIGHTS GRANT:
  * For each row, the inserted value will be:
  *   if row%MAXDEPTH == 0 no row
  *   else value = generated value + (row%MAXDEPTH -1)
- * 
+ *
  *
  * For each row
  *   generate k,v pair
@@ -172,7 +172,7 @@ check_results_nested(DB ** dbs, const uint num_rows) {
         CKERR(r);
         for(uint i=0;i<num_rows;i++) {
             if (i % MAXDEPTH) {
-		r = cursor->c_get(cursor, &key, &val, DB_NEXT);    
+		r = cursor->c_get(cursor, &key, &val, DB_NEXT);
 		CKERR(r);
 		uint observed_k = *(unsigned int*)key.data;
 		uint observed_v = *(unsigned int*)val.data;
@@ -180,7 +180,7 @@ check_results_nested(DB ** dbs, const uint num_rows) {
 		uint generated_value = generate_val(i, 0);
 		uint expected_v = generated_value + (i%MAXDEPTH - 1);
 		if (verbose >= 3)
-		    printf("expected key %d, observed key %d, expected val %d, observed val %d\n", 
+		    printf("expected key %d, observed key %d, expected val %d, observed val %d\n",
 			   expected_k, observed_k, expected_v, observed_v);
 		// test that we have the expected keys and values
 		assert(observed_k == expected_k);
@@ -188,20 +188,20 @@ check_results_nested(DB ** dbs, const uint num_rows) {
 	    }
             dbt_init(&key, NULL, sizeof(unsigned int));
             dbt_init(&val, NULL, sizeof(unsigned int));
-	    if ( verbose && (i%10000 == 0)) {printf("."); fflush(stdout);}
+	    if ( verbose && (i%10000 == 0)) {printf("."); }
         }
         r = cursor->c_close(cursor);
         CKERR(r);
         r = txn->commit(txn, DB_TXN_NOSYNC);
         CKERR(r);
     }
-    if ( verbose ) {printf("ok");fflush(stdout);}
+    if ( verbose ) {printf("ok");}
 }
 
 
 static struct timeval starttime;
 
-void my_nested_insert(DB ** dbs, uint depth,  DB_TXN *parent_txn, 
+void my_nested_insert(DB ** dbs, uint depth,  DB_TXN *parent_txn,
                             uint k, uint generated_value);
 
 
@@ -210,7 +210,7 @@ static void preload_dbs(DB **dbs)
     gettimeofday(&starttime, NULL);
     uint row;
 
-    if ( verbose ) { printf("loading");fflush(stdout); }
+    if ( verbose ) { printf("loading"); }
 
     for(row = 0; row <= NUM_ROWS; row++) {
 	uint generated_value = generate_val(row, 0);
@@ -219,15 +219,15 @@ static void preload_dbs(DB **dbs)
     }
 
     if (optimize) {
-        if (verbose) { printf("\noptimizing");fflush(stdout);}
+        if (verbose) { printf("\noptimizing"); }
         do_hot_optimize_on_dbs(env, dbs, 1);
     }
 
     if ( CHECK_RESULTS) {
-	if ( verbose ) {printf("\nchecking");fflush(stdout);}
+	if ( verbose ) {printf("\nchecking"); }
 	check_results_nested(&dbs[0], NUM_ROWS);
     }
-    if ( verbose) {printf("\ndone\n");fflush(stdout);}
+    if ( verbose) {printf("\ndone\n"); }
 }
 
 static void
@@ -243,7 +243,7 @@ nested_insert(DB ** dbs, uint depth,  DB_TXN *parent_txn, uint k, uint generated
 	dbt_init(&key, &k, sizeof(unsigned int));
 	dbt_init(&val, &v, sizeof(unsigned int));
 	int db = 0;  // maybe later replace with loop
-	r = dbs[db]->put(dbs[db], txn, &key, &val, 0);                                               
+	r = dbs[db]->put(dbs[db], txn, &key, &val, 0);
 	CKERR(r);
 	if (key.flags == 0) { dbt_init_realloc(&key); }
 	if (val.flags == 0) { dbt_init_realloc(&val); }
@@ -254,13 +254,13 @@ nested_insert(DB ** dbs, uint depth,  DB_TXN *parent_txn, uint k, uint generated
 	    if (verbose>=3)
 		printf("abort k = %d, v= %d, depth = %d\n", k, v, depth);
 	}
-	else {    
+	else {
 	    r = txn->commit(txn, DB_TXN_NOSYNC);
 	    CKERR(r);
 	    if (verbose>=3)
 		printf("commit k = %d, v= %d, depth = %d\n", k, v, depth);
 	}
-        if ( verbose && (k%10000 == 0)) {printf(".");fflush(stdout);}
+        if ( verbose && (k%10000 == 0)) {printf("."); }
 
 	if ( key.flags ) { toku_free(key.data); key.data = NULL; }
 	if ( val.flags ) { toku_free(val.data); key.data = NULL; }
@@ -268,24 +268,24 @@ nested_insert(DB ** dbs, uint depth,  DB_TXN *parent_txn, uint k, uint generated
 }
 
 
-void my_nested_insert(DB ** dbs, uint depth,  DB_TXN *parent_txn, 
-                            uint k, uint generated_value) 
+void my_nested_insert(DB ** dbs, uint depth,  DB_TXN *parent_txn,
+                            uint k, uint generated_value)
 {
     DB_TXN ** txn = (DB_TXN **)toku_xmalloc((MAXDEPTH+1) * sizeof(DB_TXN*));
-    if (txn == NULL) 
-        abort();    
+    if (txn == NULL)
+        abort();
 
     DBT *key = (DBT*)toku_xmalloc(MAXDEPTH * sizeof(DBT));
-    if (key == NULL) 
-        abort();    
+    if (key == NULL)
+        abort();
 
     DBT *val = (DBT*)toku_xmalloc(MAXDEPTH * sizeof(DBT));
-    if (val == NULL) 
-        abort();    
+    if (val == NULL)
+        abort();
 
     uint *v = (uint*)toku_xmalloc(MAXDEPTH * sizeof(uint));
-    if (v == NULL) 
-        abort();    
+    if (v == NULL)
+        abort();
 
     txn[depth] = parent_txn;
 
@@ -299,7 +299,7 @@ void my_nested_insert(DB ** dbs, uint depth,  DB_TXN *parent_txn,
 	dbt_init(&key[d], &k, sizeof(unsigned int));
 	dbt_init(&val[d], &v[d], sizeof(unsigned int));
 	int db = 0;  // maybe later replace with loop
-	r = dbs[db]->put(dbs[db], txn[d+1], &key[d], &val[d], 0);                                               
+	r = dbs[db]->put(dbs[db], txn[d+1], &key[d], &val[d], 0);
 	CKERR(r);
 
 	if (key[d].flags == 0) { dbt_init_realloc(&key[d]); }
@@ -309,27 +309,27 @@ void my_nested_insert(DB ** dbs, uint depth,  DB_TXN *parent_txn,
     for (int d = MAXDEPTH-1; d >= (int) depth; d--) {
 
         int r;
-	if (d == (k % MAXDEPTH)) {
+	if ((uint)d == (k % MAXDEPTH)) {
 	    r = txn[d+1]->abort(txn[d+1]);
 	    CKERR(r);
 	    if (verbose>=3)
 		printf("abort k = %d, v= %d, depth = %d\n", k, v[d], depth);
 	}
-	else {    
+	else {
 	    r = txn[d+1]->commit(txn[d+1], DB_TXN_NOSYNC);
 	    CKERR(r);
 	    if (verbose>=3)
 		printf("commit k = %d, v= %d, depth = %d\n", k, v[d], depth);
 	}
-        if ( verbose && (k%10000 == 0)) {printf(".");fflush(stdout);}
+        if ( verbose && (k%10000 == 0)) {printf("."); }
 
 	if ( key[d].flags ) { toku_free(key[d].data); key[d].data = NULL; }
 	if ( val[d].flags ) { toku_free(val[d].data); key[d].data = NULL; }
     }
 
-    if (v) 
+    if (v)
         toku_free(v);
-    if (key) 
+    if (key)
         toku_free(key);
     if (val)
         toku_free(val);
@@ -347,7 +347,7 @@ static const char *dbname[5] = {
     TOKU_TEST_THREE_DB_NAME
 };
 
-static void run_test(void) 
+static void run_test(void)
 {
     int r;
     const char *env_dir = TOKU_TEST_ENV_DIR_NAME; // the default env_dir.
@@ -366,7 +366,7 @@ static void run_test(void)
 //    CKERR(r);
     int envflags = DB_INIT_LOCK | DB_INIT_LOG | DB_INIT_MPOOL | DB_INIT_TXN | DB_CREATE | DB_PRIVATE;
     r = env->open(env, env_dir, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                                            CKERR(r);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r = env->checkpointing_set_period(env, 0);                                                                CKERR(r);
 
     DBT desc;
@@ -382,7 +382,7 @@ static void run_test(void)
         r = db_create(&dbs[i], env, 0);                                                                       CKERR(r);
 	if (littlenode) {
 	    r=dbs[i]->set_pagesize(dbs[i], 4096);
-	    CKERR(0);	    
+	    CKERR(0);
 	}
         dbs[i]->app_private = &idx[i];
         assert(i < 5);
@@ -406,7 +406,7 @@ static void run_test(void)
 
     if (verbose >= 2)
 	print_engine_status(env);
-    r = env->close(env, 0);                                 
+    r = env->close(env, 0);
             CKERR(r);
 
 
@@ -441,7 +441,7 @@ static void do_args(int argc, char * const argv[]) {
     int resultcode;
     char *cmd = argv[0];
     argc--; argv++;
-    
+
     while (argc>0) {
 	if (strcmp(argv[0], "-v")==0) {
 	    verbose++;
@@ -451,13 +451,13 @@ static void do_args(int argc, char * const argv[]) {
         } else if (strcmp(argv[0], "-h")==0) {
 	    resultcode=0;
 	do_usage:
-	    fprintf(stderr, "Usage: -h -c -n -d <num_dbs> -r <num_rows> %s\n", cmd);
+	    dprintf(STDERR, "Usage: -h -c -n -d <num_dbs> -r <num_rows> %s\n", cmd);
 	    //exit(resultcode);
         } else if (strcmp(argv[0], "-d")==0) {
             argc--; argv++;
             NUM_DBS = atoi(argv[0]);
             if ( NUM_DBS > MAX_DBS ) {
-                fprintf(stderr, "max value for -d field is %d\n", MAX_DBS);
+                dprintf(STDERR, "max value for -d field is %d\n", MAX_DBS);
                 resultcode=1;
                 goto do_usage;
             }
@@ -471,7 +471,7 @@ static void do_args(int argc, char * const argv[]) {
         } else if (strcmp(argv[0], "-o")==0) {
             optimize = 1;
 	} else {
-	    fprintf(stderr, "Unknown arg: %s\n", argv[0]);
+	    dprintf(STDERR, "Unknown arg: %s\n", argv[0]);
 	    resultcode=1;
 	    goto do_usage;
 	}

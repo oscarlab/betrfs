@@ -114,6 +114,10 @@ le_add_to_bn(bn_data* bn, uint32_t idx, char *key, int keylen, char *val, int va
     r->type = LE_CLEAN;
     r->u.clean.vallen = vallen;
     memcpy(r->u.clean.val, val, vallen);
+#ifdef FT_INDIRECT
+    r->indirect_insert_offsets = NULL;
+    r->num_indirect_inserts = 0;
+#endif
 }
 
 static int
@@ -145,6 +149,10 @@ test_serialize_leaf(int valsize, int nelts, double entropy) {
     sn->height = 0;
     sn->n_children = 8;
     sn->dirty = 1;
+#ifdef FT_INDIRECT
+    sn->is_cloned = false;
+    sn->is_rebalancing = false;
+#endif
     sn->oldest_referenced_xid_known = TXNID_NONE;
     MALLOC_N(sn->n_children, sn->bp);
     MALLOC_N(sn->n_children-1, sn->childkeys);
@@ -219,7 +227,11 @@ test_serialize_leaf(int valsize, int nelts, double entropy) {
     struct timeval t[2];
     gettimeofday(&t[0], NULL);
     FTNODE_DISK_DATA ndd = NULL;
+#ifdef FT_INDIRECT
+    r = toku_serialize_ftnode_to_with_indirect(fd, make_blocknum(20), sn, &ndd, true, brt->ft, false, &offset, &size, true);
+#else
     r = toku_serialize_ftnode_to(fd, make_blocknum(20), sn, &ndd, true, brt->ft, false, &offset, &size, true);
+#endif
     assert(r==0);
     gettimeofday(&t[1], NULL);
     double dt;
@@ -356,7 +368,11 @@ test_serialize_nonleaf(int valsize, int nelts, double entropy) {
     struct timeval t[2];
     gettimeofday(&t[0], NULL);
     FTNODE_DISK_DATA ndd = NULL;
+#ifdef FT_INDIRECT
+    r = toku_serialize_ftnode_to_with_indirect(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false, &offset, &size, true);
+#else
     r = toku_serialize_ftnode_to(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false, &offset, &size, true);
+#endif
     assert(r==0);
     gettimeofday(&t[1], NULL);
     double dt;

@@ -127,7 +127,7 @@ static void run_recover (void) {
 
     r = db_env_create(&env, 0);                                                             CKERR(r);
     r = env->open(env, TOKU_TEST_FILENAME, envflags + DB_RECOVER, S_IRWXU+S_IRWXG+S_IRWXO);             CKERR(r);
-    
+
     DB *db;
     r = db_create(&db, env, 0);                                                             CKERR(r);
     r = db->open(db, NULL, namea, NULL, DB_UNKNOWN, DB_AUTO_COMMIT, 0666);                  CKERR(r);
@@ -171,10 +171,10 @@ bool do_test=false, do_recover=false, do_recover_only=false, do_no_recover = fal
 	} else if (strcmp(argv[0], "-h")==0) {
 	    resultcode=0;
 	do_usage:
-	    fprintf(stderr, "Usage:\n%s [-v|-q]* [-h] {--test | --recover } \n", cmd);
+	    dprintf(STDERR, "Usage:\n%s [-v|-q]* [-h] {--test | --recover } \n", cmd);
 	    exit(resultcode);
 	} else {
-	    fprintf(stderr, "Unknown arg: %s\n", argv[0]);
+	    dprintf(STDERR, "Unknown arg: %s\n", argv[0]);
 	    resultcode=1;
 	    goto do_usage;
 	}
@@ -192,6 +192,6 @@ int test_recover_fcreate_fclose(void) {
         run_recover();
     } else if (do_no_recover) {
         run_no_recover();
-    } 
+    }
     return 0;
 }

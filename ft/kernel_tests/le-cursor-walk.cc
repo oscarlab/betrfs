@@ -100,7 +100,7 @@ static TOKUTXN const null_txn = 0;
 static DB * const null_db = 0;
 static int verbose = 1;
 static int
-get_next_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen UU(), bytevec val UU(), void *extra, bool lock_only) {
+get_next_callback(ITEMLEN keylen, bytevec key, ITEMLEN vallen UU(), bytevec val UU(), void *extra, bool lock_only, bool UU(is_indirect)) {
     DBT *CAST_FROM_VOIDP(key_dbt, extra);
     if (!lock_only) {
         toku_dbt_set(keylen, key, key_dbt, NULL);
@@ -121,7 +121,7 @@ static int test_ft_cursor_keycompare(DB *db __attribute__((unused)), const DBT *
 // create a tree and populate it with n rows
 static void
 create_populate_tree(const char *logdir, const char *fname, int n) {
-    if (verbose) fprintf(stderr, "%s %s %s %d\n", __FUNCTION__, logdir, fname, n);
+    if (verbose) dprintf(STDERR, "%s %s %s %d\n", __FUNCTION__, logdir, fname, n);
     int error;
 
     TOKULOGGER logger = NULL;
@@ -189,7 +189,7 @@ create_populate_tree(const char *logdir, const char *fname, int n) {
 // there should be n leaf entires in the tree.
 static void
 walk_tree(const char * logdir, const char *fname, int n) {
-    if (verbose) fprintf(stderr, "%s %s %d\n", __FUNCTION__, fname, n);
+    if (verbose) dprintf(STDERR, "%s %s %d\n", __FUNCTION__, fname, n);
     int error;
 
     CACHETABLE ct = NULL;

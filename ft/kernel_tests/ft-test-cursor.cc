@@ -445,7 +445,7 @@ static void test_ft_cursor_rwalk(int n) {
 }
 
 static int
-ascending_key_string_checkf (ITEMLEN keylen, bytevec key, ITEMLEN UU(vallen), bytevec UU(val), void *v, bool lock_only)
+ascending_key_string_checkf (ITEMLEN keylen, bytevec key, ITEMLEN UU(vallen), bytevec UU(val), void *v, bool lock_only, bool UU(is_indirect))
 // the keys are strings.  Verify that they keylen matches the key, that the keys are ascending.  Use (char**)v  to hold a
 // malloc'd previous string.
 {

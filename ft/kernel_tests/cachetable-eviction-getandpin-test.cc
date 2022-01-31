@@ -141,22 +141,22 @@ static void cachetable_predef_fetch_maybegetandpin_test (void) {
         CACHETABLE_WRITE_CALLBACK wc = def_write_callback(NULL);
         wc.flush_callback = flush;
         r = toku_cachetable_get_and_pin(
-            f1, 
-            key, 
-            fullhash, 
-            &value, 
-            &size, 
-            wc, 
+            f1,
+            key,
+            fullhash,
+            &value,
+            &size,
+            wc,
             def_fetch,
             def_pf_req_callback,
             def_pf_callback,
-            true, 
+            true,
             0
             );
         assert(r==0);
         r = toku_test_cachetable_unpin(f1, key, fullhash, CACHETABLE_DIRTY, make_pair_attr(8));
     }
-    
+
     struct timeval tstart;
     gettimeofday(&tstart, NULL);
 
@@ -171,16 +171,16 @@ static void cachetable_predef_fetch_maybegetandpin_test (void) {
         1,
         &value2,
         &size2,
-        wc, 
+        wc,
         def_fetch,
         def_pf_req_callback,
         def_pf_callback,
-        true, 
+        true,
         0
         );
     assert(r==0);
     ct->ev.signal_eviction_thread();
-    usleep(1*1024*1024);        
+    usleep(1*1024*1024);
     r = toku_test_cachetable_unpin(f1, make_blocknum(1), 1, CACHETABLE_CLEAN, make_pair_attr(8));
     toku_cachetable_verify(ct);
 
@@ -195,10 +195,10 @@ static void cachetable_predef_fetch_maybegetandpin_test (void) {
     assert(r == 0 && v == 0 && size == 8);
     do_sleep = false;
 
-    struct timeval tend; 
+    struct timeval tend;
     gettimeofday(&tend, NULL);
 
-    assert(tdelta_usec(&tend, &tstart) >= 2000000); 
+    assert(tdelta_usec(&tend, &tstart) >= 2000000);
     if (verbose)printf("time %" PRIu64 " \n", tdelta_usec(&tend, &tstart));
     toku_cachetable_verify(ct);
 
@@ -212,7 +212,12 @@ static void cachetable_predef_fetch_maybegetandpin_test (void) {
 extern "C" int test_cachetable_eviction_getandpin(void);
 
 int test_cachetable_eviction_getandpin() {
+    int rinit = toku_ft_layer_init();
+    CKERR(rinit);
+
     initialize_dummymsn();
     cachetable_predef_fetch_maybegetandpin_test();
+
+    toku_ft_layer_destroy();
     return 0;
 }

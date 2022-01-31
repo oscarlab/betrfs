@@ -103,7 +103,7 @@ PATENT RIGHTS GRANT:
 
 //
 // purpose of this stress test is to do a bunch of splitting and merging
-// and run db->verify periodically to make sure the db is in a 
+// and run db->verify periodically to make sure the db is in a
 // a good state
 //
 
@@ -145,7 +145,7 @@ stress_table(DB_ENV *env, DB **dbp, struct cli_args *cli_args) {
         myargs[i].lock_type = STRESS_LOCK_SHARED;
         myargs[i].operation = ptquery_op;
     }
-    run_workers(myargs, num_threads, cli_args->num_seconds, false, cli_args);
+    run_workers(myargs, num_threads, cli_args->num_seconds, cli_args);
 }
 
 extern "C" int test_test_stress_with_verify(void);
@@ -154,7 +154,7 @@ int test_test_stress_with_verify(void) {
     struct cli_args args = get_default_args();
     // let's make default checkpointing period really slow
     args.env_args.checkpointing_period = 1;
-    args.num_elements= 2000; // make default of small num elements to 
+    args.num_elements= 2000; // make default of small num elements to
     args.num_ptquery_threads = 0;
     stress_test_main(&args);
     post_teardown();

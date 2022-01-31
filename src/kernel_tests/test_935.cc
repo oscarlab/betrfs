@@ -110,8 +110,8 @@ testit (const int klen, const int vlen, const int n, const int lastvlen) {
     DB_ENV *env;
     {
         r = db_env_create(&env, 0); assert(r == 0);
-        env->set_errfile(env, stdout);
-        r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL + DB_PRIVATE + DB_CREATE + DB_INIT_LOG + DB_INIT_TXN, S_IRWXU+S_IRWXG+S_IRWXO); 
+        env->set_errfile(env, STDOUT);
+        r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_MPOOL + DB_PRIVATE + DB_CREATE + DB_INIT_LOG + DB_INIT_TXN, S_IRWXU+S_IRWXG+S_IRWXO);
         assert(r == 0);
     }
 
@@ -124,7 +124,7 @@ testit (const int klen, const int vlen, const int n, const int lastvlen) {
     }
 
     // insert to fill up a node
-    {    
+    {
         void *v = toku_malloc(vlen); assert(v); memset(v, 0, vlen);
         DB_TXN *txn = 0;
         int i;
@@ -145,7 +145,7 @@ testit (const int klen, const int vlen, const int n, const int lastvlen) {
     }
 
     // add another one to force a node split
-    {    
+    {
         void *v = toku_malloc(vlen); assert(v); memset(v, 0, vlen);
         DB_TXN *txn = 0;
         int k = htonl(n+1);

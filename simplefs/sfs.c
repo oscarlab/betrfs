@@ -26,6 +26,15 @@ static struct kmem_cache *sfs_inode_cachep;
 #define BLK_SIZE_4K	(4096)
 #define BLK_SIZE_512B	(512)
 
+static int sfs_is_rotational = 0;
+module_param(sfs_is_rotational, int, 0660);
+MODULE_PARM_DESC(sfs_is_rotational, "the device is rotational disk or not (ex: 0 or 1 )");
+
+bool sfs_is_hdd(void)
+{
+	return sfs_is_rotational == 1;
+}
+
 static uint64_t sfs_sector_per_block(struct super_block *sb)
 {
 	BUG_ON(!sb);
@@ -182,7 +191,7 @@ int sfs_get_block(struct inode *inode, sector_t iblock,
 	set_buffer_new(bh_result);
 	nr_sec = sfs_inode->start_block_number * sec_per_blk + iblock;
 	map_bh(bh_result, sb, nr_sec);
-	bh_result->b_size = sb->s_blocksize; 
+	bh_result->b_size = sb->s_blocksize;
 
 	return 0;
 }
@@ -194,7 +203,7 @@ void sfs_dump_write_begin_page(struct page *page)
 	print_hex_dump(KERN_ALERT, "PAGE 0 of LOG:",
 		       DUMP_PREFIX_ADDRESS,
 		       16, 1, buf, 16, 1);
-	kunmap(page);	
+	kunmap(page);
 }
 
 static int
@@ -203,11 +212,12 @@ sfs_write_begin(struct file *file, struct address_space *mapping,
 		struct page **pagep, void **fsdata)
 {
 	int ret;
-	
+
 	ret = sfs_block_write_begin(mapping, pos, len,
 				    flags, pagep,
 				    sfs_get_block);
 	if (ret < 0) {
+	  printk(KERN_ERR "sfs_write_begin: Ruh roh.  Ret is %d\n", ret);
 		BUG();
 	}
 	return ret;
@@ -240,42 +250,6 @@ bool sfs_is_dictionary_file(struct file *filp) {
 	return false;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
-ssize_t sfs_sync_read(struct file *filp, char __user *buf,
-			size_t len, loff_t *ppos)
-{
-	return do_sync_read(filp, buf, len, ppos);
-}
-
-ssize_t sfs_sync_write(struct file *filp, const char __user *buf,
-			size_t len, loff_t *ppos)
-{
-	ssize_t ret;
-	ret = do_sync_write(filp, buf, len, ppos);
-	return ret;
-}
-
-
-static ssize_t
-sfs_file_read(struct kiocb *iocb, const struct iovec *iov,
-		unsigned long nr_segs, loff_t pos)
-{
-	return generic_file_aio_read(iocb, iov, nr_segs, pos);
-}
-
-static ssize_t
-sfs_file_write(struct kiocb *iocb, const struct iovec *iov,
-		unsigned long nr_segs, loff_t pos)
-{
-	return sfs_in_kernel_write(iocb, iov, nr_segs, pos);
-}
-#else
-ssize_t sfs_read_iter(struct kiocb *iocb, struct iov_iter *to)
-{
-	return generic_file_read_iter(iocb, to);
-}
-#endif
-
 static int
 sfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 {
@@ -291,10 +265,11 @@ sfs_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		printk("generic_file_fsync encounter error\n");
 		BUG();
 	}
-#else
+#else /* LINUX_VERSION_CODE */
+	/* Newer kernel issues flush command in generic_file_fsync */
 	int ret = generic_file_fsync(file, start, end, datasync);
 	BUG_ON(ret);
-#endif
+#endif /* LINUX_VERSION_CODE */
 	return ret;
 }
 
@@ -304,11 +279,11 @@ static int sfs_setattr(struct dentry *dentry, struct iattr *iattr)
 	int ret;
 	loff_t size;
 
-#if LINUX_VERSION_CODE <  KERNEL_VERSION(4,19,99)
+#if LINUX_VERSION_CODE <  KERNEL_VERSION(4,9,0)
 	ret = inode_change_ok(inode, iattr);
-#else
+#else /* LINUX_VERSION_CODE */
 	ret = setattr_prepare(dentry, iattr);
-#endif
+#endif /* LINUX_VERSION_CODE */
 	if (ret)
 		return ret;
 
@@ -420,17 +395,17 @@ static loff_t sfs_file_llseek(struct file *file, loff_t offset, int whence)
 }
 
 const struct file_operations sfs_file_ops = {
-	.llseek = sfs_file_llseek,
-	.fsync = sfs_fsync,
-#if LINUX_VERSION_CODE <  KERNEL_VERSION(4,19,99)
-	.read = sfs_sync_read,
-	.write = sfs_sync_write,
-	.aio_read = sfs_file_read,
-	.aio_write = sfs_file_write,
-#else
-	.read_iter = sfs_read_iter,
-	.write_iter = sfs_write_iter,
-#endif
+	.llseek	= sfs_file_llseek,
+	.fsync	= sfs_fsync,
+#if LINUX_VERSION_CODE <  KERNEL_VERSION(4,1,0)
+	.read	= do_sync_read,
+	.write	= do_sync_write,
+	.aio_read	= generic_file_aio_read,
+	.aio_write	= sfs_in_kernel_write,
+#else /* LINUX_VERSION_CODE */
+	.read_iter	= generic_file_read_iter,
+	.write_iter	= sfs_write_iter,
+#endif /* LINUX_VERSION_CODE */
 };
 
 const struct file_operations sfs_dir_ops = {
@@ -458,7 +433,7 @@ static struct inode *sfs_iget(struct super_block *sb,
 	struct inode *inode = NULL;
 
 	inode = iget_locked(sb, ino);
-	if (IS_ERR(inode)) 
+	if (IS_ERR(inode))
 		goto exit;
 	if (!(inode->i_state & I_NEW))
 		return inode;
@@ -480,11 +455,11 @@ static struct inode *sfs_iget(struct super_block *sb,
 		printk(KERN_ERR "Unknown inode type\n");
 	}
 
-#if LINUX_VERSION_CODE <  KERNEL_VERSION(4,19,99)
+#if LINUX_VERSION_CODE <  KERNEL_VERSION(4,9,0)
 	inode->i_atime = inode->i_mtime = inode->i_ctime = CURRENT_TIME;
-#else
+#else /* LINUX_VERSION_CODE */
 	inode->i_atime = inode->i_mtime = inode->i_ctime = current_time(inode);
-#endif
+#endif /* LINUX_VERSION_CODE */
 	inode->i_private = sfs_inode;
 	unlock_new_inode(inode);
 exit:
@@ -581,7 +556,7 @@ static void sfs_put_super(struct super_block *sb)
 }
 
 int sfs_write_inode(struct inode *inode, struct writeback_control *wbc)
-{	
+{
 	return 0;
 }
 
@@ -630,10 +605,10 @@ int sfs_fill_super(struct super_block *sb, void *data, int silent)
 	struct sfs_inode *inode_buffer;
 
 
-	sector_per_blk = sfs_sector_per_block(sb); 
+	sector_per_blk = sfs_sector_per_block(sb);
 	bh = sb_bread(sb, SFS_SUPERBLOCK_BLOCK_NUMBER * sector_per_blk);
 	BUG_ON(!bh);
-	
+
 	sb_disk = (struct sfs_super_block *) bh->b_data;
 	sb_disk->nr_sector_per_blk = sector_per_blk;
 
@@ -667,15 +642,15 @@ int sfs_fill_super(struct super_block *sb, void *data, int silent)
 	root_inode->i_sb = sb;
 	root_inode->i_op = &sfs_dir_inode_ops;
 	root_inode->i_fop = &sfs_dir_ops;
-#if LINUX_VERSION_CODE <  KERNEL_VERSION(4,19,99)
+#if LINUX_VERSION_CODE <  KERNEL_VERSION(4,9,0)
 	root_inode->i_atime = CURRENT_TIME;
 	root_inode->i_mtime = CURRENT_TIME;
 	root_inode->i_ctime = CURRENT_TIME;
-#else
+#else /* LINUX_VERSION_CODE */
 	root_inode->i_atime = current_time(root_inode);
 	root_inode->i_mtime = current_time(root_inode);
 	root_inode->i_ctime = current_time(root_inode);
-#endif
+#endif /* LINUX_VERSION_CODE */
 
 	/* Create sfs_inode and link it to vfs inode later */
 	inode_buffer = kmem_cache_alloc(sfs_inode_cachep, GFP_KERNEL);
@@ -721,7 +696,7 @@ static struct dentry *sfs_mount(struct file_system_type *fs_type,
 		printk("ERROR mounting sfs, ret=%ld\n", PTR_ERR(ret));
 	else
 		printk("sfs is successfully mounted on [%s]\n", dev_name);
-	return ret;	
+	return ret;
 }
 
 static void sfs_kill_sb(struct super_block *sb)
@@ -731,7 +706,9 @@ static void sfs_kill_sb(struct super_block *sb)
 		kfree(sb->s_fs_info);
 	}
 	kill_block_super(sb);
-	printk("SFS superblock is destroyed. Unmount successful.\n");
+	printk(KERN_DEBUG "[Umount:] SFS superblock is destroyed. Unmount successful.\n");
+	printk(KERN_DEBUG "[Umount:] sfs_is_rotational=%d\n", sfs_is_rotational);
+
 	return;
 }
 
@@ -761,8 +738,13 @@ static int sfs_init(void)
 		return -ENOMEM;
 	}
 
+	printk("sfs_is_rotational is %d\n", sfs_is_rotational);
+	if (sfs_is_rotational != 0 && sfs_is_rotational != 1) {
+		return -EINVAL;
+	}
+
 	ret = register_filesystem(&sfs_fs_type);
-	if (likely(ret == 0)) 
+	if (likely(ret == 0))
 		printk(KERN_INFO "Successfully registered sfs\n");
 	else
 		printk(KERN_INFO "Failed to register sfs, error %d\n", ret);
@@ -777,7 +759,7 @@ static void sfs_exit(void)
 	ret = unregister_filesystem(&sfs_fs_type);
 	kmem_cache_destroy(sfs_inode_cachep);
 
-	if (likely(ret == 0)) 
+	if (likely(ret == 0))
 		printk(KERN_INFO "Successfully unregistered sfs\n");
 	else
 		printk(KERN_INFO "Failed to unregister sfs, error %d\n", ret);

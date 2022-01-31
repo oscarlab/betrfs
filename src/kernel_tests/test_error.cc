@@ -127,8 +127,8 @@ int test_test_error(void) {
 		const char *errfname = TOKU_TEST_FILENAME_ONE;
 		{
 		    DB_ENV *env;
-		    FILE *write_here = fopen(errfname, "w");
-		    assert(write_here);
+		    int write_here = open(errfname, O_WRONLY);
+		    assert(write_here >= 0);
 		    n_handle_error=0;
 		    r = db_env_create(&env, 0); assert(r==0);
 		    if (do_errpfx) {
@@ -140,26 +140,27 @@ int test_test_error(void) {
 		    env->set_errfile(env,0); // Turn off those annoying errors
 		    if (do_errfile)
 			env->set_errfile(env, write_here);
-		    if (do_errcall) 
+		    if (do_errcall)
 			env->set_errcall(env, handle_error);
 		    r = env->open(env, TOKU_TEST_ENV_DIR_NAME, (uint32_t) -1, 0644);
 		    assert(r==EINVAL);
 		    r = env->close(env, 0); assert(r==0);
-		    fclose(write_here);
+		    close(write_here);
 		}
 		{
-		    FILE *read_here = fopen(errfname, "r");
-		    assert(read_here);
+		    int read_here = open(errfname, O_RDONLY);
+		    assert(read_here >= 0);
 		    //char buf[10000];
                     char * buf = (char *)toku_xmalloc(10000 * sizeof(char));
-		    int buflen = fread(buf, 1, 10000-1, read_here);
+		    int buflen = read(read_here, buf, 10000-1);
 		    assert(buflen>=0);
 		    buf[buflen]=0;
 		    if (do_errfile) {
 			if (do_errpfx) {
 			    assert(strncmp(buf,"whoopi:",6)==0);
 			} else {
-			    assert(buf[0]!=0); 
+                            printf("Buflen was %d\n", buflen);
+			    assert(buf[0]!=0);
 			    assert(buf[0]!=':');
 			}
 			assert(buf[strlen(buf)-1]=='\n');
@@ -171,7 +172,7 @@ int test_test_error(void) {
 		    } else {
 			assert(n_handle_error==0);
 		    }
-		    fclose(read_here);
+		    close(read_here);
                     toku_free(buf);
 		}
                 r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0);

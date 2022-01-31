@@ -166,7 +166,7 @@ static void test3 (void)
 	char *data = (char *)toku_xmalloc(datalen * sizeof(*data));
 	for (int i=0; i<datalen; i++) data[i]=random();
 	for (int off=0; off<32; off++) {
-		if (VERBOSE) {printf("."); fflush(stdout);}
+                if (VERBOSE) {printf("."); }
 		for (int len=0; len+off<datalen; len++) {
 			uint32_t reference_sum = x1764_memory_simple(data+off, len);
 			uint32_t fast_sum      = x1764_memory       (data+off, len);
@@ -177,7 +177,7 @@ static void test3 (void)
 }
 
 extern "C" int test_x1764 (void);
-int test_x1764 (void) 
+int test_x1764 (void)
 {
 	initialize_dummymsn();
         int rinit = toku_ft_layer_init();

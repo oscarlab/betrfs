@@ -24,22 +24,14 @@
 *.out
 *.app
 
-*.py[cod]
-
-# Tags
-GPATH
-GRTAGS
-GTAGS
-TAGS
-tags
-
-# Common symlinks used in compiling
-third_party/jemalloc
+# Gcov data files
+*.gcno
+*.gcda
 
 # build dir
 build
 
-#cscope
+# cscope
 cscope.*
 
 # backups
@@ -50,3 +42,12 @@ cscope.*
 *.log
 *.csv
 *.cmd
+
+# kernel directories created by xfstests and create-test-env.sh
+linux-*/
+
+# macOS Finder metadata
+.DS_Store
+
+# IDE files
+.vscode/

@@ -138,8 +138,8 @@ static void test_loader(DB **dbs)
     DB_LOADER *loader;
     uint32_t db_flags[NUM_DBS];
     uint32_t dbt_flags[NUM_DBS];
-    for(int i=0;i<NUM_DBS;i++) { 
-        db_flags[i] = DB_NOOVERWRITE; 
+    for(int i=0;i<NUM_DBS;i++) {
+        db_flags[i] = DB_NOOVERWRITE;
         dbt_flags[i] = 0;
     }
     uint32_t loader_flags = DISALLOW_PUTS | COMPRESS; // set with -p option
@@ -153,7 +153,7 @@ static void test_loader(DB **dbs)
     CKERR(r);
     r = loader->set_poll_function(loader, NULL, NULL);
     CKERR(r);
-    
+
 /*    // using loader->put, put values into DB
     DBT key, val;
     for(int i=0;i<NUM_KV_PAIRS;i++) {
@@ -183,11 +183,11 @@ static void test_loader(DB **dbs)
         r = dbs[j]->cursor(dbs[j], txn, &cursor, 0);
         CKERR(r);
         for(int i=0;i<NUM_KV_PAIRS;i++) {
-            r = cursor->c_get(cursor, &key, &val, DB_NEXT);    
+            r = cursor->c_get(cursor, &key, &val, DB_NEXT);
             if (DISALLOW_PUTS) {
                 CKERR2(r, DB_NOTFOUND);
             } else {
-                if (r!=0) { fprintf(stderr, "r==%d, failure\n", r); }
+                if (r!=0) { dprintf(STDERR, "r==%d, failure\n", r); }
                 CKERR(r);
                 assert(*(int64_t*)key.data == kv_pairs[i].key);
                 assert(*(int64_t*)val.data == kv_pairs[i].val);
@@ -202,7 +202,7 @@ static void test_loader(DB **dbs)
     printf("PASS\n");
 }
 
-static void run_test(void) 
+static void run_test(void)
 {
     int r;
     char rmcmd[32 + strlen(envdir)];
@@ -217,7 +217,7 @@ static void run_test(void)
 //    int envflags = DB_INIT_LOCK | DB_INIT_MPOOL | DB_INIT_TXN | DB_CREATE | DB_PRIVATE | DB_INIT_LOG;
     int envflags = DB_INIT_LOCK | DB_INIT_LOG | DB_INIT_MPOOL | DB_INIT_TXN | DB_CREATE | DB_PRIVATE | DB_INIT_LOG;
     r = env->open(env, envdir, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                                            CKERR(r);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     //Disable auto-checkpointing
     r = env->checkpointing_set_period(env, 0);                                                                CKERR(r);
 
@@ -271,7 +271,7 @@ static void do_args(int argc, char * const argv[]) {
         } else if (strcmp(argv[0], "-h")==0) {
 	    resultcode=0;
 	do_usage:
-	    fprintf(stderr, "Usage:\n%s\n", cmd);
+	    dprintf(STDERR, "Usage:\n%s\n", cmd);
 	    exit(resultcode);
         } else if (strcmp(argv[0], "-v")==0) {
 	    verbose++;
@@ -287,7 +287,7 @@ static void do_args(int argc, char * const argv[]) {
             if (argc > 0)
                 envdir = argv[0];
 	} else {
-	    fprintf(stderr, "Unknown arg: %s\n", argv[0]);
+	    dprintf(STDERR, "Unknown arg: %s\n", argv[0]);
 	    resultcode=1;
 	    goto do_usage;
 	}

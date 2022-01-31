@@ -124,15 +124,15 @@ static void cachetable_prefetch_maybegetandpin_test (void) {
 
     CACHEFILE f1;
     r = toku_cachetable_openf(&f1, ct, fname1, O_RDWR|O_CREAT, S_IRWXU|S_IRWXG|S_IRWXO); assert(r == 0);
-	
+
     // prefetch block 0. this will take 10 seconds.
 
     CACHEKEY key = make_blocknum(0);
     uint32_t fullhash = toku_cachetable_hash(f1, make_blocknum(0));
     CACHETABLE_WRITE_CALLBACK wc = def_write_callback(NULL);
-   
+
    r = toku_cachefile_prefetch(f1, key, fullhash, wc, fetch, def_pf_req_callback, def_pf_callback, 0, NULL);
-   
+
 	 /*
 	toku_cachetable_verify(ct);
     // verify that maybe_get_and_pin returns an error while the prefetch is in progress
@@ -159,6 +159,9 @@ static void cachetable_prefetch_maybegetandpin_test (void) {
 extern "C" int test_cachetable_prefetch_maybegetandpin(void);
 
 int test_cachetable_prefetch_maybegetandpin(void) {
+    int rinit = toku_ft_layer_init();
+    CKERR(rinit);
     cachetable_prefetch_maybegetandpin_test();
+    toku_ft_layer_destroy();
     return 0;
 }

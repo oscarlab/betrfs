@@ -36,10 +36,10 @@ typedef long (* sys_getrlimit_t) (unsigned int, struct rlimit *);
 DECLARE_SYMBOL_FTFS(sys_newlstat);
 DECLARE_SYMBOL_FTFS(sys_setrlimit);
 DECLARE_SYMBOL_FTFS(sys_getrlimit);
-#else
+#else /* LINUX_VERSION_CODE */
 typedef long (* do_prlimit_t) (struct task_struct*, unsigned int, struct rlimit*, struct rlimit*);
 DECLARE_SYMBOL_FTFS(do_prlimit);
-#endif
+#endif /* LINUX_VERSION_CODE */
 
 int resolve_toku_misc_symbols(void)
 {
@@ -47,9 +47,9 @@ int resolve_toku_misc_symbols(void)
 	LOOKUP_SYMBOL_FTFS(sys_newlstat);
 	LOOKUP_SYMBOL_FTFS(sys_setrlimit);
 	LOOKUP_SYMBOL_FTFS(sys_getrlimit);
-#else
+#else /* LINUX_VERSION_CODE */
 	LOOKUP_SYMBOL_FTFS(do_prlimit);
-#endif
+#endif /* LINUX_VERSION_CODE */
 	return 0;
 }
 
@@ -101,21 +101,6 @@ int toku_os_get_processor_frequency(uint64_t* hzret){
     return r;
 }
 
-extern bool toku_huge_pages_ok;
-bool toku_huge_pages_ok = false;
-//passed as module parameter, getenv is no longer needed.
-extern bool check_huge_pages_in_practice(void);
-bool complain_and_return_true_if_huge_pages_are_enabled(void){
-    if(toku_huge_pages_ok) {
-        return false;
-    } else {
-        #ifdef CONFIG_TRANSPARENT_HUGEPAGE_ALWAYS
-        return true;
-        #else
-        return check_huge_pages_in_practice();
-        #endif
-    }
-}
 /*the following three mem funcs are for check_huge_pages_in_practice()*/
 void * mmap(void *addr, size_t len, int prot, int flags,int fd, off_t offset){
     struct file * file  = NULL;
@@ -204,9 +189,9 @@ int setrlimit64(int resource, struct rlimit *rlim)
 	set_fs(get_ds());
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
 	ret = ftfs_sys_setrlimit(resource, rlim);
-#else
+#else /* LINUX_VERSION_CODE */
 	ret = ftfs_do_prlimit(current, resource, rlim, NULL);
-#endif
+#endif /* LINUX_VERSION_CODE */
 	set_fs(saved);
 	return ret;
 }
@@ -220,9 +205,9 @@ int getrlimit64(int resource, struct rlimit *rlim)
 	set_fs(get_ds());
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
 	ret = ftfs_sys_getrlimit(resource, rlim);
-#else
+#else /* LINUX_VERSION_CODE */
 	ret = ftfs_do_prlimit(current, resource, NULL, rlim);
-#endif
+#endif /* LINUX_VERSION_CODE */
 	set_fs(saved);
 
 	return ret;

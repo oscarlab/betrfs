@@ -204,6 +204,7 @@ struct __db_dbt {
 #define	DB_DBT_REALLOC		0x040	/* Return in realloc'd memory. */
 #define	DB_DBT_USERCOPY		0x080	/* Use the user-supplied callback. */
 #define	DB_DBT_USERMEM		0x100	/* Return in user's memory. */
+#define	DB_DBT_INDIRECT		0x200	/* Return indirect value. */
 	uint32_t flags;
 };
 

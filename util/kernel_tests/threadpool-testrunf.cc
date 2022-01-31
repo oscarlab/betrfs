@@ -116,7 +116,7 @@ static void dotest(int poolsize, int nloops) {
     }
 
     if (verbose)
-        toku_thread_pool_print(pool, stderr);
+        toku_thread_pool_print(pool, STDERR);
     toku_thread_pool_destroy(&pool);
 }
 
@@ -127,8 +127,8 @@ int test_threadpool_runf() {
     int nloops = 100000;
 
     dotest(poolsize, nloops);
-    printf("\n Passed test poolsize = 1, nloops = 100000");    
-    
+    printf("\n Passed test poolsize = 1, nloops = 100000");
+
     poolsize = 2;
     dotest(poolsize, nloops);
     printf("\n Passed test poolsize = 2, nloops = 100000");

@@ -109,7 +109,7 @@ static const char *db_error(int error) {
     static char errorbuf[32];
     switch (error) {
     case DB_NOTFOUND: return "DB_NOTFOUND";
-    case DB_LOCK_DEADLOCK: return "DB_LOCK_DEADLOCK"; 
+    case DB_LOCK_DEADLOCK: return "DB_LOCK_DEADLOCK";
     case DB_LOCK_NOTGRANTED: return "DB_LOCK_NOTGRANTED";
     case DB_KEYEXIST: return "DB_KEYEXIST";
     default:
@@ -134,10 +134,10 @@ test_txn_cursor_last_1 (int nrows) {
 
     /* create the dup database file */
     r = db_env_create(&env, 0);        assert(r == 0);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE|DB_INIT_MPOOL|DB_INIT_TXN|DB_INIT_LOCK|DB_INIT_LOG |DB_THREAD |DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r = db_create(&db, env, 0); assert(r == 0);
-    db->set_errfile(db,stderr); // Turn off those annoying errors
+    db->set_errfile(db, STDERR); // Turn off those annoying errors
     r = db->open(db, null_txn, fname, NULL, DB_BTREE, DB_CREATE+DB_AUTO_COMMIT, 0666); assert(r == 0);
     int i;
     for (i=0; i<nrows; i++) {
@@ -145,9 +145,9 @@ test_txn_cursor_last_1 (int nrows) {
         int v = htonl(i);
         DBT key, val;
         r = db->put(db, null_txn, dbt_init(&key, &k, sizeof k), dbt_init(&val, &v, sizeof v), 0);
-        assert(r == 0); 
+        assert(r == 0);
     }
-   
+
     DB_TXN *t1;
     r = env->txn_begin(env, null_txn, &t1, 0); assert(r == 0);
     if (verbose) printf("t1:begin\n");
@@ -183,7 +183,7 @@ test_txn_cursor_last_1 (int nrows) {
     if (verbose) printf("t2:put:%s\n", db_error(r2));
 
     if (r1 == 0) {
-        r = t1->commit(t1, 0); 
+        r = t1->commit(t1, 0);
         if (verbose) printf("t1:commit:%s\n", db_error(r));
     } else {
         r = t1->abort(t1);
@@ -217,10 +217,10 @@ test_txn_cursor_last_2 (int nrows) {
 
     /* create the dup database file */
     r = db_env_create(&env, 0);        assert(r == 0);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r = env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_CREATE|DB_INIT_MPOOL|DB_INIT_TXN|DB_INIT_LOCK|DB_INIT_LOG|DB_THREAD|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r = db_create(&db, env, 0); assert(r == 0);
-    db->set_errfile(db,stderr); // Turn off those annoying errors
+    db->set_errfile(db, STDERR); // Turn off those annoying errors
     r = db->open(db, null_txn, fname, NULL, DB_BTREE, DB_CREATE+DB_AUTO_COMMIT, 0666); assert(r == 0);
     int i;
     for (i=0; i<nrows; i++) {
@@ -228,9 +228,9 @@ test_txn_cursor_last_2 (int nrows) {
         int v = htonl(i);
         DBT key, val;
         r = db->put(db, null_txn, dbt_init(&key, &k, sizeof k), dbt_init(&val, &v, sizeof v), 0);
-        assert(r == 0); 
+        assert(r == 0);
     }
-   
+
     DB_TXN *t1;
     r = env->txn_begin(env, null_txn, &t1, 0); assert(r == 0);
     if (verbose) printf("t1:begin\n");
@@ -263,7 +263,7 @@ test_txn_cursor_last_2 (int nrows) {
     r = c2->c_close(c2); assert(r == 0);
 
     if (r1 == 0) {
-        r = t1->commit(t1, 0); 
+        r = t1->commit(t1, 0);
         if (verbose) printf("t1:commit:%s\n", db_error(r));
     } else {
         r = t1->abort(t1);

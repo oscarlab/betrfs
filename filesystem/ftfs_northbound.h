@@ -18,6 +18,7 @@
 #include "ftfs.h"
 #include "tokudb.h"
 #include "sb_malloc.h"
+#include "ftfs_indirect_val.h"
 
 #define HOT_FLUSH_THRESHOLD 1 << 14
 
@@ -30,6 +31,22 @@
 #define DB_CURSOR_FLAGS 0
 #define DB_RENAME_FLAGS 0
 #define DB_CLONE_FLAGS  0
+
+/* Special key delimiters.  We use non-printable characters to encode a bit
+ * of additional metadata, so that we can still use memcmp, but have the keys
+ * in the desired order.
+ *
+ * Specifically, this ordering puts xattrs immediately after the stat struct
+ * for the file, but before children in a subdirectory.  We assume the most
+ * likely usage pattern is that xattrs would be queried immediately after
+ * a stat() of the file.
+ */
+#define FTFS_NULL_CHAR '\x00'
+#define FTFS_SLASH_CHAR '\x01'
+
+#ifdef FTFS_XATTR
+#define NB_BSTORE_XATTR_DELIMITER '\xfe'
+#endif /* End of FTFS_XATTR */
 
 #define COMMIT_JUMP_ON_CONFLICT(err, label)				\
 	if (err) {							\
@@ -47,6 +64,7 @@
 
 int init_ftfs_fs(void);
 void exit_ftfs_fs(void);
+
 
 #define FTFS_BSTORE_BLOCKSIZE_BITS	PAGE_SHIFT
 #define FTFS_BSTORE_BLOCKSIZE		PAGE_SIZE
@@ -75,6 +93,7 @@ void exit_ftfs_fs(void);
 
 #define LARGE_IO_THRESHOLD 256
 
+
 #define FTFS_DEFAULT_CIRCLE 128
 #define FTFS_INO_INC        1000
 
@@ -100,13 +119,37 @@ struct ftfs_inode {
 	DBT meta_dbt;
 	struct list_head rename_locked;
 	uint64_t ftfs_flags;
-	/* the number of pages requests
-	 * in last range query
-	 */
+#ifdef FTFS_XATTR
+	uint64_t xattr_exists;
+#endif /*End of FTFS_XATTR */
+	/* the number of page requests in last range query */
 	uint32_t last_nr_pages;
 	/* offset of the last range query */
 	uint64_t last_offset;
+	/* connect this inode with other inodes in the hashtable */
 };
+
+static inline DBT *nb_get_read_lock(struct ftfs_inode *f_inode)
+{
+	down_read(&f_inode->key_lock);
+	return &f_inode->meta_dbt;
+}
+
+static inline void nb_put_read_lock(struct ftfs_inode *f_inode)
+{
+	up_read(&f_inode->key_lock);
+}
+
+static inline DBT *nb_get_write_lock(struct ftfs_inode *f_inode)
+{
+	down_write(&f_inode->key_lock);
+	return &f_inode->meta_dbt;
+}
+
+static inline void nb_put_write_lock(struct ftfs_inode *f_inode)
+{
+	up_write(&f_inode->key_lock);
+}
 
 #define FTFS_FLAG_DELETED ((uint64_t)(1 << 0))
 
@@ -229,7 +272,8 @@ alloc_data_dbt_from_meta_dbt(DBT *data_dbt, DBT *meta_dbt, uint64_t block_num)
 	size_t size;
 
 	size = meta_dbt->size + DATA_META_KEY_SIZE_DIFF;
-	data_key = sb_malloc(size);
+	BUG_ON(size > FTFS_KMALLOC_MAX_SIZE);
+	data_key = kmalloc(size, GFP_KERNEL);
 	if (data_key == NULL)
 		return -ENOMEM;
 	strcpy(nb_key_path(data_key), nb_key_path(meta_key));
@@ -394,9 +438,6 @@ int nb_bstore_get_ino(DB *meta_db, DB_TXN *txn, ino_t *ino);
 /* Functions in nb_sbtore.c */
 int nb_bstore_update_ino(DB *meta_db, DB_TXN *txn, ino_t ino);
 
-//int ftfs_bstore_data_hot_flush(DB *data_db, struct ftfs_meta_key *meta_key,
-//                               uint64_t start, uint64_t end);
-
 int nb_bstore_env_open(struct ftfs_sb_info *sbi);
 int nb_bstore_env_close(struct ftfs_sb_info *sbi);
 
@@ -405,14 +446,30 @@ int nb_bstore_meta_get(DB *meta_db, DBT *meta_dbt, DB_TXN *txn,
 int nb_bstore_meta_put(DB *meta_db, DBT *meta_dbt, DB_TXN *txn,
 		       struct ftfs_metadata *metadata);
 int nb_bstore_meta_del(DB *meta_db, DBT *meta_dbt, DB_TXN *txn);
-int nb_bstore_meta_readdir(DB *meta_db, DBT *meta_dbt, DB_TXN *txn,
+int nb_bstore_meta_readdir(struct super_block *sb, struct dentry *parent,
+			   DB *meta_db, DBT *meta_dbt, DB_TXN *txn,
 			   struct dir_context *ctx);
+#ifdef FTFS_XATTR
+ssize_t nb_bstore_xattr_get(DB *meta_db, DBT *meta_dbt, DB_TXN *txn,
+			void *buf, size_t size);
+int nb_bstore_xattr_put(DB *meta_db, DBT *meta_dbt, DB_TXN *txn,
+			const void *buf, size_t len);
+int nb_bstore_xattr_list(DB *meta_db, DBT *meta_dbt, DB_TXN *txn,
+			char *buffer, size_t size, ssize_t *offset);
+int nb_bstore_xattr_move(DB *meta_db, DBT *old_meta_dbt,
+			DBT *new_meta_dbt, DB_TXN *txn);
+int nb_bstore_xattr_del(DB *meta_db, DBT *meta_dbt, DB_TXN *);
+
+int
+copy_xattr_dbt_from_meta_dbt(DBT *xattr_dbt, DBT *meta_dbt, const char *name, bool alloc);
+#endif /* End of FTFS_XATTR */
 
 int nb_bstore_get(DB *data_db, DBT *data_dbt, DB_TXN *txn, void *buf);
 int nb_bstore_put(DB *data_db, DBT *data_dbt, DB_TXN *txn,
 		  const void *buf, size_t len, int is_seq);
 int nb_bstore_update(DB *data_db, DBT *data_dbt, DB_TXN *txn,
 		     const void *buf, size_t size, loff_t offset);
+
 // truncate a file in data_db (we dont do extend-like falloc in our truncate),
 // preserve offset bytes in block new_num, (offset == 0) means delete that block
 int nb_bstore_trunc(DB *data_db, DBT *meta_dbt, DB_TXN *txn,
@@ -448,6 +505,29 @@ nb_bstore_get_move_type(struct ftfs_metadata *meta)
 int nb_bstore_move(DB *meta_db, DB *data_db,
 		   DBT *old_meta_dbt, DBT *new_meta_dbt,
 		   DB_TXN *txn, enum ftfs_bstore_move_type type);
+
+int nb_bstore_put_indirect_page(DB *data_db, DBT *data_dbt,
+				  DB_TXN *txn, struct ftfs_indirect_val *msg_val);
+
+struct inode *nb_setup_inode(struct super_block *sb, DBT *meta_dbt,
+			     struct ftfs_metadata *meta);
+
+#ifdef FT_INDIRECT
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,99)
+int resolve_nb_readahead_symbols(void);
+#endif /* LINUX_VERSION_CODE */
+int resolve_sb_pfn_symbols(void);
+int resolve_nb_super_symbols(void);
+/* implemented in nb_bstore.c */
+int alloc_data_dbt_from_meta_dbt(DBT *data_dbt, DBT *meta_dbt, uint64_t block_num);
+
+#ifdef TOKU_MEMLEAK_DETECT
+void ftfs_print_free_page_counter(void);
+#else
+#define ftfs_print_free_page_counter() do {} while(0)
+#endif
+
+#endif
 
 // XXX: these 3 functions shouldn't be used any more if we want to mount
 // multiple ftfs. They are kept here for southbound proc filesystems.

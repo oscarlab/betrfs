@@ -102,13 +102,13 @@ static const int OPER_STEPS = 6;
 
 static const int ITERATIONS_PER_CRASH_IN_RECOVERY = 7;
 
-typedef enum __recovery_stress_steps 
+typedef enum __recovery_stress_steps
 {
-    PRE_PRE_STEP = 0, 
-    PRE_CP_STEP, 
-    PRE_POST_STEP, 
-    CP_CP_STEP, 
-    CP_POST_STEP, 
+    PRE_PRE_STEP = 0,
+    PRE_CP_STEP,
+    PRE_POST_STEP,
+    CP_CP_STEP,
+    CP_POST_STEP,
     POST_POST_STEP
 } STEP;
 //const int OPER_PER_STEP = 331;
@@ -126,21 +126,16 @@ static void
 drop_dead(void) {
     // deliberate zerodivide or sigsegv
 #if 0
-    fprintf(stderr, "HAPPY CRASH\n");
+    dprintf(STDERR, "HAPPY CRASH\n");
 #endif
-    fflush(stdout);
-    fflush(stderr);
     int zero = 0;
     int infinity = 1/zero;
     printf("Survived zerodivide!\n");
-    fflush(stdout);
     printf("Infinity = %d\n", infinity);
-    fflush(stdout);
     void * intothevoid = NULL;
     (*(int*)intothevoid)++;
     printf("intothevoid = %p, infinity = %d\n", intothevoid, infinity);
     printf("This line should never be printed\n");
-    fflush(stdout);
 }
 
 static void drop_dead_callback_f(void *dummy UU()) {
@@ -156,7 +151,7 @@ static void verify (DICTIONARY dictionaries, int iter) {
         if (iter == 1) {
             key = firstkey(iter - 1, 0);
             verify_sequential_rows(db, key, OPER_PER_ITER);
-        } 
+        }
         else if (iter == 2) {
             key = firstkey(iter - 2, 0);
             verify_sequential_rows(db, key, OPER_PER_ITER * 2);
@@ -239,10 +234,10 @@ static void pre_checkpoint_acts(ITER_SPEC spec) {
         // begin pre, commit cp, post
         key = firstkey(iter, PRE_CP_STEP);
         r = env->txn_begin(env, NULL, &spec->pre_cp_insert_commit, 0);                CKERR(r);
-        insert_n_fixed(db, NULL, spec->pre_cp_insert_commit, key, OPER_PER_STEP); 
+        insert_n_fixed(db, NULL, spec->pre_cp_insert_commit, key, OPER_PER_STEP);
         key = firstkey(iter, PRE_POST_STEP);
         r = env->txn_begin(env, NULL, &spec->pre_post_insert_commit, 0);              CKERR(r);
-        insert_n_fixed(db, NULL, spec->pre_post_insert_commit, key, OPER_PER_STEP);           
+        insert_n_fixed(db, NULL, spec->pre_post_insert_commit, key, OPER_PER_STEP);
 
 
         // ---- ABORTED INSERTIONS THAT WOULD OVERWRITE PREVIOUS ITERATION ----
@@ -304,10 +299,10 @@ static void pre_checkpoint_acts(ITER_SPEC spec) {
             // begin pre, commit cp, post
             key = firstkey(iter - 5, PRE_CP_STEP);
             r = env->txn_begin(env, NULL, &spec->pre_cp_delete_commit, 0);                CKERR(r);
-            delete_n(db, NULL, spec->pre_cp_delete_commit, key, OPER_PER_STEP, 0); 
+            delete_n(db, NULL, spec->pre_cp_delete_commit, key, OPER_PER_STEP, 0);
             key = firstkey(iter - 5, PRE_POST_STEP);
             r = env->txn_begin(env, NULL, &spec->pre_post_delete_commit, 0);              CKERR(r);
-            delete_n(db, NULL, spec->pre_post_delete_commit, key, OPER_PER_STEP, 0);           
+            delete_n(db, NULL, spec->pre_post_delete_commit, key, OPER_PER_STEP, 0);
         }
     }
     return;
@@ -335,7 +330,7 @@ static void checkpoint_acts(ITER_SPEC spec) {
         // begin cp, commit post
         key = firstkey(iter, CP_POST_STEP);
         r = env->txn_begin(env, NULL, &spec->cp_post_insert_commit, 0);              CKERR(r);
-        insert_n_fixed(db, NULL, spec->cp_post_insert_commit, key, OPER_PER_STEP);           
+        insert_n_fixed(db, NULL, spec->cp_post_insert_commit, key, OPER_PER_STEP);
 
         // ---- ABORTED INSERTIONS THAT WOULD OVERWRITE PREVIOUS ITERATION ----
         if ( iter > 0 ) {
@@ -396,7 +391,7 @@ static void checkpoint_acts(ITER_SPEC spec) {
             // begin cp, commit post
             key = firstkey(iter - 5, CP_POST_STEP);
             r = env->txn_begin(env, NULL, &spec->cp_post_delete_commit, 0);              CKERR(r);
-            delete_n(db, NULL, spec->cp_post_delete_commit, key, OPER_PER_STEP, 0);           
+            delete_n(db, NULL, spec->cp_post_delete_commit, key, OPER_PER_STEP, 0);
         }
     }
     return;
@@ -488,7 +483,7 @@ static void run_test (int iter) {
 
     if (iter == 0)
 	dir_create(TOKU_TEST_FILENAME);  // create directory if first time through
-    
+
     // Run with cachesize of 256 bytes per iteration
     // to force lots of disk I/O
     // (each iteration inserts about 4K rows/dictionary, 16 bytes/row, 4 dictionaries = 256K bytes inserted per iteration)
@@ -499,7 +494,7 @@ static void run_test (int iter) {
         cachebytes = 0;
     if (iter & 2) cachebytes = 0;       // use default cachesize half the time
 
-    
+
     if (verbose) printf("%s: iter = %d\n", __FILE__, iter);
 
     int recovery_flags = DB_INIT_LOG|DB_INIT_TXN;
@@ -512,7 +507,7 @@ static void run_test (int iter) {
         // every N cycles, crash in recovery
         if ( (iter % ITERATIONS_PER_CRASH_IN_RECOVERY) == 0 ) {
             // crash at different places in recovery
-            if ( iter & 1 ) 
+            if ( iter & 1 )
                 db_env_set_recover_callback(drop_dead_callback_f, NULL);
             else
                 db_env_set_recover_callback2(drop_dead_callback_f, NULL);
@@ -552,7 +547,7 @@ static void run_test (int iter) {
 
     // perform checkpoint acts
     spec.step = CP_CP_STEP;
-    if ( iter & 1 ) 
+    if ( iter & 1 )
         db_env_set_checkpoint_callback((void (*)(void*))checkpoint_acts, &spec);
     else
         db_env_set_checkpoint_callback2((void (*)(void*))checkpoint_acts, &spec);
@@ -586,7 +581,7 @@ static void run_test (int iter) {
 	usleep(delay);        // ... to sleep up to one second (1M usec)
 	drop_dead();
     }
-    
+
     for (i = 0; i < NUM_DICTIONARIES; i++) {
         db_shutdown(&dictionaries[i]);
     }
@@ -619,13 +614,13 @@ static void do_args(int argc, char *const argv[]) {
 	} else if (strcmp(argv[0], "-h")==0) {
 	    resultcode=0;
 	do_usage:
-	    fprintf(stderr, "Usage:\n%s [-v|-q]* [-h] [-i] [-C] \n", cmd);
+	    dprintf(STDERR, "Usage:\n%s [-v|-q]* [-h] [-i] [-C] \n", cmd);
 	    exit(resultcode);
 	} else if (strcmp(argv[0], "-i")==0) {
             argc--; argv++;
             iter_arg = atoi(argv[0]);
 	} else {
-	    fprintf(stderr, "Unknown arg: %s\n", argv[0]);
+	    dprintf(STDERR, "Unknown arg: %s\n", argv[0]);
 	    resultcode=1;
 	    goto do_usage;
 	}
@@ -633,4 +628,3 @@ static void do_args(int argc, char *const argv[]) {
 	argv++;
     }
 }
-

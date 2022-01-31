@@ -125,7 +125,7 @@ PATENT RIGHTS GRANT:
 #include <db.h>
 
 static DB_ENV *env;
-static FILE *error_file = NULL;
+static int error_file = 0;
 
 static void
 setup (void) {
@@ -134,12 +134,12 @@ setup (void) {
 
     if (verbose==0) {
         char errfname[TOKU_PATH_MAX+1];
-	error_file = fopen(toku_path_join(errfname, 2, TOKU_TEST_ENV_DIR_NAME, "stderr"), "w");                             assert(error_file);
+	error_file = open(toku_path_join(errfname, 2, TOKU_TEST_ENV_DIR_NAME, "stderr"), O_WRONLY);                             assert(error_file);
     }
-    else error_file = stderr;
+    else error_file = STDERR;
 
     r=db_env_create(&env, 0); CKERR(r);
-    env->set_errfile(env, error_file ? error_file : stderr);
+    env->set_errfile(env, error_file ? error_file : STDERR);
     r=env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
 }
 
@@ -150,8 +150,8 @@ test_shutdown(void) {
     int r;
     r=env->close(env, 0); CKERR(r);
     if (verbose==0) {
-        fclose(error_file);
-        error_file = NULL;
+        close(error_file);
+        error_file = 0;
     }
 }
 
@@ -165,22 +165,22 @@ create_abcd(void) {
     DB * db_b;
     DB * db_c;
     DB * db_d;
-    
+
     r=env->txn_begin(env, 0, &txn, 0); CKERR(r);
     r=db_create(&db_a, env, 0); CKERR(r);
     r=db_create(&db_b, env, 0); CKERR(r);
     r=db_create(&db_c, env, 0); CKERR(r);
     r=db_create(&db_d, env, 0); CKERR(r);
-    
+
     r=db_a->open(db_a, txn, "a.db", 0, DB_BTREE, DB_CREATE, S_IRWXU|S_IRWXG|S_IRWXO); CKERR(r);
     r=db_b->open(db_b, txn, "b.db", 0, DB_BTREE, DB_CREATE, S_IRWXU|S_IRWXG|S_IRWXO); CKERR(r);
     r=db_c->open(db_c, txn, "c.db", 0, DB_BTREE, DB_CREATE, S_IRWXU|S_IRWXG|S_IRWXO); CKERR(r);
     r=db_d->open(db_d, txn, "d.db", 0, DB_BTREE, DB_CREATE, S_IRWXU|S_IRWXG|S_IRWXO); CKERR(r);
-    
+
     r=db_a->close(db_a, 0); CKERR(r);
     r=db_b->close(db_b, 0); CKERR(r);
     r=db_c->close(db_c, 0); CKERR(r);
-    
+
     r=txn->commit(txn, 0); CKERR(r);
 
     r=db_d->close(db_d, 0); CKERR(r); //Should work whether close is before or after commit.  Do one after.
@@ -219,7 +219,7 @@ verify_abcd(void) {
     DB * db_d;
     DB * db_x;
     DB * db_c2;
-    
+
     r=env->txn_begin(env, NULL, &txn, 0); CKERR(r);
     r=db_create(&db_a, env, 0); CKERR(r);
     r=db_create(&db_b, env, 0); CKERR(r);
@@ -227,7 +227,7 @@ verify_abcd(void) {
     r=db_create(&db_d, env, 0); CKERR(r);
     r=db_create(&db_x, env, 0); CKERR(r);
     r=db_create(&db_c2, env, 0); CKERR(r);
-    
+
     // should exist:
     r=db_a->open(db_a, txn, "a.db", 0, DB_BTREE, 0, S_IRWXU|S_IRWXG|S_IRWXO); CKERR(r);
     r=db_b->open(db_b, txn, "b.db", 0, DB_BTREE, 0, S_IRWXU|S_IRWXG|S_IRWXO); CKERR(r);
@@ -244,7 +244,7 @@ verify_abcd(void) {
     r=db_d->close(db_d, 0); CKERR(r);
     r=db_x->close(db_x, 0); CKERR(r);
     r=db_c2->close(db_c2, 0); CKERR(r);
-    
+
     r=txn->commit(txn, 0); CKERR(r);
 }
 
@@ -265,7 +265,7 @@ verify_ac2dx(DB_TXN * parent_txn) {
     DB * db_d;
     DB * db_x;
     DB * db_c2;
-    
+
     r=env->txn_begin(env, parent_txn, &txn, 0); CKERR(r);
     r=db_create(&db_a, env, 0);  CKERR(r);
     r=db_create(&db_b, env, 0);  CKERR(r);
@@ -273,7 +273,7 @@ verify_ac2dx(DB_TXN * parent_txn) {
     r=db_create(&db_d, env, 0);  CKERR(r);
     r=db_create(&db_x, env, 0);  CKERR(r);
     r=db_create(&db_c2, env, 0); CKERR(r);
-    
+
     // should exist:
     r=db_a->open(db_a, txn, "a.db", 0, DB_BTREE, 0, S_IRWXU|S_IRWXG|S_IRWXO);    CKERR(r);
     r=db_c2->open(db_c2, txn, "c2.db", 0, DB_BTREE, 0, S_IRWXU|S_IRWXG|S_IRWXO); CKERR(r);
@@ -290,7 +290,7 @@ verify_ac2dx(DB_TXN * parent_txn) {
     r=db_d->close(db_d, 0);   CKERR(r);
     r=db_x->close(db_x, 0);   CKERR(r);
     r=db_c2->close(db_c2, 0); CKERR(r);
-    
+
     r=txn->commit(txn, 0); CKERR(r);
 }
 
@@ -309,7 +309,7 @@ test_fileops_1(void) {
     r=txn->abort(txn); CKERR(r);
 
     // verify that aborted transaction changed nothing
-    verify_abcd(); 
+    verify_abcd();
 
     r=env->txn_begin(env, 0, &txn, 0); CKERR(r);
     perform_ops(txn);
@@ -330,7 +330,7 @@ verify_locked_open(const char * name) {
 
     r=env->txn_begin(env, 0, &txn, 0); CKERR(r);
     r=db_create(&db, env, 0); CKERR(r);
-    r=db->open(db, txn, name, 0, DB_BTREE, DB_CREATE, S_IRWXU|S_IRWXG|S_IRWXO); 
+    r=db->open(db, txn, name, 0, DB_BTREE, DB_CREATE, S_IRWXU|S_IRWXG|S_IRWXO);
     CKERR2(r, DB_LOCK_NOTGRANTED);
     r=db->close(db, 0); CKERR(r);  // always safe to close
     r=txn->abort(txn); CKERR(r);
@@ -353,13 +353,13 @@ verify_locked_rename(const char * oldname, const char * newname) {
     DB_TXN * txn;
 
     r=env->txn_begin(env, 0, &txn, 0); CKERR(r);
-    r = env->dbrename(env, txn, oldname, NULL, newname, 0); 
+    r = env->dbrename(env, txn, oldname, NULL, newname, 0);
     CKERR2(r, DB_LOCK_NOTGRANTED);
     r=txn->abort(txn); CKERR(r);
 }
 
 
-// Purpose of test_fileops_2() is to verify correct operation of 
+// Purpose of test_fileops_2() is to verify correct operation of
 // directory range locks.  It should not be possible to open or
 // rename or remove a dictionary that is marked for removal or
 // rename by another open transaction.
@@ -398,7 +398,7 @@ test_fileops_2(void) {
 	r=db_e->close(db_e, 0);   CKERR(r);  // abort requires db be closed first
 	r=db_x2->close(db_x2, 0); CKERR(r);  // abort requires db be closed first
 	r=db_c3->close(db_c3, 0); CKERR(r);  // abort requires db be closed first
-	
+
     }
 
     // within another transaction:
@@ -441,7 +441,7 @@ test_fileops_2(void) {
 
 
     r=txn_a->abort(txn_a); CKERR(r);
-    
+
 }
 
 
@@ -461,28 +461,28 @@ test_fileops_3(void) {
     // Verify correct error return codes when trying to
     // remove or rename an open dictionary
     r=env->txn_begin(env, 0, &txn_b, 0); CKERR(r);
-    r = env->dbremove(env, txn_b, "d.db", NULL, 0);  
+    r = env->dbremove(env, txn_b, "d.db", NULL, 0);
     CKERR2(r, EINVAL);
-    r = env->dbrename(env, txn_b, "d.db", NULL, "z.db", 0);  
+    r = env->dbrename(env, txn_b, "d.db", NULL, "z.db", 0);
     CKERR2(r, EINVAL);
-    r = env->dbrename(env, txn_b, "a.db", NULL, "d.db", 0);  
+    r = env->dbrename(env, txn_b, "a.db", NULL, "d.db", 0);
     CKERR2(r, EINVAL);
     r=db_d->close(db_d, 0); CKERR(r);
     r=txn_b->abort(txn_b); CKERR(r);
 
 
-    // verify correct error return codes when trying to 
+    // verify correct error return codes when trying to
     // remove or rename a non-existent dictionary
-    r = env->dbremove(env, txn_a, "nonexistent.db", NULL, 0);  
+    r = env->dbremove(env, txn_a, "nonexistent.db", NULL, 0);
     CKERR2(r, ENOENT);
-    r = env->dbrename(env, txn_a, "nonexistent.db", NULL, "z.db", 0);  
+    r = env->dbrename(env, txn_a, "nonexistent.db", NULL, "z.db", 0);
     CKERR2(r, ENOENT);
 
     // verify correct error return code when trying to
     // rename a dictionary to a name that already exists
-    r = env->dbrename(env, txn_a, "a.db", NULL, "d.db", 0);  
+    r = env->dbrename(env, txn_a, "a.db", NULL, "d.db", 0);
     CKERR2(r, EEXIST);
-    
+
     r=txn_a->abort(txn_a); CKERR(r);
 }
 

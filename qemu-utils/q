@@ -1,27 +1,49 @@
 #!/bin/bash
 
-if [ "$1" = "-serial" ] || [ "$2" = "-serial" ]; then
-	[ -f console.log ] && mv console.log console-last.log
-	SERIAL_APPEND="console=\"ttyS0,115200\""
-	SERIAL="-serial file:console.log"
+# this will also process the KERNEL_VERSION command-line argument
+source local-repo-params.include
+
+if [ ! -f $KERNEL ]; then
+	echo "$KERNEL does not exist."
+	echo "Check the KERNEL_VERSION parameter, and that the kernel is built."
+	exit 1
 fi
 
+# set default variables
 KVM="-enable-kvm"
 CPU="host"
+CONSOLE="console=tty1 highres=off console=ttyS0,115200"
+# This SERIAL will enable saving the kernel boot messages and dmesg by default.
+# This functionality is disabled when the -serial parameter is used.
+SERIAL="-curses -serial file:console.log"
 
-if [ "$1" = "-no-kvm" ] ||  [ "$2" = "-no-kvm" ]; then
-    KVM=""
-    CPU="qemu64"
-fi
+# rotate log (redundant if not using curses)
+[ -f console.log ] && mv console.log console-last.log
 
-CONSOLE="console=tty1 highres=off $SERIAL_APPEND"
-ROOT="root=/dev/hda rw --no-log"
+# parse command-line parameters
+while [ $# -gt 0 ]; do
+	case $1 in
+		-serial)
+			CONSOLE="console=ttyS0"
+			SERIAL="-nographic"
+			;;
+		-no-kvm)
+			KVM=""
+			CPU="qemu64"
+			;;
+		*)
+			echo $1 is not a valid parameter.
+			exit 1
+			;;
+	esac
+	shift
+done
 
+# run VM
 set -x
-
 qemu-system-x86_64 -smp 2 -cpu $CPU -m 6G \
-    -hda ./linuxdisk.raw -hdb ./ftfs-southbound.raw \
-    -kernel ../linux-3.11.10/arch/x86/boot/bzImage \
-	-append "$CONSOLE $ROOT" \
-	-curses -s $SERIAL \
-        $KVM
+	-drive file=linuxdisk-4.19.99.raw,index=0,media=disk,format=raw \
+	-drive file=ftfs-southbound.raw,index=1,media=disk,format=raw \
+	-kernel $KERNEL \
+	-append "$CONSOLE root=/dev/hda rw --no-log" \
+	-s $SERIAL $KVM

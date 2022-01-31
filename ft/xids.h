@@ -2,11 +2,11 @@
 // vim: ft=cpp:expandtab:ts=8:sw=4:softtabstop=4:
 
 /* Purpose of this file is to provide the world with everything necessary
- * to use the xids and nothing else.  
+ * to use the xids and nothing else.
  * Internal requirements of the xids logic do not belong here.
  *
  * xids is (abstractly) an immutable list of nested transaction ids, accessed only
- * via the functions in this file.  
+ * via the functions in this file.
  *
  * See design documentation for nested transactions at
  * TokuWiki/Imp/TransactionsOverview.
@@ -146,8 +146,8 @@ unsigned char *xids_get_end_of_array(XIDS xids);
 
 void wbuf_nocrc_xids(struct wbuf *wb, XIDS xids);
 
-void xids_fprintf(FILE* fp, XIDS xids);
+void xids_fprintf(int fp, XIDS xids);
 
 
 
-#endif 
+#endif

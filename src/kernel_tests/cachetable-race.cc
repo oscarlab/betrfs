@@ -125,18 +125,18 @@ static const char* dbname[5] = {
     TOKU_TEST_THREE_DB_NAME
 };
 
-static void run_cachetable_race_test(void) 
+static void run_cachetable_race_test(void)
 {
     int r;
     r = toku_fs_reset(env_dir, S_IRWXU+S_IRWXG+S_IRWXO);                                                      CKERR(r);
 
     r = db_env_create(&env, 0);                                                                               CKERR(r);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     int envflags = DB_INIT_LOCK | DB_INIT_LOG | DB_INIT_MPOOL | DB_INIT_TXN | DB_CREATE | DB_PRIVATE;
     r = env->open(env, env_dir, envflags, S_IRWXU+S_IRWXG+S_IRWXO);                                           CKERR(r);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r = env->checkpointing_set_period(env, 5);                                                                CKERR(r);
-    
+
     DB **XMALLOC_N(NUM_DBS, dbs);
     int idx[NUM_DBS];
     for(int i=0;i<NUM_DBS;i++) {
@@ -150,7 +150,7 @@ static void run_cachetable_race_test(void)
     for(int i=0;i<NUM_DBS;i++) {
         dbs[i]->close(dbs[i], 0);                                                                             CKERR(r);
         dbs[i] = NULL;
-	
+
 	if (i==2) {
 	    if (verbose) printf("%s:%d c=%d\n", __FILE__, __LINE__, toku_test_get_checkpointing_user_data_status());
 	    while (toku_test_get_checkpointing_user_data_status()==0)
@@ -166,7 +166,7 @@ static void run_cachetable_race_test(void)
 static void do_args(void) {
     verbose = 1;
     //printf("\nTesting loader with size_factor=1\n");
-    //toku_ft_loader_set_size_factor(1);            
+    //toku_ft_loader_set_size_factor(1);
 }
 
 extern "C" int test_cachetable_race(void);

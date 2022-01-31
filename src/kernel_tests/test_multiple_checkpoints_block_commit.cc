@@ -119,7 +119,7 @@ static void setup (void) {
     { int chk_r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
     { int chk_r = db_env_create(&env, 0); CKERR(chk_r); }
     db_env_set_checkpoint_callback(checkpoint_callback_1, NULL);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     { int chk_r = env->open(env, TOKU_TEST_ENV_DIR_NAME, envflags, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
 }
 
@@ -129,7 +129,7 @@ static void cleanup (void) {
 
 static void run_test(void) {
     DB* db = NULL;
-    
+
     IN_TXN_COMMIT(env, NULL, txn_create, 0, {
             { int chk_r = db_create(&db, env, 0); CKERR(chk_r); }
             { int chk_r = db->open(db, txn_create, TOKU_TEST_DATA_DB_NAME, NULL, DB_BTREE, DB_CREATE, 0666); CKERR(chk_r); }
@@ -145,16 +145,16 @@ static void run_test(void) {
 
     // at this point, we have a db that is dirty. Now we want to do the following
     // have two threads each start a checkpoint
-    // then have a third thread try to create a txn, do a write, 
+    // then have a third thread try to create a txn, do a write,
     // and commit the txn. In 5.2.3, the commit of the txn would block
     // until the one of the checkpoints complete (which should take 10 seconds)
     // With the fix, the commit should return immedietely
     toku_pthread_t chkpt1_tid;
     toku_pthread_t chkpt2_tid;
 
-    
-    { int chk_r = toku_pthread_create(&chkpt1_tid, NULL, run_checkpoint, NULL); CKERR(chk_r); } 
-    { int chk_r = toku_pthread_create(&chkpt2_tid, NULL, run_checkpoint, NULL); CKERR(chk_r); } 
+
+    { int chk_r = toku_pthread_create(&chkpt1_tid, NULL, run_checkpoint, NULL); CKERR(chk_r); }
+    { int chk_r = toku_pthread_create(&chkpt2_tid, NULL, run_checkpoint, NULL); CKERR(chk_r); }
     usleep(2*1024*1024);
     struct timeval tstart;
     gettimeofday(&tstart, NULL);
@@ -163,16 +163,16 @@ static void run_test(void) {
     i = 1; v = 1;
     { int chk_r = db->put(db, txn, &key, &val, 0); CKERR(chk_r); }
     { int chk_r = txn->commit(txn, 0); CKERR(chk_r); }
-    
-    struct timeval tend; 
+
+    struct timeval tend;
     gettimeofday(&tend, NULL);
     uint64_t diff = tdelta_usec(&tend, &tstart);
-    assert(diff < 5*1024*1024); 
+    assert(diff < 5*1024*1024);
 
 
     void *ret;
-    { int chk_r = toku_pthread_join(chkpt2_tid, &ret); CKERR(chk_r); } 
-    { int chk_r = toku_pthread_join(chkpt1_tid, &ret); CKERR(chk_r); } 
+    { int chk_r = toku_pthread_join(chkpt2_tid, &ret); CKERR(chk_r); }
+    { int chk_r = toku_pthread_join(chkpt1_tid, &ret); CKERR(chk_r); }
 
     { int chk_r = db->close(db,0); CKERR(chk_r); }
     db = NULL;

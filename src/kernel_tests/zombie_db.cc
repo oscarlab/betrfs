@@ -90,12 +90,12 @@ PATENT RIGHTS GRANT:
 #ident "$Id$"
 
 /* Purpose of this test is to verify correct behavior of
- * zombie dbs.  
+ * zombie dbs.
  *
  * A db is destroyed when it is closed by the user and there are no txns using it.
- * If a transaction creates a db and then closes, that leaves an open db with 
+ * If a transaction creates a db and then closes, that leaves an open db with
  * no transaction associated with it.  If another transaction then uses the db,
- * and then closes it, then that leaves a zombie db.  The db is closed, but 
+ * and then closes it, then that leaves a zombie db.  The db is closed, but
  * cannot be destroyed because there is still a transaction associated with it
  * (not the transaction that created it).
  *
@@ -106,25 +106,25 @@ PATENT RIGHTS GRANT:
  * commit txn_a
  *  => leaves open db with no txn
  *     (releases range lock on "foo" dname in directory)
- * 
+ *
  * begin txn_b
  * insert into db
  * close db
  *   => leaves zombie db, held open by txn_b
- * 
- * 
+ *
+ *
  * create txn_c
- * 
+ *
  * test1:
- * try to delete dictionary (env->dbremove(foo)) 
- *   should return DB_LOCK_NOT_GRANTED because txnB is holding range lock on some part of 
+ * try to delete dictionary (env->dbremove(foo))
+ *   should return DB_LOCK_NOT_GRANTED because txnB is holding range lock on some part of
  *   the dictionary ("foo") referred to by db
- * 
+ *
  * test2:
  * try to rename dictionary (env->dbrename(foo->bar))
- *   should return DB_LOCK_NOT_GRANTED because txnB is holding range lock on some part of 
+ *   should return DB_LOCK_NOT_GRANTED because txnB is holding range lock on some part of
  *   the dictionary ("foo") referred to by db
- * 
+ *
  */
 
 #include "test.h"
@@ -139,7 +139,7 @@ setup (void) {
     r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);       CKERR(r);
 
     r=db_env_create(&env, 0); CKERR(r);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r=env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
 }
 
@@ -180,7 +180,7 @@ test_zombie_db_work(void) {
 	r = db->put(db, txn_b, &key, &val, 0); CKERR(r);
 	r=db->close(db, 0); CKERR(r);
     }
-    
+
     // db is now closed, but cannot be destroyed until txn_b closes
     // db is now a zombie
 
@@ -188,15 +188,15 @@ test_zombie_db_work(void) {
 	DB_TXN * txn_c;
 
 	r=env->txn_begin(env, 0, &txn_c, 0); CKERR(r);
-	r = env->dbremove(env, txn_c, TOKU_TEST_DATA_DB_NAME, NULL, 0);  
+	r = env->dbremove(env, txn_c, TOKU_TEST_DATA_DB_NAME, NULL, 0);
 	CKERR2(r, DB_LOCK_NOTGRANTED);
-	r = env->dbrename(env, txn_c, TOKU_TEST_DATA_DB_NAME, NULL, "bar.db", 0); 
+	r = env->dbrename(env, txn_c, TOKU_TEST_DATA_DB_NAME, NULL, "bar.db", 0);
 	CKERR2(r, DB_LOCK_NOTGRANTED);
 	r=txn_c->commit(txn_c, 0); CKERR(r);
     }
-    
+
     r=txn_b->commit(txn_b, 0); CKERR(r);
-    
+
     // db should now be destroyed
 }
 

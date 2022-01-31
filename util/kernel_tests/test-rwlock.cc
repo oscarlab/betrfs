@@ -111,7 +111,7 @@ PATENT RIGHTS GRANT:
 // Analysis:  If the mutex can be prelocked (as cachetable does, it uses the same mutex for the cachetable and for the condition variable protecting the cache table)
 //  then you can save quite a bit.  What does the cachetable do?
 //  During pin:   (In the common case:) It grabs the mutex, grabs a read lock,  and releases the mutex.
-//  During unpin: It grabs the mutex, unlocks the rwlock lock in the pair, and releases the mutex. 
+//  During unpin: It grabs the mutex, unlocks the rwlock lock in the pair, and releases the mutex.
 //  Both actions must acquire a cachetable lock during that time, so definitely saves time to do it that way.
 
 //#include <stdlib.h>
@@ -119,6 +119,7 @@ PATENT RIGHTS GRANT:
 //#include <string.h>
 //#include <sys/time.h>
 //#include <sys/types.h>
+#include <stdlib.h>
 
 #include <toku_portability.h>
 #include <toku_assert.h>
@@ -159,7 +160,7 @@ void sequential_consistency (void) {
     sc_b = 0;
 }
 #endif
-    
+
 // Declaring val to be volatile produces essentially identical code as putting the asm volatile memory statements in.
 // gcc is not introducing memory barriers to force sequential consistency on volatile memory writes.
 // That's probably good enough for us, since we'll have a barrier instruction anywhere it matters.
@@ -180,7 +181,7 @@ static void time_nop (void) {
 	gettimeofday(&end,   NULL);
 	long long diff = factor*toku_tdiff(&end, &start)/N;
 	if (verbose>1)
-	    fprintf(stderr, "nop               = %lldns/(lock+unlock)\n", diff);
+	    dprintf(STDERR, "nop               = %lldns/(lock+unlock)\n", diff);
 	best_nop_time=mind(best_nop_time,diff);
     }
 }
@@ -202,7 +203,7 @@ void time_fcall (void) {
 	gettimeofday(&end,   NULL);
 	long long diff = factor*toku_tdiff(&end, &start)/N;
 	if (verbose>1)
-	    fprintf(stderr, "fcall             = %lldns/(lock+unlock)\n", diff);
+	    dprintf(STDERR, "fcall             = %lldns/(lock+unlock)\n", diff);
 	best_fcall_time=mind(best_fcall_time,diff);
     }
 }
@@ -220,13 +221,13 @@ void time_cas (void) {
 	gettimeofday(&end,   NULL);
 	long long diff = factor*toku_tdiff(&end, &start)/N;
 	if (verbose>1)
-	    fprintf(stderr, "cas           = %lldns/(lock+unlock)\n", diff);
+	    dprintf(STDERR, "cas           = %lldns/(lock+unlock)\n", diff);
 	best_cas_time=mind(best_cas_time,diff);
     }
 }
 
-/* The test can pass with toku_mutex_* interface but  with pthread_mutex_* there would 
- * be a stack corrution since pthread_mutex_t could be smaller than the mutex union. We 
+/* The test can pass with toku_mutex_* interface but  with pthread_mutex_* there would
+ * be a stack corrution since pthread_mutex_t could be smaller than the mutex union. We
  * have to make sure ft code does not call pthread funcs bypassing toku_pthread interface.
  * For now the test code was rewritten to use toku_mutex_* and uncommenting the code below
  * the test shall still pass. -JYM  */
@@ -247,7 +248,7 @@ void time_pthread_mutex (void) {
 	gettimeofday(&end,   NULL);
 	long long diff = factor*toku_tdiff(&end, &start)/N;
 	if (verbose>1)
-	    fprintf(stderr, "pthread_mutex     = %lldns/(lock+unlock)\n", diff);
+	    dprintf(STDERR, "pthread_mutex     = %lldns/(lock+unlock)\n", diff);
 	best_mutex_time=mind(best_mutex_time,diff);
     }
     toku_mutex_destroy(&mutex);
@@ -271,10 +272,10 @@ void time_pthread_rwlock (void) {
 	gettimeofday(&end,   NULL);
 	long long diff = factor*toku_tdiff(&end, &start)/N;
 	if (verbose>1)
-	    fprintf(stderr, "pthread_rwlock(r) = %lldns/(lock+unlock)\n", diff);
+	    dprintf(STDERR, "pthread_rwlock(r) = %lldns/(lock+unlock)\n", diff);
 	best_rwlock_time=mind(best_rwlock_time,diff);
     }
-    toku_pthread_rwlock_destroy(&mutex); 
+    toku_pthread_rwlock_destroy(&mutex);
 }
 #endif
 static void newbrt_rwlock_lock (RWLOCK rwlock, toku_mutex_t *mutex) {
@@ -297,7 +298,7 @@ void time_newbrt_rwlock (void) {
     toku_mutex_init(&external_mutex, NULL);
     rwlock_init(&rwlock);
     struct timeval start,end;
-    
+
     newbrt_rwlock_lock(&rwlock, &external_mutex);
     newbrt_rwlock_unlock(&rwlock, &external_mutex);
     for (int t=0; t<T; t++) {
@@ -309,7 +310,7 @@ void time_newbrt_rwlock (void) {
 	gettimeofday(&end,   NULL);
 	long long diff = factor*toku_tdiff(&end, &start)/N;
 	if (verbose>1)
-	    fprintf(stderr, "newbrt_rwlock(r) = %lldns/(lock+unlock)\n", diff);
+	    dprintf(STDERR, "newbrt_rwlock(r) = %lldns/(lock+unlock)\n", diff);
 	best_newbrt_time=mind(best_newbrt_time,diff);
     }
     rwlock_destroy(&rwlock);
@@ -325,7 +326,7 @@ void time_newbrt_prelocked_rwlock (void) {
     toku_mutex_lock(&external_mutex);
     rwlock_init(&rwlock);
     struct timeval start,end;
-    
+
     rwlock_read_lock(&rwlock, &external_mutex);
     rwlock_read_unlock(&rwlock);
     for (int t=0; t<T; t++) {
@@ -337,7 +338,7 @@ void time_newbrt_prelocked_rwlock (void) {
 	gettimeofday(&end,   NULL);
 	long long diff = factor*toku_tdiff(&end, &start)/N;
 	if (verbose>1)
-	    fprintf(stderr, "pre_newbrt_rwlock(r) = %lldns/(lock+unlock)\n", diff);
+	    dprintf(STDERR, "pre_newbrt_rwlock(r) = %lldns/(lock+unlock)\n", diff);
 	best_prelocked_time=mind(best_prelocked_time,diff);
     }
     rwlock_destroy(&rwlock);
@@ -362,7 +363,7 @@ void time_toku_fair_rwlock (void) {
 	gettimeofday(&end,   NULL);
 	long long diff = factor*toku_tdiff(&end, &start)/N;
 	if (verbose>1)
-	    fprintf(stderr, "pthread_fair(r)   = %lldns/(lock+unlock)\n", diff);
+	    dprintf(STDERR, "pthread_fair(r)   = %lldns/(lock+unlock)\n", diff);
 	best_fair_rwlock_time=mind(best_fair_rwlock_time,diff);
     }
     toku_fair_rwlock_destroy(&mutex);
@@ -385,7 +386,7 @@ void time_toku_cv_fair_rwlock(void) {
 	gettimeofday(&end,   NULL);
 	long long diff = factor*toku_tdiff(&end, &start)/N;
 	if (verbose>1)
-	    fprintf(stderr, "pthread_cvfair(r) = %lldns/(lock+unlock)\n", diff);
+	    dprintf(STDERR, "pthread_cvfair(r) = %lldns/(lock+unlock)\n", diff);
 	best_cv_fair_rwlock_time=mind(best_cv_fair_rwlock_time,diff);
     }
     toku_cv_fair_rwlock_destroy(&mutex);
@@ -421,7 +422,7 @@ void time_frwlock_prelocked(void) {
 	gettimeofday(&end,   NULL);
 	long long diff = factor*toku_tdiff(&end, &start)/N;
 	if (verbose>1)
-	    fprintf(stderr, "frwlock_prelocked = %lldns/(lock+unlock)\n", diff);
+	    dprintf(STDERR, "frwlock_prelocked = %lldns/(lock+unlock)\n", diff);
         best_frwlock_prelocked_time=mind(best_frwlock_prelocked_time,diff);
     }
     x.deinit();
@@ -454,7 +455,7 @@ void time_frwlock(void) {
 	gettimeofday(&end,   NULL);
 	long long diff = factor*toku_tdiff(&end, &start)/N;
 	if (verbose>1)
-	    fprintf(stderr, "frwlock           = %lldns/(lock+unlock)\n", diff);
+	    dprintf(STDERR, "frwlock           = %lldns/(lock+unlock)\n", diff);
         best_frwlock_time=mind(best_frwlock_time,diff);
     }
     x.deinit();
@@ -493,7 +494,7 @@ static void logit (int threadid, int loopid, char action) {
 // The reader threads all grab the lock, wait T*2 steps, and release the lock.
 // The writer threads
 // First the writer threads wait time T while the reader threads all go for the lock.
-// Before the first one lets go, the writer threads wake up and try to grab the lock.  But the readers are still 
+// Before the first one lets go, the writer threads wake up and try to grab the lock.  But the readers are still
 
 //   3 threads (0-2) try to grab the lock all at once.  They'll get it.  They each sleep for time T*2
 //   3 threads (3-6) try to grab the write lock.  They'll get it one after another.
@@ -700,4 +701,3 @@ int test_rwlock () {
     }
     return 0;
 }
-

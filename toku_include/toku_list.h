@@ -92,10 +92,6 @@ PATENT RIGHTS GRANT:
 #ident "Copyright (c) 2007, 2008, 2009 Tokutek Inc.  All rights reserved."
 #ident "The technology is licensed by the Massachusetts Institute of Technology, Rutgers State University of New Jersey, and the Research Foundation of State University of New York at Stony Brook under United States of America Serial No. 11/760379 and to the patents and/or patent applications resulting from it."
 
-//TODO: #1378  This is not threadsafe.  Make sure when splitting locks
-//that we protect these calls.
-
-
 // This toku_list is intended to be embedded in other data structures.
 struct toku_list {
     struct toku_list *next, *prev;
@@ -125,14 +121,12 @@ static inline struct toku_list *toku_list_tail(struct toku_list *head) {
 }
 
 static inline void toku_list_insert_between(struct toku_list *a, struct toku_list *toku_list, struct toku_list *b) {
-
     toku_list->next = a->next;
     toku_list->prev = b->prev;
     a->next = b->prev = toku_list;
 }
 
 static inline void toku_list_insert_m_between(struct toku_list *a, struct toku_list *first, struct toku_list *last, struct toku_list *b) {
-
     last->next = a->next;
     first->prev = b->prev;
     a->next = first;
@@ -185,6 +179,4 @@ static inline void toku_list_move(struct toku_list *newhead, struct toku_list *o
 #define toku_list_struct(p, t, f) ((t*)((char*)(p) - ((char*)&((t*)0)->f)))
 #endif
 
-
-
-#endif
+#endif /* _TOKUDB_LIST_H */

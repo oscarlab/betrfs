@@ -140,6 +140,7 @@ void toku_fifo_free(FIFO *);
 
 int toku_fifo_n_entries(FIFO);
 
+
 int toku_fifo_enq (FIFO, FT_MSG, bool, int32_t *);
 
 unsigned int toku_fifo_buffer_size_in_use (FIFO fifo);
@@ -148,19 +149,11 @@ unsigned long toku_fifo_memory_size_in_use(FIFO fifo);  // return how much memor
 unsigned long toku_fifo_memory_footprint(FIFO fifo);  // return how much memory the fifo occupies
 
 //These two are problematic, since I don't want to malloc() the bytevecs, but dequeueing the fifo frees the memory.
-//int toku_fifo_peek_deq (FIFO, bytevec *key, ITEMLEN *keylen, bytevec *data, ITEMLEN *datalen, uint32_t *type, TXNID *xid);
-//int toku_fifo_peek_deq_cmdstruct (FIFO, FT_MSG, DBT*, DBT*); // fill in the FT_MSG, using the two DBTs for the DBT part.
 int toku_fifo_iterate(FIFO, int(*f)(bytevec key,ITEMLEN keylen,bytevec data,ITEMLEN datalen, enum ft_msg_type type, MSN msn, XIDS xids, bool is_fresh, void*), void*);
 
 
 #define FIFO_CURRENT_ENTRY_MEMSIZE toku_ft_msg_memsize_in_fifo(msg)
 
-// Internal functions for the iterator.
-#if 0
-int toku_fifo_iterate_internal_start(FIFO fifo);
-int toku_fifo_iterate_internal_has_more(FIFO fifo, int off);
-int toku_fifo_iterate_internal_next(FIFO fifo, int off);
-#endif
 struct fifo_entry * toku_fifo_iterate_internal_get_entry(FIFO fifo, int off);
 
 size_t toku_fifo_internal_entry_memsize(struct fifo_entry *e) __attribute__((const,nonnull));
@@ -170,8 +163,11 @@ int toku_fifo_iterate (FIFO fifo, int(*f)(FT_MSG msg, bool is_fresh, void*), voi
 
 int toku_fifo_iterate_pacman (FIFO fifo, int(*f)(struct fifo_entry *, void*, FT_MSG &), void *arg) ;
 
-void toku_fifo_iterate_flip_msg_type (FIFO fifo, enum ft_msg_type from_type, enum ft_msg_type to_type) ;
-    
+void toku_fifo_iterate_flip_msg_type (FIFO fifo, enum ft_msg_type chosen_type, int bit_or_type);
+#ifdef FT_INDIRECT
+int toku_fifo_n_pages(FIFO);
+#endif
+
 DBT *fill_dbt_for_fifo_entry(DBT *dbt, const struct fifo_entry *entry);
 struct fifo_entry *toku_fifo_get_entry(FIFO fifo, int off);
 

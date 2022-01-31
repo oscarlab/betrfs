@@ -102,7 +102,7 @@ PATENT RIGHTS GRANT:
 
 
 #ifndef DB_DELETE_ANY
-#define DB_DELETE_ANY 0 
+#define DB_DELETE_ANY 0
 #endif
 
 // TOKU_TEST_FILENAME is defined in the Makefile
@@ -172,7 +172,7 @@ static void put_a_random_item (DB *db, DB_TXN *tid, int i, DB_TXN *bookx) {
     assert(r==0);
 }
 
-static void delete_a_random_item (DB *db, DB_TXN *tid, DB_TXN *bookx) { 
+static void delete_a_random_item (DB *db, DB_TXN *tid, DB_TXN *bookx) {
     if (n_keys_mentioned==0) return;
     int ridx = myrandom()%n_keys_mentioned;
     int randv = random_keys_mentioned[ridx];
@@ -334,7 +334,7 @@ static void make_db (void) {
     r=toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO);
     assert(r==0);
     r=db_env_create(&env, 0); assert(r==0);
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     r=env->open(env, TOKU_TEST_ENV_DIR_NAME, DB_INIT_LOCK|DB_INIT_LOG|DB_INIT_MPOOL|DB_INIT_TXN|DB_CREATE|DB_PRIVATE, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(r);
     r=db_create(&db, env, 0); CKERR(r);
     r=db_create(&pending_i, env, 0); CKERR(r);
@@ -385,8 +385,8 @@ static void make_db (void) {
 extern "C" int test_test_log6a_abort(void);
 int test_test_log6a_abort(void) {
     pre_setup();
-    com_count=0; 
-    pend_count=0; 
+    com_count=0;
+    pend_count=0;
     peni_count=0;
     memset(com_data, 0, N*sizeof(struct pair));
     memset(pend_data, 0, N*sizeof(struct pair));

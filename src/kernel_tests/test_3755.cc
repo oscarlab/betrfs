@@ -105,11 +105,11 @@ static int update_fun(DB *UU(db),
                       const DBT *old_val, const DBT *extra,
                       void (*set_val)(const DBT *new_val,
                                       void *set_extra),
-                      void *set_extra) 
+                      void *set_extra)
 {
     assert(extra->size == sizeof(unsigned int));
     assert(old_val->size == sizeof(unsigned int));
-    unsigned int e = *(unsigned int *)extra->data;    
+    unsigned int e = *(unsigned int *)extra->data;
     unsigned int ov = *(unsigned int *)old_val->data;
     assert(e == (ov+1));
     {
@@ -133,7 +133,7 @@ int_cmp(DB *UU(db), const DBT *a, const DBT *b) {
 static void setup (void) {
     { int chk_r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); CKERR(chk_r); }
     { int chk_r = db_env_create(&env, 0); CKERR(chk_r); }
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
     env->set_update(env, update_fun);
     {
         struct toku_db_key_operations key_ops;

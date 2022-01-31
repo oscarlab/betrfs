@@ -147,9 +147,16 @@ test_prefetch_read(int fd, FT_HANDLE UU(brt), FT brt_h) {
     assert(BP_STATE(dn,1) == PT_AVAIL);
     assert(BP_STATE(dn,2) == PT_AVAIL);
     toku_ftnode_pe_callback(dn, make_pair_attr(0xffffffff), &attr, brt_h);
-    assert(BP_STATE(dn,0) == PT_COMPRESSED);
-    assert(BP_STATE(dn,1) == PT_COMPRESSED);
-    assert(BP_STATE(dn,2) == PT_COMPRESSED);
+    if (!ftfs_is_hdd()) {
+        /* YZJ: We do not have compression for SSD*/
+        assert(BP_STATE(dn,0) == PT_AVAIL);
+        assert(BP_STATE(dn,1) == PT_AVAIL);
+        assert(BP_STATE(dn,2) == PT_AVAIL);
+    } else {
+        assert(BP_STATE(dn,0) == PT_COMPRESSED);
+        assert(BP_STATE(dn,1) == PT_COMPRESSED);
+        assert(BP_STATE(dn,2) == PT_COMPRESSED);
+    }
     r = toku_ftnode_pf_callback(dn, ndd, &bfe, fd, &attr);
     assert(BP_STATE(dn,0) == PT_AVAIL);
     assert(BP_STATE(dn,1) == PT_AVAIL);
@@ -165,15 +172,31 @@ test_prefetch_read(int fd, FT_HANDLE UU(brt), FT brt_h) {
     r = toku_deserialize_ftnode_from(fd, make_blocknum(20), 0/*pass zero for hash*/, &dn, &ndd, &bfe);
     assert(r==0);
     assert(dn->n_children == 3);
-    assert(BP_STATE(dn,0) == PT_ON_DISK);
+    if (!ftfs_is_hdd()) {
+        // YZJ: For SSD, we pretch the whole node
+        // disregarding the left boundary
+        assert(BP_STATE(dn,0) == PT_AVAIL);
+    } else {
+        assert(BP_STATE(dn,0) == PT_ON_DISK);
+    }
     assert(BP_STATE(dn,1) == PT_AVAIL);
     assert(BP_STATE(dn,2) == PT_AVAIL);
     toku_ftnode_pe_callback(dn, make_pair_attr(0xffffffff), &attr, brt_h);
-    assert(BP_STATE(dn,0) == PT_ON_DISK);
-    assert(BP_STATE(dn,1) == PT_COMPRESSED);
-    assert(BP_STATE(dn,2) == PT_COMPRESSED);
+    if (!ftfs_is_hdd()) {
+        assert(BP_STATE(dn,0) == PT_AVAIL);
+        assert(BP_STATE(dn,1) == PT_AVAIL);
+        assert(BP_STATE(dn,2) == PT_AVAIL);
+    } else {
+        assert(BP_STATE(dn,0) == PT_ON_DISK);
+        assert(BP_STATE(dn,1) == PT_COMPRESSED);
+        assert(BP_STATE(dn,2) == PT_COMPRESSED);
+    }
     r = toku_ftnode_pf_callback(dn, ndd, &bfe, fd, &attr);
-    assert(BP_STATE(dn,0) == PT_ON_DISK);
+    if (!ftfs_is_hdd()) {
+        assert(BP_STATE(dn,0) == PT_AVAIL);
+    } else {
+        assert(BP_STATE(dn,0) == PT_ON_DISK);
+    }
     assert(BP_STATE(dn,1) == PT_AVAIL);
     assert(BP_STATE(dn,2) == PT_AVAIL);
     destroy_bfe_for_prefetch(&bfe);
@@ -187,17 +210,35 @@ test_prefetch_read(int fd, FT_HANDLE UU(brt), FT brt_h) {
     r = toku_deserialize_ftnode_from(fd, make_blocknum(20), 0/*pass zero for hash*/, &dn, &ndd, &bfe);
     assert(r==0);
     assert(dn->n_children == 3);
-    assert(BP_STATE(dn,0) == PT_ON_DISK);
-    assert(BP_STATE(dn,1) == PT_AVAIL);
-    assert(BP_STATE(dn,2) == PT_ON_DISK);
+    if (!ftfs_is_hdd()) {
+       assert(BP_STATE(dn,0) == PT_AVAIL);
+       assert(BP_STATE(dn,1) == PT_AVAIL);
+       assert(BP_STATE(dn,2) == PT_AVAIL);
+    } else {
+       assert(BP_STATE(dn,0) == PT_ON_DISK);
+       assert(BP_STATE(dn,1) == PT_AVAIL);
+       assert(BP_STATE(dn,2) == PT_ON_DISK);
+    }
     toku_ftnode_pe_callback(dn, make_pair_attr(0xffffffff), &attr, brt_h);
-    assert(BP_STATE(dn,0) == PT_ON_DISK);
-    assert(BP_STATE(dn,1) == PT_COMPRESSED);
-    assert(BP_STATE(dn,2) == PT_ON_DISK);
+    if (!ftfs_is_hdd()) {
+        assert(BP_STATE(dn,0) == PT_AVAIL);
+        assert(BP_STATE(dn,1) == PT_AVAIL);
+        assert(BP_STATE(dn,2) == PT_AVAIL);
+    } else {
+        assert(BP_STATE(dn,0) == PT_ON_DISK);
+        assert(BP_STATE(dn,1) == PT_COMPRESSED);
+        assert(BP_STATE(dn,2) == PT_ON_DISK);
+    }
     r = toku_ftnode_pf_callback(dn, ndd, &bfe, fd, &attr);
-    assert(BP_STATE(dn,0) == PT_ON_DISK);
-    assert(BP_STATE(dn,1) == PT_AVAIL);
-    assert(BP_STATE(dn,2) == PT_ON_DISK);
+    if (!ftfs_is_hdd()) {
+        assert(BP_STATE(dn,0) == PT_AVAIL);
+        assert(BP_STATE(dn,1) == PT_AVAIL);
+        assert(BP_STATE(dn,2) == PT_AVAIL);
+    } else {
+        assert(BP_STATE(dn,0) == PT_ON_DISK);
+        assert(BP_STATE(dn,1) == PT_AVAIL);
+        assert(BP_STATE(dn,2) == PT_ON_DISK);
+    }
     destroy_bfe_for_prefetch(&bfe);
     toku_ftnode_free(&dn);
     toku_free(ndd);
@@ -208,17 +249,35 @@ test_prefetch_read(int fd, FT_HANDLE UU(brt), FT brt_h) {
     r = toku_deserialize_ftnode_from(fd, make_blocknum(20), 0/*pass zero for hash*/, &dn, &ndd, &bfe);
     assert(r==0);
     assert(dn->n_children == 3);
-    assert(BP_STATE(dn,0) == PT_ON_DISK);
-    assert(BP_STATE(dn,1) == PT_ON_DISK);
-    assert(BP_STATE(dn,2) == PT_AVAIL);
+    if (!ftfs_is_hdd()) {
+        assert(BP_STATE(dn,0) == PT_AVAIL);
+        assert(BP_STATE(dn,1) == PT_AVAIL);
+        assert(BP_STATE(dn,2) == PT_AVAIL);
+    } else {
+        assert(BP_STATE(dn,0) == PT_ON_DISK);
+        assert(BP_STATE(dn,1) == PT_ON_DISK);
+        assert(BP_STATE(dn,2) == PT_AVAIL);
+    }
     toku_ftnode_pe_callback(dn, make_pair_attr(0xffffffff), &attr, brt_h);
-    assert(BP_STATE(dn,0) == PT_ON_DISK);
-    assert(BP_STATE(dn,1) == PT_ON_DISK);
-    assert(BP_STATE(dn,2) == PT_COMPRESSED);
+    if (!ftfs_is_hdd()) {
+        assert(BP_STATE(dn,0) == PT_AVAIL);
+        assert(BP_STATE(dn,1) == PT_AVAIL);
+        assert(BP_STATE(dn,2) == PT_AVAIL);
+    } else {
+        assert(BP_STATE(dn,0) == PT_ON_DISK);
+        assert(BP_STATE(dn,1) == PT_ON_DISK);
+        assert(BP_STATE(dn,2) == PT_COMPRESSED);
+    }
     r = toku_ftnode_pf_callback(dn, ndd, &bfe, fd, &attr);
-    assert(BP_STATE(dn,0) == PT_ON_DISK);
-    assert(BP_STATE(dn,1) == PT_ON_DISK);
-    assert(BP_STATE(dn,2) == PT_AVAIL);
+    if (!ftfs_is_hdd()) {
+        assert(BP_STATE(dn,0) == PT_AVAIL);
+        assert(BP_STATE(dn,1) == PT_AVAIL);
+        assert(BP_STATE(dn,2) == PT_AVAIL);
+    } else {
+        assert(BP_STATE(dn,0) == PT_ON_DISK);
+        assert(BP_STATE(dn,1) == PT_ON_DISK);
+        assert(BP_STATE(dn,2) == PT_AVAIL);
+    }
     destroy_bfe_for_prefetch(&bfe);
     toku_free(ndd);
     toku_ftnode_free(&dn);
@@ -229,17 +288,35 @@ test_prefetch_read(int fd, FT_HANDLE UU(brt), FT brt_h) {
     r = toku_deserialize_ftnode_from(fd, make_blocknum(20), 0/*pass zero for hash*/, &dn, &ndd, &bfe);
     assert(r==0);
     assert(dn->n_children == 3);
-    assert(BP_STATE(dn,0) == PT_AVAIL);
-    assert(BP_STATE(dn,1) == PT_ON_DISK);
-    assert(BP_STATE(dn,2) == PT_ON_DISK);
+    if (!ftfs_is_hdd()) {
+        assert(BP_STATE(dn,0) == PT_AVAIL);
+        assert(BP_STATE(dn,1) == PT_AVAIL);
+        assert(BP_STATE(dn,2) == PT_AVAIL);
+    } else {
+        assert(BP_STATE(dn,0) == PT_AVAIL);
+        assert(BP_STATE(dn,1) == PT_ON_DISK);
+        assert(BP_STATE(dn,2) == PT_ON_DISK);
+    }
     toku_ftnode_pe_callback(dn, make_pair_attr(0xffffffff), &attr, brt_h);
-    assert(BP_STATE(dn,0) == PT_COMPRESSED);
-    assert(BP_STATE(dn,1) == PT_ON_DISK);
-    assert(BP_STATE(dn,2) == PT_ON_DISK);
+    if (!ftfs_is_hdd()) {
+        assert(BP_STATE(dn,0) == PT_AVAIL);
+        assert(BP_STATE(dn,1) == PT_AVAIL);
+        assert(BP_STATE(dn,2) == PT_AVAIL);
+    } else {
+        assert(BP_STATE(dn,0) == PT_COMPRESSED);
+        assert(BP_STATE(dn,1) == PT_ON_DISK);
+        assert(BP_STATE(dn,2) == PT_ON_DISK);
+    }
     r = toku_ftnode_pf_callback(dn, ndd, &bfe, fd, &attr);
-    assert(BP_STATE(dn,0) == PT_AVAIL);
-    assert(BP_STATE(dn,1) == PT_ON_DISK);
-    assert(BP_STATE(dn,2) == PT_ON_DISK);
+    if (!ftfs_is_hdd()) {
+        assert(BP_STATE(dn,0) == PT_AVAIL);
+        assert(BP_STATE(dn,1) == PT_AVAIL);
+        assert(BP_STATE(dn,2) == PT_AVAIL);
+    } else {
+        assert(BP_STATE(dn,0) == PT_AVAIL);
+        assert(BP_STATE(dn,1) == PT_ON_DISK);
+        assert(BP_STATE(dn,2) == PT_ON_DISK);
+    }
     destroy_bfe_for_prefetch(&bfe);
     toku_ftnode_free(&dn);
     toku_free(ndd);
@@ -299,7 +376,11 @@ test_subset_read(int fd, FT_HANDLE UU(brt), FT brt_h) {
     toku_ftnode_pe_callback(dn, make_pair_attr(0xffffffff), &attr, brt_h);
     assert(BP_STATE(dn,0) == PT_ON_DISK);
     assert(BP_STATE(dn,1) == PT_ON_DISK);
-    assert(BP_STATE(dn,2) == PT_COMPRESSED);
+    if (!ftfs_is_hdd()) {
+        assert(BP_STATE(dn,2) == PT_AVAIL);
+    } else {
+        assert(BP_STATE(dn,2) == PT_COMPRESSED);
+    }
     r = toku_ftnode_pf_callback(dn, ndd, &bfe, fd, &attr);
     assert(BP_STATE(dn,0) == PT_ON_DISK);
     assert(BP_STATE(dn,1) == PT_ON_DISK);
@@ -319,12 +400,21 @@ test_subset_read(int fd, FT_HANDLE UU(brt), FT brt_h) {
     // need to call this twice because we had a subset read before, that touched the clock
     toku_ftnode_pe_callback(dn, make_pair_attr(0xffffffff), &attr, brt_h);
     assert(BP_STATE(dn,0) == PT_ON_DISK);
-    assert(BP_STATE(dn,1) == PT_COMPRESSED);
+    if (!ftfs_is_hdd()) {
+        assert(BP_STATE(dn,1) == PT_AVAIL);
+    } else {
+        assert(BP_STATE(dn,1) == PT_COMPRESSED);
+    }
     assert(BP_STATE(dn,2) == PT_AVAIL);
     toku_ftnode_pe_callback(dn, make_pair_attr(0xffffffff), &attr, brt_h);
     assert(BP_STATE(dn,0) == PT_ON_DISK);
-    assert(BP_STATE(dn,1) == PT_COMPRESSED);
-    assert(BP_STATE(dn,2) == PT_COMPRESSED);
+    if (!ftfs_is_hdd()) {
+        assert(BP_STATE(dn,1) == PT_AVAIL);
+        assert(BP_STATE(dn,2) == PT_AVAIL);
+    } else {
+        assert(BP_STATE(dn,1) == PT_COMPRESSED);
+        assert(BP_STATE(dn,2) == PT_COMPRESSED);
+    }
     r = toku_ftnode_pf_callback(dn, ndd, &bfe, fd, &attr);
     assert(BP_STATE(dn,0) == PT_ON_DISK);
     assert(BP_STATE(dn,1) == PT_AVAIL);
@@ -343,11 +433,20 @@ test_subset_read(int fd, FT_HANDLE UU(brt), FT brt_h) {
     // need to call this twice because we had a subset read before, that touched the clock
     toku_ftnode_pe_callback(dn, make_pair_attr(0xffffffff), &attr, brt_h);
     assert(BP_STATE(dn,0) == PT_AVAIL);
-    assert(BP_STATE(dn,1) == PT_COMPRESSED);
+    if (!ftfs_is_hdd()) {
+        assert(BP_STATE(dn,1) == PT_AVAIL);
+    } else {
+        assert(BP_STATE(dn,1) == PT_COMPRESSED);
+    }
     assert(BP_STATE(dn,2) == PT_ON_DISK);
     toku_ftnode_pe_callback(dn, make_pair_attr(0xffffffff), &attr, brt_h);
-    assert(BP_STATE(dn,0) == PT_COMPRESSED);
-    assert(BP_STATE(dn,1) == PT_COMPRESSED);
+    if (!ftfs_is_hdd()) {
+        assert(BP_STATE(dn,0) == PT_AVAIL);
+        assert(BP_STATE(dn,1) == PT_AVAIL);
+    } else {
+        assert(BP_STATE(dn,0) == PT_COMPRESSED);
+        assert(BP_STATE(dn,1) == PT_COMPRESSED);
+    }
     assert(BP_STATE(dn,2) == PT_ON_DISK);
     r = toku_ftnode_pf_callback(dn, ndd, &bfe, fd, &attr);
     assert(BP_STATE(dn,0) == PT_AVAIL);
@@ -381,7 +480,10 @@ test_prefetching(void) {
     sn.n_children = 3;
     sn.dirty = 1;
     sn.oldest_referenced_xid_known = TXNID_NONE;
-
+#ifdef FT_INDIRECT
+    sn.is_cloned = false;
+    sn.is_rebalancing = false;
+#endif
     uint64_t key1 = 100;
     uint64_t key2 = 200;
 
@@ -450,7 +552,11 @@ test_prefetching(void) {
         assert(size   == 100);
     }
     FTNODE_DISK_DATA ndd = NULL;
+#ifdef  FT_INDIRECT
+    r = toku_serialize_ftnode_to_with_indirect(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false, &offset, &size, true);
+#else
     r = toku_serialize_ftnode_to(fd, make_blocknum(20), &sn, &ndd, true, brt->ft, false, &offset, &size, true);
+#endif
     assert(r==0);
 
     test_prefetch_read(fd, brt, brt_h);

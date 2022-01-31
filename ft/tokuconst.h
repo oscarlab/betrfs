@@ -99,10 +99,10 @@ PATENT RIGHTS GRANT:
  * root transaction (id 0).
  */
 
-
 enum {MAX_NESTED_TRANSACTIONS = 253};
 enum {MAX_TRANSACTION_RECORDS = MAX_NESTED_TRANSACTIONS + 1};
 
+// Maximum pages in a leafenrtry or fifo entry
+#define MAX_PAGE_PER_ENTRY (32)
 
 #endif
-

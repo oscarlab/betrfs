@@ -2,7 +2,7 @@
 // vim: ft=cpp:expandtab:ts=8:sw=4:softtabstop=4:
 /* This is a performance test.  Releasing lock during I/O should mean that given two threads doing queries,
  * and one of them is in-memory and one of them is out of memory, then the in-memory one should not be slowed down by the out-of-memory one.
- * 
+ *
  * Step 1: Create a dictionary that doesn't fit in main memory.  Do it fast (sequential insertions).
  * Step 2: Measure performance of in-memory requests.
  * Step 3: Add a thread that does requests in parallel.
@@ -122,7 +122,7 @@ static void create_db (uint64_t N) {
     n_rows = N;
     { int r = toku_fs_reset(TOKU_TEST_ENV_DIR_NAME, S_IRWXU+S_IRWXG+S_IRWXO); assert(r==0); }
     { int r = db_env_create(&env, 0);                                          CKERR(r); }
-    env->set_errfile(env, stderr);
+    env->set_errfile(env, STDERR);
 #ifdef TOKUDB
     env->set_redzone(env, 0);
 #endif
@@ -179,7 +179,7 @@ void* reader_thread (void *arg)
 
     DB_TXN *txn;
     struct reader_thread_state *rs = (struct reader_thread_state *)arg;
-    
+
     { int r = env->txn_begin(env, NULL, &txn, 0);                              CKERR(r); }
     char key[20];
     char data [200];
@@ -200,7 +200,7 @@ void* reader_thread (void *arg)
 	    vals[i] = random()%n_rows;
 	}
     }
-    
+
     uint64_t n_since_commit = 0;
     long long n_read_so_far = 0;
     while ((!rs->finish) && ((rs->n_to_read < 0) || (n_read_so_far < rs->n_to_read))) {
@@ -230,7 +230,7 @@ void* reader_thread (void *arg)
 	n_read_so_far ++;
     }
     { int r = txn->commit(txn, DB_TXN_NOSYNC);                                 CKERR(r); }
-    
+
     gettimeofday(&end_time, 0);
     rs->elapsed_time = toku_tdiff(&end_time, &start_time);
     return NULL;
@@ -308,4 +308,3 @@ int test_test3039(void) {
     post_teardown();
     return 0;
 }
-

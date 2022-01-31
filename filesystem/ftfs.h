@@ -17,8 +17,13 @@
 #include <linux/version.h>
 
 extern size_t db_cachesize;
-//#define FTFS_SCALE_CACHE(totalram_pages) (totalram_pages / 8) //1/4
 #define FTFS_SCALE_CACHE(totalram_pages) (totalram_pages / 4)
+/*
+ * We found that using 1/4 of DRAM as the cachetable size
+ * makes seq write slower on Bunsens. This macro tries to
+ * set the upper bound for the cachetable size to 4 GiB.
+ */
+#define FTFS_DB_CACHESIZE_MAX (4L<<30)
 extern int toku_ncpus;
 
 void ftfs_error (const char * function, const char * fmt, ...);
@@ -64,7 +69,9 @@ static inline int init_ft_index(void)
 	struct sysinfo info;
 	si_meminfo(&info);
 	db_cachesize = FTFS_SCALE_CACHE(info.totalram) << PAGE_SHIFT;
-
+	if (db_cachesize > FTFS_DB_CACHESIZE_MAX) {
+		db_cachesize = FTFS_DB_CACHESIZE_MAX;
+	}
 	return toku_ft_layer_init_with_panicenv();
 }
 
@@ -75,7 +82,18 @@ static inline void destroy_ft_index(void)
 }
 
 void init_mem_trace(void);
+bool ftfs_is_hdd(void);
 
 #define FTFS_SUPER_MAGIC 0XF7F5
+
+#if defined (FT_INDIRECT) && defined(TOKU_MEMLEAK_DETECT)
+void debug_ftfs_alloc_page(void *p, size_t size);
+void debug_ftfs_free_page(void *p);
+#else
+#define debug_ftfs_alloc_page(p,s) do {} while(0)
+#define debug_ftfs_free_page(p) do {} while(0)
+#endif
+
+#define PAGE_MAGIC (4096*4096)
 
 #endif /* _FTFS_H */

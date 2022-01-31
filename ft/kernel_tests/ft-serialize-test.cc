@@ -118,6 +118,10 @@ le_add_to_bn(bn_data* bn, uint32_t idx, const  char *key, int keysize, const cha
     r->type = LE_CLEAN;
     r->u.clean.vallen = valsize;
     memcpy(r->u.clean.val, val, valsize);
+#ifdef FT_INDIRECT
+    r->indirect_insert_offsets = NULL;
+    r->num_indirect_inserts = 0;
+#endif
 }
 
 static KLPAIR
@@ -133,6 +137,10 @@ le_fastmalloc(struct mempool * mp, const char *key, int keylen, const char *val,
     le->type = LE_CLEAN;
     le->u.clean.vallen = vallen;
     memcpy(le->u.clean.val, val, vallen);
+#ifdef FT_INDIRECT
+    le->indirect_insert_offsets = NULL;
+    le->num_indirect_inserts = 0;
+#endif
     return kl;
 }
 
@@ -165,10 +173,20 @@ string_key_cmp(DB *UU(e), const DBT *a, const DBT *b)
     return strcmp(s, t);
 }
 
+static int
+int_key_cmp(DB *UU(e), const DBT *a, const DBT *b)
+{
+    int32_t s = *((uint32_t*)(a->data));
+    int32_t t = *((uint32_t*)(b->data));
+    int32_t diff = s - t;
+    return (int) diff;
+}
+
+
 static void
-setup_dn(enum ftnode_verify_type bft, int fd, FT brt_h, FTNODE *dn, FTNODE_DISK_DATA* ndd) {
+setup_dn(enum ftnode_verify_type bft, int fd, FT brt_h, FTNODE *dn, FTNODE_DISK_DATA* ndd, int (*cmp)(DB *UU(e), const DBT *a, const DBT *b)) {
     int r;
-    brt_h->key_ops.keycmp = string_key_cmp;
+    brt_h->key_ops.keycmp = cmp;
     if (bft == read_all) {
         struct ftnode_fetch_extra bfe;
         fill_bfe_for_full_read(&bfe, brt_h);
@@ -196,7 +214,11 @@ setup_dn(enum ftnode_verify_type bft, int fd, FT brt_h, FTNODE *dn, FTNODE_DISK_
                         assert(is_BNULL(*dn, i));
                     }
                     else {
-                        assert(BP_STATE(*dn,i) == PT_COMPRESSED);
+                        if (!ftfs_is_hdd()) {
+                            assert(BP_STATE(*dn,i) == PT_AVAIL);
+                        } else {
+                            assert(BP_STATE(*dn,i) == PT_COMPRESSED);
+                        }
                     }
                 }
             }
@@ -222,21 +244,31 @@ setup_dn(enum ftnode_verify_type bft, int fd, FT brt_h, FTNODE *dn, FTNODE_DISK_
                 }
                 toku_ftnode_pe_callback(*dn, make_pair_attr(0xffffffff), &attr, brt_h);
                 for (int i = 0; i < (*dn)->n_children; i++) {
-                    assert(BP_STATE(*dn,i) == PT_COMPRESSED);
+                    if (!ftfs_is_hdd()) {
+                        assert(BP_STATE(*dn,i) == PT_AVAIL);
+                    } else {
+                        assert(BP_STATE(*dn,i) == PT_COMPRESSED);
+                    }
                 }
             }
         }
-        // now decompress them
-        fill_bfe_for_full_read(&bfe, brt_h);
-        assert(toku_ftnode_pf_req_callback(*dn, &bfe));
-        PAIR_ATTR attr;
-        r = toku_ftnode_pf_callback(*dn, *ndd, &bfe, fd, &attr);
-        assert(r==0);
-        // assert all bp's are available
-        for (int i = 0; i < (*dn)->n_children; i++) {
-            assert(BP_STATE(*dn,i) == PT_AVAIL);
+
+        // YZJ: Run the code below when it is hdd or dn is leaf
+        // If it is not hdd, nonleaf is not evicted so
+        // no need to test pf_callback here.
+        if (ftfs_is_hdd() || (*dn)->height == 0) {
+            // now decompress them
+            fill_bfe_for_full_read(&bfe, brt_h);
+            assert(toku_ftnode_pf_req_callback(*dn, &bfe));
+            PAIR_ATTR attr;
+            r = toku_ftnode_pf_callback(*dn, *ndd, &bfe, fd, &attr);
+            assert(r==0);
+            // assert all bp's are available
+            for (int i = 0; i < (*dn)->n_children; i++) {
+                assert(BP_STATE(*dn,i) == PT_AVAIL);
+            }
+            // continue on with test
         }
-        // continue on with test
     }
     else {
         // if we get here, this is a test bug, NOT a bug in development code
@@ -244,22 +276,35 @@ setup_dn(enum ftnode_verify_type bft, int fd, FT brt_h, FTNODE *dn, FTNODE_DISK_
     }
 }
 
-static void write_sn_to_disk(int fd, FT_HANDLE brt, FTNODE sn, FTNODE_DISK_DATA* src_ndd, bool do_clone) {
+static void write_sn_to_disk(int fd, FT_HANDLE brt, FTNODE sn, FTNODE_DISK_DATA* src_ndd, bool do_clone,
+                             int (*cmp)(DB *UU(e), const DBT *a, const DBT *b)) {
     int r;
     DISKOFF offset;
     DISKOFF size;
+    // We need these two lines so ft_verify_pivots doesn't complain
+    brt->ft->key_ops.keycmp = cmp;
+    brt->ft->cf = NULL;
+
     if (do_clone) {
         void* cloned_node_v = NULL;
         PAIR_ATTR attr;
         long clone_size;
         toku_ftnode_clone_callback(sn, &cloned_node_v, &clone_size, &attr, false, brt->ft);
         FTNODE CAST_FROM_VOIDP(cloned_node, cloned_node_v);
+#ifdef FT_INDIRECT
+        r = toku_serialize_ftnode_to_with_indirect(fd, make_blocknum(20), cloned_node, src_ndd, false, brt->ft, false, &offset, &size, true);
+#else
         r = toku_serialize_ftnode_to(fd, make_blocknum(20), cloned_node, src_ndd, false, brt->ft, false, &offset, &size, true);
+#endif
         assert(r==0);
         toku_ftnode_free(&cloned_node);
     }
     else {
+#ifdef FT_INDIRECT
+        r = toku_serialize_ftnode_to_with_indirect(fd, make_blocknum(20), sn, src_ndd, true, brt->ft, false, &offset, &size, true);
+#else
         r = toku_serialize_ftnode_to(fd, make_blocknum(20), sn, src_ndd, true, brt->ft, false, &offset, &size, true);
+#endif
         assert(r==0);
     }
 }
@@ -286,6 +331,10 @@ test_serialize_leaf_check_msn(enum ftnode_verify_type bft, bool do_clone) {
     sn.height = 0;
     sn.n_children = 2;
     sn.dirty = 1;
+#ifdef FT_INDIRECT
+    sn.is_cloned = false;
+    sn.is_rebalancing = false;
+#endif
     sn.oldest_referenced_xid_known = TXNID_NONE;
     sn.unbound_insert_count = 0;
     MALLOC_N(sn.n_children, sn.bp);
@@ -342,9 +391,9 @@ test_serialize_leaf_check_msn(enum ftnode_verify_type bft, bool do_clone) {
     FTNODE_DISK_DATA src_ndd = NULL;
     FTNODE_DISK_DATA dest_ndd = NULL;
 
-    write_sn_to_disk(fd, brt, &sn, &src_ndd, do_clone);
+    write_sn_to_disk(fd, brt, &sn, &src_ndd, do_clone, string_key_cmp);
 
-    setup_dn(bft, fd, brt_h, &dn, &dest_ndd);
+    setup_dn(bft, fd, brt_h, &dn, &dest_ndd, string_key_cmp);
 
     assert(dn->thisnodename.b==20);
 
@@ -434,6 +483,10 @@ test_serialize_leaf_with_large_pivots(enum ftnode_verify_type bft, bool do_clone
     snp->height = 0;
     snp->n_children = nrows;
     snp->dirty = 1;
+#ifdef FT_INDIRECT
+    snp->is_cloned = false;
+    snp->is_rebalancing = false;
+#endif
     snp->oldest_referenced_xid_known = TXNID_NONE;
     snp->unbound_insert_count = 0;
     MALLOC_N(snp->n_children, snp->bp);
@@ -496,9 +549,9 @@ test_serialize_leaf_with_large_pivots(enum ftnode_verify_type bft, bool do_clone
     FTNODE_DISK_DATA src_ndd = NULL;
     FTNODE_DISK_DATA dest_ndd = NULL;
 
-    write_sn_to_disk(fd, brt, snp, &src_ndd, do_clone);
+    write_sn_to_disk(fd, brt, snp, &src_ndd, do_clone, string_key_cmp);
 
-    setup_dn(bft, fd, brt_h, &dn, &dest_ndd);
+    setup_dn(bft, fd, brt_h, &dn, &dest_ndd, string_key_cmp);
 
     assert(dn->thisnodename.b==20);
 
@@ -537,16 +590,14 @@ test_serialize_leaf_with_large_pivots(enum ftnode_verify_type bft, bool do_clone
             assert(BLB_DATA(dn, bn)->omt_size() > 0);
             for (uint32_t i = 0; i < BLB_DATA(dn, bn)->omt_size(); i++) {
                 LEAFENTRY curr_le;
-                uint32_t curr_keylen, other_len, curr_le_size;
+                uint32_t curr_keylen, other_len;
                 void* curr_key;
                 LEAFENTRY other_le;
                 BLB_DATA(dn, bn)->fetch_klpair(i, &curr_le, &curr_keylen, &curr_key);
                 other_le = get_le_from_klpair(les[last_i]);
                 other_len = leafentry_memsize(other_le);
-                curr_le_size = leafentry_memsize(curr_le);
                 assert(leafentry_memsize(curr_le) == leafentry_memsize(get_le_from_klpair(les[last_i])));
                 assert(memcmp(curr_le, other_le, other_len) == 0);
-                //assert(memcmp(curr_le, get_le_from_klpair(les[last_i]), leafentry_memsize(curr_le)) == 0);
                 if (bn < npartitions-1) {
                     assert(strcmp((char*)dn->childkeys[bn].data, (char*)(les[last_i]->key_le)) <= 0);
                 }
@@ -602,6 +653,10 @@ test_serialize_leaf_with_many_rows(enum ftnode_verify_type bft, bool do_clone) {
     snp->height = 0;
     snp->n_children = 1;
     snp->dirty = 1;
+#ifdef FT_INDIRECT
+    snp->is_cloned = false;
+    snp->is_rebalancing = false;
+#endif
     snp->oldest_referenced_xid_known = TXNID_NONE;
     snp->unbound_insert_count = 0;
     MALLOC_N(snp->n_children, snp->bp);
@@ -653,9 +708,9 @@ test_serialize_leaf_with_many_rows(enum ftnode_verify_type bft, bool do_clone) {
 
     FTNODE_DISK_DATA src_ndd = NULL;
     FTNODE_DISK_DATA dest_ndd = NULL;
-    write_sn_to_disk(fd, brt, snp, &src_ndd, do_clone);
+    write_sn_to_disk(fd, brt, snp, &src_ndd, do_clone, int_key_cmp);
 
-    setup_dn(bft, fd, brt_h, &dn, &dest_ndd);
+    setup_dn(bft, fd, brt_h, &dn, &dest_ndd, int_key_cmp);
 
     assert(dn->thisnodename.b==20);
 
@@ -747,6 +802,10 @@ test_serialize_leaf_with_large_rows(enum ftnode_verify_type bft, bool do_clone) 
     snp->height = 0;
     snp->n_children = 1;
     snp->dirty = 1;
+#ifdef FT_INDIRECT
+    snp->is_cloned = false;
+    snp->is_rebalancing = false;
+#endif
     snp->oldest_referenced_xid_known = TXNID_NONE;
     snp->unbound_insert_count = 0;
 
@@ -807,9 +866,9 @@ test_serialize_leaf_with_large_rows(enum ftnode_verify_type bft, bool do_clone) 
 
     FTNODE_DISK_DATA src_ndd = NULL;
     FTNODE_DISK_DATA dest_ndd = NULL;
-    write_sn_to_disk(fd, brt, snp, &src_ndd, do_clone);
+    write_sn_to_disk(fd, brt, snp, &src_ndd, do_clone, string_key_cmp);
 
-    setup_dn(bft, fd, brt_h, &dn, &dest_ndd);
+    setup_dn(bft, fd, brt_h, &dn, &dest_ndd, string_key_cmp);
 
     assert(dn->thisnodename.b==20);
 
@@ -850,17 +909,14 @@ test_serialize_leaf_with_large_rows(enum ftnode_verify_type bft, bool do_clone) 
             assert(BLB_DATA(dn, bn)->omt_size() > 0);
             for (uint32_t i = 0; i < BLB_DATA(dn, bn)->omt_size(); i++) {
                 LEAFENTRY curr_le;
-                uint32_t curr_keylen;
+                uint32_t curr_keylen, other_len;
                 void* curr_key;
                 LEAFENTRY other_le;
-                uint32_t other_len, curr_le_size;
                 BLB_DATA(dn, bn)->fetch_klpair(i, &curr_le, &curr_keylen, &curr_key);
                 assert(leafentry_memsize(curr_le) == leafentry_memsize(get_le_from_klpair(les[last_i])));
                 other_le = get_le_from_klpair(les[last_i]);
                 other_len = leafentry_memsize(other_le);
-                curr_le_size = leafentry_memsize(curr_le);
                 assert(memcmp(curr_le, other_le, other_len) == 0);
-                //assert(memcmp(curr_le, get_le_from_klpair(les[last_i]), leafentry_memsize(curr_le)) == 0);
                 if (bn < npartitions-1) {
                     assert(strcmp((char*)dn->childkeys[bn].data, (char*)(les[last_i]->key_le)) <= 0);
                 }
@@ -914,6 +970,10 @@ test_serialize_leaf_with_empty_basement_nodes(enum ftnode_verify_type bft, bool 
     sn.height = 0;
     sn.n_children = 7;
     sn.dirty = 1;
+#ifdef FT_INDIRECT
+    sn.is_cloned = false;
+    sn.is_rebalancing = false;
+#endif
     sn.oldest_referenced_xid_known = TXNID_NONE;
     sn.unbound_insert_count = 0;
     MALLOC_N(sn.n_children, sn.bp);
@@ -970,9 +1030,9 @@ test_serialize_leaf_with_empty_basement_nodes(enum ftnode_verify_type bft, bool 
     }
     FTNODE_DISK_DATA src_ndd = NULL;
     FTNODE_DISK_DATA dest_ndd = NULL;
-    write_sn_to_disk(fd, brt, &sn, &src_ndd, do_clone);
+    write_sn_to_disk(fd, brt, &sn, &src_ndd, do_clone, string_key_cmp);
 
-    setup_dn(bft, fd, brt_h, &dn, &dest_ndd);
+    setup_dn(bft, fd, brt_h, &dn, &dest_ndd, string_key_cmp);
 
     assert(dn->thisnodename.b==20);
 
@@ -1054,6 +1114,10 @@ test_serialize_leaf_with_multiple_empty_basement_nodes(enum ftnode_verify_type b
     sn.height = 0;
     sn.n_children = 4;
     sn.dirty = 1;
+#ifdef FT_INDIRECT
+    sn.is_cloned = false;
+    sn.is_rebalancing = false;
+#endif
     sn.oldest_referenced_xid_known = TXNID_NONE;
     sn.unbound_insert_count = 0;
     MALLOC_N(sn.n_children, sn.bp);
@@ -1103,9 +1167,9 @@ test_serialize_leaf_with_multiple_empty_basement_nodes(enum ftnode_verify_type b
 
     FTNODE_DISK_DATA src_ndd = NULL;
     FTNODE_DISK_DATA dest_ndd = NULL;
-    write_sn_to_disk(fd, brt, &sn, &src_ndd, do_clone);
+    write_sn_to_disk(fd, brt, &sn, &src_ndd, do_clone, string_key_cmp);
 
-    setup_dn(bft, fd, brt_h, &dn, &dest_ndd);
+    setup_dn(bft, fd, brt_h, &dn, &dest_ndd, string_key_cmp);
 
     assert(dn->thisnodename.b==20);
 
@@ -1170,6 +1234,10 @@ test_serialize_nonleaf(enum ftnode_verify_type bft, bool do_clone) {
     sn.dirty = 1;
     sn.oldest_referenced_xid_known = TXNID_NONE;
     sn.unbound_insert_count = 0;
+#ifdef FT_INDIRECT
+    sn.is_cloned = false;
+    sn.is_rebalancing = false;
+#endif
     MALLOC_N(2, sn.bp);
     MALLOC_N(1, sn.childkeys);
     toku_memdup_dbt(&sn.childkeys[0], "hello", 6);
@@ -1243,9 +1311,9 @@ test_serialize_nonleaf(enum ftnode_verify_type bft, bool do_clone) {
     }
     FTNODE_DISK_DATA src_ndd = NULL;
     FTNODE_DISK_DATA dest_ndd = NULL;
-    write_sn_to_disk(fd, brt, &sn, &src_ndd, do_clone);
+    write_sn_to_disk(fd, brt, &sn, &src_ndd, do_clone, string_key_cmp);
 
-    setup_dn(bft, fd, brt_h, &dn, &dest_ndd);
+    setup_dn(bft, fd, brt_h, &dn, &dest_ndd, string_key_cmp);
 
     assert(dn->thisnodename.b==20);
 
@@ -1293,56 +1361,76 @@ test_ft_serialize (void) {
     initialize_dummymsn();
     int rinit = toku_ft_layer_init();
     CKERR(rinit);
-
     test_serialize_nonleaf(read_none, false);
     test_serialize_nonleaf(read_all, false);
-    test_serialize_nonleaf(read_compressed, false);
+    if (ftfs_is_hdd()) {
+        test_serialize_nonleaf(read_compressed, false);
+    }
     test_serialize_nonleaf(read_none, true);
     test_serialize_nonleaf(read_all, true);
-    test_serialize_nonleaf(read_compressed, true);
-
+    if (ftfs_is_hdd()) {
+        test_serialize_nonleaf(read_compressed, true);
+    }
     test_serialize_leaf_check_msn(read_none, false);
     test_serialize_leaf_check_msn(read_all, false);
-    test_serialize_leaf_check_msn(read_compressed, false);
+    if (ftfs_is_hdd()) {
+        test_serialize_leaf_check_msn(read_compressed, false);
+    }
     test_serialize_leaf_check_msn(read_none, true);
     test_serialize_leaf_check_msn(read_all, true);
-    test_serialize_leaf_check_msn(read_compressed, true);
-
+    if (ftfs_is_hdd()) {
+        test_serialize_leaf_check_msn(read_compressed, true);
+    }
     test_serialize_leaf_with_multiple_empty_basement_nodes(read_none, false);
     test_serialize_leaf_with_multiple_empty_basement_nodes(read_all, false);
-    test_serialize_leaf_with_multiple_empty_basement_nodes(read_compressed, false);
+    if (ftfs_is_hdd()) {
+        test_serialize_leaf_with_multiple_empty_basement_nodes(read_compressed, false);
+    }
     test_serialize_leaf_with_multiple_empty_basement_nodes(read_none, true);
     test_serialize_leaf_with_multiple_empty_basement_nodes(read_all, true);
-    test_serialize_leaf_with_multiple_empty_basement_nodes(read_compressed, true);
-
+    if (ftfs_is_hdd()) {
+        test_serialize_leaf_with_multiple_empty_basement_nodes(read_compressed, true);
+    }
     test_serialize_leaf_with_empty_basement_nodes(read_none, false);
     test_serialize_leaf_with_empty_basement_nodes(read_all, false);
-    test_serialize_leaf_with_empty_basement_nodes(read_compressed, false);
+    if (ftfs_is_hdd()) {
+        test_serialize_leaf_with_empty_basement_nodes(read_compressed, false);
+    }
     test_serialize_leaf_with_empty_basement_nodes(read_none, true);
     test_serialize_leaf_with_empty_basement_nodes(read_all, true);
-    test_serialize_leaf_with_empty_basement_nodes(read_compressed, true);
-
+    if (ftfs_is_hdd()) {
+        test_serialize_leaf_with_empty_basement_nodes(read_compressed, true);
+    }
     test_serialize_leaf_with_large_rows(read_none, false);
     test_serialize_leaf_with_large_rows(read_all, false);
-    test_serialize_leaf_with_large_rows(read_compressed, false);
+    if (ftfs_is_hdd()) {
+        test_serialize_leaf_with_large_rows(read_compressed, false);
+    }
     test_serialize_leaf_with_large_rows(read_none, true);
     test_serialize_leaf_with_large_rows(read_all, true);
-    test_serialize_leaf_with_large_rows(read_compressed, true);
-
+    if (ftfs_is_hdd()) {
+        test_serialize_leaf_with_large_rows(read_compressed, true);
+    }
     test_serialize_leaf_with_large_pivots(read_none, false);
     test_serialize_leaf_with_large_pivots(read_all, false);
-    test_serialize_leaf_with_large_pivots(read_compressed, false);
+    if (ftfs_is_hdd()) {
+        test_serialize_leaf_with_large_pivots(read_compressed, false);
+    }
     test_serialize_leaf_with_large_pivots(read_none, true);
     test_serialize_leaf_with_large_pivots(read_all, true);
-    test_serialize_leaf_with_large_pivots(read_compressed, true);
-
+    if (ftfs_is_hdd()) {
+        test_serialize_leaf_with_large_pivots(read_compressed, true);
+    }
     test_serialize_leaf_with_many_rows(read_none, false);
     test_serialize_leaf_with_many_rows(read_all, false);
-    test_serialize_leaf_with_many_rows(read_compressed, false);
+    if (ftfs_is_hdd()) {
+        test_serialize_leaf_with_many_rows(read_compressed, false);
+    }
     test_serialize_leaf_with_many_rows(read_none, true);
     test_serialize_leaf_with_many_rows(read_all, true);
-    test_serialize_leaf_with_many_rows(read_compressed, true);
-
+    if (ftfs_is_hdd()) {
+        test_serialize_leaf_with_many_rows(read_compressed, true);
+    }
     toku_ft_layer_destroy();
     return 0;
 }

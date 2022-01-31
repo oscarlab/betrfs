@@ -76,8 +76,8 @@ struct mount {
 	struct path mnt_ex_mountpoint;
 };
 
-
 int resolve_ftfs_southbound_symbols(void);
+int resolve_sb_pfn_symbols(void);
 
 void sb_override_creds(const struct cred **saved);
 int attach_ftfs_southbound(struct task_struct *tsk);
@@ -94,4 +94,9 @@ void save_task_southbound(struct task_struct *tsk,
 			struct ftfs_southbound *save);
 void restore_task_southbound(struct task_struct *tsk,
 			struct ftfs_southbound *saved);
+
+#ifdef FT_INDIRECT
+void ftfs_print_page(unsigned long);
+#endif
+
 #endif /* _FTFS_SOUTHBOUND_H */

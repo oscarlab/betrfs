@@ -314,7 +314,7 @@ static int recover_env_init (RECOVER_ENV renv,
     toku_dbt_array_init(&renv->dest_keys, 1);
     toku_dbt_array_init(&renv->dest_vals, 1);
     if (tokudb_recovery_trace)
-        fprintf(stderr, "%s:%d\n", __FUNCTION__, __LINE__);
+        dprintf(STDERR, "%s:%d\n", __FUNCTION__, __LINE__);
     return r;
 }
 
@@ -341,7 +341,7 @@ static void recover_env_cleanup (RECOVER_ENV renv) {
     toku_dbt_array_destroy(&renv->dest_vals);
 
     if (tokudb_recovery_trace)
-        fprintf(stderr, "%s:%d\n", __FUNCTION__, __LINE__);
+        dprintf(STDERR, "%s:%d\n", __FUNCTION__, __LINE__);
 }
 
 static const char *recover_state(RECOVER_ENV renv) {
@@ -419,7 +419,7 @@ static int toku_recover_begin_checkpoint (struct logtype_begin_checkpoint *l, RE
         r = 0; // ignore it (log only has a begin checkpoint)
         break;
     default:
-        fprintf(stderr, "Tokudb recovery %s: %d Unknown checkpoint state %d\n", __FILE__, __LINE__, (int)renv->ss.ss);
+        dprintf(STDERR, "Tokudb recovery %s: %d Unknown checkpoint state %d\n", __FILE__, __LINE__, (int)renv->ss.ss);
         abort();
         break;
     }
@@ -429,7 +429,7 @@ static int toku_recover_begin_checkpoint (struct logtype_begin_checkpoint *l, RE
 static int toku_recover_backward_begin_checkpoint (struct logtype_begin_checkpoint *l, RECOVER_ENV renv) {
     int r;
     time_t tnow = time(NULL);
-    fprintf(stderr, "%.24s Tokudb recovery bw_begin_checkpoint at %" PRIu64 " timestamp %" PRIu64 " (%s)\n", ctime(&tnow), l->lsn.lsn, l->timestamp, recover_state(renv));
+    dprintf(STDERR, "%.24s Tokudb recovery bw_begin_checkpoint at %" PRIu64 " timestamp %" PRIu64 " (%s)\n", ctime(&tnow), l->lsn.lsn, l->timestamp, recover_state(renv));
     switch (renv->ss.ss) {
     case BACKWARD_NEWER_CHECKPOINT_END:
         // incomplete checkpoint, nothing to do
@@ -441,13 +441,13 @@ static int toku_recover_backward_begin_checkpoint (struct logtype_begin_checkpoi
         renv->ss.checkpoint_begin_timestamp = l->timestamp;
         renv->goforward = true;
         tnow = time(NULL);
-        fprintf(stderr, "%.24s Tokudb recovery turning around at begin checkpoint %" PRIu64 " time %" PRIu64 "\n", 
-                ctime(&tnow), l->lsn.lsn, 
+        dprintf(STDERR, "%.24s Tokudb recovery turning around at begin checkpoint %" PRIu64 " time %" PRIu64 "\n",
+                ctime(&tnow), l->lsn.lsn,
                 renv->ss.checkpoint_end_timestamp - renv->ss.checkpoint_begin_timestamp);
         r = 0;
         break;
     default:
-        fprintf(stderr, "Tokudb recovery %s: %d Unknown checkpoint state %d\n", __FILE__, __LINE__, (int)renv->ss.ss);
+        dprintf(STDERR, "Tokudb recovery %s: %d Unknown checkpoint state %d\n", __FILE__, __LINE__, (int)renv->ss.ss);
         abort();
         break;
     }
@@ -477,7 +477,7 @@ static int toku_recover_end_checkpoint (struct logtype_end_checkpoint *l, RECOVE
 
 static int toku_recover_backward_end_checkpoint (struct logtype_end_checkpoint *l, RECOVER_ENV renv) {
     time_t tnow = time(NULL);
-    fprintf(stderr, "%.24s Tokudb recovery bw_end_checkpoint at %" PRIu64 " timestamp %" PRIu64 " xid %" PRIu64 " (%s)\n", ctime(&tnow), l->lsn.lsn, l->timestamp, l->lsn_begin_checkpoint.lsn, recover_state(renv));
+    dprintf(STDERR, "%.24s Tokudb recovery bw_end_checkpoint at %" PRIu64 " timestamp %" PRIu64 " xid %" PRIu64 " (%s)\n", ctime(&tnow), l->lsn.lsn, l->timestamp, l->lsn_begin_checkpoint.lsn, recover_state(renv));
     switch (renv->ss.ss) {
     case BACKWARD_NEWER_CHECKPOINT_END:
         renv->ss.ss = BACKWARD_BETWEEN_CHECKPOINT_BEGIN_END;
@@ -486,12 +486,12 @@ static int toku_recover_backward_end_checkpoint (struct logtype_end_checkpoint *
         renv->ss.checkpoint_end_timestamp = l->timestamp;
         return 0;
     case BACKWARD_BETWEEN_CHECKPOINT_BEGIN_END:
-        fprintf(stderr, "Tokudb recovery %s:%d Should not see two end_checkpoint log entries without an intervening begin_checkpoint\n", __FILE__, __LINE__);
+        dprintf(STDERR, "Tokudb recovery %s:%d Should not see two end_checkpoint log entries without an intervening begin_checkpoint\n", __FILE__, __LINE__);
         abort();
     default:
         break;
     }
-    fprintf(stderr, "Tokudb recovery %s: %d Unknown checkpoint state %d\n", __FILE__, __LINE__, (int)renv->ss.ss);
+    dprintf(STDERR, "Tokudb recovery %s: %d Unknown checkpoint state %d\n", __FILE__, __LINE__, (int)renv->ss.ss);
     abort();
 }
 
@@ -572,12 +572,12 @@ recover_transaction(TOKUTXN *txnp, TXNID_PAIR xid, TXNID_PAIR parentxid, TOKULOG
         assert(txn==NULL);
     }
     r = toku_txn_begin_with_xid(
-        parent, 
-        &txn, 
-        logger, 
-        xid, 
-        TXN_SNAPSHOT_NONE, 
-        NULL, 
+        parent,
+        &txn,
+        logger,
+        xid,
+        TXN_SNAPSHOT_NONE,
+        NULL,
         true, // for_recovery
         false // read_only
         );
@@ -877,24 +877,24 @@ static int toku_recover_change_fdescriptor (struct logtype_change_fdescriptor *l
         toku_txnid2txn(renv->logger, l->xid, &txn);
         DBT old_descriptor, new_descriptor;
         toku_fill_dbt(
-            &old_descriptor, 
-            l->old_descriptor.data, 
+            &old_descriptor,
+            l->old_descriptor.data,
             l->old_descriptor.len
             );
         toku_fill_dbt(
-            &new_descriptor, 
-            l->new_descriptor.data, 
+            &new_descriptor,
+            l->new_descriptor.data,
             l->new_descriptor.len
             );
         toku_ft_change_descriptor(
-            tuple->ft_handle, 
-            &old_descriptor, 
-            &new_descriptor, 
-            false, 
+            tuple->ft_handle,
+            &old_descriptor,
+            &new_descriptor,
+            false,
             txn,
             l->update_cmp_descriptor
             );
-    }    
+    }
     return 0;
 }
 
@@ -986,14 +986,14 @@ static int toku_recover_sync_unbound_insert (struct logtype_sync_unbound_insert 
 
 static int toku_recover_backward_enq_unbound_insert (struct logtype_enq_unbound_insert *UU(l), RECOVER_ENV UU(renv)) {
     // TODO: ???
-    fprintf(stderr, "no recovery code written for large I/Os!!!");
+    dprintf(STDERR, "no recovery code written for large I/Os!!!");
     assert(0);
     return 0;
 }
 
 static int toku_recover_backward_sync_unbound_insert (struct logtype_sync_unbound_insert *UU(l), RECOVER_ENV UU(renv)) {
     // TODO: ???
-    fprintf(stderr, "no recovery code written for large I/Os!!!");
+    dprintf(STDERR, "no recovery code written for large I/Os!!!");
     assert(0);
     return 0;
 }
@@ -1017,7 +1017,7 @@ static int toku_recover_enq_insert_no_overwrite (struct logtype_enq_insert_no_ov
         toku_fill_dbt(&keydbt, l->key.data, l->key.len);
         toku_fill_dbt(&valdbt, l->value.data, l->value.len);
         toku_ft_maybe_insert(tuple->ft_handle, &keydbt, &valdbt, txn, true, l->lsn, false, FT_INSERT_NO_OVERWRITE);
-    }    
+    }
     return 0;
 }
 
@@ -1038,7 +1038,7 @@ static int toku_recover_enq_delete_any (struct logtype_enq_delete_any *l, RECOVE
         DBT keydbt;
         toku_fill_dbt(&keydbt, l->key.data, l->key.len);
         toku_ft_maybe_delete(tuple->ft_handle, &keydbt, txn, true, l->lsn, false);
-    }    
+    }
     return 0;
 }
 
@@ -1075,7 +1075,7 @@ static int toku_recover_enq_delete_multi (struct logtype_enq_delete_multi *l, RE
             l->lsn,
             false,
             l->is_resetting_op);
-    }    
+    }
     return 0;
 }
 
@@ -1193,7 +1193,7 @@ static int toku_recover_enq_insert_multiple (struct logtype_enq_insert_multiple 
                 do_inserts = false; // src file was probably deleted, #3129
         }
     }
-    
+
     if (do_inserts) {
         DBT src_key, src_val;
 
@@ -1393,7 +1393,7 @@ static int toku_recover_hot_index(struct logtype_hot_index *UU(l), RECOVER_ENV U
     TOKUTXN txn = NULL;
     toku_txnid2txn(renv->logger, l->xid, &txn);
     assert(txn!=NULL);
-    // just make an entry in the rollback log 
+    // just make an entry in the rollback log
     //   - set do_log = 0 -> don't write to recovery log
     toku_ft_hot_index_recovery(txn, l->hot_index_filenums, 0, 0, (LSN*)NULL);
     return 0;
@@ -1417,7 +1417,7 @@ int tokudb_needs_recovery(const char *log_dir, bool ignore_log_empty) {
     if (r != 0) {
         needs_recovery = true; goto exit;
     }
-    
+
     struct log_entry *le;
     le = NULL;
     r = toku_logcursor_last(logcursor, &le);
@@ -1482,7 +1482,7 @@ static void recover_abort_live_txn(TOKUTXN txn) {
     // abort the transaction
     int r = toku_txn_abort_txn(txn, NULL, NULL);
     assert(r == 0);
-    
+
     // close the transaction
     toku_txn_close_txn(txn);
 }
@@ -1513,9 +1513,9 @@ static void recover_abort_all_live_txns(RECOVER_ENV renv) {
 static void recover_trace_le(const char *f, int l, int r, struct log_entry *le) {
     if (le) {
         LSN thislsn = toku_log_entry_get_lsn(le);
-        fprintf(stderr, "%s:%d r=%d cmd=%c lsn=%" PRIu64 "\n", f, l, r, le->cmd, thislsn.lsn);
+        dprintf(STDERR, "%s:%d r=%d cmd=%c lsn=%" PRIu64 "\n", f, l, r, le->cmd, thislsn.lsn);
     } else
-        fprintf(stderr, "%s:%d r=%d cmd=?\n", f, l, r);
+        dprintf(STDERR, "%s:%d r=%d cmd=?\n", f, l, r);
 }
 
 // For test purposes only.
@@ -1530,12 +1530,12 @@ static int do_recovery(RECOVER_ENV renv, const char *env_dir, const char *log_di
     int rr = 0;
     TOKULOGCURSOR logcursor = NULL;
     struct log_entry *le = NULL;
-    
+
     time_t tnow = time(NULL);
-    fprintf(stderr, "%.24s Tokudb recovery starting in env %s\n", ctime(&tnow), env_dir);
+    dprintf(STDERR, "%.24s Tokudb recovery starting in env %s\n", ctime(&tnow), env_dir);
 
     /* DEP 12/16/13 - I can't figure out why this chunk of code exists. */
-#if 0    
+#if 0
     char org_wd[1000];
     {
         char *wd=getcwd(org_wd, sizeof(org_wd));
@@ -1553,11 +1553,11 @@ static int do_recovery(RECOVER_ENV renv, const char *env_dir, const char *log_di
     // there must be at least one log entry
     r = toku_logcursor_create(&logcursor, log_dir);
     assert(r == 0);
-    
+
     r = toku_logcursor_last(logcursor, &le);
     if (r != 0) {
-        if (tokudb_recovery_trace) 
-            fprintf(stderr, "RUNRECOVERY: %s:%d r=%d\n", __FUNCTION__, __LINE__, r);
+        if (tokudb_recovery_trace)
+            dprintf(STDERR, "RUNRECOVERY: %s:%d r=%d\n", __FUNCTION__, __LINE__, r);
         rr = DB_RUNRECOVERY; goto errorexit;
     }
 
@@ -1572,10 +1572,10 @@ static int do_recovery(RECOVER_ENV renv, const char *env_dir, const char *log_di
         int rrx;
         if ((rrx = toku_stat(env_dir, &buf))!=0) {
             rr = 1;
-            fprintf(stderr, "%.24s Tokudb recovery error: directory does not exist: %s\n", ctime(&tnow), env_dir);
+            dprintf(STDERR, "%.24s Tokudb recovery error: directory does not exist: %s\n", ctime(&tnow), env_dir);
             goto errorexit;
         } else if (!S_ISDIR(buf.st_mode)) {
-            fprintf(stderr, "%.24s Tokudb recovery error: this file is supposed to be a directory, but is not: %s\n", ctime(&tnow), env_dir);
+            dprintf(STDERR, "%.24s Tokudb recovery error: this file is supposed to be a directory, but is not: %s\n", ctime(&tnow), env_dir);
             rr = ENOTDIR; goto errorexit;
         }
     }
@@ -1584,18 +1584,18 @@ static int do_recovery(RECOVER_ENV renv, const char *env_dir, const char *log_di
     tnow = time(NULL);
     time_t tlast;
     tlast = tnow;
-    fprintf(stderr, "%.24s Tokudb recovery scanning backward from %" PRIu64 "\n", ctime(&tnow), lastlsn.lsn);
+    dprintf(STDERR, "%.24s Tokudb recovery scanning backward from %" PRIu64 "\n", ctime(&tnow), lastlsn.lsn);
     for (unsigned i=0; 1; i++) {
 
         // get the previous log entry (first time gets the last one)
         le = NULL;
         r = toku_logcursor_prev(logcursor, &le);
-        if (tokudb_recovery_trace) 
+        if (tokudb_recovery_trace)
             recover_trace_le(__FUNCTION__, __LINE__, r, le);
         if (r != 0) {
             if (r == DB_NOTFOUND)
                 break;
-            rr = DB_RUNRECOVERY; 
+            rr = DB_RUNRECOVERY;
             goto errorexit;
         }
 
@@ -1604,7 +1604,7 @@ static int do_recovery(RECOVER_ENV renv, const char *env_dir, const char *log_di
             tnow = time(NULL);
             if (tnow - tlast >= TOKUDB_RECOVERY_PROGRESS_TIME) {
                 thislsn = toku_log_entry_get_lsn(le);
-                fprintf(stderr, "%.24s Tokudb recovery scanning backward from %" PRIu64 " at %" PRIu64 " (%s)\n", ctime(&tnow), lastlsn.lsn, thislsn.lsn, recover_state(renv));
+                dprintf(STDERR, "%.24s Tokudb recovery scanning backward from %" PRIu64 " at %" PRIu64 " (%s)\n", ctime(&tnow), lastlsn.lsn, thislsn.lsn, recover_state(renv));
                 tlast = tnow;
             }
         }
@@ -1613,12 +1613,12 @@ static int do_recovery(RECOVER_ENV renv, const char *env_dir, const char *log_di
         assert(renv->ss.ss == BACKWARD_BETWEEN_CHECKPOINT_BEGIN_END ||
                renv->ss.ss == BACKWARD_NEWER_CHECKPOINT_END);
         logtype_dispatch_assign(le, toku_recover_backward_, r, renv);
-        if (tokudb_recovery_trace) 
+        if (tokudb_recovery_trace)
             recover_trace_le(__FUNCTION__, __LINE__, r, le);
         if (r != 0) {
-            if (tokudb_recovery_trace) 
-                fprintf(stderr, "DB_RUNRECOVERY: %s:%d r=%d\n", __FUNCTION__, __LINE__, r);
-            rr = DB_RUNRECOVERY; 
+            if (tokudb_recovery_trace)
+                dprintf(STDERR, "DB_RUNRECOVERY: %s:%d r=%d\n", __FUNCTION__, __LINE__, r);
+            rr = DB_RUNRECOVERY;
             goto errorexit;
         }
         if (renv->goforward)
@@ -1626,14 +1626,15 @@ static int do_recovery(RECOVER_ENV renv, const char *env_dir, const char *log_di
     }
 
     // run first callback
-    if (recover_callback_fx) 
+    if (recover_callback_fx) {
         recover_callback_fx(recover_callback_args);
+    }
 
     // scan forwards
     assert(le);
     thislsn = toku_log_entry_get_lsn(le);
     tnow = time(NULL);
-    fprintf(stderr, "%.24s Tokudb recovery starts scanning forward to %" PRIu64 " from %" PRIu64 " left %" PRIu64 " (%s)\n", ctime(&tnow), lastlsn.lsn, thislsn.lsn, lastlsn.lsn - thislsn.lsn, recover_state(renv));
+    dprintf(STDERR, "%.24s Tokudb recovery starts scanning forward to %" PRIu64 " from %" PRIu64 " left %" PRIu64 " (%s)\n", ctime(&tnow), lastlsn.lsn, thislsn.lsn, lastlsn.lsn - thislsn.lsn, recover_state(renv));
 
     for (unsigned i=0; 1; i++) {
 
@@ -1642,7 +1643,7 @@ static int do_recovery(RECOVER_ENV renv, const char *env_dir, const char *log_di
             tnow = time(NULL);
             if (tnow - tlast >= TOKUDB_RECOVERY_PROGRESS_TIME) {
                 thislsn = toku_log_entry_get_lsn(le);
-                fprintf(stderr, "%.24s Tokudb recovery scanning forward to %" PRIu64 " at %" PRIu64 " left %" PRIu64 " (%s)\n", ctime(&tnow), lastlsn.lsn, thislsn.lsn, lastlsn.lsn - thislsn.lsn, recover_state(renv));
+                dprintf(STDERR, "%.24s Tokudb recovery scanning forward to %" PRIu64 " at %" PRIu64 " left %" PRIu64 " (%s)\n", ctime(&tnow), lastlsn.lsn, thislsn.lsn, lastlsn.lsn - thislsn.lsn, recover_state(renv));
                 tlast = tnow;
             }
         }
@@ -1651,36 +1652,36 @@ static int do_recovery(RECOVER_ENV renv, const char *env_dir, const char *log_di
         assert(renv->ss.ss == FORWARD_BETWEEN_CHECKPOINT_BEGIN_END ||
                renv->ss.ss == FORWARD_NEWER_CHECKPOINT_END);
         logtype_dispatch_assign(le, toku_recover_, r, renv);
-        if (tokudb_recovery_trace) 
+        if (tokudb_recovery_trace)
             recover_trace_le(__FUNCTION__, __LINE__, r, le);
         if (r != 0) {
-            if (tokudb_recovery_trace) 
-                fprintf(stderr, "DB_RUNRECOVERY: %s:%d r=%d\n", __FUNCTION__, __LINE__, r);
-            rr = DB_RUNRECOVERY; 
+            if (tokudb_recovery_trace)
+                dprintf(STDERR, "DB_RUNRECOVERY: %s:%d r=%d\n", __FUNCTION__, __LINE__, r);
+            rr = DB_RUNRECOVERY;
             goto errorexit;
         }
 
         // get the next log entry
         le = NULL;
         r = toku_logcursor_next(logcursor, &le);
-        if (tokudb_recovery_trace) 
+        if (tokudb_recovery_trace)
             recover_trace_le(__FUNCTION__, __LINE__, r, le);
         if (r != 0) {
             if (r == DB_NOTFOUND)
                 break;
-            rr = DB_RUNRECOVERY; 
+            rr = DB_RUNRECOVERY;
             goto errorexit;
-        }        
+        }
     }
 
     // verify the final recovery state
-    assert(renv->ss.ss == FORWARD_NEWER_CHECKPOINT_END);   
+    assert(renv->ss.ss == FORWARD_NEWER_CHECKPOINT_END);
 
     r = toku_logcursor_destroy(&logcursor);
     assert(r == 0);
 
     // run second callback
-    if (recover_callback2_fx) 
+    if (recover_callback2_fx)
         recover_callback2_fx(recover_callback2_args);
 
     // restart logging
@@ -1691,7 +1692,7 @@ static int do_recovery(RECOVER_ENV renv, const char *env_dir, const char *log_di
         uint32_t n = recover_get_num_live_txns(renv);
         if (n > 0) {
             tnow = time(NULL);
-            fprintf(stderr, "%.24s Tokudb recovery has %" PRIu32 " live transaction%s\n", ctime(&tnow), n, n > 1 ? "s" : "");
+            dprintf(STDERR, "%.24s Tokudb recovery has %" PRIu32 " live transaction%s\n", ctime(&tnow), n, n > 1 ? "s" : "");
         }
     }
     recover_abort_all_live_txns(renv);
@@ -1699,7 +1700,7 @@ static int do_recovery(RECOVER_ENV renv, const char *env_dir, const char *log_di
         uint32_t n = recover_get_num_live_txns(renv);
         if (n > 0) {
             tnow = time(NULL);
-            fprintf(stderr, "%.24s Tokudb recovery has %" PRIu32 " prepared transaction%s\n", ctime(&tnow), n, n > 1 ? "s" : "");
+            dprintf(STDERR, "%.24s Tokudb recovery has %" PRIu32 " prepared transaction%s\n", ctime(&tnow), n, n > 1 ? "s" : "");
         }
     }
 
@@ -1708,7 +1709,7 @@ static int do_recovery(RECOVER_ENV renv, const char *env_dir, const char *log_di
     n = file_map_get_num_dictionaries(&renv->fmap);
     if (n > 0) {
         tnow = time(NULL);
-        fprintf(stderr, "%.24s Tokudb recovery closing %" PRIu32 " dictionar%s\n", ctime(&tnow), n, n > 1 ? "ies" : "y");
+        dprintf(STDERR, "%.24s Tokudb recovery closing %" PRIu32 " dictionar%s\n", ctime(&tnow), n, n > 1 ? "ies" : "y");
     }
     file_map_close_dictionaries(&renv->fmap, lastlsn);
 
@@ -1718,19 +1719,19 @@ static int do_recovery(RECOVER_ENV renv, const char *env_dir, const char *log_di
         toku_log_comment(renv->logger, NULL, true, 0, recover_comment);
     }
 
-    // checkpoint 
+    // checkpoint
     tnow = time(NULL);
-    fprintf(stderr, "%.24s Tokudb recovery making a checkpoint\n", ctime(&tnow));
+    dprintf(STDERR, "%.24s Tokudb recovery making a checkpoint\n", ctime(&tnow));
     r = toku_checkpoint(renv->cp, renv->logger, NULL, NULL, NULL, NULL, RECOVERY_CHECKPOINT, false);
     assert(r == 0);
     tnow = time(NULL);
-    fprintf(stderr, "%.24s Tokudb recovery done\n", ctime(&tnow));
+    dprintf(STDERR, "%.24s Tokudb recovery done\n", ctime(&tnow));
 
     return 0;
 
  errorexit:
     tnow = time(NULL);
-    fprintf(stderr, "%.24s Tokudb recovery failed %d\n", ctime(&tnow), rr);
+    dprintf(STDERR, "%.24s Tokudb recovery failed %d\n", ctime(&tnow), rr);
 
     if (logcursor) {
         r = toku_logcursor_destroy(&logcursor);
@@ -1744,7 +1745,7 @@ int
 toku_recover_lock(const char *lock_dir, int *lockfd) {
     int e = toku_single_process_lock(lock_dir, "recovery", lockfd);
     if (e != 0 && e != ENOENT) {
-        fprintf(stderr, "Couldn't run recovery because some other process holds the recovery lock\n");
+        dprintf(STDERR, "Couldn't run recovery because some other process holds the recovery lock\n");
     }
     return e;
 }
@@ -1803,7 +1804,7 @@ int tokudb_recover(DB_ENV *env,
 }
 
 // Return 0 if recovery log exists, ENOENT if log is missing
-int 
+int
 tokudb_recover_log_exists(const char * log_dir) {
     int r;
     TOKULOGCURSOR logcursor;
@@ -1817,7 +1818,7 @@ tokudb_recover_log_exists(const char * log_dir) {
     }
     else
         r = ENOENT;
-    
+
     return r;
 }
 

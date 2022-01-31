@@ -130,7 +130,7 @@ toku_assert_init(void)
 static int (*toku_maybe_get_engine_status_text_p)(char* buff, int buffsize) = 0;
 static void (*toku_maybe_set_env_panic_p)(int code, const char* msg) = 0;
 
-void toku_assert_set_fpointers(int (*toku_maybe_get_engine_status_text_pointer)(char*, int), 
+void toku_assert_set_fpointers(int (*toku_maybe_get_engine_status_text_pointer)(char*, int),
 			       void (*toku_maybe_set_env_panic_pointer)(int, const char*),
                                uint64_t num_rows) {
     toku_maybe_get_engine_status_text_p = toku_maybe_get_engine_status_text_pointer;
@@ -143,32 +143,28 @@ void (*do_assert_hook)(void) = NULL;
 
 static void toku_do_backtrace_abort(void) __attribute__((noreturn));
 
-static void 
+static void
 toku_do_backtrace_abort(void) {
 
     // backtrace
 #if !TOKU_WINDOWS
     int n = backtrace(backtrace_pointers, N_POINTERS);
-    fprintf(stderr, "Backtrace: (Note: toku_do_assert=0x%p)\n", toku_do_assert); fflush(stderr);
+    dprintf(STDERR, "Backtrace: (Note: toku_do_assert=0x%p)\n", toku_do_assert);
     backtrace_symbols_fd(backtrace_pointers, n, fileno(stderr));
 #endif
 
-    fflush(stderr);
-    
     if (engine_status_num_rows && toku_maybe_get_engine_status_text_p) {
 	int buffsize = engine_status_num_rows * 128;  // assume 128 characters per row (gross overestimate, should be safe)
-	char buff[buffsize];	
-	toku_maybe_get_engine_status_text_p(buff, buffsize);  
-	fprintf(stderr, "Engine status:\n%s\n", buff);
+	char buff[buffsize];
+	toku_maybe_get_engine_status_text_p(buff, buffsize);
+	dprintf(STDERR, "Engine status:\n%s\n", buff);
     }
     else
-	fprintf(stderr, "Engine status function not available\n");
-    fprintf(stderr, "Memory usage:\n");
-    fflush(stderr);	    // just in case malloc_stats() crashes, we still want engine status (and to know that malloc_stats() failed)
+	dprintf(STDERR, "Engine status function not available\n");
+    dprintf(STDERR, "Memory usage:\n");
     if (malloc_stats_f) {
         malloc_stats_f();
     }
-    fflush(stderr);	    
 
     if (do_assert_hook) do_assert_hook();
     if (toku_gdb_dump_on_assert) {
@@ -204,12 +200,12 @@ set_panic_if_not_panicked(int caller_errno, char * msg) {
 }
 
 
-/* DEP: Keep this in the frame size.  Probably 
+/* DEP: Keep this in the frame size.  Probably
  *  want to reimplement these APIs for kernel.
  */
 #define MSGLEN 500
 extern "C" void ftfs_test_break(void);
-void 
+void
 toku_do_assert_fail (const char *expr_as_string, const char *function, const char *file, int line, int caller_errno) {
     ftfs_test_break();
     char msg[MSGLEN];
@@ -219,7 +215,7 @@ toku_do_assert_fail (const char *expr_as_string, const char *function, const cha
     toku_do_backtrace_abort();
 }
 
-void 
+void
 toku_do_assert_zero_fail (uintptr_t expr, const char *expr_as_string, const char *function, const char *file, int line, int caller_errno) {
     char msg[MSGLEN];
     snprintf(msg, MSGLEN, "%s:%d %s: Assertion `%s == 0' failed (errno=%d) (%s=%" PRIuPTR ")\n", file, line, function, expr_as_string, caller_errno, expr_as_string, expr);
@@ -237,10 +233,9 @@ toku_do_assert_expected_fail (uintptr_t expr, uintptr_t expected, const char *ex
     toku_do_backtrace_abort();
 }
 
-void 
+void
 toku_do_assert(int expr, const char *expr_as_string, const char *function, const char* file, int line, int caller_errno) {
     if (expr == 0) {
         toku_do_assert_fail(expr_as_string, function, file, line, caller_errno);
     }
 }
-
