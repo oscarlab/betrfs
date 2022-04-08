@@ -10,7 +10,7 @@ pipeline {
   stages {
     stage('Testing') {
       steps {
-	timeout(time: 15, unit: 'MINUTES') {
+	timeout(time: 20, unit: 'MINUTES') {
            sh '''
 	     /usr/bin/sudo /bin/cp /host/playpen/btrfs/* /sbin/
 	     /usr/bin/sudo /bin/ln -s $(/bin/pwd) /oscar/betrfs
